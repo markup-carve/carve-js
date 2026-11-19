@@ -3,10 +3,6 @@
 import { ImportInputError, type ImportDiagnostic, type ImportResult, withoutHtmlRanges } from './kit.ts'
 import { importHtml } from './html.ts'
 import { readAttribution } from './bbcode-quote.ts'
-import { type DocumentNode } from '../../src/index.ts'
-import { writeTree } from '../../src/write.ts'
-import { blankLinesBetween } from '../../src/write-blocks.ts'
-import { createWriter } from '../../src/write-state.ts'
 
 /** The 0.1 limit: BBCode is bounded forum content, and a larger input is refused. */
 export const BBCODE_MAX_INPUT_LENGTH = 262144
@@ -166,10 +162,6 @@ function inlineTag(tag: Tag): string {
 
 /** A block container's children: block tags stand alone, and inline runs split into paragraphs at blank lines. */
 function blocksHtml(items: Item[]): string {
-  return blocksHtmlUnits(items).join('\n')
-}
-
-function blocksHtmlUnits(items: Item[]): string[] {
   const out: string[] = []
   let run: Item[] = []
   const flush = (): void => {
@@ -194,7 +186,7 @@ function blocksHtmlUnits(items: Item[]): string[] {
     out.push(blockTag(item))
   }
   flush()
-  return out
+  return out.join('\n')
 }
 
 function blockTag(tag: Tag): string {
@@ -268,60 +260,12 @@ export function bbcodeHtml(input: string, diagnostics: ImportDiagnostic[] = []):
   return blocksHtml(new BbcodeReader(input.replace(/\r\n?/gu, '\n'), diagnostics).read())
 }
 
-type DocumentChild = DocumentNode['children'][number]
-
-/** A unit that cannot combine with its neighbor in the writer and has no writer loss of its own. */
-function independentUnit(children: DocumentChild[], result: ImportResult): children is [DocumentChild] {
-  const only = children[0]
-  return children.length === 1 && only !== undefined &&
-    ['paragraph', 'block_quote', 'code_block', 'thematic_break'].includes(only.type) &&
-    !result.source.startsWith('\n') && result.diagnostics.every(entry => entry.code.startsWith('import-'))
-}
-
-function assembledSource(units: readonly { node: DocumentChild, source: string }[]): string {
-  const separator = createWriter(null, false)
-  const lines: string[] = []
-  let before: DocumentChild | undefined
-  for (const unit of units) {
-    if (before !== undefined) for (let blanks = blankLinesBetween(separator, before, before, unit.node, false);
-      blanks > 0; blanks--) lines.push('')
-    lines.push(...unit.source.slice(0, -1).split('\n'))
-    before = unit.node
-  }
-  return `${lines.join('\n')}\n`
-}
-
 export function importBbcode(input: string): ImportResult {
   const length = new TextEncoder().encode(input).length
   if (length > BBCODE_MAX_INPUT_LENGTH) throw new BbcodeInputTooLargeError(length)
   const diagnostics: ImportDiagnostic[] = []
-  const units = blocksHtmlUnits(new BbcodeReader(input.replace(/\r\n?/gu, '\n'), diagnostics).read())
-  // Independent top-level units share no HTML context. Import a repeated unit once per document.
-  const cache = new Map<string, ImportResult>()
-  const children: DocumentNode['children'] = []
-  const findings: ImportDiagnostic[] = []
-  const writtenUnits: { node: DocumentChild, source: string }[] = []
-  let independent = true
-  let document: DocumentNode | undefined
-  for (const unit of units) {
-    let result = cache.get(unit)
-    if (result === undefined) {
-      result = importHtml(unit, false, {}, false)
-      cache.set(unit, result)
-    }
-    document ??= result.document
-    const unitChildren = structuredClone(result.document.children)
-    children.push(...unitChildren)
-    findings.push(...withoutHtmlRanges(result.diagnostics.filter(entry => entry.code.startsWith('import-'))))
-    if (independentUnit(unitChildren, result)) writtenUnits.push({ node: unitChildren[0], source: result.source })
-    else independent = false
-  }
-  if (document === undefined) return { ...importHtml('', false, {}, false), diagnostics }
-  const merged = { ...document, children }
-  if (independent) {
-    return { document: merged, source: assembledSource(writtenUnits), diagnostics: [...diagnostics, ...findings] }
-  }
-  // Each imported unit was validated by the HTML importer. Their ordered union adds no new node fields.
-  const written = writeTree(merged, undefined)
-  return { document: merged, source: written.source, diagnostics: [...diagnostics, ...findings, ...written.diagnostics] }
+  const html = bbcodeHtml(input, diagnostics)
+  // This HTML is generated here; its byte positions do not locate the BBCode input.
+  const result = importHtml(html, false, {}, false)
+  return { ...result, diagnostics: [...diagnostics, ...withoutHtmlRanges(result.diagnostics)] }
 }

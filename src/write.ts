@@ -782,35 +782,14 @@ function addLines(out: string[], lines: readonly string[], blanks: number): void
   for (const line of lines) out.push(line)
 }
 
-/** A repeated group with no document-wide spelling context has the same lines as its earlier occurrence. */
-function writeCachedGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,
-  repeated: Map<string, string[]>, canReuse: boolean): number {
-  let key: string | undefined
-  if (canReuse && !first && w.escapes.size === 0 && w.forms.size === 0 && w.losses.entries.length === 0) {
-    key = JSON.stringify(document.children.slice(from, groupEnd(w, document.children, from)))
-  }
-  const cached = key === undefined ? undefined : repeated.get(key)
-  if (cached !== undefined) {
-    w.lines = cached
-    run.stats.planned++
-    return groupEnd(w, document.children, from)
-  }
-  const end = writeGroup(w, run, document, from, first)
-  if (key !== undefined && w.losses.entries.length === 0 && run.stats.repaired === 0) repeated.set(key, w.lines.slice())
-  return end
-}
-
 function writeDocument(w: Writer, run: WriterRun, document: DocumentNode): string {
   const nodes = document.children
   const out: string[] = []
-  const repeated = new Map<string, string[]>()
-  const canReuse = run.path === 'plan' && w.facts === null && w.extensions.length === 0 &&
-    w.linkKeys.size === 0 && w.abbreviations.size === 0
   let before: Node | null = null
   let list: Node | null = null
   for (let at = 0; at < nodes.length;) {
     const from = at
-    at = writeCachedGroup(w, run, document, from, out.length === 0, repeated, canReuse)
+    at = writeGroup(w, run, document, from, out.length === 0)
     if (w.lines.length === 0) continue
     if (out.length === 0 && w.blankFirst) out.push('')
     const blanks = before === null ? 0 : blankLinesBetween(w, before, list, nodes[from]!, false)
