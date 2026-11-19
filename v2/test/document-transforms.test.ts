@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parse, render, renderWithDiagnostics, renderWithDocumentTransforms } from '../src/index.ts'
+import { parse, render, renderWithDiagnostics, renderWithDocumentTransforms, tabsExtensions, tabsRenderer } from '../src/index.ts'
 
 describe('C2-X-053 to C2-X-055: document transforms', () => {
   it('runs transforms in order on a copy of the resolved view', () => {
@@ -61,5 +61,19 @@ describe('C2-X-053 to C2-X-055: document transforms', () => {
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: 'extension-transform-failed', severity: 'error', channel: 'render-loss',
     }))
+  })
+
+  it('rejects an extension prop that its registered schema does not declare', () => {
+    const source = ':::: tabs\n::: tab "A"\nbody\n:::\n::::\n'
+    const options = { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } }
+    const result = renderWithDocumentTransforms(source, [
+      { name: 'invalid', transform: (view) => {
+        const tabs = view.children[0]
+        if (tabs?.type === 'block_extension') tabs.props = { bogus: 'x' }
+        return view
+      } },
+    ], options)
+    expect(result.html).toBe(render(source, options))
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'extension-transform-failed' }))
   })
 })

@@ -424,14 +424,14 @@ function duplicateViewId(document: DocumentNode): string | null {
   return visit(document)
 }
 
-function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[]): {
+function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[], extensions: Settings['extensions']): {
   view: DocumentNode, failures: Diagnostic[]
 } {
   const failures: Diagnostic[] = []
   for (const entry of transforms) {
     try {
       const next = entry.transform(structuredClone(view))
-      validateTree(next)
+      validateTree(next, undefined, undefined, extensions)
       const duplicate = duplicateViewId(next)
       if (duplicate !== null) throw new Error(`duplicate authored id ${duplicate}`)
       view = next
@@ -453,7 +453,7 @@ export function renderWithDocumentTransforms(
   const parsed = inputStage(authored, settings, true)
   const resolved = resolveStage(parsed, settings)
   const sourceDiagnostics = parseDiagnostics(resolved, parsed)
-  const { view, failures } = applyDocumentTransforms(structuredClone(resolved.document), transforms)
+  const { view, failures } = applyDocumentTransforms(structuredClone(resolved.document), transforms, settings.extensions)
   const rendered = renderWithDiagnostics(view, options)
   const diagnostics = [...sourceDiagnostics, ...failures, ...rendered.diagnostics]
   if (settings.strictLosses) for (const entry of diagnostics) {
