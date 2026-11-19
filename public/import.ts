@@ -15,6 +15,10 @@ export interface ImportOptions {
   rawHtml?: boolean
   /** C2-M-082: makes each loss of the import an error. */
   strictLosses?: boolean
+  /** C2-H-204: render-loss codes left out of the result. */
+  allowLosses?: readonly string[]
+  /** C2-H-205: the cap on the losses the result keeps; default 100. */
+  maxLosses?: number
 }
 
 /**
@@ -23,8 +27,8 @@ export interface ImportOptions {
  */
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   if (options === undefined) throw new CarveOptionError('from', 'required')
-  checkOptions(options, { from: 'string', rawHtml: 'boolean', strictLosses: 'boolean' })
+  checkOptions(options, { from: 'string', rawHtml: 'boolean', strictLosses: 'boolean', allowLosses: 'losses', maxLosses: 'losses' })
   if (options.from !== 'html') throw new CarveOptionError('from', `unknown value ${JSON.stringify(options.from)}`)
   if (typeof input !== 'string') throw new ImportInputError('the input is not text', 'html')
-  return runImport('html', options.strictLosses === true, () => importHtml(input, options.rawHtml === true))
+  return runImport('html', options, () => importHtml(input, options.rawHtml === true))
 }

@@ -1,6 +1,7 @@
 // The 19 options of C2-H-137. An option this engine does not offer is refused, not ignored.
 import {
-  BOOLEAN_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS, OPTION_TYPES,
+  BOOLEAN_DEFAULTS, COUNT_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS, OPTION_TYPES,
+  RENDER_LOSS_CODES,
 } from './option-tables.ts'
 import { type ExtensionDefinition, type ExtensionRenderer } from './extensions/types.ts'
 import { includeSettings, type IncludeSettings } from './include-settings.ts'
@@ -9,6 +10,7 @@ import { type CodeBlockNode } from './ast.ts'
 export type HeadingIds = 'off' | 'keep-case' | 'lower' | 'ascii' | 'ascii-lower' | 'ascii-strict' | 'ascii-strict-lower'
 export type Mode = 'interactive' | 'static'
 export type Profile = 'full' | 'article' | 'comment' | 'minimal'
+export type SoftBreak = 'newline' | 'space' | 'br'
 
 /** C2-H-128: a deny list or an allow list of URL schemes. There is no off value. */
 export interface UrlPolicy {
@@ -39,7 +41,7 @@ export interface Options {
   mode?: Mode
   renderers?: Readonly<Record<string, ExtensionRenderer>>
   /** Trusted host HTML for ordinary code blocks; undefined selects the core HTML. */
-  codeBlockRenderer?: (node: Readonly<CodeBlockNode>, defaultHtml: string) => string | undefined
+  codeBlockRenderer?: ((node: Readonly<CodeBlockNode>, defaultHtml: string) => string | null | undefined) | null
   symbols?: Readonly<Record<string, string>>
   labels?: Readonly<Record<string, string>>
   social?: Social | null
@@ -51,6 +53,12 @@ export interface Options {
   urlPolicy?: UrlPolicy
   profile?: Profile
   strictLosses?: boolean
+  /** C2-H-204: render-loss codes left out of the record. */
+  allowLosses?: readonly string[]
+  /** C2-H-205: the cap on the render-loss entries the record keeps. */
+  maxLosses?: number
+  /** C2-H-203: how a soft break is written. */
+  softBreak?: SoftBreak
   alignTables?: boolean
   /** C2-W-127: `format` writes as if the parse had no sidecar. */
   normalize?: boolean
@@ -71,7 +79,7 @@ export interface Settings {
   /** C2-N-003: the resolver and the two limits, or null when nothing is expanded. */
   includes: IncludeSettings | null
   renderers: Readonly<Record<string, ExtensionRenderer>>
-  codeBlockRenderer: ((node: Readonly<CodeBlockNode>, defaultHtml: string) => string | undefined) | undefined
+  codeBlockRenderer: ((node: Readonly<CodeBlockNode>, defaultHtml: string) => string | null | undefined) | undefined
   urlPolicy: UrlPolicy
   headingIds: HeadingIds
   mode: Mode
@@ -91,6 +99,9 @@ export interface Settings {
   semanticKeys: readonly (readonly [string, string | null])[]
   /** The quote glyphs of a registered extension, or null for those of C2-H-078. */
   quotes: readonly [string, string, string, string] | null
+  allowLosses: ReadonlySet<string>
+  maxLosses: number
+  softBreak: SoftBreak
 }
 
 export const CORE_SEMANTIC_KEYS: readonly (readonly [string, string | null])[] = [['abbr', 'title'], ['time', 'datetime'], ['kbd', null]]
@@ -137,7 +148,10 @@ function isPlainObject(value: unknown): value is Readonly<Record<string, unknown
 }
 
 // The type of the items of each list and map option (spec/0.2/data/options.json).
-const ITEM_TYPES = new Map([['labels', 'string'], ['symbols', 'string'], ['rules', 'rule-state'], ['platforms', 'string']])
+const ITEM_TYPES = new Map([
+  ['labels', 'string'], ['symbols', 'string'], ['rules', 'rule-state'], ['platforms', 'string'], ['allowLosses', 'string'],
+])
+const MAX_LOSSES_DEFAULT = COUNT_DEFAULTS.get('maxLosses')!
 const STRUCTURE_NAMES = new Map([
   ['includes', 'an include root or resolver'], ['social', 'an object'], ['urlPolicy', 'an object with a deny list or an allow list'],
 ])
@@ -151,6 +165,7 @@ function checkItems(name: string, items: readonly unknown[], what: string): void
 /** The test of each declared type: the reason a value of the option `name` is refused, or null. */
 const TYPE_CHECKS = new Map<string, (name: string, value: unknown) => string | null>([
   ['boolean', (_name, value) => (typeof value === 'boolean' ? null : 'not a boolean')],
+  ['count', (_name, value) => (Number.isSafeInteger(value) && (value as number) >= 0 ? null : 'not a count')],
   ['enum', (name, value) => {
     if (typeof value === 'string' && ENUM_VALUES.get(name)!.includes(value)) return null
     return `unknown value ${JSON.stringify(value) ?? typeof value}`
@@ -236,7 +251,7 @@ function checkValues(given: OptionMap, names: readonly string[], stage: 'parse' 
     if (name === 'positions' && stage === 'parse') {
       if (given[name] !== undefined && typeof given[name] !== 'boolean') throw new CarveOptionError(name, 'not a boolean')
     } else if (name === 'codeBlockRenderer') {
-      if (given[name] !== undefined && typeof given[name] !== 'function') throw new CarveOptionError(name, 'not a function')
+      if (given[name] != null && typeof given[name] !== 'function') throw new CarveOptionError(name, 'not a function')
     } else if (OPTION_KINDS.has(name)) checkType(name, given[name])
     else throw new CarveOptionError(name, 'unknown option')
   }
@@ -247,11 +262,20 @@ function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
   const names = Object.keys(given)
   checkValues(given, names, stage)
   for (const name of names) {
-    const kind = name === 'codeBlockRenderer' ? 'render' : OPTION_KINDS.get(name)
+    const kind = OPTION_KINDS.get(name)
     if (kind === 'format' || kind === 'lint' || (stage === 'parse' && kind === 'render')) {
       throw new CarveOptionError(name, `not an option of ${stage}`)
     }
   }
+}
+
+/** C2-H-204: each entry is a code of the render-loss channel. */
+function allowLossesValue(value: unknown): readonly string[] {
+  if (value === undefined) return []
+  const list = value as readonly string[]
+  const unknown = list.find((code) => !RENDER_LOSS_CODES.includes(code))
+  if (unknown !== undefined) throw new CarveOptionError('allowLosses', `${JSON.stringify(unknown)} is no render-loss code`)
+  return list
 }
 
 function extensionsValue(value: unknown): readonly ExtensionDefinition[] {
@@ -375,7 +399,7 @@ export function readOptions(options: object | undefined, stage: 'parse' | 'rende
     extensions,
     includes: includeSettings(given['includes'], (reason) => new CarveOptionError('includes', reason)),
     renderers: renderersValue(given['renderers']),
-    codeBlockRenderer: given['codeBlockRenderer'] as Settings['codeBlockRenderer'],
+    codeBlockRenderer: (given['codeBlockRenderer'] ?? undefined) as Settings['codeBlockRenderer'],
     urlPolicy: policy,
     headingIds: enumValue(given, 'headingIds') as HeadingIds,
     mode: enumValue(given, 'mode') as Mode,
@@ -393,5 +417,8 @@ export function readOptions(options: object | undefined, stage: 'parse' | 'rende
     strictLosses: booleanValue(given, 'strictLosses'),
     semanticKeys: lastField(extensions, 'semanticKeys') ?? CORE_SEMANTIC_KEYS,
     quotes: lastField(extensions, 'quotes'),
+    allowLosses: new Set(allowLossesValue(given['allowLosses'])),
+    maxLosses: (given['maxLosses'] as number | undefined) ?? MAX_LOSSES_DEFAULT,
+    softBreak: enumValue(given, 'softBreak') as SoftBreak,
   }
 }

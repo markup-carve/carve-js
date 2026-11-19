@@ -264,7 +264,7 @@ function renderFile(path: string, display: string, bytes: Uint8Array, args: Pars
   const input = fromAst ? tree(strictText(path, bytes)) : bytes
   const source = fromAst ? '' : lenientText(bytes)
   // C2-T-026: the allow list is applied before strictLosses, so the gate is the command's.
-  const result = renderWithDiagnostics(input, { ...settings, strictLosses: false })
+  const result = renderWithDiagnostics(input, { ...settings, strictLosses: false, maxLosses: Number.MAX_SAFE_INTEGER })
   const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
   const file: FileResult = { status: 0, losses: { file: display,
     diagnostics: located(source, retained, fromAst ? undefined : bytes), suppressed } }

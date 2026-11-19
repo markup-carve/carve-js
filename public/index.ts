@@ -29,10 +29,10 @@ export { type MigrateOptions, type MigrationResult } from '../migrate/index.ts'
 export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from '../src/layout.ts'
 export { CarveLayoutError, validateLayout } from '../src/layout-validate.ts'
 export {
-  CarveOptionError, type HeadingIds, type Mode, type ParseOptions, type Profile, type RenderOptions, type Social, type SocialRequest,
+  CarveOptionError, type HeadingIds, type Mode, type ParseOptions, type Profile, type RenderOptions, type Social, type SocialRequest, type SoftBreak,
   type UrlPolicy,
 } from '../src/options.ts'
-export { stringOffsetOfByte, utf8Length } from '../src/positions.ts'
+export { positionOf, stringOffsetOfByte, utf8Length } from '../src/positions.ts'
 export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } from '../src/format.ts'
 export { CarveWriteError, type LayoutEntry, type WriteOutput } from '../src/write.ts'
 export { type Diagnostic } from '../src/diagnostics.ts'

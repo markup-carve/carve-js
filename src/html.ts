@@ -14,7 +14,7 @@ import {
   attributes, carriesAttributes, escapeAttribute, escapeCarrierText, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
 import { inlineHtml, mergedAttrs } from './html-inline.ts'
-import { type Settings } from './options.ts'
+import { CarveOptionError, type Settings } from './options.ts'
 import { attributesAct, includeSource } from './include.ts'
 import { includeMessage } from './expand.ts'
 import { PROFILES } from './render-tables.ts'
@@ -415,7 +415,10 @@ function codeBlock(r: Render, node: CodeBlockNode, level: number): void {
   const title = node.title === undefined ? undefined : plainText(node.title)
   const defaultHtml = preHtml(r, node, node.syntax, title, node.groupLabel)
   const html = r.settings.codeBlockRenderer?.(node, defaultHtml)
-  if (html !== undefined && typeof html !== 'string') throw new TypeError('codeBlockRenderer returned a value that is not a string')
+  // C2-H-207: a result that is neither text nor nothing refuses the render.
+  if (html !== undefined && html !== null && typeof html !== 'string') {
+    throw new CarveOptionError('codeBlockRenderer', 'returned a value that is neither text nor nothing')
+  }
   line(r, level, html ?? defaultHtml)
 }
 

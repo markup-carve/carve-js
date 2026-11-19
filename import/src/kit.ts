@@ -6,7 +6,20 @@ import {
 
 export type Format = 'markdown' | 'gfm' | 'djot' | 'bbcode' | 'html'
 export type ImportDiagnostic = Diagnostic & { foreignType?: string }
-export interface ImportResult { document: DocumentNode, source: string, diagnostics: ImportDiagnostic[] }
+export interface ImportResult {
+  document: DocumentNode
+  source: string
+  diagnostics: ImportDiagnostic[]
+  /** C2-H-205: the losses past `maxLosses` that were counted, not kept. */
+  suppressedDiagnostics?: number
+}
+
+/** C2-M-082, C2-H-204, C2-H-205: the loss settings an import reads. */
+export interface LossSettings {
+  strictLosses?: boolean
+  allowLosses?: readonly string[]
+  maxLosses?: number
+}
 
 export class ImportInputError extends Error {
   readonly code = 'import-input-error'
@@ -14,14 +27,27 @@ export class ImportInputError extends Error {
   constructor(message: string, foreignType: string) { super(message); this.name = 'ImportInputError'; this.foreignType = foreignType }
 }
 
-/** C2-M-006, C2-M-082: runs one import; a refusal becomes `ImportInputError` and `strictLosses` makes each loss an error. */
-export function runImport(format: Format, strictLosses: boolean, run: () => ImportResult): ImportResult {
+/**
+ * C2-M-006, C2-M-082: runs one import; a refusal becomes `ImportInputError` and `strictLosses` makes each loss an error.
+ * C2-H-204, C2-H-205: allowed codes are left out, and losses past `maxLosses` are counted, not kept.
+ */
+export function runImport(format: Format, settings: LossSettings, run: () => ImportResult): ImportResult {
   try {
     const result = run()
-    if (strictLosses) for (const entry of result.diagnostics) {
-      if (entry.channel === 'render-loss') entry.severity = 'error'
+    const allowed = new Set(settings.allowLosses ?? [])
+    const max = settings.maxLosses ?? 100
+    const kept: ImportDiagnostic[] = []
+    let suppressed = 0
+    for (const entry of result.diagnostics) {
+      if (entry.channel !== 'render-loss') kept.push(entry)
+      else if (allowed.has(entry.code)) continue
+      else if (kept.filter((other) => other.channel === 'render-loss').length >= max) suppressed++
+      else {
+        if (settings.strictLosses === true) entry.severity = 'error'
+        kept.push(entry)
+      }
     }
-    return result
+    return { ...result, diagnostics: kept, suppressedDiagnostics: suppressed }
   } catch (error) {
     if (error instanceof ImportInputError) throw error
     if (error instanceof RangeError && error.message.includes('stack')) {

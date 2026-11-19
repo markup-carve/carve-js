@@ -11,10 +11,8 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
     fix: 'C2-W-138 ranges the key and value rather than the whole span' }],
   ['CC-891', { fields: ['diagnostics:delimited-table-wide-row'],
     fix: 'C2-W-138 ranges the whole table rather than only its fence opener' }],
-  ['CC-1223', { fields: ['html'],
-    fix: 'C2-X-035 wraps the fallback because C2-X-058 keeps the locator as an attribute' }],
-  ['CC-1227', { fields: ['html'],
-    fix: 'C2-H-020 keeps a promoted block image bare when C2-H-159 blanks its denied source' }],
+  ['CC-1271', { fields: ['stderrDiagnostics'],
+    fix: 'destination-denied starts at the destination, column 5, as CC-651 and CC-1262 state' }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
