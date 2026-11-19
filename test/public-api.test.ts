@@ -37,7 +37,7 @@ describe('the public 0.2 entry', () => {
       'AST_VERSION', 'CarveInputError', 'CarveLayoutError', 'CarveOptionError', 'CarvePatchError', 'CarveRenderError', 'CarveTreeError',
       'CarveWriteError', 'DEFAULT_DENIED_SCHEMES', 'ImportInputError', 'LAYOUT_VERSION', 'MAX_TREE_DEPTH', 'NODE_TYPES',
       'RESERVED_WRITER_TARGETS', 'SPEC_VERSION', 'VERSION', 'applyPatch', 'createWriterRegistry', 'decodeTree', 'diffTree',
-      'encodeEnvelope', 'encodeTree', 'format', 'formatWithDiagnostics', 'headingId', 'importDocument', 'includeDependencies',
+      'encodeEnvelope', 'encodeTree', 'fix', 'fixEdits', 'fixableRules', 'format', 'formatWithDiagnostics', 'headingId', 'importDocument', 'includeDependencies',
       'includeRegion', 'isUrlAllowed', 'lint', 'migrateTree', 'parse', 'parseWithDiagnostics', 'parseWithLayout', 'positionOf',
       'render', 'renderWithDiagnostics', 'renderWithDocumentTransforms', 'sourceFingerprint', 'stringOffsetOfByte',
       'tabsExtensions', 'tabsRenderer', 'treeFingerprint', 'urlScheme', 'utf8Length', 'validateLayout', 'validateTree', 'write',

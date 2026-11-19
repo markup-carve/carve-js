@@ -23,6 +23,9 @@ const source = format('=  Hello /Carve/')
 const diagnostics = lint('See [x][nope].')
 ```
 
+`fix(source)` applies the rewrites of `carve lint --fix` and `fixEdits(source, diagnostic)` returns the edits for one
+finding, for editor quick fixes ([Lint fixes](docs/api.md#lint-fixes)).
+
 The root entry runs in browsers, Node, Deno and bundlers. `@markup-carve/carve/node` adds
 `fileSystemResolver`, the include resolver that reads files. `@markup-carve/carve/import` imports Markdown, GFM,
 Djot, BBCode and HTML ([guide](docs/import.md)); the core entry imports HTML. `@markup-carve/carve/upgrade` is the

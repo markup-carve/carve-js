@@ -28,6 +28,8 @@ HTML importer uses.
 | `write` | a tree, `{ layout, alignTables, extensions, check }` | canonical source | `CarveOptionError`, `CarveTreeError`, `CarveWriteError` |
 | `writeWithDiagnostics` | as `write` | `{ source, diagnostics }` | `CarveOptionError`, `CarveTreeError` |
 | `lint` | source, `{ rules, platforms, includes, extensions }` | diagnostics | `CarveOptionError` |
+| `fix` | source, `{ rules, platforms, extensions }` | `{ output, applied }`, as `carve lint --fix` writes it ([Lint fixes](#lint-fixes)) | `CarveOptionError` |
+| `fixEdits` | source, a diagnostic of `lint` | the edits that fix that finding, or null | `CarveOptionError` |
 | `importDocument` | HTML, `{ from: 'html', rawHtml, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
 | `includeDependencies` | a tree, `{ ranges }` | its include dependencies; with `ranges`, each directive's byte range | |
 | `includeRegion` | file text, a region name, `{ code }` | `{ ok, text, start, end }` or `{ ok: false, reason }` | `CarveOptionError` |
@@ -43,8 +45,8 @@ HTML importer uses.
 | `validateLayout` | a sidecar value | the sidecar | `CarveLayoutError` |
 | `writeDocument`, `createWriterRegistry` | a target name and a tree | `{ output, diagnostics }` | `CarveOptionError`, and the errors of the writer |
 
-Helpers: `isUrlAllowed` and `urlScheme` test a URL against a URL policy (for an extension renderer that writes
-a link), `DEFAULT_DENIED_SCHEMES` is the default deny list, `utf8Length` and `stringOffsetOfByte` turn the byte
+Helpers: `fixableRules` lists the lint rules that `fix` rewrites. `isUrlAllowed` and `urlScheme` test a URL against a
+URL policy (for an extension renderer that writes a link), `DEFAULT_DENIED_SCHEMES` is the default deny list, `utf8Length` and `stringOffsetOfByte` turn the byte
 ranges of diagnostics and positions into string offsets. `AST_VERSION`, `LAYOUT_VERSION` and `MAX_TREE_DEPTH` are
 the contract constants. `VERSION` is the package version, `SPEC_VERSION` is `{ version: '0.2', commit }` with the
 commit of the specification the engine pins, and `NODE_TYPES` holds the `block` and `inline` node type lists of the
@@ -207,6 +209,29 @@ const result = upgrade('Some _it_ text.\n', { edits: true })
 if (result.output !== 'Some {_it_} text.\n' || result.edits?.[0]?.entry !== 'U-065') throw new Error('upgrade')
 ```
 
+## Lint fixes
+
+`fix(source, options)` applies the fix pass of `carve lint --fix` (see [the CLI guide](cli.md)): each finding of a
+rule in `fixableRules` becomes the one replacement its message names. Every fixable rule is on unless `rules` turns
+it off, and a fix is kept only where its node stands at the finding after the rewrite. `applied` counts the fixes by
+rule. Includes are not read: a fix rewrites only the source it is given, so `includes` is refused.
+
+`fixEdits(source, diagnostic)` returns the edits for one finding of `lint(source)`: each has `startOffset` and
+`endOffset` (UTF-8 bytes, as in the diagnostic) and the replacement `text`. It returns null where the rule has no
+fix, or where the fix would not hold, so an editor offers a quick fix only where `carve lint --fix` would apply one.
+
+```js
+import { fix, fixEdits, lint } from '@markup-carve/carve'
+
+const result = fix('**bold** and ~~strike~~\n')
+if (result.output !== '*bold* and {~strike~}\n' || result.applied.get('markdown-strong-double-star') !== 1) throw new Error('fix')
+
+const source = 'Some **bold** text.\n'
+const finding = lint(source).find((entry) => entry.code === 'markdown-strong-double-star')
+const edits = finding === undefined ? null : fixEdits(source, finding)
+if (edits?.[0]?.text !== '*' || edits[0].startOffset !== 5) throw new Error('fixEdits')
+```
+
 ## Prettier
 
 `@markup-carve/carve/prettier` is a Prettier 3 plugin. It claims `.crv` files and prints them with `format`, so its
@@ -319,7 +344,9 @@ says what to use instead. Of the 172 values, 118 map to a 0.2 call and 54 are go
 | `djotToCarve`, `migrateDjot` | `importDocument(djot, { from: 'djot' })` of `@markup-carve/carve/import` | through djot.js and the HTML importer |
 | `bbcodeToCarve`, `migrateBbcode` | `importDocument(bbcode, { from: 'bbcode' })` of `@markup-carve/carve/import` | JavaScript only |
 | `BbcodeInputTooLargeError`, `BBCODE_MAX_INPUT_LENGTH` | the same names of `@markup-carve/carve/import` | the error is an `ImportInputError` |
-| `renderCarveWithConversionReport`, `djotMigrationWarnings`, `formatMigrationWarnings`, `applyMigrationFixes`, `BbcodeSentinelSpaceExhaustedError` | gone | the importers return `diagnostics`; the BBCode reader needs no sentinel characters |
+| `djotMigrationWarnings` | `lint` | the `djot-` and `markdown-` lint rules report the collisions; the `djot-` rules are off unless `rules` turns them on |
+| `applyMigrationFixes` | `fix` | `fixEdits` returns the edits of one finding |
+| `renderCarveWithConversionReport`, `formatMigrationWarnings`, `BbcodeSentinelSpaceExhaustedError` | gone | the importers return `diagnostics`; the BBCode reader needs no sentinel characters |
 | `SPEC_VERSION` | `SPEC_VERSION` | `{ version: '0.2', commit }` |
 | `migrateCaseOnlyReferences` | `upgrade` (`./upgrade`) | the source upgrade covers it |
 | `stampCarve`, `buildMarker`, `stripTrailingMarker`, `readStamp`, `needsReview`, `compareSpecVersions` | gone | 0.2 source carries no version stamp; `SPEC_VERSION` names what the engine reads |

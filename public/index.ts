@@ -13,6 +13,9 @@ import { type ExtensionDefinition } from '../src/extensions/types.ts'
 import { CarveOptionError, type HeadingIds, readOptions } from '../src/options.ts'
 import { slugify } from '../src/slug.ts'
 import { includeRegion as includeRegionImpl, type RegionResult } from '../src/include-source.ts'
+import { FIXABLE_RULES, type FixEdit, fixEditsFor, type FixResult, fixSource } from '../lint/fix.ts'
+import { type LintOptions } from '../lint/types.ts'
+import { type Diagnostic } from '../src/diagnostics.ts'
 import { type ApplyPatchOptions, applyPatch as applyPatchImpl, diffTree as diffTreeImpl, type PatchOperation, sourceFingerprint as
   sourceFingerprintImpl, treeFingerprint as treeFingerprintImpl } from '../src/tree-patch.ts'
 import { type LayoutEntry, write as writeImpl, writeWithDiagnostics as writeWithDiagnosticsImpl, type WriteOutput } from '../src/write.ts'
@@ -48,6 +51,7 @@ export {
 } from '../src/include-settings.ts'
 export { type IncludeDependency, includeDependencies, type IncludeDependencyOptions } from '../src/include-dependencies.ts'
 export { lint, type LintOptions } from '../lint/lint.ts'
+export { type FixEdit, type FixResult } from '../lint/fix.ts'
 export { isUrlAllowed, urlScheme } from '../src/html-attributes.ts'
 export { DEFAULT_DENIED_SCHEMES } from '../src/option-tables.ts'
 /** Provisional (spec/0.2/extensions.md): may change in 0.2.x. */
@@ -193,4 +197,36 @@ export function sourceFingerprint(source: string | Uint8Array): string {
 export function treeFingerprint(document: DocumentNode): string {
   validateTreeImpl(document)
   return treeFingerprintImpl(document)
+}
+
+/** The options of `fix`: those of `lint` without `includes`, since a fix rewrites only the source it is given. */
+export type FixOptions = Omit<LintOptions, 'includes'>
+
+/** The rules that `fix` and `fixEdits` rewrite, each to the one replacement its lint message names. */
+export const fixableRules: readonly string[] = FIXABLE_RULES
+
+function checkFixOptions(options: unknown): void {
+  if (options === undefined) return
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) throw new CarveOptionError('fix', 'not an object')
+  if ('includes' in options) throw new CarveOptionError('includes', 'unknown option')
+}
+
+/**
+ * The source with every fix applied that holds, as `carve lint --fix` writes it, and the number of fixes by rule. Every
+ * fixable rule is on unless `rules` turns it off. A fix whose node does not stand where its finding started is dropped.
+ */
+export function fix(source: string, options?: FixOptions): FixResult {
+  if (typeof source !== 'string') throw new CarveOptionError('source', 'not a string')
+  checkFixOptions(options)
+  return fixSource(source, options ?? {})
+}
+
+/**
+ * The edits that fix one finding `lint` reported for `source` (an editor quick fix), or null where its rule has no fix
+ * or the fix would not hold. Ranges are UTF-8 byte offsets, as in the diagnostic.
+ */
+export function fixEdits(source: string, diagnostic: Diagnostic): FixEdit[] | null {
+  if (typeof source !== 'string') throw new CarveOptionError('source', 'not a string')
+  if (typeof diagnostic !== 'object' || diagnostic === null) throw new CarveOptionError('diagnostic', 'not a diagnostic')
+  return fixEditsFor(source, diagnostic)
 }
