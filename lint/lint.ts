@@ -149,11 +149,27 @@ function visit(node: Node, path: string, context: LintContext, controls: Control
   const pos = node.pos
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
     node.type, path, pos.startLine, pos.endLine)
+  markContent(node, context)
   maskLeaf(node, path, context)
   const control = controlOf(node, context)
   if (control !== null && pos !== undefined) controls[pos.startLine]!.push(control)
   runNodeRules(node, path, context)
   visitChildren(node, path, context, controls)
+}
+
+const CONTENT_TYPES: ReadonlySet<Node['type']> = new Set(['paragraph', 'caption', 'line', 'heading', 'definition_term', 'thematic_break', 'table_row'])
+
+/** A leaf block starts its first line's text, and each break ends where the next line's text starts. */
+function markContent(node: Node, context: LintContext): void {
+  const pos = node.pos
+  if (pos === undefined) return
+  const offset = CONTENT_TYPES.has(node.type) ? pos.startOffset
+    : node.type === 'soft_break' || node.type === 'hard_break' ? pos.endOffset : undefined
+  if (offset === undefined) return
+  const line = context.lines[(node.type === 'soft_break' || node.type === 'hard_break' ? pos.endLine : pos.startLine) - 1]
+  const at = context.chars[offset] ?? line?.start
+  // A caption's paragraph starts behind the caption's own marker, which stays part of the line's text.
+  if (line !== undefined && at !== undefined && (line.content === undefined || at < line.content)) line.content = at
 }
 
 const OPAQUE_LEAF_TYPES: readonly Node['type'][] = ['code', 'raw_inline', 'literal_inline', 'math', 'comment',

@@ -20,6 +20,8 @@ export interface Line {
   path: string
   opaque: boolean
   paragraph: boolean
+  /** Where the text of the line's leaf block starts, behind every container prefix. */
+  content?: number
 }
 
 export interface LintContext {
