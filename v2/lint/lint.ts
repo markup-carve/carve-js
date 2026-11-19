@@ -260,8 +260,8 @@ export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
   const own = lintSource(source, options)
   if (options.includes === undefined) return own
   const rest: LintOptions = { ...options }
-  const all = [...own, ...lintIncludes(source, options.includes, (text) => lintSource(text, rest),
-    (text, node, path) => lintPayload(text, node, path, rest))]
+  const all = lintIncludes(source, options.includes, own, (text) => lintSource(text, rest),
+    (text, node, path) => lintPayload(text, node, path, rest))
   const seen = new Set<string>()
   return all.filter((entry) => {
     const key = `${entry.file ?? ''}\0${entry.code}\0${entry.range?.startOffset ?? ''}\0${entry.range?.endOffset ?? ''}`
