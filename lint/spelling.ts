@@ -84,7 +84,7 @@ function thematicBreak(line: Line, context: LintContext): void {
   if (!isRun(text, '-_', 3)) return
   const previous = prior(line, context)
   if (text[0] === '-' && previous !== undefined && previous.text.trim() !== '' && previous.paragraph) return
-  if (line.number === 1 && text === '---') return
+  if (line.number === 1 && start === line.start && text === '---') return
   context.report('thematic-break-spelling', start, start + text.length, line.path, { raw: text })
 }
 
