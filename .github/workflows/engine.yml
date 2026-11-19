@@ -61,6 +61,10 @@ jobs:
       - name: Example inputs for the cross-check
         run: node scripts/write-example-inputs.ts
 
+      # The cross-check of a spec pin from before the 0.2 rename reads the engine under v2/.
+      - name: Engine paths for the pinned cross-check
+        run: mkdir -p v2 && ln -sfn ../src v2/src && ln -sfn ../data v2/data && ln -sfn ../test v2/test
+
       - name: Schema and reader cross-check
         run: AST_FUZZ_COUNT=100000 node --stack-size=8192 scripts/spec2-ast-crosscheck.mjs ..
         working-directory: carve
