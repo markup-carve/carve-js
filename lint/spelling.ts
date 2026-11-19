@@ -183,11 +183,23 @@ function emptyReference(line: Line, context: LintContext): void {
     { label: match[1]! }, footnote ? 1 : 0)
 }
 
+function textOwner(path: string, context: LintContext): string {
+  for (let at = path; at !== ''; at = at.slice(0, at.lastIndexOf('/'))) {
+    const type = context.nodeTypes.get(at)
+    if (type === 'heading') return 'heading'
+    if (type === 'caption') return 'caption'
+    if (type === 'definition_term') return 'term'
+    if (type === 'table_cell' || type === 'cell_paragraph') return 'cell'
+    if (type === 'line_block' || type === 'line') return 'line-block line'
+  }
+  return 'paragraph'
+}
+
 function tableShaped(line: Line, context: LintContext): void {
   const { text, start } = lineText(line)
   if (text.startsWith('|') && !text.endsWith('|') && line.paragraph) {
     context.report('table-shaped-paragraph', start, start + text.length, line.path,
-      { owner: context.nodeTypes.get(line.path) === 'heading' ? 'heading' : 'paragraph' })
+      { owner: textOwner(line.path, context) })
   }
 }
 
