@@ -448,23 +448,25 @@ export interface DocumentTransform {
   transform: (view: DocumentNode) => DocumentNode
 }
 
-/** C2-X-055: the authored ids that occur more than once in one render view. */
-function duplicateViewIds(document: DocumentNode): Set<string> {
-  const seen = new Set<string>()
-  const duplicates = new Set<string>()
+/** C2-X-055: how often each authored id occurs in one render view. */
+function viewIdCounts(document: DocumentNode): Map<string, number> {
+  const counts = new Map<string, number>()
   const visit = (node: Node): void => {
     const id = node.attrs?.id
-    if (id !== undefined) {
-      if (seen.has(id)) duplicates.add(id)
-      seen.add(id)
-    }
+    if (id !== undefined) counts.set(id, (counts.get(id) ?? 0) + 1)
     forEachSlot(node, (nodes, step) => {
       if (step === 'fallback') return
       for (const child of nodes) visit(child)
     }, undefined, document.extensions)
   }
   visit(document)
-  return duplicates
+  return counts
+}
+
+/** An id the transform used once more than its input did, where that makes it a duplicate. */
+function addedDuplicate(before: ReadonlyMap<string, number>, after: ReadonlyMap<string, number>): string | undefined {
+  for (const [id, count] of after) if (count > 1 && count > (before.get(id) ?? 0)) return id
+  return undefined
 }
 
 function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[], extensions: Settings['extensions']): {
@@ -472,15 +474,15 @@ function applyDocumentTransforms(view: DocumentNode, transforms: readonly Docume
 } {
   const failures: Diagnostic[] = []
   // A duplicate the source already holds is reported by the parse; only one a transform adds fails it.
-  let duplicates = duplicateViewIds(view)
+  let counts = viewIdCounts(view)
   for (const entry of transforms) {
     try {
       const next = entry.transform(structuredClone(view))
       validateTree(next, undefined, undefined, extensions)
-      const after = duplicateViewIds(next)
-      const added = [...after].find((id) => !duplicates.has(id))
+      const after = viewIdCounts(next)
+      const added = addedDuplicate(counts, after)
       if (added !== undefined) throw new Error(`duplicate authored id ${added}`)
-      duplicates = after
+      counts = after
       view = next
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)

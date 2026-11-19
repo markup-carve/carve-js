@@ -237,6 +237,13 @@ describe('linkPolicy', () => {
     expect(render('[c](/p) [e](#x)\n', { extensions: [linkPolicy({ allowInternal: false })] })).toBe('<p>c e</p>')
   })
 
+  it('reads a host as a browser does, and treats a bare relative path as internal', () => {
+    const numeric = render('[a](http://2130706433/) [b](http://0x7f.0.0.1/x) [c](https://ok.org)\n',
+      { extensions: [linkPolicy({ deniedDomains: ['127.0.0.1'] })] })
+    expect(numeric).toBe('<p>a b <a href="https://ok.org">c</a></p>')
+    expect(render('[x](doc/page) [y](a/b:c)\n', { extensions: [linkPolicy({ allowInternal: false })] })).toBe('<p>x y</p>')
+  })
+
   it('reads the allowed domains and schemes', () => {
     const src = '[a](https://docs.ok.org) [b](https://other.org) [m](mailto:x@ok.org)\n'
     expect(render(src, { extensions: [linkPolicy({ allowedDomains: ['ok.org'] })] })).toBe(

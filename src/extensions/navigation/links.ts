@@ -108,7 +108,22 @@ function specialUrlHost(afterScheme: string): string | null {
     host = colon === -1 ? authority : authority.slice(0, colon)
   }
   host = normalizeHost(percentDecode(host))
-  return host === '' ? null : host
+  if (host === '') return null
+  try {
+    // The WHATWG parser decides which host a browser opens: `2130706433` and `0x7f.1` are `127.0.0.1`.
+    return normalizeHost(new URL(`http://${afterScheme.replace(/^[/\\]+/u, '')}`).hostname) || host
+  } catch {
+    return host
+  }
+}
+
+/** A configured domain, read as the host a URL with it would have. */
+function canonicalHost(domain: string): string {
+  try {
+    return normalizeHost(new URL(`http://${domain}`).hostname) || normalizeHost(domain)
+  } catch {
+    return normalizeHost(domain)
+  }
 }
 
 function trimControls(url: string): string {
@@ -137,9 +152,9 @@ function compilePolicy(options: LinkPolicyOptions): Policy {
     denied: lower(options.deniedSchemes ?? ['javascript', 'vbscript', 'data', 'file']),
     allowed: options.allowedSchemes === undefined || options.allowedSchemes === null ? null : lower(options.allowedSchemes),
     allowedDomains: options.allowedDomains === undefined || options.allowedDomains === null
-      ? null : options.allowedDomains.map(normalizeHost),
-    deniedDomains: (options.deniedDomains ?? []).map(normalizeHost),
-    baseHost: options.baseHost === undefined ? null : normalizeHost(options.baseHost),
+      ? null : options.allowedDomains.map(canonicalHost),
+    deniedDomains: (options.deniedDomains ?? []).map(canonicalHost),
+    baseHost: options.baseHost === undefined ? null : canonicalHost(options.baseHost),
   }
 }
 
@@ -164,7 +179,7 @@ function schemeAllowed(policy: Policy, url: string, colon: number): boolean {
   return policy.deniedDomains.length === 0 && policy.allowedDomains === null && policy.allowExternal
 }
 
-/** The 0.1 `LinkPolicy` decision, ported unchanged. */
+/** The 0.1 `LinkPolicy` decision; a host is read as a browser reads it, and a bare relative path is internal. */
 function policyAllows(policy: Policy, input: string): boolean {
   const url = trimControls(input).replace(/[\t\n\r]/gu, '')
   if (url === '') return true
@@ -177,7 +192,9 @@ function policyAllows(policy: Policy, input: string): boolean {
   }
   if (prefix.startsWith('/') || prefix.startsWith('./') || prefix.startsWith('../')) return policy.allowInternal
   const colon = url.indexOf(':')
-  return colon === -1 || schemeAllowed(policy, url, colon)
+  // A path without a scheme, such as `doc/page` or `a/b:c`, is relative and so internal.
+  if (colon === -1 || /[/?#]/u.test(url.slice(0, colon))) return policy.allowInternal
+  return schemeAllowed(policy, url, colon)
 }
 
 /**

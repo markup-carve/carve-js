@@ -96,6 +96,16 @@ describe('C2-X-053 to C2-X-055: document transforms', () => {
     expect(result.diagnostics.map((entry) => entry.code)).not.toContain('extension-transform-failed')
   })
 
+  it('fails a transform that adds an occurrence of an id the source already duplicates', () => {
+    const result = renderWithDocumentTransforms('[a]{#x} [b]{#x}', [{ name: 'third', transform: (view) => {
+      const paragraph = view.children[0]
+      if (paragraph?.type === 'paragraph') paragraph.children.push({ type: 'span', attrs: { id: 'x' }, children: [] })
+      return view
+    } }])
+    expect(result.html).toBe('<p><span id="x">a</span> <span id="x">b</span></p>')
+    expect(result.diagnostics.map((entry) => entry.message)).toContain('The document transform third failed: duplicate authored id x')
+  })
+
   it('runs the document transforms registered in extensions, in registration order', () => {
     const suffix = (name: string, text: string): ExtensionDefinition => ({ name, version: '1', props: {}, slots: {},
       documentTransform: (view) => {
