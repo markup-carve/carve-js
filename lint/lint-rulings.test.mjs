@@ -1,4 +1,4 @@
-// The maintainer rulings of carve#6175, #6176 and #6177 (19 November).
+// The maintainer rulings of carve#6175, #6176, #6177 and #6178 (19 November).
 import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 import { citations } from '../src/extensions/citations.ts'
@@ -28,6 +28,13 @@ describe('lint rulings', () => {
     expect(found(':: t\n: x {#id} y\n', 'unattached-inline-attribute')).toEqual([[2, 5]])
     expect(found('| x {#id} y |\n', 'unattached-inline-attribute')).toEqual([[1, 5]])
     expect(found('| a | {#id} |\n', 'unattached-inline-attribute')).toEqual([])
+  })
+
+  it('carve#6178: a lazy line offers its own quote mark as the candidate', () => {
+    expect(found('    i) > $$x$$\n   > ## H\n', 'block-opener-without-blank-line')).toEqual([[2, 4]])
+    expect(found('10. %%#region\n     > :\n> [ ]: u\n', 'block-opener-without-blank-line')).toEqual([[3, 1]])
+    expect(found('> a\n> ## H\n', 'block-opener-without-blank-line')).toEqual([[2, 3]])
+    expect(found('> a\n> > b\n', 'block-opener-without-blank-line')).toEqual([])
   })
 
   it('carve#6177: heading-marker-mixed stands on the first heading of the document', () => {

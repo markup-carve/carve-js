@@ -247,6 +247,8 @@ function openerWidth(text: string): number {
 }
 
 function quoteContinues(line: Line, previous: Line, context: LintContext): boolean {
+  // A lazy line carries no mark of the quote before its content, so its own `>` is the candidate (carve#6178).
+  if (line.content !== undefined && !line.text.slice(0, line.content - line.start).includes('>')) return false
   return previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')
 }
 
