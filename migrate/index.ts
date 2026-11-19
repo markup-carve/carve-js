@@ -44,7 +44,7 @@ function outputEnvelope(input: Fields, document: DocumentNode): Envelope {
 }
 
 const SLOTS = ['children', 'items', 'rows', 'cells', 'old', 'new', 'prefix', 'suffix', 'inline', 'title', 'shortCaption',
-  'base', 'annotation', 'pairs', 'content']
+  'base', 'annotation', 'pairs', 'content', 'locatorValue']
 
 function migrateList(values: unknown, path: string, state: MigrationState): Fields[] {
   const result: Fields[] = []

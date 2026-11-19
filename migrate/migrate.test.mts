@@ -156,4 +156,18 @@ describe('stored tree migration', () => {
       assert.equal(treesEqual(migrateTree(old).document, parse(source)), true, source)
     }
   })
+
+  it('C2-A-178, C2-A-082: the short caption of a figure and the locator of a citation are migrated like any node list', () => {
+    const escaped = [{ type: 'escaped_text', value: '*' }]
+    const figure = migrateTree({ type: 'document', astVersion: '1.2', children: [{ type: 'figure', caption: [{ type: 'text', value: 'C' }],
+      shortCaption: escaped, children: [{ type: 'code_block', content: 'x\n' }] }] })
+    const block = figure.document.children[0]
+    assert.equal(block?.type, 'code_block')
+    if (block?.type === 'code_block') assert.deepEqual(block.caption?.short, [{ type: 'text', value: '*' }])
+    const cited = migrateTree({ type: 'document', astVersion: '1.2', children: [{ type: 'paragraph', children: [
+      { type: 'citation_group', raw: '[@a]', items: [{ type: 'citation', key: 'a', locatorLabel: 'page', locatorValue: escaped }] }] }] })
+    const group = cited.document.children[0]?.type === 'paragraph' ? cited.document.children[0].children[0] : undefined
+    const citation = group?.type === 'citation_group' ? group.children[0] : undefined
+    assert.deepEqual(citation?.type === 'citation' ? citation.locator : undefined, { label: 'page', children: [{ type: 'text', value: '*' }] })
+  })
 })

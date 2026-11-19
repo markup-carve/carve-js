@@ -230,7 +230,7 @@ function citation(node: Fields, old: Fields): void {
   if (old['suppressAuthor'] === true) node['mode'] = 'suppress-author'
   delete node['suppressAuthor']
   const label = string(old['locatorLabel'])
-  const value = old['locatorValue']
+  const value = node['locatorValue']
   if (label !== undefined || value !== undefined) {
     const children = Array.isArray(value) ? value : typeof value === 'string' ? [{ type: 'text', value }] : []
     node['locator'] = label === undefined ? { children } : { label, children }
@@ -239,10 +239,10 @@ function citation(node: Fields, old: Fields): void {
   delete node['locatorValue']
 }
 
-function figure(node: Fields, old: Fields): void {
+function figure(node: Fields): void {
   const caption = node['caption']
   if (Array.isArray(caption)) node['caption'] = { type: 'caption', children: [{ type: 'paragraph', children: caption }] }
-  if (Array.isArray(old['shortCaption']) && object(node['caption'])) node['caption']['short'] = old['shortCaption']
+  if (Array.isArray(node['shortCaption']) && object(node['caption'])) node['caption']['short'] = node['shortCaption']
   delete node['shortCaption']
 }
 
@@ -362,11 +362,11 @@ function tableGroupAttrs(node: Fields, state: MigrationState): void {
 
 function tableShape(node: Fields, old: Fields, state: MigrationState): void {
   switch (node['type']) {
-    case 'table': migrateTable(node, old, state); tableGroupAttrs(node, state); figure(node, old); break
+    case 'table': migrateTable(node, old, state); tableGroupAttrs(node, state); figure(node); break
     case 'table_cell': migrateCell(node, old, state); break
     case 'table_row': migrateRow(node, old, state); break
-    case 'figure': figureTarget(node); figure(node, old); break
-    case 'figure_group': figure(node, old); break
+    case 'figure': figureTarget(node); figure(node); break
+    case 'figure_group': figure(node); break
     default: break
   }
 }
