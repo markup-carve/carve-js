@@ -15,6 +15,7 @@ import { withoutPositions } from './corpus-checks.ts'
 import { applyPatch, diffTree, sourceFingerprint, treeFingerprint } from '../src/tree-patch.ts'
 
 const same = (a, b) => isDeepStrictEqual(a, b)
+const standardRenderers = { ...imgFenceRenderers, ...mermaid().renderers, ...codeGroup().renderers }
 const catalogRows = Object.freeze(JSON.parse(readFileSync(new URL('../data/lint-rules.json', import.meta.url), 'utf8')).rules)
 const parseRows = Object.freeze(Object.fromEntries(catalogRows.filter(row => row.channel !== 'lint').map(row => [row.id, row])))
 const plain = value => JSON.parse(JSON.stringify(value))
@@ -38,7 +39,7 @@ function optionsOf(entry) {
   if (options.renderers !== undefined) options.renderers = Object.fromEntries(Object.entries(options.renderers).map(([name, value]) =>
     [name, name === 'carve.tabs' && typeof value === 'object' && value?.standard
       ? engine.standardTabsRenderer(value.standard)
-      : value === 'standard' ? name === 'carve.tabs' ? engine.tabsRenderer : imgFenceRenderers[name] : value]))
+      : value === 'standard' ? name === 'carve.tabs' ? engine.tabsRenderer : standardRenderers[name] : value]))
   if (entry.files !== undefined) options.includes = { resolver: corpusResolver(entry.files), ...options.includes }
   if (options.codeBlockRenderer !== undefined) options.codeBlockRenderer = codeBlockFunction(options.codeBlockRenderer)
   return options
