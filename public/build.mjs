@@ -1,4 +1,4 @@
-// Builds `@markup-carve/carve` and `@markup-carve/carve/node`: one ES module each, and their declarations.
+// Builds `@markup-carve/carve`, `@markup-carve/carve/node` and `@markup-carve/carve/extensions`: one ES module each, and their declarations.
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -8,6 +8,7 @@ const shared = { bundle: true, format: 'esm', target: 'es2022', legalComments: '
 
 await build({ ...shared, entryPoints: ['public/index.ts'], outfile: 'dist/index.js', platform: 'neutral' })
 await build({ ...shared, entryPoints: ['public/node.ts'], outfile: 'dist/node.js', platform: 'node' })
+await build({ ...shared, entryPoints: ['public/extensions.ts'], outfile: 'dist/extensions.js', platform: 'neutral' })
 
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'public/tsconfig.build.json'], { stdio: 'inherit' })
 

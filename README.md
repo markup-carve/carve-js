@@ -42,6 +42,7 @@ npx carve upgrade --check legacy.crv
 ## Documentation
 
 - [Library API and migration from 0.1](docs/api.md)
+- [Fenced renderers: diagrams, math, code groups and callouts](docs/fenced-renderers.md)
 - [Engine notes: conformance, byte input, includes, command line](docs/engine.md)
 - [Development](docs/development.md)
 - [Carve documentation](https://markup-carve.github.io/carve/)

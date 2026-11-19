@@ -9,5 +9,5 @@
     "outDir": "../dist/types"
   },
   "include": [],
-  "files": ["index.ts", "node.ts", "../import/src/mdast-extensions.d.ts"]
+  "files": ["index.ts", "node.ts", "extensions.ts", "../import/src/mdast-extensions.d.ts"]
 }
