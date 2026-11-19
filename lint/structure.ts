@@ -268,11 +268,12 @@ function headingKind(node: Node, _path: string, context: LintContext): void {
 
 function headingClosing(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading') return
-  const source = raw(node, context)
-  if (!source.trimStart().startsWith('#')) return
-  const end = source.trimEnd()
-  const hash = end.lastIndexOf(' #')
-  if (hash >= 0 && isHashRun(end.slice(hash + 1))) {
+  const end = raw(node, context).trimEnd()
+  // C2-B-153: an `=` heading too; the run needs heading text before its space, so `= ##` is left alone.
+  const marker = /^[ \t]*(?:#+|=+)[ \t]/.exec(end)?.[0].length ?? 0
+  const run = /[ \t](#+)$/.exec(end)
+  const hash = run === null ? -1 : run.index
+  if (hash >= marker && end.slice(marker, hash).trim() !== '') {
     const range = bounds(node, context)
     if (range !== null) context.report('heading-closing-hashes', range[0] + hash + 1, range[0] + end.length,
       path, { run: end.slice(hash + 1) })
@@ -289,12 +290,6 @@ function headingTrailing(node: Node, path: string, context: LintContext): void {
     if (range !== null) context.report('heading-trailing-attribute', range[0] + brace + 1, range[0] + end.length,
       path, { block })
   }
-}
-
-function isHashRun(text: string): boolean {
-  if (text.length === 0) return false
-  for (const ch of text) if (ch !== '#') return false
-  return true
 }
 
 function duplicateReferenceUrl(node: Node, path: string, context: LintContext): void {

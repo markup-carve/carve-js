@@ -67,4 +67,19 @@ describe('0.2 lint parity, lintsat1 round', () => {
   it("C2-B-075: a block opener on a later line of the term", () => {
     expect(count(":: c\n# H\n", 'definition-term-block-folded')).toBe(0)
   })
+  it("C2-B-153: closing hashes on an `=` heading", () => {
+    expect(count("== H #\n", 'heading-closing-hashes')).toBe(1)
+  })
+  it("C2-B-153: a run that is the only text", () => {
+    expect(count("= ##\n", 'heading-closing-hashes')).toBe(0)
+  })
+  it("C2-B-067: a lower-column separator after a folded term", () => {
+    expect(count("::: box\n   :: t\n: d\n:::\n", 'description-separator-below-content-column')).toBe(1)
+  })
+  it("C2-B-067: a separator at the list column", () => {
+    expect(count(":: t\n: d\n", 'description-separator-below-content-column')).toBe(0)
+  })
+  it("C2-B-074: a line the column rule reports is left to it", () => {
+    expect(count("- :: t\n  : d\n: x\n", 'markdown-definition-paragraph')).toBe(0)
+  })
 })

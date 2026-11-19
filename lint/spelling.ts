@@ -318,7 +318,7 @@ function markdownDefinition(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   // C2-B-074: a later line of its paragraph, below a line that is no `::` term.
   if (!line.paragraphLeaf || previous === undefined || previous.path !== line.path || !text.startsWith(': ')) return
-  if (lineText(previous).text.startsWith(':: ')) return
+  if (lineText(previous).text.startsWith(':: ') || belowListColumn(line, context) !== undefined) return
   context.report('markdown-definition-paragraph', start, start + text.length, line.path)
 }
 
@@ -410,23 +410,61 @@ function captionLooking(line: Line, context: LintContext): void {
   if (below || above) context.report('caption-looking-paragraph', start, start + 1, line.path, {}, below ? 0 : 1)
 }
 
-function descriptionColumn(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
-  if (!line.paragraph || (!text.startsWith(': ') && !text.startsWith(':: '))) return
-  if (!hasAncestor(line.path, context, 'list_item')) return
-  let host: Line | undefined
-  for (let at = line.number - 2; at >= 0; at--) {
-    const candidate = context.lines[at]
-    if (candidate === undefined) break
-    if (line.number - candidate.number > 4) break
-    if (trimmed(candidate).text.startsWith(':: ')) { host = candidate; break }
+function ancestorOf(path: string, context: LintContext, type: string): string | undefined {
+  let current = path
+  while (current !== '') {
+    if (context.nodeTypes.get(current) === type) return current
+    const split = current.lastIndexOf('/children/')
+    if (split < 0) return undefined
+    current = current.slice(0, split)
   }
-  if (host === undefined) return
-  const first = trimmed(host)
-  if (!first.text.startsWith(':: ') || start - line.start >= first.start - host.start) return
+  return undefined
+}
+
+function quoteDepth(path: string, context: LintContext): number {
+  let depth = 0
+  for (let at = path.indexOf('/children/'); at >= 0; at = path.indexOf('/children/', at + 1)) {
+    if (context.nodeTypes.get(path.slice(0, at)) === 'block_quote') depth++
+  }
+  return depth + (context.nodeTypes.get(path) === 'block_quote' ? 1 : 0)
+}
+
+// C2-B-067, C2-B-071, C2-B-074: a colon mark that opens no entry, below a description list whose first term
+// mark stands further right.
+function opensEntry(line: Line, context: LintContext): boolean {
+  if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) === line.number) return true
+  const description = ancestorOf(line.path, context, 'definition_description')
+  return description !== undefined && firstLineOfPath(description, context) === line.number
+}
+
+/** The column of the first term mark of the description list the nearest non-blank line above at the same quote depth lies in. */
+function listColumnAbove(line: Line, context: LintContext): number | undefined {
+  const depth = quoteDepth(line.path, context)
+  for (let at = line.number - 2; at >= 0; at--) {
+    const host = context.lines[at]
+    if (host === undefined || host.text.trim() === '' || quoteDepth(host.path, context) !== depth) continue
+    const list = ancestorOf(host.path, context, 'definition_list')
+    const listLine = list === undefined ? undefined : firstLineOfPath(list, context)
+    const listStart = list === undefined ? undefined : context.layouts.get(list)?.startByte
+    if (listLine === undefined || listStart === undefined) return undefined
+    return (context.chars[listStart] ?? 0) - context.lines[listLine - 1]!.start
+  }
+  return undefined
+}
+
+function belowListColumn(line: Line, context: LintContext): { text: string, start: number, hostColumn: number } | undefined {
+  const { text, start } = contentLine(line)
+  if (!/^::?(?:[ \t]|$)/.test(text) || opensEntry(line, context)) return undefined
+  const hostColumn = listColumnAbove(line, context)
+  return hostColumn !== undefined && hostColumn > start - line.start ? { text, start, hostColumn } : undefined
+}
+
+function descriptionColumn(line: Line, context: LintContext): void {
+  const found = belowListColumn(line, context)
+  if (found === undefined) return
+  const { text, start, hostColumn } = found
   context.report('description-separator-below-content-column', start, start + text.length, line.path,
-    { name: text.startsWith('::') ? 'term' : 'description', column: String(start - line.start + 1),
-      'host.column': String(first.start - host.start + 1) })
+    { name: text.startsWith('::') ? 'term' : 'description', column: String(start - line.start + 1), 'host.column': String(hostColumn + 1) })
 }
 
 const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'admonition', 'figure_group', 'line_block', 'block_quote'])
