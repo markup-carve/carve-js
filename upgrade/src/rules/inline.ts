@@ -20,7 +20,9 @@ function hasClosingRun(src: string, openerEnd: number, end: number, width: numbe
   return false
 }
 
-function canCloseRun(visit: Visit): boolean {
+function canCloseRun(visit: Visit, late: boolean): boolean {
+  // C2-B-169: in a cell the closer on the line keeps the pipes inside the span, so the late pass tries every host.
+  if (late) return OPEN_RUNS.includes(visit.node.type) && visit.node.pos !== undefined
   return OPEN_RUNS.includes(visit.node.type) && visit.node.pos !== undefined
     && ancestor(visit, 'block_quote') === null && ancestor(visit, 'line_block') === null
     && ancestor(visit, 'table') === null && ancestor(visit, 'figure') === null
@@ -28,7 +30,7 @@ function canCloseRun(visit: Visit): boolean {
 
 function unclosedRun(ctx: Context, visit: Visit): void {
   const node = visit.node
-  if (!canCloseRun(visit)) return
+  if (!canCloseRun(visit, ctx.late)) return
   const { startOffset: start, endOffset: end, startLine } = node.pos!
   let at = start
   if (ctx.src[at] === '!' || ctx.src[at] === '$') at++
