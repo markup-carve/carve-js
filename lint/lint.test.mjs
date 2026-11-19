@@ -15,6 +15,19 @@ it('C2-B-081: a definition shaped line in a quote is reported', () => {
   expect(entries[0].range.startOffset).toBe(2)
 })
 
+it('C2-B-160 and C2-B-161: only a column-zero first-line hyphen run opens frontmatter', () => {
+  for (const prefix of [' ', '  ', '    ', '\t']) {
+    const source = `${prefix}---\n`
+    const entries = lint(source).filter((entry) => entry.code === 'thematic-break-spelling')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].range).toEqual({ startOffset: prefix.length, endOffset: prefix.length + 3 })
+  }
+  const quoted = lint('> ---\n').filter((entry) => entry.code === 'thematic-break-spelling')
+  expect(quoted).toHaveLength(1)
+  expect(quoted[0].range).toEqual({ startOffset: 2, endOffset: 5 })
+  expect(lint('---\n').map((entry) => entry.code)).not.toContain('thematic-break-spelling')
+})
+
 it('C2-B-030: the right aligned ordered marker is reported at that marker', () => {
   const entries = lint(' 9. a\n10. b\n').filter((entry) => entry.code === 'ordered-marker-right-aligned')
   expect(entries).toHaveLength(1)
