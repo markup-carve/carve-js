@@ -102,6 +102,20 @@ describe('diffTree and applyPatch', () => {
     expect(encodeTree(tree)).toBe(before)
   })
 
+  it('tests values without regard to member order, and refuses a value that is no JSON', () => {
+    const tree = parse('a', { positions: false })
+    const reversed = Object.fromEntries(Object.entries(JSON.parse(encodeTree(tree)) as object).reverse())
+    expect(() => applyPatch(tree, [{ op: 'test', path: '', value: reversed }])).not.toThrow()
+    for (const value of [undefined, 1n, Number.NaN, new Date(0)]) {
+      try {
+        applyPatch(tree, [{ op: 'add', path: '/children/-', value }])
+        throw new Error('accepted')
+      } catch (error) {
+        expect((error as CarvePatchError).path).toBe('/0/value')
+      }
+    }
+  })
+
   it('applies move and copy', () => {
     const tree = parse('a\n\nb\n', { positions: false })
     const moved = applyPatch(tree, [{ op: 'move', from: '/children/0', path: '/children/1' }])
@@ -130,6 +144,11 @@ describe('carve diff', () => {
     expect(result.status).toBe(1)
     expect(JSON.parse(result.stdout)).toEqual(diffTree(parse('a /b/\n', { positions: false }), parse('a *b*\n', { positions: false })))
     expect(cli('a.crv', 'b.crv').stdout).toBe('replace /children/0/children/1 {"type":"strong","children":[{"type":"text","value":"b"}]}\n')
+  })
+
+  it('reads source bytes that are not well-formed UTF-8, as render does', () => {
+    writeFileSync(join(dir, 'c.crv'), Uint8Array.from([0x61, 0xff, 0x0a]))
+    expect(cli('c.crv', 'c.crv').status).toBe(0)
   })
 
   it('exits 0 for equal trees and 2 without two files', () => {

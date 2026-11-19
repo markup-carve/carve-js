@@ -85,8 +85,23 @@ function isObject(value: Json): value is { [key: string]: Json } {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** RFC 6902, section 4.6: equal values, members compared without regard to their order. */
 function same(a: Json, b: Json): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
+  if (a === b) return true
+  if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((item, at) => same(item, b[at]!))
+  if (!isObject(a) || !isObject(b)) return false
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && same(a[key]!, b[key]!))
+}
+
+/** Whether `value` is a JSON value: what a patch may carry. */
+function isJson(value: unknown): value is Json {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (Array.isArray(value)) return value.every(isJson)
+  if (typeof value !== 'object') return false
+  const prototype: unknown = Object.getPrototypeOf(value)
+  return (prototype === Object.prototype || prototype === null) && Object.values(value).every(isJson)
 }
 
 /** Two nodes of one type are patched field by field; anything else is replaced whole. */
@@ -203,6 +218,7 @@ function applyOperation(root: Json, operation: unknown, index: number): Json {
   const path = parsePointer(entry['path'], `${at}/path`)
   const needsValue = entry['op'] === 'add' || entry['op'] === 'replace' || entry['op'] === 'test'
   if (needsValue && !Object.hasOwn(entry, 'value')) throw new CarvePatchError(`${at}/value`, 'missing')
+  if (needsValue && !isJson(entry['value'])) throw new CarvePatchError(`${at}/value`, 'not a JSON value')
   const value = structuredClone(entry['value']) as Json
   switch (entry['op']) {
     case 'add': return insert(root, path, value, `${at}/path`, false)

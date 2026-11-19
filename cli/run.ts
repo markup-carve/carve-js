@@ -560,7 +560,7 @@ function finishRun(args: ParsedArgs, collected: Collected): void {
  */
 function diffFiles(args: ParsedArgs): number {
   if (args.files.length !== 2) throw new UsageError('diff takes two files')
-  const [before, after] = args.files.map((path) => parse(strictText(path, readBytes(path)), { positions: false }))
+  const [before, after] = args.files.map((path) => parse(readBytes(path), { positions: false }))
   const patch = diffTree(before!, after!)
   process.stdout.write(args.values['json'] === true ? `${JSON.stringify(patch, null, 2)}\n` : patch.map(operationLine).join(''))
   return patch.length === 0 ? 0 : 1
