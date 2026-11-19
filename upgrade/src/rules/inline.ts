@@ -41,7 +41,11 @@ function unclosedRun(ctx: Context, visit: Visit): void {
   if (hasClosingRun(ctx.src, openerEnd, end, width)) return
   if (ctx.findings.some((finding) => finding.edit !== null && start <= finding.offset && finding.offset <= end)) return
   if (end > openerEnd) {
-    change(ctx, 'U-258', end, end, mark, 'unclosed 0.1 inline run closed at its content end')
+    // C2-I-016: a value that starts or ends with a backtick is padded with one space on each side.
+    const pad = ctx.src[end - 1] === '`'
+    const from = pad ? openerEnd : end
+    change(ctx, 'U-258', from, end, pad ? ` ${ctx.src.slice(openerEnd, end)} ${mark}` : mark,
+      'unclosed 0.1 inline run closed at its content end')
     return
   }
   const record = { ...recordOf(node.type === 'math' ? 'U-396' : 'U-258', startLine,
@@ -63,9 +67,22 @@ const BARE: Record<string, Bare> = {
   highlight: { mark: '=', entry: 'U-067', name: 'highlight' }
 }
 
+/** The start of the attribute block that ends at `end`, or `end` when the span has none. */
+function attributeStart(src: string, end: number): number {
+  if (src[end - 1] !== '}') return end
+  let depth = 0
+  for (let at = end - 1; at >= 0; at--) {
+    if (src[at] === '}') depth++
+    else if (src[at] === '{' && --depth === 0) return at
+  }
+  return end
+}
+
 function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
   if (node.pos === undefined) return
-  const { startOffset: start, endOffset: end } = node.pos
+  const { startOffset: start } = node.pos
+  // The closer of a span with a glued attribute block goes before the block.
+  const end = node.attrs === undefined ? node.pos.endOffset : attributeStart(ctx.src, node.pos.endOffset)
   if (ctx.src[start] !== bare.mark || ctx.src[end - 1] !== bare.mark || end - start < 2) return
   // C2-B-171: a brace block glued to a cell's pipe is the attribute block of the cell, so a space goes between.
   change(ctx, bare.entry, start, start, ctx.src[start - 1] === '|' ? ' {' : '{', `bare ${bare.name} put in braces`)

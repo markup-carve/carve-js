@@ -80,6 +80,9 @@ export function closedRunCandidates(output: string, id = 'U-258'): Candidate[] {
     }
     const mark = '`'.repeat(length)
     for (const end of ends) found.push({ id, output: output.slice(0, end) + mark + output.slice(end) })
+    // C2-I-016: a value that starts or ends with a backtick needs a space on each side.
+    const open = at + length
+    for (const end of ends) found.push({ id, output: `${output.slice(0, open)} ${output.slice(open, end)} ${mark}${output.slice(end)}` })
     return found
   }
   return found

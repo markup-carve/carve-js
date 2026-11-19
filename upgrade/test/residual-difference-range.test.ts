@@ -3,7 +3,7 @@ import { canWriteUpgrade, needsAttention, upgrade } from '../src/upgrade.ts'
 
 describe('residual HTML differences name their source', () => {
   it('names a map row and the source range when a rewrite does not preserve HTML', () => {
-    const source = '_*`/`/*a*/_\n'
+    const source = '_x /*a*/{.q} b/{c} c_\n'
     const result = upgrade(source)
     const mismatch = result.records.find((record) => record.entry === 'upgrade-mismatch')
     expect(result.check).toBe('mismatch')
@@ -24,9 +24,9 @@ describe('residual HTML differences name their source', () => {
   })
 
   it('marks a difference with no tool row as a map finding', () => {
-    const source = 'a------- b-------- c---------- d----------- e-------------\n'
+    const source = '{:fr}\n{:fr}\n {lang=de}\nText\n'
     const mismatch = upgrade(source).records.find((record) => record.entry === 'upgrade-mismatch')
     expect(mismatch?.message).toContain('no mapped row')
-    expect(mismatch?.range).toEqual({ startOffset: 0, endOffset: source.length - 1 })
+    expect(mismatch?.range).toEqual({ startOffset: 0, endOffset: source.indexOf('\n') })
   })
 })

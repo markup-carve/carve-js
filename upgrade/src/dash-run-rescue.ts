@@ -1,10 +1,12 @@
-// U-431: 0.1 split a hyphen run into as many em dashes as leave an even rest; C2-I-111 writes one em
-// dash and then en dashes. The dash characters 0.1 wrote keep its HTML; the complete HTML check decides.
+// U-431: 0.1 split an odd hyphen run into as many em dashes as leave an even rest; C2-I-111 writes one
+// em dash and splits the rest again. The dashes 0.1 wrote keep its HTML; the complete HTML check decides.
 import { compareHtmlExact } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
 
 function dashes01(length: number): string {
+  if (length % 3 === 0) return '—'.repeat(length / 3)
+  if (length % 2 === 0) return '–'.repeat(length / 2)
   for (let em = Math.floor(length / 3); em >= 0; em--) {
     const rest = length - em * 3
     if (rest % 2 === 0) return '—'.repeat(em) + '–'.repeat(rest / 2)

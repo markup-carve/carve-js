@@ -32,8 +32,9 @@ function delimiterOffsets(text: string, line: number): number[] {
 }
 
 export function rescueEscape(input: string, output: string, mismatch: ReportRecord): { output: string; record: ReportRecord } | null {
-  if (mismatch.line < 1 || input.split('\n').length !== output.split('\n').length) return null
-  const offsets = delimiterOffsets(output, mismatch.line)
+  if (mismatch.line < 1) return null
+  // A paragraph difference is placed on its first line; the opener 0.2 reads may stand on the next.
+  const offsets = [...delimiterOffsets(output, mismatch.line), ...delimiterOffsets(output, mismatch.line + 1)]
   if (offsets.length === 0 || offsets.length > MAX_SINGLE) return null
   const expected = html01(input)
   const keeps = (candidate: string): boolean => {

@@ -8,10 +8,10 @@ describe('C2-I-024 braced boundaries after the comment ruling', () => {
     expect(result.records.map((record) => record.entry)).toEqual(['U-401'])
   })
 
-  it('reports an unmapped mark and escaped comment combination', () => {
+  it('U-393 reports a mark and escaped comment combination', () => {
     const result = upgrade('{=a\\ %% c=} t and b \\ %% d\n')
     expect(result.check).toBe('mismatch')
-    expect(result.records.map((record) => record.entry)).toEqual(['upgrade-mismatch'])
+    expect(result.records.map((record) => record.entry)).toEqual(['U-393', 'upgrade-mismatch'])
   })
 
   for (const source of ['{-{_a-}_} b-}\n', '{-a-}{+{+b~}+}+}\n']) {
