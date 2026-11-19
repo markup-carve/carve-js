@@ -1,4 +1,5 @@
 import { change, type Context, type Visit } from '../context.ts'
+import { type Node01 } from '../engines.ts'
 import { isBlank, lineStart, lineText } from '../source.ts'
 import { quotePrefix } from './blank-lines.ts'
 import { insideQuotes, quoteDepth } from './lines.ts'
@@ -105,5 +106,71 @@ export function commentLineBreaks(ctx: Context): void {
     const at = lineStart(ctx.lines, line)
     change(ctx, 'U-433', at, at, quotePrefix(text, quoteDepth(text)).trimEnd() + '\n',
       'blank line written above the comment line that ended the 0.1 block')
+  }
+}
+
+const EXPLICIT_MESSAGE = 'a paragraph whose delimiters 0.2 pairs otherwise is written with braced spans and escaped text'
+const DELIMITER = /[*/_{}~^=+\-%`[\]!<$|"']/u
+
+interface Planned { start: number; end: number; text: string; entry: string }
+
+/** The edits that spell the inline tree under `node` explicitly, or false when it holds a form other than text and plain spans. */
+function explicitEdits(src: string, node: Node01, out: Planned[]): boolean {
+  for (const child of node.children ?? []) {
+    const pos = child.pos
+    if (pos === undefined) return false
+    if (child.type === 'soft_break' || child.type === 'hard_break') continue
+    if (child.type === 'text') {
+      if (src.slice(pos.startOffset, pos.endOffset) !== child.value) return false
+      for (let at = pos.startOffset; at < pos.endOffset; at++) {
+        if (DELIMITER.test(src[at]!)) out.push({ start: at, end: at, text: '\\', entry: 'U-273' })
+      }
+      continue
+    }
+    const span = spanOf(src, child)
+    if (span === null) return false
+    out.push({ start: pos.startOffset, end: pos.startOffset + span.width, text: span.open, entry: span.entry })
+    out.push({ start: pos.endOffset - span.width, end: pos.endOffset, text: span.close, entry: span.entry })
+    if (!explicitEdits(src, span.inner, out)) return false
+  }
+  return true
+}
+
+interface Braced { width: number; open: string; close: string; inner: Node01; entry: string }
+
+/** A 0.1 bold italic span, slash and star outside, as nested braced spans. */
+function boldItalicSpan(src: string, node: Node01, start: number, end: number): Braced | null {
+  const inner = node.children?.length === 1 ? node.children[0]! : null
+  if (inner?.type !== 'emphasis' || !src.startsWith('/*', start) || !src.startsWith('*/', end - 2)) return null
+  return { width: 2, open: '{*{/', close: '/}*}', inner, entry: 'U-068' }
+}
+
+/** The braced spelling of a 0.1 strong or emphasis span with bare delimiters, and the node that holds its content. */
+function spanOf(src: string, node: Node01): Braced | null {
+  const { startOffset: start, endOffset: end } = node.pos!
+  if (node.attrs !== undefined) return null
+  if (node.type === 'strong' && node.boldItalic === true) return boldItalicSpan(src, node, start, end)
+  const mark = node.type === 'strong' ? '*' : node.type === 'emphasis' ? '/' : null
+  if (mark === null || end - start < 2 || src[start] !== mark || src[end - 1] !== mark) return null
+  return { width: 1, open: `{${mark}`, close: `${mark}}`, inner: node, entry: 'U-273' }
+}
+
+/**
+ * C2-I-011, C2-I-049 to C2-I-052: a paragraph of text and plain strong and emphasis spans is written with
+ * braced spans and every delimiter character of its text escaped, so 0.2 pairs exactly the spans 0.1 read.
+ * It replaces the edits other rules made inside the paragraph; the self-check decides whether it is kept.
+ */
+export function explicitInline(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    if (node.type !== 'paragraph' || node.pos === undefined) continue
+    const planned: Planned[] = []
+    if (!explicitEdits(ctx.src, node, planned) || !planned.some((edit) => edit.text !== '\\')) continue
+    const { startOffset: from, endOffset: to } = node.pos
+    for (let at = ctx.findings.length - 1; at >= 0; at--) {
+      const edit = ctx.findings[at]!.edit
+      if (edit !== null && edit.end > from && edit.start < to) ctx.findings.splice(at, 1)
+    }
+    for (const edit of planned) change(ctx, edit.entry, edit.start, edit.end, edit.text, EXPLICIT_MESSAGE)
   }
 }

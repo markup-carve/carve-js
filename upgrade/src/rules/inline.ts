@@ -116,8 +116,35 @@ function boldItalic(ctx: Context, node: Node01): void {
   const { startOffset: start } = node.pos!
   const end = ctx.late && node.attrs !== undefined ? attributeStart(ctx.src, node.pos!.endOffset) : node.pos!.endOffset
   if (node.boldItalic !== true || !ctx.src.startsWith('/*', start) || !ctx.src.startsWith('*/', end - 2)) return
+  if (bracedBoldItalic) { bracedSpans(ctx, node, start, end); return }
   change(ctx, 'U-068', start, start + 2, '*/', 'emphasis outside strong respelled as strong outside emphasis')
   change(ctx, 'U-068', end - 2, end, '/*', 'emphasis outside strong respelled as strong outside emphasis')
+}
+
+/** Set while `inlineBraced` runs. */
+let bracedBoldItalic = false
+
+const textOnly = (node: Node01): boolean => (node.children ?? []).every((child) => child.type === 'text'
+  || child.type === 'soft_break' || (child.type === 'emphasis' && textOnly(child)))
+
+/**
+ * U-068 as explicit braced spans, the spelling of `rescueBracedBoldItalic`, for a span inside a larger
+ * document. C2-I-011: text content gets its punctuation escaped, so 0.2 pairs no delimiter in it.
+ */
+function bracedSpans(ctx: Context, node: Node01, start: number, end: number): void {
+  const message = 'emphasis outside strong written as explicit braced spans so its content stays text'
+  change(ctx, 'U-068', start, start + 2, '{*{/', message)
+  change(ctx, 'U-068', end - 2, end, '/}*}', message)
+  if (!textOnly(node)) return
+  for (let at = start + 2; at < end - 2; at++) {
+    if (/[!-/:-@[-`{-~]/u.test(ctx.src[at]!)) change(ctx, 'U-068', at, at, '\\', message)
+  }
+}
+
+/** The late form of `inline` that writes bold italic as braced spans. */
+export function inlineBraced(ctx: Context): void {
+  bracedBoldItalic = true
+  try { inline(ctx) } finally { bracedBoldItalic = false }
 }
 
 function deletionTagName(ctx: Context, node: Node01): void {

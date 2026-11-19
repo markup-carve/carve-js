@@ -1289,9 +1289,9 @@
     "path": "resources/examples/edge-cases/0473-a-run-of-asterisks-inside-a-combined-token-is-content.md",
     "line": 24,
     "input": "*/**/*\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-145"
+      "U-273"
     ]
   },
   {
@@ -1300,9 +1300,9 @@
     "path": "resources/examples/edge-cases/0602-the-combined-bold-italic-token-does-not-open-after-an-underscore-or-a-slash.md",
     "line": 10,
     "input": "a_/*y*/ x\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-145"
+      "U-273"
     ]
   },
   {
@@ -2191,9 +2191,9 @@
     "path": "resources/examples/edge-cases/0781-an-opener-is-open-where-it-stands-so-a-combined-token-after-a-guarded-star-stays-split.md",
     "line": 32,
     "input": "_*/*a**/\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-145"
+      "U-273"
     ]
   },
   {
@@ -2202,9 +2202,9 @@
     "path": "resources/examples/edge-cases/0739-opaque-reference-and-inline-bounds.md",
     "line": 76,
     "input": "_*x\n/*b*/\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-145"
+      "U-273"
     ]
   },
   {

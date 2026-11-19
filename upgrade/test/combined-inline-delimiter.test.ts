@@ -10,8 +10,15 @@ describe('C2-I-047 C2-I-048 C2-I-049: combined inline delimiters', () => {
     expect(result.records.map((record) => record.entry)).not.toContain('U-068')
   })
 
-  it('keeps an unrelated table difference as a mismatch', () => {
+  it('respells the token beside a table difference that a report row explains', () => {
     const result = upgrade('/***/\n\n{valigns=top,bottom widths=40}\n| a | b | c |')
+    expect(result.output).toBe('{*{/\\*/}*}\n\n{valigns=top,bottom widths=40}\n| a | b | c |')
+    expect(result.check).toBe('explained')
+    expect(result.records.map((record) => record.entry)).toEqual(expect.arrayContaining(['U-068', 'U-150']))
+  })
+
+  it('keeps an unrelated table difference as a mismatch', () => {
+    const result = upgrade('/*a %% `*/` b*/ c\n\n{valigns=top,bottom widths=40}\n| a | b | c |')
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })
