@@ -11,7 +11,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ### Breaking
 
-- The package is the Carve 0.2 engine. The 0.2 API moves from `@markup-carve/carve/v2` to the package root and `./v2/node` to `./node`; the 0.1 root API, its `./node` entry and the `./prettier` plugin are removed. [docs/api.md](docs/api.md) maps each 0.1 call to its replacement; a 0.2 Prettier plugin is #5063, the Markdown, plain-text and ANSI writers are #5057.
+- The package is the Carve 0.2 engine. The 0.2 API moves from the `./v2` entry to the package root and `./v2/node` to `./node`; the 0.1 root API, its `./node` entry and the `./prettier` plugin are removed. [docs/api.md](docs/api.md) maps each 0.1 call to its replacement; a 0.2 Prettier plugin is #5063, the Markdown, plain-text and ANSI writers are #5057.
 - The `carve` bin is the 0.2 command line (formerly `carve2`); `carve2` is removed. `carve upgrade` rewrites 0.1 documents.
 - `dist/carve.iife.min.js` (the `carve` global, `unpkg` and `jsdelivr`) exposes the 0.2 API.
 - The GitHub Action drops the `from-djot` and `portable` inputs, and the pre-commit hooks `carve-lint-from-djot` and `carve-lint-portable` are removed: 0.2 has no Djot divergence lint.
