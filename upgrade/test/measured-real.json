@@ -935,9 +935,7 @@
     "line": 1,
     "input": "> > - %%%\n> > %%%\n> > %%%\n> > x\nt\n",
     "check": "pass",
-    "entries": [
-      "U-129"
-    ]
+    "entries": []
   },
   {
     "cause": "C30",
@@ -946,9 +944,7 @@
     "line": 1,
     "input": "> - %%%\n> %%%\n> %%%\n> x\nt\n",
     "check": "pass",
-    "entries": [
-      "U-129"
-    ]
+    "entries": []
   },
   {
     "cause": "C30",
@@ -957,9 +953,7 @@
     "line": 1,
     "input": "> > > 1. %%%%\n> > > %%%%\n> > > %%%%\n> > > x\n- t\n",
     "check": "pass",
-    "entries": [
-      "U-129"
-    ]
+    "entries": []
   },
   {
     "cause": "C31",

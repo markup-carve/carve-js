@@ -6,19 +6,21 @@ import { recordOf, type ReportRecord } from './report.ts'
 import { lineOf, readLines } from './source.ts'
 import { newMapCandidates } from './new-map-candidates.ts'
 import { newMapRange, replayMapRange } from './new-map-ranges.ts'
+import { sameHost } from './tabs.ts'
 
 const REWRITE_IDS = new Set([
   'U-278', 'U-280', 'U-281',
   'U-284', 'U-285', 'U-286', 'U-290', 'U-300', 'U-304', 'U-305', 'U-340', 'U-365', 'U-366',
   'U-367', 'U-368', 'U-369', 'U-375', 'U-376', 'U-377',
-  'U-399', 'U-400', 'U-401', 'U-402', 'U-405', 'U-406', 'U-407',
+  'U-399', 'U-400', 'U-401', 'U-402', 'U-405', 'U-406', 'U-407', 'U-427',
 ])
 const REPORT_IDS = new Set([
   'U-262', 'U-263', 'U-264', 'U-271', 'U-279', 'U-282', 'U-283', 'U-287', 'U-288', 'U-289',
   'U-249', 'U-291', 'U-292', 'U-293', 'U-301', 'U-302', 'U-303', 'U-341', 'U-362', 'U-364', 'U-370', 'U-371',
   'U-378', 'U-379', 'U-380', 'U-381', 'U-382', 'U-383', 'U-384', 'U-385', 'U-386', 'U-387',
   'U-388', 'U-389', 'U-391', 'U-394', 'U-395',
-  'U-397', 'U-398', 'U-403', 'U-404', 'U-408', 'U-409', 'U-410', 'U-411',
+  'U-393', 'U-397', 'U-398', 'U-403', 'U-404', 'U-408', 'U-409', 'U-410', 'U-411',
+  'U-426', 'U-428',
   'U-414', 'U-415', 'U-417', 'U-419',
 ])
 
@@ -44,7 +46,7 @@ export function mappedRewrite(input: string): { output: string; record: ReportRe
   const candidates = row !== undefined && row.to !== input
     ? [{ id: row.id, output: row.to }, ...additional] : additional
   for (const candidate of candidates) {
-    if (!rendersLikeOld(input, candidate.output)) continue
+    if (!(candidate.id === 'U-427' ? sameHost(input, candidate.output) : rendersLikeOld(input, candidate.output))) continue
     return { output: candidate.output, record: recordOf(candidate.id, 1,
       row?.id === candidate.id ? row.meaning02 : 'the source has a preserving 0.2 spelling') }
   }

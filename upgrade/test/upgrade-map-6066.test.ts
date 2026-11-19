@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import map from '../../data/upgrade-map.json' with { type: 'json' }
 import { canWriteUpgrade, needsAttention, upgrade } from '../src/upgrade.ts'
+import { migrateCaseOnlyReferences } from '../../build/engine-0.1/index.js'
 
 const rows = map.source.filter((row) => Number(row.id.slice(2)) >= 375)
 
 describe('the pinned replay map rows', () => {
-  it.each(rows.filter((row) => row.kind === 'rewrite' && !['U-412', 'U-413', 'U-423', 'U-424', 'U-425'].includes(row.id)))
+  it.each(rows.filter((row) => row.kind === 'rewrite' && !['U-412', 'U-413', 'U-423', 'U-424', 'U-425', 'U-429'].includes(row.id)))
   ('$id rewrites and preserves the old HTML', (row) => {
     const result = upgrade(row.from)
     expect(result.output).toBe(row.to)
@@ -39,7 +40,15 @@ describe('the pinned replay map rows', () => {
     expect(record?.range).toBeDefined()
     expect(record!.range!.endOffset).toBeGreaterThan(record!.range!.startOffset)
     expect(row.from.slice(record!.range!.startOffset, record!.range!.endOffset)).not.toBe('')
-    expect(canWriteUpgrade(result)).toBe(row.id === 'U-396' || Number(row.id.slice(2)) >= 408)
+    expect(canWriteUpgrade(result)).toBe(row.id === 'U-396' ||
+      (Number(row.id.slice(2)) >= 408 && !['U-426', 'U-428'].includes(row.id)))
+  })
+
+  it('U-429 respells a case-only reference only under migration', () => {
+    const row = map.source.find((item) => item.id === 'U-429')!
+    expect(upgrade(row.from).output).toBe(row.from)
+    expect(migrateCaseOnlyReferences(row.from)).toBe(row.to)
+    expect(upgrade(row.to).check).toBe('pass')
   })
 
   it.each(rows.filter((row) => ['U-412', 'U-413'].includes(row.id)))

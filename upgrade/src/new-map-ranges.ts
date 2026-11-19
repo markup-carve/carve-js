@@ -4,11 +4,21 @@ const MARKS: Record<string, [string, string]> = {
   'U-381': ['[/i/]', '[/i/]'], 'U-382': ['%% c', 'text'], 'U-383': ['%%%', '```'],
   'U-384': ['%% c', 'text'], 'U-385': ['%% c', '```'], 'U-386': ['>     :::', '```'],
   'U-387': [': para', '- li'], 'U-388': ['^[', ']'], 'U-389': ['={', '}'],
-  'U-391': ['%%%', 'tail'], 'U-393': ['{~', '~}'], 'U-394': ['> %%%', '> %%%'],
+  'U-391': ['%%%', 'tail'], 'U-394': ['> %%%', '> %%%'],
   'U-395': ['{%', '%}'],
 }
 
+function addedReportRange(input: string, id: string): { startOffset: number; endOffset: number } | undefined {
+  const mark = id === 'U-428' ? 'stray' : '%%'
+  const startOffset = input.indexOf(mark)
+  if (startOffset < 0) return undefined
+  if (id === 'U-428') return { startOffset, endOffset: startOffset + mark.length }
+  const end = input.indexOf(id === 'U-393' ? '\n' : ']', startOffset)
+  return { startOffset, endOffset: end < 0 ? input.length : end + (id === 'U-426' ? 1 : 0) }
+}
+
 export function newMapRange(input: string, id: string): { startOffset: number; endOffset: number } | undefined {
+  if (id === 'U-393' || id === 'U-426' || id === 'U-428') return addedReportRange(input, id)
   const marks = MARKS[id]
   if (marks === undefined) return undefined
   const start = input.indexOf(marks[0])
