@@ -12,7 +12,7 @@ import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 import { createPlan, notePlaces, type Plan } from './write-plan.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
-import { sourceCoreEquivalent } from './write-extension-source.ts'
+import { sourceCoreEquivalent, withCoreInlines } from './write-extension-source.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
 export interface LayoutEntry extends WriterFacts {
@@ -582,8 +582,11 @@ function withoutStandardData(node: Node): Node {
 
 /** C2-W-002, C2-A-193: the writer disregards standard data namespaces in its readback check. */
 function writerEqual(expected: Node, actual: Node): boolean {
-  return treesEqual(expected, actual) || sourceCoreEquivalent(expected, actual) ||
-    treesEqual(withoutStandardData(expected), actual)
+  if (treesEqual(expected, actual) || sourceCoreEquivalent(expected, actual)) return true
+  const plain = withoutStandardData(expected)
+  if (treesEqual(plain, actual)) return true
+  const cores = withCoreInlines(plain)
+  return cores !== undefined && treesEqual(cores, actual)
 }
 
 /** C2-W-002: whether the written group reads back as its blocks. */

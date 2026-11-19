@@ -1224,6 +1224,7 @@ function compareFields(c: Check, e: Node, a: Node): void {
 }
 
 function compareInline(c: Check, e: Node, a: Node): void {
+  if (sourceCoreEquivalent(e, a)) return
   if ('key' in e && e.key !== undefined && hasOtherForm(c, e)) return compareRaw(c, e, a)
   compareFields(c, e, a)
   if (!('children' in e)) return
