@@ -154,7 +154,7 @@ export function loseKey(w: Writer, node: Node, index: number, key: string): void
   const keys = w.lostKeys.get(node) ?? []
   if (keys.includes(key)) return
   w.lostKeys.set(node, [...keys, key])
-  const message = `the key ${key} in the attrs of a ${node.type} node has no spelling beside the table fields that write it`
+  const message = `Carve source cannot spell the key ${key} in the attrs of a ${node.type} node beside the table fields that write it`
   const entry: Diagnostic = { code: 'field-unspellable', severity: 'warning', channel: 'render-loss', message }
   addFinding(w.losses, node, entry)
   w.losses.steps ??= new Map()
@@ -165,8 +165,8 @@ export function lose(w: Writer, node: Node, field: string | null): void {
   if (w.lost.has(node)) return
   w.lost.add(node)
   const message = field === null
-    ? `a ${node.type} node has no spelling in Carve source here`
-    : `the field ${field} of a ${node.type} node has no spelling in Carve source here`
+    ? `Carve source cannot spell a ${node.type} node here`
+    : `Carve source cannot spell the field ${field} of a ${node.type} node here`
   const code = field === null ? 'structure-unspellable' : 'field-unspellable'
   const entry: Diagnostic = { code, severity: 'warning', channel: 'render-loss', message }
   addFinding(w.losses, node, entry)
