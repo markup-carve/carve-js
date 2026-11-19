@@ -272,6 +272,14 @@ function isOutside(filter: Filter, node: Node, block: boolean, depth: number): b
   return rule.maxNesting >= 0 && depth > rule.maxNesting
 }
 
+function degradationMessage(filter: Filter, node: Node, block: boolean): string {
+  if (!admitsType(filter.rule, node.type, block)) {
+    return `Degraded a construct the profile "${filter.name}" does not allow: ${node.type}.`
+  }
+  return `Degraded ${node.type} because it exceeds the nesting limit of profile "${filter.name}"; ` +
+    'move it to a shallower level or use a profile that permits the depth.'
+}
+
 /**
  * Filters one list in place. Its nodes stand `depth` levels below the children of the document.
  * `degrade` gives the nodes that replace one outside the profile; `block` names the axis of the list.
@@ -287,7 +295,7 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
     } else if (isOutside(filter, node, block, depth)) {
       // C2-H-165: one report for the degraded node, which stays in the tree; the nodes inside it are not reported again.
       const out = degrade(node)
-      const message = `Degraded a construct the profile "${filter.name}" does not allow: ${node.type}`
+      const message = degradationMessage(filter, node, block)
       const entry = { code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss', message } as const
       addFinding(filter.findings, node, entry)
       noteGone(filter, node)

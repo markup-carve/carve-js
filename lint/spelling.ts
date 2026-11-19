@@ -186,7 +186,8 @@ function emptyReference(line: Line, context: LintContext): void {
 function tableShaped(line: Line, context: LintContext): void {
   const { text, start } = lineText(line)
   if (text.startsWith('|') && !text.endsWith('|') && line.paragraph) {
-    context.report('table-shaped-paragraph', start, start + text.length, line.path)
+    context.report('table-shaped-paragraph', start, start + text.length, line.path,
+      { owner: context.nodeTypes.get(line.path) === 'heading' ? 'heading' : 'paragraph' })
   }
 }
 
