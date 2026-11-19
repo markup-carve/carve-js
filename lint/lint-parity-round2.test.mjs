@@ -35,7 +35,6 @@ describe('0.2 lint leaf ownership and visual columns', () => {
   it('C2-B-025 and C2-B-027: a block past list content uses visual columns', () => {
     expect(codes('- item\n  # H\n\t***\n')).toEqual([
       'block-opener-without-blank-line',
-      'list-item-body-below-content-column',
       'list-item-block-overindented',
     ])
     for (const item of ['- item', '* item', '1. item']) {

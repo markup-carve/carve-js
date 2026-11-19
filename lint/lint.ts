@@ -145,6 +145,14 @@ function markSpanStarts(children: readonly Node[], context: LintContext): void {
   }
 }
 
+function markDescriptionAndCloser(node: Node, context: LintContext): void {
+  const pos = node.pos
+  if (pos === undefined) return
+  if (node.type === 'definition_description') context.state.descriptionStarts.add(pos.startLine)
+  if (['div', 'admonition', 'figure_group', 'line_block', 'block_quote'].includes(node.type) && pos.endLine > pos.startLine
+    && /^\s*:{3,}\s*$/.test(context.lines[pos.endLine - 1]?.text ?? '')) context.state.containerClosers.add(pos.endLine)
+}
+
 function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
   context.nodeTypes.set(path, node.type)
   if (node.type === 'footnote') context.state.footnoteKeys.set(path, node.key)
@@ -159,6 +167,7 @@ function visit(node: Node, path: string, context: LintContext, controls: Control
     context.state.idOwners.set(node.generatedId, node.type)
   }
   const pos = node.pos
+  markDescriptionAndCloser(node, context)
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
     node.type, path, pos.startLine, pos.endLine)
   markContent(node, context)
@@ -307,6 +316,8 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, referenceUrls: new Set(), ids: new Set(),
       idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
+      descriptionStarts: new Set(),
+      containerClosers: new Set(),
       spanStarts: new Set(),
       usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [], unresolvedReferences: [],
       footnoteDefinitions: [] },

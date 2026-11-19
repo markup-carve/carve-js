@@ -305,7 +305,8 @@ function separatorRow(node: Node, path: string, context: LintContext): void {
   if (!line.startsWith('|') || !line.endsWith('|')) return
   const cells = line.slice(1, -1).split('|')
   if (cells.length < 1 || !cells.every(isSeparatorCell)) return
-  const previous = context.lines[(node.pos?.startLine ?? 1) - 2]?.text.trim() ?? ''
+  const previousLine = context.lines[(node.pos?.startLine ?? 1) - 2]?.text ?? ''
+  const previous = previousLine.slice(previousLine.indexOf('|')).trim()
   if (!previous.startsWith('|') || previous.slice(1, -1).split('|').every(isSeparatorCell)) return
   reportNode('deprecated-separator-row', node, path, context)
 }
@@ -783,6 +784,7 @@ function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): vo
     if (!'*_/~='.includes(ch) || source[at + 1] !== '{' || escaped(source, at)) continue
     const end = source.indexOf('}', at + 2)
     if (end < 0) continue
+    if (!isAttributeLine(source.slice(at + 1, end + 1), 0, end - at)) continue
     // C2-B-182: an alignment run that opens a cell is reported by deprecated-cell-alignment.
     if (at <= 1 && opensCell(context, range[0]) && oldAlignmentRun(source)?.prefix.length === end + 1) {
       at = end
@@ -832,7 +834,8 @@ function carveVersion(node: Node, path: string, context: LintContext): void {
 
 function commentFenceCloserText(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'comment' || node.form !== 'block' || node.pos === undefined) return
-  const opener = context.lines[node.pos.startLine - 1]?.text.trimStart() ?? ''
+  const openerStart = context.chars[node.pos.startOffset] ?? 0
+  const opener = context.source.slice(openerStart, context.lines[node.pos.startLine - 1]?.end ?? openerStart)
   let width = 0
   while (opener[width] === '%') width++
   if (width < 3) return
@@ -1014,15 +1017,6 @@ function sigilAfterLetter(node: Node, path: string, context: LintContext): void 
   }
 }
 
-/**
- * The column of `child` in the container of `item`, as the layout counts the item's columns: positions count from the
- * start of the line, so a quote mark before the item would otherwise read as indentation.
- */
-function itemColumn(item: Node, marker: number, child: Node): number | undefined {
-  if (item.pos === undefined || child.pos === undefined) return undefined
-  return child.pos.startColumn - item.pos.startColumn + marker
-}
-
 /** C2-W-106 table: a block of an item, after its first, that starts past the marker and short of the content column. */
 function listItemBodyColumn(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'list_item') return
@@ -1032,9 +1026,10 @@ function listItemBodyColumn(node: Node, path: string, context: LintContext): voi
   if (marker === undefined || content === undefined) return
   for (const child of node.children.slice(1)) {
     const line = child.pos === undefined ? undefined : context.lines[child.pos.startLine - 1]
-    const column = itemColumn(node, marker, child)
+    const start = child.pos === undefined ? undefined : context.chars[child.pos.startOffset]
+    const column = start === undefined ? undefined : columnOf(context.source, start, quoteDepth(path, context))
     if (line === undefined || column === undefined || column <= marker || column >= content) continue
-    const at = line.start + (child.pos?.startColumn ?? 1) - 1
+    const at = start ?? line.start
     context.report('list-item-body-below-content-column', at, line.end, path)
   }
 }
@@ -1048,6 +1043,11 @@ function blockColumn(node: Node, path: string, context: LintContext): number | u
   return start === undefined ? undefined : columnOf(context.source, start, quoteDepth(path, context))
 }
 
+function isLintableItemBlock(child: Node | undefined): child is Node & { pos: NonNullable<Node['pos']> } {
+  if (child === undefined || child.pos === undefined || child.type === 'list' || child.type === 'comment') return false
+  return child.type !== 'paragraph' || child.children.length === 1 && child.children[0]?.type === 'image'
+}
+
 function overindentedBlocks(node: Node, path: string, context: LintContext,
   visit: (at: number, child: Node, start: number, end: number, past: number, content: number) => void): void {
   if (node.type !== 'list_item') return
@@ -1057,7 +1057,7 @@ function overindentedBlocks(node: Node, path: string, context: LintContext,
   if (content === undefined || marker === undefined) return
   for (let at = 0; at < node.children.length; at++) {
     const child = node.children[at]
-    if (child === undefined || child.type === 'paragraph' || child.type === 'list' || child.pos === undefined) continue
+    if (!isLintableItemBlock(child)) continue
     const line = context.lines[child.pos.startLine - 1]
     const childPath = `${path}/children/${at}`
     const column = blockColumn(child, childPath, context)
@@ -1153,6 +1153,7 @@ function blockOverindent(node: Node, path: string, context: LintContext): void {
   const start = context.chars[node.pos.startOffset] ?? 0
   const line = context.lines[node.pos.startLine - 1]
   if (line === undefined) return
+  if (line.text.slice(0, start - line.start).endsWith('> ')) return
   const quotes = quoteDepth(path, context)
   const column = columnOf(context.source, start, quotes)
   const content = ownerContentColumn(ownerPath, ownerType, quotes, context)
@@ -1268,6 +1269,15 @@ function groupPath(path: string): string {
 function unevenListIndent(node: Node, path: string, context: LintContext): void {
   leftMarkers(node, path, context, (at, column, _deeper, outer) => {
     const item = node.type === 'list' ? node.children[at] : undefined
+    let footnoteColumn = 0
+    for (let owner = path; owner !== ''; owner = owner.slice(0, owner.lastIndexOf('/children/'))) {
+      if (context.nodeTypes.get(owner) === 'footnote') {
+        footnoteColumn = context.layouts.get(owner)?.contentColumn ?? 0
+        break
+      }
+    }
+    const previous = context.layouts.get(`${path}/children/${at - 1}`)?.markerColumn ?? 0
+    if (Math.max(0, column - footnoteColumn) >= Math.max(0, previous - footnoteColumn)) return
     if (item !== undefined && (outer === undefined || column <= outer)) reportNode('uneven-list-indent', item, `${path}/children/${at}`, context)
   })
 }
@@ -1514,7 +1524,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('list-item-block-overindented', ['list_item'], listItemBlockIndent),
   nodeRule('list-marker-below-content-column', ['list'], listMarkerBelowColumn),
   nodeRule('block-opener-overindented', ['block_quote', 'div', 'directive', 'admonition', 'figure_group',
-    'code_block', 'line_block', 'definition_term', 'heading',
+    'code_block', 'raw_block', 'line_block', 'definition_term', 'heading',
     'thematic_break', 'table'], blockOverindent),
   nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
   nodeRule('consumed-key-near-miss', ['code_block'], consumedNearMiss),

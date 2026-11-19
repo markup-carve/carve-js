@@ -136,7 +136,7 @@ function tildeFence(line: Line, context: LintContext): void {
   const { text, start } = candidate
   const report = (what: string): void => context.report('block-marker-as-text', start, start + text.length, line.path, { what })
   if (text.startsWith('~~~')) return report('a tilde fence')
-  if (/^:{3,}\S/.test(text)) return report('a colon fence')
+  if (/^:{3,}\S/.test(text) && firstLineOfPath(line.path, context) === line.number) return report('a colon fence')
   // C2-B-090: a brace run that opened a braced inline form is no attribute line that failed.
   if (text.startsWith('{') && opensAttributes(text.charCodeAt(1)) && !isAttributeLine(text, 0, text.length)
     && !context.state.spanStarts.has(start)) {
@@ -278,7 +278,7 @@ function listWithoutBlank(line: Line, context: LintContext): void {
 
 function indentedCode(line: Line, context: LintContext): void {
   const previous = prior(line, context)
-  if (line.number > 1 && previous?.text.trim() === '' && line.paragraph && firstLineOfPath(line.path, context) === line.number
+  if (line.number > 1 && previous?.text.trim() === '' && line.paragraphLeaf && firstLineOfPath(line.path, context) === line.number
     && line.path.split('/').length <= 3 && line.text.startsWith('    ') && line.text.trim() !== '') {
     reportLine('indented-code-block', line, context)
   }
@@ -296,17 +296,25 @@ function unattachedCaption(line: Line, context: LintContext): void {
   if (hasAncestor(line.path, context, 'caption')) return
   const previous = prior(line, context)
   // C2-B-149: below any other block the line is text; below a definition, which is no block, it is left alone.
-  if (previous !== undefined && !previous.paragraph && isDefinitionLine(previous.text)) return
+  if (previous !== undefined && !previous.paragraph && isDefinitionLine(previous.text)
+    && !/^\[\^[^\]]+\]:[ \t]*%%/.test(previous.text)) return
   context.report('unattached-caption', start, start + text.length, line.path)
+}
+
+function attributeHasLaterOwner(line: Line, context: LintContext): boolean {
+  if (context.state.attachedLines.has(line.number)) return true
+  if (context.nodeTypes.get(line.path) === 'heading' || context.nodeTypes.get(line.path) === 'definition_term') return true
+  if (line.number > 1 && firstLineOfPath(line.path, context) !== line.number) return true
+  const next = context.lines[line.number]
+  return next !== undefined && !blank(next) && next.paragraph === false && !context.state.containerClosers.has(next.number)
 }
 
 function unattachedAttribute(line: Line, context: LintContext): void {
   const { text, start } = lineText(line)
   if (!line.paragraph || !text.startsWith('{') || !text.endsWith('}') || text.length < 3) return
   if (!attributeLead(text[1])) return
-  if (context.state.attachedLines.has(line.number)) return
+  if (attributeHasLaterOwner(line, context)) return
   const next = context.lines[line.number]
-  if (next !== undefined && !blank(next) && next.paragraph === false) return
   context.report('unattached-block-attribute', start, start + text.length, line.path, {}, blank(next) ? 1 : 0)
 }
 
@@ -354,6 +362,7 @@ function definitionInContainer(line: Line, context: LintContext): void {
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
   if (hasAncestor(line.path, context, 'footnote')) return
+  if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) !== line.number) return
   if (line.text[0] !== ' ' && line.text[0] !== '\t' && line.path.split('/').length <= 3) return
   context.report('definition-in-container', start, start + close + 2, line.path)
 }
@@ -370,9 +379,9 @@ function foldedTerm(line: Line, context: LintContext): void {
 }
 
 function githubAlert(line: Line, context: LintContext): void {
-  const match = /^\s*(?:>[ \t]*)+\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
+  const match = /^\s*>[ \t]*(?:.*?>[ \t]*)?\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
   if (match === null || !line.paragraph) return
-  const at = match[0].indexOf('[!')
+  const at = match[0].lastIndexOf('[!')
   context.report('github-alert-marker', line.start + at, line.end, line.path)
 }
 
@@ -455,6 +464,9 @@ function listColumnAbove(line: Line, context: LintContext): number | undefined {
 interface BelowColumn { text: string, start: number, column: number, hostColumn: number }
 
 function belowListColumn(line: Line, context: LintContext): BelowColumn | undefined {
+  if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) !== line.number
+    && line.text.trimStart().startsWith('>')) return undefined
+  if (context.state.descriptionStarts.has(line.number)) return undefined
   const { text, start } = contentLine(line)
   if (!/^::?(?:[ \t]|$)/.test(text) || opensEntry(line, context)) return undefined
   const hostColumn = listColumnAbove(line, context)
