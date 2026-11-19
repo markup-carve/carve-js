@@ -551,30 +551,32 @@ function upgradeSource(input: string): UpgradeResult {
     const check = selfCheck(input, done)
     return { output: input, changed: false, records: done.records, check, engine01: ENGINE_01_VERSION }
   }
-  const done = rewrite(input)
-  const mathClass = mathClassReport(done.context)
-  if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
-  const rewrittenRecords = done.records.map((record) => ({ ...record }))
-  let check = selfCheck(input, done)
-  if (check === 'mismatch') {
-    const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
-    if (mismatch !== undefined) {
-      const rescued = rescueMismatch(input, done.output, mismatch, done.records)
-      const checked = done.records
-      done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
-      if (rescued !== null) {
-        keepIncludeReview(rescued.record, checked, done.records)
-        done.records.push(rescued.record)
-        done.output = rescued.output
-      }
-      check = selfCheck(input, done)
-    }
-  }
+  const { done, check } = firstPass(input)
   if (check === 'mismatch') {
     const late = latePass(input, done.output)
     if (late !== null) return late
   }
   return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+}
+
+/** The rules, then the first rescue whose spelling keeps the 0.1 HTML. */
+function firstPass(input: string): { done: Rewritten; check: UpgradeResult['check'] } {
+  const done = rewrite(input)
+  const mathClass = mathClassReport(done.context)
+  if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
+  const rewrittenRecords = done.records.map((record) => ({ ...record }))
+  const check = selfCheck(input, done)
+  const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
+  if (check !== 'mismatch' || mismatch === undefined) return { done, check }
+  const rescued = rescueMismatch(input, done.output, mismatch, done.records)
+  const checked = done.records
+  done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
+  if (rescued !== null) {
+    keepIncludeReview(rescued.record, checked, done.records)
+    done.records.push(rescued.record)
+    done.output = rescued.output
+  }
+  return { done, check: selfCheck(input, done) }
 }
 
 /** A record of the text after `edits`, placed in the text before them. */
