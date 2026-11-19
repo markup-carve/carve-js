@@ -60,9 +60,9 @@ function escapeSource(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 }
 
-// `</` is the only sequence that closes the script early; `<\/` is the same JSON.
+// `</` closes the script early, and `<!--` then `<script` keeps `</script>` from closing it; the guards are the same JSON.
 function guardScriptClose(value: string): string {
-  return value.replace(/<\//g, '<\\/')
+  return value.replace(/<\//g, '<\\/').replace(/<!--/g, '<\\u0021--')
 }
 
 function authored(attrs: Attrs | undefined, name: string): boolean {
