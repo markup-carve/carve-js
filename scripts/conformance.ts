@@ -18,6 +18,16 @@ interface Row {
   unverifiedPassed: number
 }
 
+const sampleAt = process.argv.indexOf('--sample')
+const sampleCount = sampleAt < 0 ? null : Number(process.argv[sampleAt + 1])
+if (sampleCount !== null && (!Number.isSafeInteger(sampleCount) || sampleCount < 1)) {
+  throw new Error('pass a positive sample count')
+}
+function sample<T>(entries: readonly T[]): readonly T[] {
+  if (sampleCount === null || entries.length <= sampleCount) return entries
+  return Array.from({ length: sampleCount }, (_, at) => entries[Math.floor(at * entries.length / sampleCount)]!)
+}
+
 const rows = new Map<string, Row>()
 const failures: string[] = []
 
@@ -42,7 +52,7 @@ function accepted(tree: unknown): boolean {
   }
 }
 
-for (const example of CORPUS_EXAMPLES) {
+for (const example of sample(CORPUS_EXAMPLES)) {
   if (example.kind === 'import') continue
   const failed = exampleMismatches(example).map((entry) => entry.field)
   const held = HELD.get(example.id)
@@ -50,21 +60,22 @@ for (const example of CORPUS_EXAMPLES) {
   if (held !== undefined && failed.join() === held.fields.join()) row.held++
   else if (failed.length > 0) failures.push(`${example.id}: ${failed.join(', ')}`)
 }
-for (const entry of CLAUSE_CASES) {
+for (const entry of sample(CLAUSE_CASES)) {
+  if (sampleCount !== null && entry.kind === 'cli') continue
   const failed = (entry.kind === undefined ? clauseCaseMismatches(entry) : newCaseMismatches(entry)).map((mismatch) => mismatch.field)
   const held = HELD.get(entry.id)
   const row = count(`clause cases, ${entry.kind ?? 'render'}`, failed)
   if (held !== undefined && failed.join() === held.fields.join()) row.held++
   else if (failed.length > 0) failures.push(`${entry.id}: ${failed.join(', ')}`)
 }
-for (const entry of REFUSED_TREES) {
+for (const entry of sample(REFUSED_TREES)) {
   const path = refusalPath(entry)
   const failed = path?.startsWith(REFUSED_AT.get(entry.id) ?? '?') === true ? [] : [`refused at ${String(path)}`]
   count('refused trees', failed)
   if (failed.length > 0) failures.push(`${entry.id}: ${failed.join(', ')}`)
 }
 for (const [file, trees] of EXAMPLE_TREES) {
-  for (const entry of trees) {
+  for (const entry of sample(trees)) {
     const failed = exampleTreeMismatches(entry).map((mismatch) => mismatch.field)
     const held = HELD.get(entry.id)
     const row = count('positive trees', failed)
@@ -72,12 +83,12 @@ for (const [file, trees] of EXAMPLE_TREES) {
     else if (failed.length > 0) failures.push(`${file} ${entry.id}: ${failed.join(', ')}`)
   }
 }
-for (const entry of SUPPLIED_TREES) {
+for (const entry of sample(SUPPLIED_TREES)) {
   const failed = accepted(entry.tree) ? [] : ['refused']
   count('supplied trees', failed)
   if (failed.length > 0) failures.push(`nodes ${entry.id}: refused`)
 }
-for (const entry of LAYOUT_FIXTURES) {
+for (const entry of sample(LAYOUT_FIXTURES)) {
   const failed = layoutMismatches(entry).map((mismatch) => mismatch.field)
   count('layouts', failed)
   if (failed.length > 0) failures.push(`layout ${entry.id}: ${failed.join(', ')}`)
