@@ -50,6 +50,12 @@ describe('Markdown and Djot through the HTML hub', () => {
     expect(source('`<a>`{=html} and\n\n``` =latex\n\\x\n```\n', 'djot')).toBe('`<a>`{=html} and\n\n```=latex\n\\x\n```\n')
   })
 
+  it('keeps the Djot text before an image on its line', () => {
+    expect(source('[link](https://a.b) and ![img](i.png)', 'djot')).toBe('[link](https://a.b) and ![img](i.png)\n')
+    expect(source('x ![c](d) y ![e][r]\n\n[r]: u\n', 'djot')).toBe('x ![c](d) y ![e](u)\n')
+    expect(source('> q ![c](d)\n> !![e](f)\n', 'djot')).toBe('> q ![c](d)\n> !![e](f)\n')
+  })
+
   it('reports no whitespace normalization for the libraries\' own line breaks', () => {
     const result = importDocument('- a\n- b\n', { from: 'djot' })
     expect(result.diagnostics).toEqual([])
