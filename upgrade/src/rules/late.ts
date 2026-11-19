@@ -53,3 +53,28 @@ export function lineComments(ctx: Context): void {
     change(ctx, hostRow(visit), from, end, `{%${text}%}`, MESSAGE)
   }
 }
+
+const OPENING = new Set(['(', '[', '{', '=', ':', '“', '‘'])
+
+/** Whether 0.2 opens the straight quote at `at`, read from the character before it (C2-I-104, C2-I-105). */
+function opens02(src: string, at: number): boolean {
+  if (src[at] === "'" && /[0-9]/u.test(src[at + 1] ?? '')) return false
+  const before = src[at - 1]
+  return before === undefined || /\s/u.test(before) || OPENING.has(before)
+}
+
+/**
+ * C2-I-104, C2-I-105: 0.2 reads a straight quote from its neighbors, and where that guess differs from
+ * the quote 0.1 printed, the author types the curly character. Approximate; the self-check decides.
+ */
+export function typedQuotes(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'smart_punctuation' || node.pos === undefined || typeof node.glyph !== 'string') continue
+    const at = node.pos.startOffset
+    const value = ctx.src[at]
+    if ((value !== '"' && value !== "'") || node.pos.endOffset !== at + 1) continue
+    const opened = String(node.kind).startsWith('left_')
+    if (opened === opens02(ctx.src, at)) continue
+    change(ctx, 'U-375', at, at + 1, node.glyph, 'straight quote typed as the curly quote 0.1 printed')
+  }
+}

@@ -1,7 +1,7 @@
 import { type Rule } from '../context.ts'
 import { attributeLines, openers } from './attributes.ts'
 import { blankLines } from './blank-lines.ts'
-import { lineComments } from './comments.ts'
+import { lineComments, typedQuotes } from './late.ts'
 import { definitions, definitionsAtTop, definitionsKept } from './definitions.ts'
 import { escapes } from './escapes.ts'
 import { fences } from './fences.ts'
@@ -16,7 +16,7 @@ export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks
   inline, lineBlockSpaces, escapes, shortcuts, unclosedRuns]
 
 /** Rules that run only when the first pass leaves a difference, so a source that already upgrades keeps its result. */
-export const LATE_RULES: readonly Rule[] = [lineComments]
+export const LATE_RULES: readonly Rule[] = [lineComments, typedQuotes]
 
 /** Each late variant replaces first-pass rules with the late rules in their place, tried in order. */
 export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
