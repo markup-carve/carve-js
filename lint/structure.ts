@@ -253,14 +253,17 @@ function headingLevel(node: Node, path: string, context: LintContext): void {
   context.state.headingLevel = node.level
 }
 
-function headingKind(node: Node, _path: string, context: LintContext): void {
+function headingKind(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading') return
   const source = raw(node, context)
   const kind = source.trimStart()[0]
   if (kind === '#' || kind === '=') {
+    const range = bounds(node, context)
+    if (context.state.firstHeading === null && range !== null) context.state.firstHeading = { range, path }
     context.state.headingKinds.add(kind)
-    if (context.state.headingKinds.size === 2 && !context.state.mixedReported) {
-      context.report('heading-marker-mixed', 0, 1, '')
+    const first = context.state.firstHeading
+    if (context.state.headingKinds.size === 2 && !context.state.mixedReported && first !== null) {
+      context.report('heading-marker-mixed', first.range[0], first.range[1], first.path)
       context.state.mixedReported = true
     }
   }
@@ -585,10 +588,13 @@ function djotBracedHighlight(node: Node, path: string, context: LintContext): vo
   }
 }
 
+// carve#6176: every inline content of text, a description's through its paragraphs.
+const INLINE_HOSTS: ReadonlySet<string> = new Set(['paragraph', 'heading', 'definition_term', 'cell_paragraph'])
+
 function unattachedInline(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const parent = path.slice(0, path.lastIndexOf('/children/'))
-  if (context.nodeTypes.get(parent) !== 'paragraph') return
+  if (!INLINE_HOSTS.has(context.nodeTypes.get(parent) ?? '')) return
   const source = raw(node, context)
   const range = bounds(node, context)
   if (range === null) return

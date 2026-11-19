@@ -44,6 +44,7 @@ export interface LintContext {
     headingLevel: number
     headingKinds: Set<string>
     mixedReported: boolean
+    firstHeading: { range: [number, number], path: string } | null
     referenceUrls: Set<string>
     ids: Set<string>
     idOwners: Map<string, Node['type']>
