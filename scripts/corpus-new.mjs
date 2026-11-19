@@ -6,10 +6,13 @@ import { spawnSync } from 'node:child_process'
 import { isDeepStrictEqual } from 'node:util'
 import * as engine from '../src/index.ts'
 import { imgFenceExtensions, imgFenceRenderers } from '../extensions/blocks/img-fence.ts'
+import { mermaid } from '../src/extensions/standard/fenced-render.ts'
+import { codeGroup } from '../src/extensions/standard/code-group.ts'
 import { importDocument } from '../import/src/index.ts'
 import { CATALOG } from '../lint/catalog.ts'
 import { corpusResolver, hexBytes } from './corpus.ts'
 import { withoutPositions } from './corpus-checks.ts'
+import { applyPatch, diffTree, sourceFingerprint, treeFingerprint } from '../src/tree-patch.ts'
 
 const same = (a, b) => isDeepStrictEqual(a, b)
 const catalogRows = Object.freeze(JSON.parse(readFileSync(new URL('../data/lint-rules.json', import.meta.url), 'utf8')).rules)
@@ -26,9 +29,16 @@ function optionsOf(entry) {
     ...(extensions.includes('carve.wiki') ? [engine.wikiExtension] : []),
     ...(extensions.includes('carve.cite') ? [engine.citeExtension] : []),
     ...(extensions.includes('carve.imgFence.img') ? imgFenceExtensions : []),
+    ...(extensions.includes('carve.fencedRender.mermaid') ? mermaid().extensions : []),
+    ...(extensions.includes('carve.codeGroup') ? codeGroup().extensions : []),
+    ...(extensions.includes('carve.details') ? [engine.detailsExtension] : []),
+    ...(extensions.includes('carve.spoiler') ? [engine.spoilerExtension] : []),
+    ...(extensions.includes('carve.spoilerBlock') ? [engine.spoilerBlockExtension] : []),
   ]
   if (options.renderers !== undefined) options.renderers = Object.fromEntries(Object.entries(options.renderers).map(([name, value]) =>
-    [name, value === 'standard' ? name === 'carve.tabs' ? engine.tabsRenderer : imgFenceRenderers[name] : value]))
+    [name, name === 'carve.tabs' && typeof value === 'object' && value?.standard
+      ? engine.standardTabsRenderer(value.standard)
+      : value === 'standard' ? name === 'carve.tabs' ? engine.tabsRenderer : imgFenceRenderers[name] : value]))
   if (entry.files !== undefined) options.includes = { resolver: corpusResolver(entry.files), ...options.includes }
   if (options.codeBlockRenderer !== undefined) options.codeBlockRenderer = codeBlockFunction(options.codeBlockRenderer)
   return options
@@ -205,6 +215,26 @@ function run(entry) {
     const result = engine.positionOf(input, entry.offset)
     return [...(expected.line !== undefined && result.line !== expected.line ? ['line'] : []),
       ...(expected.column !== undefined && result.column !== expected.column ? ['column'] : [])]
+  }
+  if (kind === 'fingerprint') {
+    const fingerprint = entry.of === 'tree' ? treeFingerprint(engine.parse(input, { positions: false })) : sourceFingerprint(input)
+    return fingerprint === expected.fingerprint ? [] : ['fingerprint']
+  }
+  if (kind === 'diff') {
+    const first = engine.parse(input, { positions: false })
+    const second = engine.parse(entry.inputAfter, { positions: false })
+    const patch = diffTree(first, second)
+    const actual = applyPatch(first, patch)
+    const applies = same(JSON.parse(engine.encodeTree(actual)), JSON.parse(engine.encodeTree(second)))
+    return [...(expected.applies === true && !applies ? ['applies'] : []),
+      ...(expected.patch !== undefined && !same(patch, expected.patch) ? ['patch'] : [])]
+  }
+  if (kind === 'patch') {
+    const tree = engine.parse(input, { positions: false })
+    const fingerprint = entry.fingerprintOf === undefined ? undefined
+      : treeFingerprint(engine.parse(entry.fingerprintOf, { positions: false }))
+    const result = applyPatch(tree, entry.patch, { fingerprint })
+    return childrenFields(result, expected)
   }
   if (kind === 'import') {
     const result = importDocument(entry.html, { from: 'html', ...options })

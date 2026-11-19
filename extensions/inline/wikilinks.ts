@@ -34,6 +34,12 @@ function targetSource(node: Parameters<Render>[0], host: Parameters<Render>[1]):
   return typeof node.props?.['target'] === 'string' ? node.props['target'] : host.plainText(node.fallback ?? [])
 }
 
+function linkText(node: Parameters<Render>[0], host: Parameters<Render>[1], page: string, anchor: string): string {
+  const display = host.plainText(node.fallback ?? [])
+  if (node.source?.form === 'inline' && !node.source.body.includes('|')) return page === '' ? anchor : page
+  return display
+}
+
 /** The standard `:wiki[Page#anchor|Display]` matcher (C2-X-057) with a link renderer. */
 export function wikilinks(options: WikilinksOptions = {}): ExtensionBundle {
   const generate = options.urlGenerator ?? slug
@@ -41,7 +47,6 @@ export function wikilinks(options: WikilinksOptions = {}): ExtensionBundle {
   const link: Render = (node, host) => {
     const source = targetSource(node, host)
     const { page, anchor } = target(source)
-    const display = host.plainText(node.fallback ?? [])
     const href = generate(page) + anchor
     // C2-X-057: the target becomes a link only through the URL policy (C2-H-159).
     if ((page === '' && anchor === '') || !isUrlAllowed(href, host.urlPolicy)) return host.inlines(node.fallback ?? [])
@@ -51,7 +56,7 @@ export function wikilinks(options: WikilinksOptions = {}): ExtensionBundle {
     const authored = (node.attrs?.keyValues ?? []).filter(([name]) => !names.has(name.toLowerCase()))
     const keyValues: [string, string][] = [generated[0]!, ...authored, ...generated.slice(1)]
     const attrs = authorAttrs({ ...node.attrs, classes: [...classes, ...(node.attrs?.classes ?? [])], keyValues }, host)
-    const text = display !== '' ? display : page === '' ? anchor : page
+    const text = linkText(node, host, page, anchor)
     return `<a href="${host.escapeAttribute(href)}"${attrs}>${host.escapeText(text)}</a>`
   }
   return { extensions: [wikiExtension], renderers: { 'carve.wiki': { version: '1', render: link, buildTime: link } } }

@@ -44,7 +44,6 @@ const ENGINE_FLAGS: readonly Flag[] = [
 
 function specified(row: (typeof cli.flags)[number]): Flag {
   const flag: Flag = { name: row.name, commands: row.commands as Command[], kind: row.kind as ValueKind }
-  if (row.name === 'heading-ids') flag.commands = [...flag.commands, 'lint']
   if ('values' in row) flag.values = row.name === 'from' ? [...row.values, ...EXTRA_FROM] : row.values
   if ('option' in row) flag.option = row.option
   if ('repeatable' in row && row.repeatable === true) flag.repeatable = true
