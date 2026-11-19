@@ -587,10 +587,11 @@ const WIDE_TABLE = '| a | b |\n|---|---|\n| 🇺🇸 | 👩‍💻 |\n| 각 | a�
 const VALID_URL_POLICY: UrlPolicy = { deny: ['javascript'] }
 
 function validOption(entry: OptionCase, rng: Random): unknown {
-  if (entry.name === 'includes' || entry.name === 'social') return null
+  if (entry.name === 'includes' || entry.name === 'social' || entry.name === 'codeBlockRenderer') return null
   if (entry.name === 'urlPolicy') return VALID_URL_POLICY
   if (entry.type === 'boolean') return rng.bool()
   if (entry.type === 'enum') return entry.values?.[rng.int(entry.values.length)] ?? 'off'
+  if (entry.type === 'count') return rng.int(200)
   if (entry.type === 'list') return []
   return {}
 }
