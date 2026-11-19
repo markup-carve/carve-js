@@ -392,7 +392,7 @@ function applyExtraHtml(input: string, done: Rewritten, old: string, next: strin
   const empty = done.records.filter((record) => (record.entry === 'U-258' || record.entry === 'U-396')
     && record.class === 'report' && record.range !== undefined)
     .map((record) => input.slice(record.range!.startOffset, record.range!.endOffset))
-  const runs = explainEmptyRuns(cited.html, empty)
+  const runs = explainEmptyRuns(cited.html, empty, next)
   const eof = explainDescriptionPlusFenceEof(input, done.output, runs.html, next)
   const tab = hasEntry(done.records, 'U-153') ? removeListMarkerTab(input, eof.html, next)
     : { html: eof.html, applied: [] }
