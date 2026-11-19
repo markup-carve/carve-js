@@ -35,7 +35,7 @@ function validateRuleSettings(rules: unknown): void {
 function validateOptions(options: unknown): asserts options is LintOptions {
   if (!plainRecord(options)) throw new CarveOptionError('lint', 'not an object')
   for (const name of Object.keys(options)) {
-    if (name !== 'rules' && name !== 'platforms' && name !== 'includes' && name !== 'extensions') {
+    if (name !== 'rules' && name !== 'platforms' && name !== 'includes' && name !== 'extensions' && name !== 'headingIds') {
       throw new CarveOptionError(name, 'unknown option')
     }
   }
@@ -44,6 +44,9 @@ function validateOptions(options: unknown): asserts options is LintOptions {
     throw new CarveOptionError('platforms', 'not a list of supported platform names')
   }
   validateRuleSettings(options['rules'])
+  if (options['headingIds'] !== undefined && !['off', 'keep-case', 'lower', 'ascii', 'ascii-lower', 'ascii-strict', 'ascii-strict-lower'].includes(String(options['headingIds']))) {
+    throw new CarveOptionError('headingIds', 'unknown value')
+  }
 }
 
 function active(id: RuleId, options: LintOptions): boolean {
@@ -332,7 +335,8 @@ export function lintPayload(text: string, node: Node, path: string, options: Lin
 }
 
 function lintSource(source: string, options: LintOptions): Diagnostic[] {
-  const parsed = parseWithLayout(source, options.extensions === undefined ? undefined : { extensions: options.extensions })
+  const parsed = parseWithLayout(source, { ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
+    ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
   visit(parsed.document, '', context, controls)

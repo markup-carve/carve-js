@@ -26,6 +26,7 @@ import { RULES } from './rules/index.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
 import { applyTabs, planTabs, sameHost } from './tabs.ts'
+import { respellExtensions, sameExtensionHosts, type RegisteredExtension } from './extension-respell.ts'
 
 export interface UpgradeResult {
   /** The Carve 0.2 source. */
@@ -587,7 +588,7 @@ function normalizationPreservesHtml(input: string, normalized: string, output: s
 }
 
 /** Rewrites the Carve 0.1 document `input` into Carve 0.2 and checks the result against both engines. */
-export function upgrade(input: string): UpgradeResult {
+function upgradeBase(input: string): UpgradeResult {
   const withoutBom = input.startsWith('\ufeff') ? input.slice(1) : input
   const crlf = withoutBom.includes('\r\n') && !withoutBom.replaceAll('\r\n', '').includes('\n')
   if (withoutBom === input && !crlf) return upgradeCore(input)
@@ -601,6 +602,20 @@ export function upgrade(input: string): UpgradeResult {
   result.records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: 0,
     message: 'the original and normalized BOM or line endings render differently' })
   return { ...result, output, changed: output !== input, check: 'mismatch' }
+}
+
+/** Rewrite only source forms of the 0.1 host extensions the caller explicitly registered. */
+export function upgrade(input: string, registered: readonly RegisteredExtension[] = []): UpgradeResult {
+  const base = upgradeBase(input)
+  if (registered.length === 0) return base
+  const planned = respellExtensions(base.output, registered)
+  if (planned.records.length === 0) return base
+  const verified = base.check !== 'mismatch' && sameExtensionHosts(input, planned.output, registered)
+  const records = [...base.records, ...planned.records]
+  if (!verified) records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: 0,
+    message: 'the registered 0.1 extension host and the 0.2 standard host render differently' })
+  return { ...base, output: planned.output, changed: planned.output !== input, records,
+    check: verified ? 'explained' : 'mismatch' }
 }
 
 /** Whether a person has to look at the result: a report entry hit, or the self-check found a difference. */

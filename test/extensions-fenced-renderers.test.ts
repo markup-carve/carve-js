@@ -149,15 +149,15 @@ describe('fencedRender fallback and static mode (C2-X-035, C2-X-052)', () => {
 
 describe('mathBlock', () => {
   it('renders a math fence as a display math div', () => {
-    expect(html('```math\nx^2\n```', mathBlock())).toBe('<div class="math display">\\[x^2\\]</div>')
+    expect(html('```math\nx^2\n```', mathBlock())).toBe('<div class="math display" role="math">\\[x^2\\]</div>')
   })
 
   it('escapes &, < and > like core math', () => {
-    expect(html('```math\na<b & c>d\n```', mathBlock())).toBe('<div class="math display">\\[a&lt;b &amp; c&gt;d\\]</div>')
+    expect(html('```math\na<b & c>d\n```', mathBlock())).toBe('<div class="math display" role="math">\\[a&lt;b &amp; c&gt;d\\]</div>')
   })
 
   it('takes another language and leaves other fences to the core', () => {
-    expect(html('```tex\nx\n```', mathBlock({ language: 'tex' }))).toBe('<div class="math display">\\[x\\]</div>')
+    expect(html('```tex\nx\n```', mathBlock({ language: 'tex' }))).toBe('<div class="math display" role="math">\\[x\\]</div>')
     expect(html('```js\nx\n```', mathBlock())).toBe(render('```js\nx\n```'))
   })
 
@@ -167,13 +167,13 @@ describe('mathBlock', () => {
 
   it('keeps the author attributes after the math classes', () => {
     expect(html('{#e1 .big data-n=1}\n```math\nx\n```', mathBlock())).toBe(
-      '<div id="e1" class="math display big" data-n="1">\\[x\\]</div>')
+      '<div id="e1" class="math display big" role="math" data-n="1">\\[x\\]</div>')
   })
 
   it('static mode uses the host build function, or the fallback without one', () => {
     const build = (tex: string, display: boolean): string => `<math display="${display ? 'block' : 'inline'}">${tex}</math>`
     expect(html('```math\nx\n```', mathBlock({ build }), 'static')).toBe(
-      '<div class="math display"><math display="block">x</math></div>')
+      '<div class="math display" role="math"><math display="block">x</math></div>')
     expect(html('```math\nx\n```', mathBlock(), 'static')).toBe('<pre><code class="language-math">x\n</code></pre>')
   })
 })
@@ -324,7 +324,7 @@ describe('the group together', () => {
     const output = renderWithDocumentTransforms(source, all.transforms ?? [], { extensions: all.extensions, renderers: all.renderers }).html
     expect(output).toContain('<pre class="mermaid" role="img" aria-label="mermaid">A &lt;1></pre>')
     expect(output).toContain('<div class="code-group"')
-    expect(output).toContain('<div class="math display">\\[x\\]</div>')
+    expect(output).toContain('<div class="math display" role="math">\\[x\\]</div>')
   })
 
   it('a code group keeps a panel whose code has callouts, and its selection', () => {

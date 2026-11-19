@@ -1,12 +1,25 @@
 // Option checks of the public calls that the engine does not check itself (C2-H-137: an unknown option is refused).
 import { CarveOptionError, readOptions } from '../src/options.ts'
 
-export type OptionKind = 'boolean' | 'string' | 'count' | 'extensions' | 'layout' | 'losses'
+export type OptionKind = 'boolean' | 'string' | 'count' | 'extensions' | 'extension-names' | 'layout' | 'losses'
 
 function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {
   if (typeof value !== 'object' || value === null) return false
   const prototype: unknown = Object.getPrototypeOf(value)
   return prototype === Object.prototype || prototype === null
+}
+
+function checkExtensionNames(name: string, value: unknown): void {
+  if (!Array.isArray(value) || !value.every(item => item === 'wikilinks' || item === 'samp')) {
+    throw new CarveOptionError(name, 'expected a list of wikilinks or samp')
+  }
+}
+
+function checkLayout(name: string, value: unknown): void {
+  if (!isPlainObject(value) || !Array.isArray(value['nodes'])) throw new CarveOptionError(name, 'not a sidecar with a list of nodes')
+  for (const entry of value['nodes'] as unknown[]) {
+    if (!validLayoutEntry(entry)) throw new CarveOptionError(name, 'a node entry the writer cannot read')
+  }
 }
 
 function checkValue(name: string, kind: OptionKind, value: unknown): void {
@@ -23,14 +36,14 @@ function checkValue(name: string, kind: OptionKind, value: unknown): void {
     case 'extensions':
       readOptions({ extensions: value }, 'parse')
       return
+    case 'extension-names':
+      checkExtensionNames(name, value)
+      return
     case 'losses':
       readOptions({ [name]: value }, 'render')
       return
     case 'layout':
-      if (!isPlainObject(value) || !Array.isArray(value['nodes'])) throw new CarveOptionError(name, 'not a sidecar with a list of nodes')
-      for (const entry of value['nodes'] as unknown[]) {
-        if (!validLayoutEntry(entry)) throw new CarveOptionError(name, 'a node entry the writer cannot read')
-      }
+      checkLayout(name, value)
   }
 }
 

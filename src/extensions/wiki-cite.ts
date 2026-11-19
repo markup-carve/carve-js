@@ -4,13 +4,17 @@ import { type ExtensionClaim, type ExtensionDefinition } from './types.ts'
 
 function inlineTextClaim(name: string, claim: ExtensionClaim) {
   if (claim.form !== 'inline') return null
+  const source = plainText(claim.children)
+  const separator = name === 'carve.wiki' ? source.indexOf('|') : -1
+  const target = separator < 0 ? source : source.slice(0, separator)
+  const display = separator < 0 ? source : source.slice(separator + 1)
   return { type: 'inline_extension' as const, name, version: '1', children: [],
-    fallback: [{ type: 'text' as const, value: plainText(claim.children) }] }
+    props: { target }, fallback: [{ type: 'text' as const, value: display }] }
 }
 
 export const wikiExtension: ExtensionDefinition = {
   name: 'carve.wiki', version: '1', matcher: { form: 'inline', name: 'wiki' },
-  props: {}, slots: {}, children: 'none', transform: (claim) => inlineTextClaim('carve.wiki', claim),
+  props: { target: 'string' }, slots: {}, children: 'none', transform: (claim) => inlineTextClaim('carve.wiki', claim),
 }
 
 /** C2-X-058: one implementation, with the citations extension. */

@@ -262,7 +262,7 @@ function itemOpen(r: Render, node: ListItemNode, bullet: boolean): string {
   if (task === undefined) return `<li${tag(r, node)}>`
   const state: Pair[] = TASK_NO_STATE.includes(task.mark) ? [] : [['data-task-state', task.mark]]
   const checked = TASK_CHECKED.includes(task.mark) ? ' checked' : ''
-  const label = escapeAttribute(blockText(node.children))
+  const label = escapeAttribute(r.taskLabels?.get(node) ?? blockText(node.children))
   const open = `<li${tag(r, node, { structural: state, base: ['task'],
     ...(bullet ? { style: 'list-style: none', styleFirst: true } : {}) })}>`
   return `${open}<input type="checkbox"${checked} disabled${label === '' ? '' : ` aria-label="${label}"`}> `
@@ -529,7 +529,7 @@ function include(r: Render, node: IncludeNode, level: number): void {
 function blockExtension(r: Render, node: BlockExtensionNode, level: number): void {
   const rendered = r.renderExtension(node, level)
   if (rendered !== null) { line(r, level, rendered); return }
-  loss(r, node, 'extension-fallback-rendered', `the extension ${node.name} is rendered through its fallback`)
+  loss(r, node, 'extension-fallback-rendered', `Rendered the fallback of the unknown extension "${node.name}"`)
   // C2-X-035: the attributes of the node go on a div around its fallback.
   const tag = attributes(r, node, {})
   if (tag === '') return writeBlocks(r, node.fallback, level)
@@ -969,12 +969,13 @@ interface RenderResult {
  */
 export function renderDocument(
   document: DocumentNode, settings: Settings, resolution: Resolution, losses: Findings, bidi: boolean, source?: string | number,
+  taskLabels?: ReadonlyMap<ListItemNode, string>,
 ): RenderResult {
   const rule = PROFILES.get(settings.profile)
   const linksAllowed = rule === undefined ||
     ((rule.allowedInline?.includes('link') ?? true) && !(rule.deniedInline?.includes('link') ?? false))
   const r: Render = {
-    settings, resolution, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
+    settings, resolution, taskLabels, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
     document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),

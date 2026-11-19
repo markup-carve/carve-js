@@ -3,6 +3,7 @@ import { type Diagnostic } from '../src/diagnostics.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { type RuleId } from './catalog.ts'
 import { type ExtensionDefinition } from '../src/extensions/types.ts'
+import { type HeadingIds } from '../src/options.ts'
 
 export interface LintOptions {
   rules?: Partial<Record<RuleId, 'on' | 'off'>>
@@ -10,6 +11,7 @@ export interface LintOptions {
   /** C2-N-085: a resolver, or the `includes` option of a parse, through which the included files are linted too. */
   includes?: unknown
   extensions?: readonly ExtensionDefinition[]
+  headingIds?: HeadingIds
 }
 
 export interface Line {

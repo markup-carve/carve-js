@@ -7,7 +7,7 @@ import {
   isBlockParent, isInlineParent, type ListItemNode, type Node, type NodeHandlers, type NodeOfType, type ParagraphNode, type TableCellNode,
   type TableNode, type TableRowNode, titleOf,
 } from './ast.ts'
-import { plainText } from './ast-text.ts'
+import { blockText as taskBlockText, plainText } from './ast-text.ts'
 import { NODE_TABLE } from './ast-validate.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { passesPolicy } from './html-attributes.ts'
@@ -34,6 +34,8 @@ interface Filter {
 
 /** What a profile did to a tree for one render. */
 export interface ProfileRun {
+  /** Accessible names read from task items before their descendants degrade. */
+  readonly taskLabels: ReadonlyMap<ListItemNode, string>
   /** The footnote references and inline footnotes that the degraded forms took out. */
   readonly gone: ReadonlySet<Node>
   /** C2-H-177: the targets of the headings that the profile degraded. */
@@ -197,6 +199,7 @@ function tableParagraph(node: TableNode): ParagraphNode[] {
 function degradedBlocks(node: Node): ParagraphNode[] {
   // C2-H-165: a table keeps its caption, with its number, as a paragraph below its rows.
   if (node.type === 'table') return [...tableParagraph(node), ...(node.caption === undefined ? [] : degradedBlocks(node.caption))]
+  if (node.type === 'line_block') return textParagraph(joined(node.children, ''))
   const caption = degradedCaption(node)
   if (caption !== undefined) return [...textParagraph(ownText(node)), ...degradedBlocks(caption)]
   if (node.type in MARKED_TEXT || isInlineParent(node) || !('children' in node)) return textParagraph(blockText(node))
@@ -357,6 +360,12 @@ export function applyProfile(
   document: DocumentNode, name: string, rule: ProfileRule, findings: Findings, texts: ReadonlyMap<Node, string>,
   policy: Pick<Settings, 'allowed' | 'denied'>,
 ): ProfileRun {
+  const taskLabels = new Map<ListItemNode, string>()
+  const collectTasks = (node: Node): void => {
+    if (node.type === 'list_item' && node.task !== undefined) taskLabels.set(node, taskBlockText(node.children))
+    forEachSlot(node, (nodes) => { for (const child of nodes) collectTasks(child) }, undefined, document.extensions ?? [])
+  }
+  collectTasks(document)
   const filter: Filter = {
     name, rule, findings, declarations: document.extensions ?? [], undo: [], gone: new Set(), goneTargets: new Set(),
     writesAsText: (node) => name === 'comment' && isDeniedLink(node, policy),
@@ -368,6 +377,7 @@ export function applyProfile(
     xrefTexts = NO_TEXTS
   }
   return {
+    taskLabels,
     gone: filter.gone,
     goneTargets: filter.goneTargets,
     restore: () => {

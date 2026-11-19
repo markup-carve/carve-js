@@ -15,6 +15,7 @@ export const CARRIERS: ReadonlySet<string> = new Set([
 export interface NoteEntry { item: Html.Element, label?: string, inline: boolean }
 
 export interface HtmlContext extends Context {
+  labels: Readonly<Record<string, string>>
   notes: Map<string, NoteEntry>
   /** The footnotes the references named, in the order of the section. */
   footnotes: FootnoteNode[]

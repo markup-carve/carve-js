@@ -8,6 +8,8 @@ export {
   graphviz, mermaid, plantuml, type PresetBuilders, type PresetOptions, presets, vegaLite, wavedrom,
 } from '../src/extensions/standard/fenced-render.ts'
 export { mathBlock, type MathBlockOptions } from '../src/extensions/standard/math-block.ts'
+export { detailsExtension, spoilerExtension, spoilerBlockExtension, spoilerExtensions } from '../src/extensions/standard/details.ts'
+export { standardTabsRenderer } from '../src/extensions/tabs.ts'
 export { codeGroup, type CodeGroupOptions } from '../src/extensions/standard/code-group.ts'
 export { codeCallouts } from '../src/extensions/standard/code-callouts.ts'
 export { details } from '../extensions/blocks/details.ts'

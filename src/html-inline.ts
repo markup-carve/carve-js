@@ -410,7 +410,7 @@ function inlineExtension(node: InlineExtensionNode, r: Render): string {
   if (!name.includes('.')) return `<span${attributes(r, node, { base: [`ext-${name}`] })}>${children(r, node)}</span>`
   const rendered = r.renderExtension(node)
   if (rendered !== null) return rendered
-  loss(r, node, 'extension-fallback-rendered', `the extension ${name} is rendered through its fallback`)
+  loss(r, node, 'extension-fallback-rendered', `Rendered the fallback of the unknown extension "${name}"`)
   const fallback = inlineList(r, node.fallback ?? node.children, true)
   // C2-X-035: the attributes of the node go on a span around its fallback.
   const tag = attributes(r, node, {})

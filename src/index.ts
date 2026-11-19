@@ -67,7 +67,8 @@ export { isUrlAllowed, urlScheme } from './html-attributes.ts'
 export { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 export { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer, type ExtensionRenderHost,
   type ExtensionSlot, type ExtensionSource } from './extensions/types.ts'
-export { tabExtension, tabsExtension, tabsExtensions, tabsRenderer } from './extensions/tabs.ts'
+export { tabExtension, tabsExtension, tabsExtensions, tabsRenderer, standardTabsRenderer } from './extensions/tabs.ts'
+export { detailsExtension, spoilerExtension, spoilerBlockExtension, spoilerExtensions } from './extensions/standard/details.ts'
 export { wikiExtension, citeExtension } from './extensions/wiki-cite.ts'
 
 /** Block tree of `src`. Leaves keep their source spans; inline content is not parsed. */

@@ -170,7 +170,12 @@ function located(input: string, entries: readonly Diagnostic[], bytes?: Uint8Arr
   const included = new Map<string, LocationIndex>()
   return entries.map((entry) => {
     const place = location(indexFor(entry, own, included), entry)
-    return place === null ? { ...entry } : { ...entry, ...place }
+    const includedBy = entry.includedBy?.map((part) => {
+      const index = part.file === undefined ? own : indexFor({ ...entry, file: part.file }, own, included)
+      const site = location(index, { ...entry, range: part.range })
+      return { ...part, ...(site ?? {}) }
+    })
+    return { ...entry, ...(place ?? {}), ...(includedBy === undefined ? {} : { includedBy }) }
   })
 }
 
@@ -483,7 +488,7 @@ function caseReferences(source: string): { source: string, records: ReportRecord
 
 function upgraded(original: string, args: ParsedArgs): ReturnType<typeof upgrade> {
   const migrated = args.values['migrate'] === true ? caseReferences(original) : { source: original, records: [] }
-  const result = upgrade(migrated.source)
+  const result = upgrade(migrated.source, (args.values['registered-extension'] as ('wikilinks' | 'samp')[] | undefined) ?? [])
   return { ...result, changed: result.output !== original, records: [...migrated.records, ...result.records] }
 }
 

@@ -29,6 +29,7 @@ const UPGRADE_FLAGS: readonly Flag[] = [
   { name: 'json', commands: ['upgrade'], kind: 'switch' },
   { name: 'force', commands: ['upgrade'], kind: 'switch' },
   { name: 'migrate', commands: ['upgrade'], kind: 'switch' },
+  { name: 'registered-extension', commands: ['upgrade'], kind: 'enum', values: ['wikilinks', 'samp'], repeatable: true },
   { name: 'json', commands: ['diff'], kind: 'switch' },
 ]
 // C2-T-003: the commands and flags of the 0.1 command line that the reference engine keeps.

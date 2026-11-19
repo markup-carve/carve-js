@@ -6,6 +6,7 @@ import { upgrade as upgradeImpl, type UpgradeResult as UpgradeCore } from '../up
 import { upgradeEdits, type UpgradeEdit } from '../upgrade/src/source-edits.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { checkOptions } from './check.ts'
+import { type RegisteredExtension } from '../upgrade/src/extension-respell.ts'
 
 export { type UpgradeEdit } from '../upgrade/src/source-edits.ts'
 export { type ReportRecord } from '../upgrade/src/report.ts'
@@ -14,6 +15,8 @@ export { type ReportRecord } from '../upgrade/src/report.ts'
 export interface UpgradeOptions {
   /** Also returns `edits`, the changes from the 0.1 source to the 0.2 source, for an editor to offer as quick fixes. */
   edits?: boolean
+  /** Default 0.1 host extensions whose source forms need a 0.2 spelling. */
+  registeredExtensions?: readonly RegisteredExtension[]
 }
 
 export interface UpgradeResult extends UpgradeCore {
@@ -26,9 +29,9 @@ export interface UpgradeResult extends UpgradeCore {
  * the upgrade rows that applied; `check` is `pass` or `explained` when the output may be written.
  */
 export function upgrade(source: string, options?: UpgradeOptions): UpgradeResult {
-  checkOptions(options, { edits: 'boolean' })
+  checkOptions(options, { edits: 'boolean', registeredExtensions: 'extension-names' })
   if (typeof source !== 'string') throw new CarveOptionError('source', 'not a string')
-  const result: UpgradeResult = upgradeImpl(source)
+  const result: UpgradeResult = upgradeImpl(source, options?.registeredExtensions)
   if (options?.edits === true) result.edits = upgradeEdits(source, result.output, result.records)
   return result
 }

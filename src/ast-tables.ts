@@ -687,8 +687,14 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
 
 export const EXTENSION_SLOT_ORDER: ReadonlyMap<string, readonly string[]> = new Map([
   ["carve.cite", []],
+  ["carve.codeGroup", ["panels"]],
+  ["carve.details", ["title","body"]],
+  ["carve.fencedRender.mermaid", []],
   ["carve.imgFence.image", []],
   ["carve.imgFence.img", []],
+  ["carve.mathBlock", []],
+  ["carve.spoiler", []],
+  ["carve.spoilerBlock", ["title","body"]],
   ["carve.tab", ["title","body"]],
   ["carve.tabs", ["tabs"]],
   ["carve.wiki", []],

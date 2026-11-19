@@ -205,7 +205,7 @@ function renderProfiled(resolved: ResolvedTree): { html: string, losses: Finding
   const run = applyProfile(document, settings.profile, rule, losses, resolved.resolution.xrefText, settings)
   try {
     const resolution = liveResolution(resolved.resolution, run.gone, run.goneTargets)
-    return renderDocument(document, settings, resolution, losses, resolved.bidi, resolved.source)
+    return renderDocument(document, settings, resolution, losses, resolved.bidi, resolved.source, run.taskLabels)
   } finally {
     run.restore()
   }

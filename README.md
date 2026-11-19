@@ -21,6 +21,7 @@ const html = render('= Hello /Carve/')
 const document = parse('= Hello /Carve/')
 const source = format('=  Hello /Carve/')
 const diagnostics = lint('See [x][nope].')
+const localized = lint('= Alpha\n\nSee [a](#alpha).', { headingIds: 'lower' })
 ```
 
 `fix(source)` applies the rewrites of `carve lint --fix` and `fixEdits(source, diagnostic)` returns the edits for one
@@ -36,6 +37,7 @@ files as `carve fmt` does. A classic-script build is published as
 `@markup-carve/carve/extensions` holds the provisional standard extensions, registered by the host:
 
 - blocks: `details`, `spoiler` (also inline), `listTable`
+- tabs: `standardTabsRenderer({ mode: 'aria' })` selects ARIA controls; CSS radios remain the default
 - inline: `colorSwatch`, `wikilinks`, `semanticSpan`, `smartQuotes` (with `smartQuoteLocales`,
   `isSmartQuoteLocaleSupported`, `SMART_QUOTE_LOCALES`)
 - document transforms: `defaultAttributes`, `tabNormalize`, `inlineFootnotesToParentheses`
@@ -48,9 +50,11 @@ The command line:
 npx carve README.crv > README.html
 npx carve fmt --check README.crv
 npx carve lint README.crv
+npx carve lint --heading-ids lower README.crv
 npx carve import --from html page.html
 npx carve import --from markdown README.md
 npx carve upgrade --check legacy.crv
+npx carve upgrade --registered-extension wikilinks legacy-wiki.crv
 npx carve fix --write notes.crv
 npx carve flatten book.crv > book-all.crv
 npx carve diff old.crv new.crv
