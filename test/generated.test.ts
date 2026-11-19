@@ -32,7 +32,7 @@ it('C2-W-106 lint/catalog.ts is generated from the specification table', () => {
   expect(read('lint/catalog.ts')).toBe(generateCatalog(read('data/lint-rules.json')))
 })
 
-const specData = join(process.env['CARVE_SPEC_DIR'] ?? join(root, '../spec'), 'spec/0.2/data')
+const specData = join(process.env['CARVE_SPEC_DIR'] ?? join(root, 'spec'), 'spec/0.2/data')
 
 it(
   'the copied data files equal the spec files',

@@ -19,8 +19,8 @@ concurrency:
 # rather than inheriting the 360-minute GitHub default.
 
 jobs:
-  mutation-v2:
-    name: 0.2 parser and HTML mutation gate
+  mutation:
+    name: parser and HTML mutation gate
     if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -86,13 +86,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Public 0.2 declarations with both TypeScript versions
+      - name: Public declarations with both TypeScript versions
         if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
         run: npm run check-public-types
       - run: npm run test:cli
 
   test:
-    name: corpus + include-conformance (${{ matrix.node-version }}, shard ${{ matrix.shard }}/2)
+    name: tests (${{ matrix.node-version }}, shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -121,10 +121,6 @@ jobs:
       # run exactly the files `npm test` runs.
       - name: Corpus tests
         run: npx vitest run --shard=${{ matrix.shard }}/2
-
-      - name: Include-conformance gate (spec §19 vectors)
-        if: matrix.shard == 1
-        run: npm run test:includes
 
       - name: Build
         if: matrix.shard == 1
@@ -163,46 +159,3 @@ jobs:
       # every git-dependency install. Roughly two seconds, hence per-PR.
       - name: Bundle parity
         run: npm run test:browser
-
-  mxss:
-    name: browser mutation-XSS (svg fence)
-    runs-on: ubuntu-latest
-
-    # THE INSTALL STEP HANGS, and without a bound it hangs for the six hours a
-    # job is allowed. The browser download stalled three times in two hours on one
-    # evening - 40 to 47 minutes each - while the same step finished in 66
-    # seconds on other branches in between. Every one of those held a merge and
-    # a runner slot, and the check itself never started.
-    #
-    # The whole job is 1 to 5 minutes when it is healthy, so this bounds a hang
-    # to roughly three times its own worst honest run and turns it into a red
-    # check a rerun clears, rather than a pending one nobody can distinguish
-    # from slow.
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      # Playwright + chromium are needed only for this job, so install them here
-      # rather than as a project devDependency (keeps the main matrix light).
-      - name: Install Playwright chromium
-        run: |
-          npm i --no-save playwright@1.64.0
-          npx playwright install chromium
-
-      - name: Browser mutation-XSS check
-        run: npm run test:mxss

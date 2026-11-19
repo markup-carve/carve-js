@@ -11,7 +11,7 @@ it('src/dispatch.ts is what scripts/generate-dispatch.ts writes', () => {
   expect(readFileSync(join(root, 'src/dispatch.ts'), 'utf8')).toBe(generated)
 })
 
-const specFile = join(process.env['CARVE_SPEC_DIR'] ?? join(root, '../spec'), 'spec/0.2/data/line-shapes.json')
+const specFile = join(process.env['CARVE_SPEC_DIR'] ?? join(root, 'spec'), 'spec/0.2/data/line-shapes.json')
 
 it(
   'data/line-shapes.json equals the spec file',

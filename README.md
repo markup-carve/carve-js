@@ -3,8 +3,8 @@
 [![CI](https://github.com/markup-carve/carve-js/actions/workflows/ci.yml/badge.svg)](https://github.com/markup-carve/carve-js/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-carve-js parses and renders Carve in TypeScript and JavaScript. It implements Carve spec 0.1.
-Read the [Carve documentation](https://markup-carve.github.io/carve/) for the language.
+carve-js parses, renders, formats and lints Carve in TypeScript and JavaScript. It is the reference engine
+of Carve 0.2. Read the [Carve documentation](https://markup-carve.github.io/carve/) for the language.
 
 ## Install
 
@@ -15,40 +15,40 @@ npm install @markup-carve/carve
 ## Usage
 
 ```ts
-import { parse, renderHtml, resolve } from '@markup-carve/carve'
-
-const document = resolve(parse('# Hello /Carve/'))
-const html = renderHtml(document)
-```
-
-CLI basics:
-
-```sh
-npx carve README.crv > README.html
-npx carve lint README.crv
-npx carve fmt README.crv
-npx carve migrate --from html page.html
-```
-
-## Carve 0.2
-
-The Carve 0.2 engine is published beside the 0.1 API as `@markup-carve/carve`, for browsers, Node and
-bundlers, with `@markup-carve/carve/node` for the file system include resolver. The package root stays 0.1.
-
-```ts
-import { parse, render } from '@markup-carve/carve'
+import { format, lint, parse, render } from '@markup-carve/carve'
 
 const html = render('= Hello /Carve/')
 const document = parse('= Hello /Carve/')
+const source = format('=  Hello /Carve/')
+const diagnostics = lint('See [x][nope].')
 ```
 
-The [0.2 API guide](docs/api.md) lists every call and its errors, and maps each 0.1 call to its 0.2 replacement.
-The Markdown, plain-text and ANSI writers of 0.1 are being ported to 0.2.
+The root entry runs in browsers, Node, Deno and bundlers. `@markup-carve/carve/node` adds
+`fileSystemResolver`, the include resolver that reads files. A classic-script build is published as
+`dist/carve.iife.min.js` (the `unpkg` and `jsdelivr` target) and exposes the same API as a `carve` global.
+
+The command line:
+
+```sh
+npx carve README.crv > README.html
+npx carve fmt --check README.crv
+npx carve lint README.crv
+npx carve import --from html page.html
+npx carve upgrade --check legacy.crv
+```
+
+`carve upgrade` rewrites a Carve 0.1 document into 0.2 so that it renders the same.
 
 ## Documentation
 
+- [Library API and migration from 0.1](docs/api.md)
+- [Engine notes: conformance, byte input, includes, command line](docs/engine.md)
+- [Development](docs/development.md)
 - [Carve documentation](https://markup-carve.github.io/carve/)
 - [Playground](https://markup-carve.github.io/carve/playground)
-- [Engine guides](docs/README.md)
-- [Security for untrusted input](docs/security.md)
-- [Development and contributing](docs/development.md)
+
+## CI and pre-commit
+
+The repository is a GitHub Action (`markup-carve/carve-js@<tag>`, inputs `files`, `fmt`, `lint`, `version`)
+and a pre-commit hook source (hooks `carve-fmt`, `carve-fmt-write`, `carve-lint`). Both run the `carve` bin
+of the pinned version.

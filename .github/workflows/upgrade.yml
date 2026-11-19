@@ -1,7 +1,7 @@
 name: upgrade tool
 
-# The 0.1 to 0.2 upgrade tool in `upgrade/`. It reads the build of `src/` and the engine in
-# `v2/`, so a change to either runs it too.
+# The 0.1 to 0.2 upgrade tool in `upgrade/`. It reads the 0.1 reader in `upgrade/engine-0.1/` and the
+# engine in `src/`, so a change to either runs it too.
 on:
   push:
     branches: [next2]

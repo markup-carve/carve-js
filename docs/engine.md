@@ -1,6 +1,6 @@
-# Carve 0.2
+# Engine notes
 
-The 0.2 engine is in `src`. The package publishes it as `@markup-carve/carve`, built from `public/index.ts`; [docs/api.md](../docs/api.md) is its reference. `src/index.ts` is the internal entry that the tests, scripts and command line use, and it also exports the scanner and event helpers.
+The engine is in `src`. The package publishes it as `@markup-carve/carve`, built from `public/index.ts`; [api.md](api.md) is its reference. `src/index.ts` is the internal entry that the tests, scripts and command line use, and it also exports the scanner and event helpers.
 
 ## Conformance
 

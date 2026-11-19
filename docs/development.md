@@ -14,41 +14,30 @@ npm test
 ```
 
 If you cloned without `--recurse-submodules`, run `git submodule update --init`
-to fetch the spec corpus.
+to fetch the specification.
 
 ## Layout
 
 ```
 carve-js/
-├── src/                    Entry points and implementation modules
-│   ├── ast.ts              Typed AST node definitions
-│   ├── parse.ts            Linear-time block + inline parser
-│   ├── render-html.ts      AST → canonical HTML renderer
-│   ├── render-markdown.ts  AST → Markdown renderer
-│   ├── render-plain.ts     AST → plain-text renderer
-│   ├── render-ansi.ts      AST → ANSI-styled renderer
-│   ├── djot-migrate.ts     Djot/Markdown collision warnings + autocorrect
-│   ├── markdown-migrate.ts Markdown → Carve source transform
-│   ├── ast/                AST JSON, patches, and sidecars
-│   ├── parse/              Block, inline, list, and table parser modules
-│   ├── import/             Djot, Markdown, and HTML import helpers
-│   ├── extension/          Built-in extensions
-│   ├── heading/            Heading IDs, numbers, and references
-│   ├── render/             Renderer helpers
-│   ├── source/             Source positions and errors
-│   ├── table/              Table layout and spans
-│   ├── cli.ts              `carve` binary (render, fmt, flatten, fix, lint, diff, merge, portability, trace, migrate)
-│   └── index.ts            Public API
-├── test/                   Vitest suites + the spec corpus runner
-├── spec/                   git submodule → markup-carve/carve
-├── package.json
-└── tsconfig.json
+├── src/                  The engine: block and inline parser, resolver, HTML renderer, writer
+├── public/               The package entry points (`.` and `./node`) and their build
+├── cli/                  The `carve` bin
+├── lint/                 The linter
+├── migrate/              Tree migration from AST 1.x and drafts
+├── import/               HTML, Markdown, GFM and Djot import
+├── upgrade/              `carve upgrade`, with the frozen 0.1 reader in upgrade/engine-0.1/
+├── extensions/           Example extensions ported from 0.1, not shipped
+├── data/                 Tables and the conformance corpus copied from the specification
+├── test/                 Vitest suites
+├── proptest/             Source property tests
+├── scripts/              Generators, gates, benchmarks and the browser bundle build
+└── spec/                 git submodule: markup-carve/carve
 ```
 
-## HTML import performance
-
-See [HTML import measurements](html-import-performance.md) for the #2154
-investigation and a script that measures parser input separately from timing.
+`npm run build` compiles the 0.1 reader into `build/engine-0.1/` (not published), then bundles
+`dist/index.js`, `dist/node.js`, `dist/cli.js` and the declarations in `dist/types/`.
+`npm run build:browser` writes `dist/carve.iife.min.js`.
 
 ---
 

@@ -29,11 +29,11 @@ const writable = canWriteUpgrade(result)
 
 ## How it works
 
-The tool reads the input with the 0.1 engine of this repository (the build of `src/` in
-`dist/`, so run `npm ci` or `npm run build` at the repository root first), collects edits from
+The tool reads the input with the frozen 0.1 engine in `engine-0.1/` (its build in
+`build/engine-0.1/`, so run `npm ci` or `npm run build` at the repository root first), collects edits from
 the 0.1 tree and its positions, and applies them from the end of the text backward. It changes
 only the spans a contract entry names. It then renders the input with the 0.1 engine and the
-output with the 0.2 engine (`v2/`). The check sorts attributes, lowercases HTML attribute names,
+output with the 0.2 engine (`src/` of the repository). The check sorts attributes, lowercases HTML attribute names,
 and drops layout whitespace between
 tags. `explained` requires the cited entries' HTML transformations to reproduce the 0.2 result
 exactly. The transformations are in `data/html-transformations.json`; U-019 and U-021 also have

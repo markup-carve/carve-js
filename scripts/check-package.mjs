@@ -35,35 +35,27 @@ try {
   run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false',
     join(consumer, packed.filename),
   ], consumer)
-  writeFileSync(join(consumer, 'consumer.ts'), `
-import { carveToHtml, fromAstJson, type Document } from '@markup-carve/carve'
-import { fileSystemResolver } from '@markup-carve/carve/node'
-import * as prettier from '@markup-carve/carve/prettier'
-
-const payload: unknown = { type: 'document', srcByteLength: 0, children: [] }
-const doc: Document = fromAstJson(payload)
-if (doc.children.length !== 0) throw new Error('Unexpected decoded children')
-if (carveToHtml('hello').trim() !== '<p>hello</p>') throw new Error('Render failed')
-if (typeof fileSystemResolver !== 'function') throw new Error('Missing Node export')
-if (!prettier.parsers) throw new Error('Missing Prettier export')
-`)
-  copyFileSync(join(root, 'scripts/package-consumer.ts'), join(consumer, 'consumer-v2.ts'))
+  copyFileSync(join(root, 'scripts/package-consumer.ts'), join(consumer, 'consumer.ts'))
   writeFileSync(join(consumer, 'tsconfig.json'), JSON.stringify({
     compilerOptions: {
       module: 'NodeNext', moduleResolution: 'NodeNext', target: 'ES2022',
       strict: true, exactOptionalPropertyTypes: true, types: [], outDir: 'out',
     },
-    files: ['consumer.ts', 'consumer-v2.ts'],
+    files: ['consumer.ts'],
   }))
   run(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.json'], consumer)
   run(process.execPath, ['out/consumer.js'], consumer)
-  run(process.execPath, ['out/consumer-v2.js'], consumer)
-  // Hosts include browsers: the 0.2 entry bundles for the browser with no Node built-in.
+  // Hosts include browsers: the root entry bundles for the browser with no Node built-in.
   await build({
     stdin: { contents: "import { render } from '@markup-carve/carve'\nglobalThis.out = render('a')\n", resolveDir: consumer },
     bundle: true, platform: 'browser', format: 'esm', write: false, logLevel: 'error',
   })
-  console.log('Packed ESM, Node, Prettier, 0.2 and 0.2 Node entry points passed the consumer check.')
+  // The bin carries the 0.1 reader of `carve upgrade` inside its bundle.
+  writeFileSync(join(consumer, 'legacy.crv'), '| a | b |\n|---|---|\n| 1 | 2 |\n')
+  run(join(consumer, 'node_modules/.bin/carve'), ['--version'], consumer)
+  run(join(consumer, 'node_modules/.bin/carve'), ['upgrade', '--write', 'legacy.crv'], consumer)
+  run(join(consumer, 'node_modules/.bin/carve'), ['fmt', '--check', 'legacy.crv'], consumer)
+  console.log('Packed root and Node entry points and the carve bin passed the consumer check.')
 } finally {
   rmSync(consumer, { recursive: true, force: true })
 }

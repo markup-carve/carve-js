@@ -57,7 +57,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:browser": "node test/browser-bundle.mjs --selfcheck && node test/browser-bundle.mjs",
-    "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
+    "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
     "check:extension-migration": "tsc -p extensions/tsconfig.json && eslint --config extensions/eslint.config.mjs 'extensions/**/*.ts' 'test/extension-migration/**/*.ts' --max-warnings=0 && vitest run test/extension-migration",
     "test:stress": "CARVE_STRESS=1 vitest run test/writer.stress.test.ts",
     "test:proptest": "node --test proptest/*.test.ts",

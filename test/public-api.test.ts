@@ -130,7 +130,7 @@ describe('the public 0.2 entry', () => {
   })
 
   it('reads files below a root with the Node resolver', () => {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'carve-v2-public-')))
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'carve-public-')))
     mkdirSync(join(dir, 'docs'))
     writeFileSync(join(dir, 'docs/part.crv'), 'From disk.\n')
     const resolver = fileSystemResolver(dir)
@@ -225,7 +225,7 @@ describe('the 0.2 API guide', () => {
 
   it('runs every example', async () => {
     const entry = pathToFileURL(join(root, 'public/index.ts')).href
-    const dir = mkdtempSync(join(tmpdir(), 'carve-v2-guide-'))
+    const dir = mkdtempSync(join(tmpdir(), 'carve-guide-'))
     const examples = [...guide.matchAll(/^```ts\n([\s\S]*?)^```$/gmu)].map((match) => match[1]!)
     expect(examples.length).toBeGreaterThanOrEqual(5)
     for (const [index, example] of examples.entries()) {
@@ -237,7 +237,7 @@ describe('the 0.2 API guide', () => {
 
   it('maps every value of the 0.1 package root', { timeout: 120_000 }, async () => {
     // A file URL keeps the 0.1 sources out of the 0.2 type check.
-    const legacy = Object.keys(await import(pathToFileURL(join(root, 'src/index.ts')).href) as object)
+    const legacy = Object.keys(await import(pathToFileURL(join(root, 'upgrade/engine-0.1/index.ts')).href) as object)
     const section = guide.slice(guide.indexOf('## Migrating from 0.1'))
     const mapped = new Set<string>()
     for (const line of section.split('\n')) {

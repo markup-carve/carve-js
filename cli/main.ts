@@ -3,7 +3,7 @@ import { parseArgs, help } from './flags.ts'
 import { classifyCliError, run } from './run.ts'
 import { CarveWriteError } from '../src/index.ts'
 import { writerHasLoss } from '../src/write.ts'
-import { CARVE2_VERSION } from './version.ts'
+import { CARVE_VERSION } from './version.ts'
 
 function errorMessage(error: unknown): string {
   if (!(error instanceof CarveWriteError)) return error instanceof Error ? error.message : String(error)
@@ -24,7 +24,7 @@ function main(): number {
     const args = parseArgs(process.argv.slice(2))
     if (args.help) { process.stdout.write(help(args.command)); return 0 }
     if (args.version) {
-      process.stdout.write(`${CARVE2_VERSION}\n`)
+      process.stdout.write(`${CARVE_VERSION}\n`)
       return 0
     }
     return run(args)

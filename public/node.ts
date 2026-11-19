@@ -1,5 +1,5 @@
 /**
- * The Node-only part of the 0.2 API (`@markup-carve/carve/node`), kept off `./v2` so browser builds never see
+ * The Node-only part of the API (`@markup-carve/carve/node`), kept off the root entry so browser builds never see
  * Node built-ins.
  */
 import { realpathSync } from 'node:fs'

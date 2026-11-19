@@ -1,18 +1,12 @@
-name: 0.2 block core
+name: engine
 
-# The checks of the 0.2 engine that are too slow for the normal test run, on pull
-# requests against next2 that touch it. Three-line enumeration stays in `npm test`.
+# The checks of the engine that are too slow for the normal test run, on pull
+# requests against next2. Three-line enumeration stays in `npm test`.
 on:
   pull_request:
     branches: [next2]
-    paths:
-      - 'v2/**'
-      - '.github/workflows/v2-block-core.yml'
   push:
     branches: [next2]
-    paths:
-      - 'v2/**'
-      - '.github/workflows/v2-block-core.yml'
   workflow_dispatch:
 
 concurrency:
@@ -34,7 +28,7 @@ jobs:
       - run: npm run check:extension-migration
 
   ast-schema-crosscheck:
-    name: 0.2 AST schema agreement, 100,000 mutants
+    name: AST schema agreement, 100,000 mutants
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -318,9 +312,9 @@ jobs:
       - run: npm ci
 
       # A shared runner is not idle, so there is no threshold yet.
-      # `npm ci` builds the 0.1 engine into dist/, which the second table compares with.
+      # `npm ci` builds the 0.1 reader into build/engine-0.1/, which the second table compares with.
       - name: Block pass, inline pass, source to HTML and source to canonical source, CPU time per document
-        run: npm run bench -- --files test/fixtures/bench-commonmark-core.crv,docs/extensions.md,docs/migration.md --rounds 20
+        run: npm run bench -- --files test/fixtures/bench-commonmark-core.crv,docs/api.md,docs/engine.md --rounds 20
 
   proptest:
     name: source property tests

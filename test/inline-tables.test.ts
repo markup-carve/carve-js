@@ -15,7 +15,7 @@ it('src/inline-tables.ts is what scripts/generate-inline.ts writes', () => {
   expect(readFileSync(join(root, 'src/inline-tables.ts'), 'utf8')).toBe(generated)
 })
 
-const specData = join(process.env['CARVE_SPEC_DIR'] ?? join(root, '../spec'), 'spec/0.2/data')
+const specData = join(process.env['CARVE_SPEC_DIR'] ?? join(root, 'spec'), 'spec/0.2/data')
 
 it(
   'the inline data files equal the spec files',

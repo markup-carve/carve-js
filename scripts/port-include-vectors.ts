@@ -1,8 +1,8 @@
 // Ports the 212 include vectors of 0.1 (tests/include-conformance/vectors on main of the specification repository)
-// to the 0.2 data format of v2/test/include-vectors: virtual files or a file tree, the entry, the options, and the
+// to the 0.2 data format of test/include-vectors: virtual files or a file tree, the entry, the options, and the
 // expected HTML, fmt, warnings by code, dependencies and positions. A changed vector states the clause its new
 // expectation comes from; a dropped one is listed with its reason.
-//   node v2/scripts/port-include-vectors.ts <0.1 vector directory> <_VECTORS.md>
+//   node scripts/port-include-vectors.ts <0.1 vector directory> <_VECTORS.md>
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { format } from '../src/format.ts'
@@ -290,7 +290,7 @@ function resolverOf(old: OldVector): NewVector['resolver'] {
   return old.options?.['resolverIds'] === true ? 'virtual-ids' : 'virtual'
 }
 
-/** The fs ids of 0.1 are `<TMP>/<root>/...`; a 0.2 id is the path from the root (v2/cli/include-fs.ts). */
+/** The fs ids of 0.1 are `<TMP>/<root>/...`; a 0.2 id is the path from the root (cli/include-fs.ts). */
 function fsId(id: string, root: string): string {
   const prefix = root === '.' ? '<TMP>/' : `<TMP>/${root}/`
   return id.startsWith(prefix) ? id.slice(prefix.length) : id

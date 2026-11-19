@@ -14,7 +14,7 @@ interface Regression {
   inputJson?: string
 }
 
-const directory = 'v2/proptest/regressions'
+const directory = 'proptest/regressions'
 for (const name of readdirSync(directory).filter((file) => file.endsWith('.crv'))) {
   const file = join(directory, name)
   const metadata = JSON.parse(readFileSync(`${file}.json`, 'utf8')) as Regression

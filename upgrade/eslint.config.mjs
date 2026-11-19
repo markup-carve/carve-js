@@ -1,9 +1,10 @@
 import { fileURLToPath } from 'node:url'
 import tseslint from 'typescript-eslint'
 
-// The rules of `v2/`: typed checks and a complexity cap of 15.
+// The rules of the engine: typed checks and a complexity cap of 15. The frozen 0.1 reader is not linted.
 export default [{
   files: ['**/*.ts'],
+  ignores: ['engine-0.1/**'],
   languageOptions: {
     parser: tseslint.parser,
     parserOptions: {

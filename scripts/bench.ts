@@ -34,7 +34,7 @@ function option(name: string, fallback: string): string {
   return at >= 0 && at + 1 < process.argv.length ? process.argv[at + 1]! : fallback
 }
 
-const corpus = option('corpus', join(import.meta.dirname, '../../../carve-bench/corpus'))
+const corpus = option('corpus', join(import.meta.dirname, '../../carve-bench/corpus'))
 const realistic = option('realistic', join(corpus, 'realistic'))
 const rounds = Number(option('rounds', '50'))
 const sampleMicros = Number(option('sample-ms', '20')) * 1000

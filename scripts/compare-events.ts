@@ -3,7 +3,7 @@
 // to three tokens over the alphabet of inline tokens, and the public tree and the HTML under three
 // sets of options on the documents of up to two lines, the contents of up to two tokens and the
 // examples of the specification. Used by scripts/mutate.ts on a surviving mutation.
-//   node scripts/compare-events.ts PATH_TO_OTHER_V2
+//   node scripts/compare-events.ts PATH_TO_OTHER_CHECKOUT
 // Prints the first document whose events differ and exits 1, or exits 0 when none does.
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'

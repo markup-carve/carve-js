@@ -1,9 +1,8 @@
-# Carve 0.2 library API
+# Library API
 
 `@markup-carve/carve` is the public API of the Carve 0.2 engine. It follows the library calls of
-`spec/0.2/tooling.md` (C2-T-005) and refuses with the typed errors of C2-T-040. The package root
-(`@markup-carve/carve`) stays the 0.1 API, so a host that imports it today is unaffected; a host moves to
-0.2 by changing the import path and the calls below.
+`spec/0.2/tooling.md` (C2-T-005) and refuses with the typed errors of C2-T-040. It replaces the 0.1 API of
+the same package; [Migrating from 0.1](#migrating-from-01) maps each 0.1 call to its replacement.
 
 | Entry | Runs in | Holds |
 |---|---|---|
