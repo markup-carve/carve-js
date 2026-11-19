@@ -969,12 +969,15 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   return escaped
 }
 
-/** C2-I-023: an unpaired bracket or braced opener of text makes a later `%%` text, even after whitespace. */
+/** C2-I-023: a text opener can make a later `%%` text, but the reader decides whether it paired. */
 function percentsWithinTextOpeners(leaf: Leaf, escaped: Uint8Array): void {
+  if (leaf.codes.indexOf(37) < 0 || (leaf.codes.indexOf(91) < 0 && leaf.codes.indexOf(123) < 0)) return
   const depth: CommentDepth = { brackets: 0, textBrackets: 0, textBraces: 0, bracesByMark: new Uint32Array(128) }
   for (let at = 0; at < leaf.codes.length; at++) {
     if (leaf.kinds[at] === TEXT && leaf.codes[at] === 37 && leaf.codes[at + 1] === 37 &&
-      (depth.textBrackets > 0 || depth.textBraces > 0)) escaped[at] = 0
+      escaped[at] !== 0 && (depth.textBrackets > 0 || depth.textBraces > 0)) {
+      return undecide(leaf, 'percent behind text opener')
+    }
     advanceCommentDepth(leaf, at, escaped, depth)
   }
 }
