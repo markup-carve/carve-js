@@ -4,6 +4,7 @@ import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
 import { columnOf, readPrefix } from '../src/layout-lines.ts'
+import { advanceColumn } from '../src/source.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -425,10 +426,13 @@ function multilineTerm(node: Node, path: string, context: LintContext): void {
 }
 
 function headingLineColumn(line: LintContext['lines'][number], quotes: number, context: LintContext): number {
-  const prefix = readPrefix(context.source, line.start, line.end, quotes)
-  let content = prefix.pos
-  while (context.source[content] === ' ' || context.source[content] === '\t') content++
-  return columnOf(context.source, content, quotes)
+  const prefix = quotes === 0 ? { pos: line.start, column: 0, origin: 0 }
+    : readPrefix(context.source, line.start, line.end, quotes)
+  let column = prefix.column
+  for (let at = prefix.pos; context.source[at] === ' ' || context.source[at] === '\t'; at++) {
+    column = advanceColumn(column, context.source.charCodeAt(at))
+  }
+  return column - prefix.origin
 }
 
 function headingContinuation(node: Node, path: string, context: LintContext): void {
@@ -1042,6 +1046,8 @@ function listItemBodyColumn(node: Node, path: string, context: LintContext): voi
 
 /** Each block of a list item, other than a paragraph, that starts past the item's content column. */
 function blockColumn(node: Node, path: string, context: LintContext): number | undefined {
+  const marker = context.layouts.get(path)?.markerColumn
+  if (marker !== undefined) return marker
   const start = node.pos === undefined ? undefined : context.chars[node.pos.startOffset]
   return start === undefined ? undefined : columnOf(context.source, start, quoteDepth(path, context))
 }
