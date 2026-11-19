@@ -501,6 +501,12 @@ function preservingMappedResult(input: string, mapped: { output: string; record:
     check: 'pass', engine01: ENGINE_01_VERSION }
 }
 
+/** U-290 keeps the directive unexpanded, so the U-011 review of the failed check stays. */
+function keepIncludeReview(rescue: ReportRecord, checked: readonly ReportRecord[], records: ReportRecord[]): void {
+  if (rescue.entry !== 'U-290' || hasEntry(records, 'U-011')) return
+  for (const record of checked) if (record.entry === 'U-011') records.push({ ...record, class: 'report' })
+}
+
 function upgradeSource(input: string): UpgradeResult {
   const mapped = mappedRewrite(input)
   if (mapped !== null) return preservingMappedResult(input, mapped)
@@ -522,10 +528,7 @@ function upgradeSource(input: string): UpgradeResult {
       const checked = done.records
       done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
       if (rescued !== null) {
-        // U-290 keeps the directive unexpanded, so its U-011 review stays.
-        if (rescued.record.entry === 'U-290' && !hasEntry(done.records, 'U-011')) {
-          done.records.push(...checked.filter((record) => record.entry === 'U-011').map((record) => ({ ...record, class: 'report' as const })))
-        }
+        keepIncludeReview(rescued.record, checked, done.records)
         done.records.push(rescued.record)
         done.output = rescued.output
       }
