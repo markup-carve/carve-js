@@ -767,14 +767,19 @@ function flattenCellGroup(group: Inline[], pending: Inline[][]): boolean {
 
 function cellInline(node: Html.Element, context: HtmlContext): Inline[] {
   const children = inlineChildren(node, context)
+  if (flattenCellBreaks(children)) report(context, node, 'import-whitespace-normalized', 'HTML table cell line break read as a space')
+  return coalesce(children)
+}
+
+/** A line break at any depth of a cell reads as a space; returns whether there was one. */
+export function flattenCellBreaks(children: Inline[]): boolean {
   const pending: Inline[][] = [children]
   let changed = false
   while (pending.length > 0) {
     const group = pending.pop()
     if (group !== undefined) changed = flattenCellGroup(group, pending) || changed
   }
-  if (changed) report(context, node, 'import-whitespace-normalized', 'HTML table cell line break read as a space')
-  return coalesce(children)
+  return changed
 }
 
 function rows(node: Html.Element, context: HtmlContext, inHead: boolean): TableRowNode[] {
