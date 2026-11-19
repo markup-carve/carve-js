@@ -170,7 +170,7 @@ if (!html.includes('Install')) throw new Error(html)
 ## Migrating from 0.1
 
 Each value the 0.1 package root exports, and what replaces it in 0.2. A row marked gone has no 0.2 call; the note
-says what to use instead. Of the 172 values, 76 map to a 0.2 call and 96 are gone.
+says what to use instead. Of the 172 values, 84 map to a 0.2 call and 88 are gone.
 
 | 0.1 call | 0.2 call | Note |
 |---|---|---|
@@ -212,7 +212,11 @@ says what to use instead. Of the 172 values, 76 map to a 0.2 call and 96 are gon
 | `carveToCarvePatch`, `applySourcePatch`, `createSourcePatch`, `sourceFingerprint` | gone | source patches are not part of 0.2 |
 | `carveToPreservationReport`, `assessTablePreservation`, `PreservationError` | gone | not part of 0.2 |
 | `checkPortability`, `normalizeHtml` | gone | Djot portability checks are not part of 0.2 |
-| `renderCarveWithConversionReport`, `markdownToCarve`, `djotToCarve`, `migrateMarkdown`, `migrateDjot`, `djotMigrationWarnings`, `formatMigrationWarnings`, `applyMigrationFixes`, `bbcodeToCarve`, `migrateBbcode`, `BbcodeInputTooLargeError`, `BbcodeSentinelSpaceExhaustedError`, `BBCODE_MAX_INPUT_LENGTH` | gone | Markdown, GFM and Djot import is outside the specification (C2-T-003): `carve import --from markdown`; BBCode is not carried over |
+| `markdownToCarve`, `migrateMarkdown` | `importDocument(markdown, { from: 'gfm' })` of `@markup-carve/carve/import` | `from: 'markdown'` reads CommonMark without the GFM extensions; see [import.md](import.md) |
+| `djotToCarve`, `migrateDjot` | `importDocument(djot, { from: 'djot' })` of `@markup-carve/carve/import` | through djot.js and the HTML importer |
+| `bbcodeToCarve`, `migrateBbcode` | `importDocument(bbcode, { from: 'bbcode' })` of `@markup-carve/carve/import` | JavaScript only |
+| `BbcodeInputTooLargeError`, `BBCODE_MAX_INPUT_LENGTH` | the same names of `@markup-carve/carve/import` | the error is an `ImportInputError` |
+| `renderCarveWithConversionReport`, `djotMigrationWarnings`, `formatMigrationWarnings`, `applyMigrationFixes`, `BbcodeSentinelSpaceExhaustedError` | gone | the importers return `diagnostics`; the BBCode reader needs no sentinel characters |
 | `migrateCaseOnlyReferences`, `stampCarve`, `buildMarker`, `stripTrailingMarker`, `readStamp`, `needsReview`, `compareSpecVersions`, `SPEC_VERSION` | gone | 0.1 to 0.2 source upgrades run in `carve upgrade` |
 | `formatLintWarnings`, `KNOWN_LINT_PLATFORMS` | gone | a diagnostic is plain data; the one platform is `github` |
 | `inspectColonFences`, `decisionTrace`, `decisionTraceJsonLines`, `tabNormalize` | gone | 0.1 debugging helpers |

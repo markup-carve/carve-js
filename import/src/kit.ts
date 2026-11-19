@@ -4,7 +4,7 @@ import {
   type Inline, type ListNode, type TableCellNode, type TableRowNode,
 } from '../../src/index.ts'
 
-export type Format = 'markdown' | 'gfm' | 'djot' | 'html'
+export type Format = 'markdown' | 'gfm' | 'djot' | 'bbcode' | 'html'
 export type ImportDiagnostic = Diagnostic & { foreignType?: string }
 export interface ImportResult { document: DocumentNode, source: string, diagnostics: ImportDiagnostic[] }
 
@@ -32,6 +32,15 @@ export function runImport(format: Format, strictLosses: boolean, run: () => Impo
 }
 
 /** C2-A-026: foreign parsers can produce deeper trees than the engine can accept. */
+/** A hub import reads library HTML, so its findings name no range of the caller's input. */
+export function withoutHtmlRanges(diagnostics: ImportDiagnostic[]): ImportDiagnostic[] {
+  return diagnostics.filter(entry => entry.code !== 'import-whitespace-normalized').map(entry => {
+    if (entry.range === undefined || !entry.code.startsWith('import-')) return entry
+    const { range: _range, ...rest } = entry
+    return rest
+  })
+}
+
 export function ensureForeignDepth(root: unknown, format: Format): void {
   const pending: { value: unknown, depth: number }[] = [{ value: root, depth: 0 }]
   while (pending.length > 0) {

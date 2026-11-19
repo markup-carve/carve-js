@@ -15,8 +15,8 @@ export interface Flag {
 
 export const COMMANDS: readonly Command[] = ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import', 'lint']
 
-// C2-T-003: the reference engine also imports Markdown, GFM and Djot, and offers the upgrade command.
-const EXTRA_FROM = ['markdown', 'gfm', 'djot']
+// C2-T-003: the reference engine also imports Markdown, GFM, Djot and BBCode, and offers the upgrade command.
+const EXTRA_FROM = ['markdown', 'gfm', 'djot', 'bbcode']
 const UPGRADE_FLAGS: readonly Flag[] = [
   { name: 'check', commands: ['upgrade'], kind: 'switch' },
   { name: 'write', commands: ['upgrade'], kind: 'switch' },

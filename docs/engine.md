@@ -51,6 +51,7 @@ carve fmt --check article.crv
 carve diagnostics --json article.crv
 carve lint --rules '{"empty-link-destination":"off"}' article.crv
 carve import --from html page.html
+carve import --from djot notes.dj
 carve upgrade --check legacy.crv
 ```
 

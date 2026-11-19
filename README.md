@@ -24,7 +24,8 @@ const diagnostics = lint('See [x][nope].')
 ```
 
 The root entry runs in browsers, Node, Deno and bundlers. `@markup-carve/carve/node` adds
-`fileSystemResolver`, the include resolver that reads files. A classic-script build is published as
+`fileSystemResolver`, the include resolver that reads files. `@markup-carve/carve/import` imports Markdown, GFM,
+Djot, BBCode and HTML ([guide](docs/import.md)); the core entry imports HTML. A classic-script build is published as
 `dist/carve.iife.min.js` (the `unpkg` and `jsdelivr` target) and exposes the same API as a `carve` global.
 
 The command line:
@@ -34,6 +35,7 @@ npx carve README.crv > README.html
 npx carve fmt --check README.crv
 npx carve lint README.crv
 npx carve import --from html page.html
+npx carve import --from markdown README.md
 npx carve upgrade --check legacy.crv
 ```
 
@@ -44,6 +46,7 @@ npx carve upgrade --check legacy.crv
 - [Library API and migration from 0.1](docs/api.md)
 - [Fenced renderers: diagrams, math, code groups and callouts](docs/fenced-renderers.md)
 - [Engine notes: conformance, byte input, includes, command line](docs/engine.md)
+- [Importing Markdown, Djot, BBCode and HTML](docs/import.md)
 - [Development](docs/development.md)
 - [Carve documentation](https://markup-carve.github.io/carve/)
 - [Playground](https://markup-carve.github.io/carve/playground)

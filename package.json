@@ -41,6 +41,10 @@
       "types": "./dist/types/public/extensions.d.ts",
       "import": "./dist/extensions.js"
     },
+    "./import": {
+      "types": "./dist/types/public/formats.d.ts",
+      "import": "./dist/import.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -88,7 +92,6 @@
     "differential-migrate": "node scripts/differential-migrate.ts"
   },
   "devDependencies": {
-    "@djot/djot": "^0.3.2",
     "@types/node": "^22.19.20",
     "ajv": "^8.20.0",
     "c8": "^12.0.0",
@@ -101,23 +104,24 @@
     "marked": "^18.2.0",
     "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-gfm": "^3.1.0",
-    "micromark": "^4.0.3",
-    "micromark-extension-gfm": "^3.0.0",
     "typescript": "^5.7.2",
     "typescript-5-9": "npm:typescript@^5.9.3",
     "typescript-eslint": "^8.70.1",
     "vitest": "^2.1.8",
     "yaml": "^2.9.0"
   },
-  "peerDependencies": {
-    "@djot/djot": "^0.3.2"
-  },
-  "peerDependenciesMeta": {
-    "@djot/djot": {
-      "optional": true
-    }
-  },
   "dependencies": {
+    "@djot/djot": "0.3.2",
+    "micromark": "4.0.3",
+    "micromark-extension-directive": "4.0.0",
+    "micromark-extension-frontmatter": "2.0.0",
+    "micromark-extension-gfm": "3.0.0",
+    "micromark-extension-gfm-autolink-literal": "2.1.0",
+    "micromark-extension-gfm-footnote": "2.1.0",
+    "micromark-extension-gfm-strikethrough": "2.1.0",
+    "micromark-extension-gfm-table": "2.1.2",
+    "micromark-extension-gfm-task-list-item": "2.1.0",
+    "micromark-extension-math": "3.1.0",
     "parse5": "^7.3.0"
   }
 }
