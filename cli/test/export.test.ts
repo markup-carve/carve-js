@@ -13,8 +13,8 @@ function cli(args: string[], input = ''): { status: number | null, stdout: strin
 
 describe('render --to', () => {
   it('writes each export target', () => {
-    expect(cli(['render', '--to', 'markdown'], '# T\n\n*b*\n').stdout).toBe('# T\n\n**b**\n')
-    expect(cli(['render', '--to', 'plain'], '# T\n\n*b*\n').stdout).toBe('T\n\nb\n')
+    expect(cli(['render', '--to', 'markdown'], '= T\n\n*b*\n').stdout).toBe('# T\n\n**b**\n')
+    expect(cli(['render', '--to', 'plain'], '= T\n\n*b*\n').stdout).toBe('T\n\nb\n')
     expect(cli(['render', '--to', 'ansi'], '*b*\n').stdout).toBe('\x1b[1mb\x1b[0m\n')
     expect(cli(['render', '--to', 'html'], '*b*\n').stdout).toBe('<p><strong>b</strong></p>\n')
   })

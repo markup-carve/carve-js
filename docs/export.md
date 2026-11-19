@@ -10,7 +10,7 @@ the losses of the run in one result. The tree is not changed.
 import { parse } from '@markup-carve/carve'
 import { toAnsi, toMarkdown, toPlainText } from '@markup-carve/carve/export'
 
-const tree = parse('# Notes\n\nSee *this* and </#Notes>.\n')
+const tree = parse('= Notes\n\nSee *this* and </#Notes>.\n')
 const markdown = toMarkdown(tree)
 if (markdown.output !== '# Notes\n\nSee **this** and [Notes](#notes).\n') throw new Error(markdown.output)
 if (toPlainText(tree).output !== 'Notes\n\nSee this and Notes.\n') throw new Error('plain')
