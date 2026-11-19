@@ -29,6 +29,18 @@ function safePair(name: string, value: string, host: ExtensionRenderHost, consum
   return ` ${name}="${host.escapeAttribute(value)}"`
 }
 
+/** C2-H-009: generated declarations join the authored `style` at its place, or follow the authored keys as a new one. */
+export function withStyle(attrs: Attrs | undefined, declarations: string): Attrs | undefined {
+  if (declarations === '') return attrs
+  const keyValues = attrs?.keyValues ?? []
+  const at = keyValues.findIndex(([key]) => key.toLowerCase() === 'style')
+  if (at < 0) return { ...(attrs ?? {}), keyValues: [...keyValues, ['style', declarations]] }
+  const [key, value] = keyValues[at]!
+  const authored = styleIsDangerous(value) ? '' : value.replace(/[ ;]+$/, '')
+  const merged: [string, string] = [key, authored === '' ? declarations : `${authored}; ${declarations}`]
+  return { ...attrs, keyValues: keyValues.map((pair, index) => index === at ? merged : pair) }
+}
+
 export function withClass(attrs: Attrs | undefined, base: string): Attrs {
   return { ...(attrs ?? {}), classes: [base, ...(attrs?.classes ?? [])] }
 }

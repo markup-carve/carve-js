@@ -1,6 +1,6 @@
 import type { ExtensionBundle } from '../../src/extensions/standard/bundle.ts'
 import type { Attrs, Block, ExtensionClaim, ExtensionDefinition, ExtensionRenderer, ExtensionRenderHost, ListItemNode, ListNode, Node } from '../../src/index.ts'
-import { attrValue, authorAttrs } from '../common/attrs.ts'
+import { attrValue, authorAttrs, withStyle } from '../common/attrs.ts'
 
 interface Cell {
   item: ListItemNode
@@ -169,9 +169,9 @@ function cellHtml(cell: Cell, col: number, row: number, head: number, headCols: 
   const tag = heading ? 'th' : 'td'
   const scope = heading ? ` scope="${row < head || rowHead ? 'col' : 'row'}"` : ''
   const spans = `${cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : ''}${cell.colspan > 1 ? ` colspan="${cell.colspan}"` : ''}`
-  const attrs = authorAttrs(cell.item.attrs, host, ['rowspan', 'colspan', 'scope', 'header', 'header-row', 'align', 'valign'])
-  const style = cellStyle(cell, col, tableAttrs)
-  return `<${tag}${scope}${spans}${attrs}${style === '' ? '' : ` style="${host.escapeAttribute(style)}"`}>` +
+  const attrs = authorAttrs(withStyle(cell.item.attrs, cellStyle(cell, col, tableAttrs)), host,
+    ['rowspan', 'colspan', 'scope', 'header', 'header-row', 'align', 'valign'])
+  return `<${tag}${scope}${spans}${attrs}>` +
     `${cellContent(cell.item, host)}</${tag}>`
 }
 

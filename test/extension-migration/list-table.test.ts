@@ -14,6 +14,30 @@ const h = (s: string): string => carveToHtml(s, { extensions: [listTable()] }).t
 const plain = (s: string): string => carveToHtml(s).trim()
 
 describe('list-table Tier-3 extension', () => {
+  it('merges an authored style and the alignment into one style attribute (#5096, C2-H-009)', () => {
+    const html = h([
+      '{aligns="left,right,center,left" valigns="top"}',
+      '::: list-table',
+      '- -{style="color:red"} a',
+      '  -{style="color:red; ;  "} b',
+      '  -{style=""} c',
+      '  -{style="background:url(javascript:x)"} d',
+      '- -{style="color:red" align=right} e',
+      ':::',
+    ].join('\n'))
+    expect(html).toContain('<td style="color:red; text-align: left; vertical-align: top;">a</td>')
+    expect(html).toContain('<td style="color:red; text-align: right;">b</td>')
+    expect(html).toContain('<td style="text-align: center;">c</td>')
+    expect(html).toContain('<td style="text-align: left;">d</td>')
+    expect(html).toContain('<td style="color:red; text-align: right; vertical-align: top;">e</td>')
+    expect(html.match(/<td[^>]*style=[^>]*style=/)).toBeNull()
+  })
+
+  it('keeps the authored attribute order with the merged style at the authored place', () => {
+    const html = h('{aligns=left}\n::: list-table\n- -{title=t style="color:red" lang=de} a\n:::')
+    expect(html).toContain('<td title="t" style="color:red; text-align: left;" lang="de">a</td>')
+  })
+
   it('lets cell alignment override column defaults', () => {
     const html = h([
       '{aligns="left,right" valigns="top,bottom"}',
