@@ -424,6 +424,13 @@ function multilineTerm(node: Node, path: string, context: LintContext): void {
   }
 }
 
+function headingLineColumn(line: LintContext['lines'][number], quotes: number, context: LintContext): number {
+  const prefix = readPrefix(context.source, line.start, line.end, quotes)
+  let content = prefix.pos
+  while (context.source[content] === ' ' || context.source[content] === '\t') content++
+  return columnOf(context.source, content, quotes)
+}
+
 function headingContinuation(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
   const first = context.lines[node.pos.startLine - 1]
@@ -435,10 +442,7 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   const marker = context.layouts.get(path)?.markerColumn
   if (marker === undefined) return
   const quotes = quoteDepth(path, context)
-  const prefix = readPrefix(context.source, second.start, second.end, quotes)
-  let content = prefix.pos
-  while (context.source[content] === ' ' || context.source[content] === '\t') content++
-  const indent = columnOf(context.source, content, quotes)
+  const indent = headingLineColumn(second, quotes, context)
   if (indent > marker) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
 }
 
@@ -1037,6 +1041,11 @@ function listItemBodyColumn(node: Node, path: string, context: LintContext): voi
 }
 
 /** Each block of a list item, other than a paragraph, that starts past the item's content column. */
+function blockColumn(node: Node, path: string, context: LintContext): number | undefined {
+  const start = node.pos === undefined ? undefined : context.chars[node.pos.startOffset]
+  return start === undefined ? undefined : columnOf(context.source, start, quoteDepth(path, context))
+}
+
 function overindentedBlocks(node: Node, path: string, context: LintContext,
   visit: (at: number, child: Node, start: number, end: number, past: number, content: number) => void): void {
   if (node.type !== 'list_item') return
@@ -1049,8 +1058,7 @@ function overindentedBlocks(node: Node, path: string, context: LintContext,
     if (child === undefined || child.type === 'paragraph' || child.type === 'list' || child.pos === undefined) continue
     const line = context.lines[child.pos.startLine - 1]
     const childPath = `${path}/children/${at}`
-    const start = context.chars[child.pos.startOffset]
-    const column = start === undefined ? undefined : columnOf(context.source, start, quoteDepth(childPath, context))
+    const column = blockColumn(child, childPath, context)
     if (line === undefined || column === undefined || column <= content) continue
     visit(at, child, line.start + child.pos.startColumn - 1, line.end, column - content, content)
   }
