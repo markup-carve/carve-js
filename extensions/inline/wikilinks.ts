@@ -39,9 +39,9 @@ export function wikilinks(options: WikilinksOptions = {}): ExtensionBundle {
     const href = generate(page) + anchor
     // C2-X-057: the target becomes a link only through the URL policy (C2-H-159).
     if ((page === '' && anchor === '') || !isUrlAllowed(href, host.urlPolicy)) return host.inlines(node.fallback ?? [])
-    // The generated pairs replace authored ones of the same name, so `{rel=opener}` cannot undo `noopener`.
+    // The generated href and pairs replace authored ones, so `{rel=opener}` cannot undo `noopener`.
     const generated: [string, string][] = [['data-wikilink', page], ...(options.newWindow === true ? [['target', '_blank'], ['rel', 'noopener']] as [string, string][] : [])]
-    const names = new Set(generated.map(([name]) => name))
+    const names = new Set(['href', ...generated.map(([name]) => name)])
     const authored = (node.attrs?.keyValues ?? []).filter(([name]) => !names.has(name.toLowerCase()))
     const keyValues: [string, string][] = [generated[0]!, ...authored, ...generated.slice(1)]
     const attrs = authorAttrs({ ...node.attrs, classes: [...classes, ...(node.attrs?.classes ?? [])], keyValues }, host)

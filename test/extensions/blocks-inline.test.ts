@@ -121,7 +121,7 @@ describe('wikilinks', () => {
     const options = use(wikilinks({ urlGenerator: (page) => `/w/${page}`, cssClass: 'a b', newWindow: true }))
     expect(render(':wiki[P]', options)).toBe(
       '<p><a href="/w/P" class="a b" data-wikilink="P" target="_blank" rel="noopener">P</a></p>')
-    expect(render(':wiki[P]{rel=opener TARGET=x data-wikilink=y lang=de}', options)).toBe(
+    expect(render(':wiki[P]{rel=opener TARGET=x data-wikilink=y HREF=/evil lang=de}', options)).toBe(
       '<p><a href="/w/P" class="a b" data-wikilink="P" lang="de" target="_blank" rel="noopener">P</a></p>')
     expect(render(':wiki[P]', use(wikilinks({ urlGenerator: () => 'javascript:alert(1)' })))).toBe('<p>P</p>')
   })
