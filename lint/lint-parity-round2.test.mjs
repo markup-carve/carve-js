@@ -49,5 +49,7 @@ describe('0.2 lint leaf ownership and visual columns', () => {
     expect(codes('> - a\n>     ***\n')).toContain('list-item-block-overindented')
     expect(codes('- item\n\n\t```\n\t```\n')).toContain('list-item-block-overindented')
     expect(codes('- item\n\n\t> q\n')).toContain('list-item-block-overindented')
+    expect(codes('- item\n\n    {.x}\n  ***\n')).toContain('list-item-block-overindented')
+    expect(codes('- item\n\n  {.x}\n    ***\n')).not.toContain('list-item-block-overindented')
   })
 })

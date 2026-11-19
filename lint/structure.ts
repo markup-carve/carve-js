@@ -1047,7 +1047,8 @@ function listItemBodyColumn(node: Node, path: string, context: LintContext): voi
 /** Each block of a list item, other than a paragraph, that starts past the item's content column. */
 function blockColumn(node: Node, path: string, context: LintContext): number | undefined {
   const marker = context.layouts.get(path)?.markerColumn
-  if (marker !== undefined) return marker
+  // An attached attribute line starts the node before its block marker.
+  if (marker !== undefined && node.attrs === undefined) return marker
   const start = node.pos === undefined ? undefined : context.chars[node.pos.startOffset]
   return start === undefined ? undefined : columnOf(context.source, start, quoteDepth(path, context))
 }
