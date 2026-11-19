@@ -535,12 +535,12 @@ describe('the profiles', () => {
 
   it('C2-H-129: each construct outside the profile is reported with profile-construct-degraded, on the node that stands for it', () => {
     expect(degraded('# h\n\na [b](c)', 'minimal')).toEqual([
-      'profile-construct-degraded: Degraded a construct the profile "minimal" does not allow: heading',
-      'profile-construct-degraded: Degraded a construct the profile "minimal" does not allow: link',
+      'profile-construct-degraded: Degraded a construct the profile "minimal" does not allow: heading.',
+      'profile-construct-degraded: Degraded a construct the profile "minimal" does not allow: link.',
     ])
     expect(renderWithDiagnostics('a [b](c)', { profile: 'minimal' }).diagnostics[0]).toEqual({
       code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss',
-      message: 'Degraded a construct the profile "minimal" does not allow: link', path: '/children/0/children/1',
+      message: 'Degraded a construct the profile "minimal" does not allow: link.', path: '/children/0/children/1',
       range: { startOffset: 2, endOffset: 8 },
     })
     expect(() => render('# h', { profile: 'minimal', strictLosses: true })).toThrow('profile-construct-degraded')
@@ -564,7 +564,7 @@ describe('the profiles', () => {
 
   it('C2-H-163: the body of a note is not filtered where the profile has no notes, so nothing in it is reported', () => {
     expect(degraded('a[^n]\n\n[^n]: note\n\n    # heading in the note', 'comment')).toEqual([
-      'profile-construct-degraded: Degraded a construct the profile "comment" does not allow: footnote_ref',
+      'profile-construct-degraded: Degraded a construct the profile "comment" does not allow: footnote_ref.',
     ])
   })
 
