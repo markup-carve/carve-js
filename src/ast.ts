@@ -361,6 +361,8 @@ function cloneArray(value: readonly unknown[]): unknown {
 function cloneObject(value: Record<string, unknown>): unknown {
   const copy: Record<string, unknown> = {}
   for (const key of Object.keys(value)) {
+    // An assignment to `__proto__` sets the prototype instead of copying the key.
+    if (key === '__proto__') return NOT_PLAIN
     const item = clonePlain(value[key])
     if (item === NOT_PLAIN) return NOT_PLAIN
     copy[key] = item

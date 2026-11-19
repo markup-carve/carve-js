@@ -28,6 +28,13 @@ describe('cloneTree', () => {
     expect(1 in copy.sparse).toBe(false)
     expect(() => cloneTree({ run: () => 1 })).toThrow()
   })
+
+  it('keeps an own __proto__ key as a key', () => {
+    const data = JSON.parse('{"payload": {"__proto__": {"x": 1}}}') as { payload: object }
+    const copy = cloneTree(data)
+    expect(Object.keys(copy.payload)).toEqual(['__proto__'])
+    expect(Object.getPrototypeOf(copy.payload)).toBe(Object.prototype)
+  })
 })
 
 describe('sameTree', () => {
