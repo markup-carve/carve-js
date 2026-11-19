@@ -4,9 +4,6 @@ coverage/
 .vitest-cache/
 *.log
 .DS_Store
-# Generated demo output (regenerable via examples/static-mode-demo.mjs)
-examples/static-mode-demo.*.html
-
 # Working design docs - never committed
 docs/superpowers/
 
@@ -14,5 +11,6 @@ docs/superpowers/
 _*
 !_*/
 
-# Written in CI for the cross-check of the specification (v2/scripts/write-example-inputs.ts).
-/v2/data/examples.json
+# Written in CI for the cross-check of the specification (scripts/write-example-inputs.ts).
+/data/examples.json
+build/

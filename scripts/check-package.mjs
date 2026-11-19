@@ -47,7 +47,7 @@ if (carveToHtml('hello').trim() !== '<p>hello</p>') throw new Error('Render fail
 if (typeof fileSystemResolver !== 'function') throw new Error('Missing Node export')
 if (!prettier.parsers) throw new Error('Missing Prettier export')
 `)
-  copyFileSync(join(root, 'scripts/package-consumer-v2.ts'), join(consumer, 'consumer-v2.ts'))
+  copyFileSync(join(root, 'scripts/package-consumer.ts'), join(consumer, 'consumer-v2.ts'))
   writeFileSync(join(consumer, 'tsconfig.json'), JSON.stringify({
     compilerOptions: {
       module: 'NodeNext', moduleResolution: 'NodeNext', target: 'ES2022',
@@ -60,7 +60,7 @@ if (!prettier.parsers) throw new Error('Missing Prettier export')
   run(process.execPath, ['out/consumer-v2.js'], consumer)
   // Hosts include browsers: the 0.2 entry bundles for the browser with no Node built-in.
   await build({
-    stdin: { contents: "import { render } from '@markup-carve/carve/v2'\nglobalThis.out = render('a')\n", resolveDir: consumer },
+    stdin: { contents: "import { render } from '@markup-carve/carve'\nglobalThis.out = render('a')\n", resolveDir: consumer },
     bundle: true, platform: 'browser', format: 'esm', write: false, logLevel: 'error',
   })
   console.log('Packed ESM, Node, Prettier, 0.2 and 0.2 Node entry points passed the consumer check.')

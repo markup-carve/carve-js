@@ -1,6 +1,6 @@
 // The HTML round-trip clauses of 16 November 2026: one reading per element, and the rebuilt link definitions.
 import { describe, expect, it } from 'vitest'
-import { parse, render } from '../../v2/src/index.ts'
+import { parse, render } from '../../src/index.ts'
 import { importDocument } from '../src/index.ts'
 
 const CARRIER = '<ul data-carve-tight><li>t</li></ul>'

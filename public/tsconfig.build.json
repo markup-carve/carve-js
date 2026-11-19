@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "..",
+    "outDir": "../dist/types"
+  },
+  "include": [],
+  "files": ["index.ts", "node.ts", "../import/src/mdast-extensions.d.ts"]
+}

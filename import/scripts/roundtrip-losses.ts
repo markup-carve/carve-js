@@ -1,9 +1,9 @@
 // The tree facts a `roundtrip` render does not write, each by the clause that drops it. The harness applies them to the
 // parsed tree before it compares, so a difference that remains is a defect of the importer or of the renderer.
-import { isUrlAllowed, type DocumentNode, type IncludeNode } from '../../v2/src/index.ts'
-import { includeSource } from '../../v2/src/include.ts'
-import { keyValue } from '../../v2/src/html-attributes.ts'
-import { DROPPED_NAMES, DROPPED_PREFIXES } from '../../v2/src/render-tables.ts'
+import { isUrlAllowed, type DocumentNode, type IncludeNode } from '../../src/index.ts'
+import { includeSource } from '../../src/include.ts'
+import { keyValue } from '../../src/html-attributes.ts'
+import { DROPPED_NAMES, DROPPED_PREFIXES } from '../../src/render-tables.ts'
 
 type Fields = Record<string, unknown>
 type Loss = (node: Fields, list: Fields[], at: number, found: Set<string>) => Fields[] | undefined

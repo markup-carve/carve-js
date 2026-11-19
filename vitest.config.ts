@@ -7,14 +7,10 @@ import { configDefaults, defineConfig } from 'vitest/config'
 // here as "no test suite found" if vitest tried to load them.
 export default defineConfig({
   test: {
-    // `v2/` is the 0.2 engine. It shares the runner and nothing else.
-    include: ['test/**/*.test.ts', 'v2/test/**/*.test.ts'],
-    // Cases that take seconds run under `npm run test:stress:v2`, in CI as a step of their own.
+    include: ['test/**/*.test.ts'],
+    // Cases that take seconds run under `npm run test:stress`, in CI as a step of their own.
     exclude: process.env['CARVE_STRESS'] === undefined ? [...configDefaults.exclude, '**/*.stress.test.ts'] : configDefaults.exclude,
-    // Rule A branch differences from the spec model, each with its ticket.
-    setupFiles: ['test/rule-a-todo.setup.ts'],
-    // One module graph per worker instead of per file: re-importing the engine
-    // for each of ~830 files was about 40% of the suite's CPU time.
+    // One module graph per worker instead of per file.
     isolate: false,
   },
 })

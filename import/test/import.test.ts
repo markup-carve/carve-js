@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { format, render, validateTree } from '../../v2/src/index.ts'
+import { format, render, validateTree } from '../../src/index.ts'
 import { ImportInputError, importDocument } from '../src/index.ts'
 
 interface Fixture { name: string, html: string }

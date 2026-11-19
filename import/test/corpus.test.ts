@@ -1,10 +1,10 @@
-// The HTML import examples of the conformance corpus that the engine pins (v2/data/conformance/examples.json):
+// The HTML import examples of the conformance corpus that the engine pins (data/conformance/examples.json):
 // the children of the imported document without positions, the canonical source, and the codes the example names.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { describe, expect, it } from 'vitest'
-import { encodeTree } from '../../v2/src/index.ts'
+import { encodeTree } from '../../src/index.ts'
 import { importDocument } from '../src/index.ts'
 
 interface ImportExample {
@@ -17,7 +17,7 @@ interface ImportExample {
   expected: { children?: unknown[], carve?: string, diagnostics?: string[] }
 }
 
-const path = join(import.meta.dirname, '../../v2/data/conformance/examples.json')
+const path = join(import.meta.dirname, '../../data/conformance/examples.json')
 const examples = (JSON.parse(readFileSync(path, 'utf8')) as { examples: ImportExample[] }).examples.filter(entry => entry.kind === 'import')
 
 /**

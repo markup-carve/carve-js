@@ -1,6 +1,6 @@
 import { parse, type Block as DjotBlock, type Inline as DjotInline, type Doc, type Row } from '@djot/djot'
-import type { Attrs, Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
-import { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from '../../v2/src/index.ts'
+import type { Attrs, Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../src/index.ts'
+import { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from '../../src/index.ts'
 import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, text,
   withDestination,
   type Context, type ImportResult } from './kit.ts'

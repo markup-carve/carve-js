@@ -7,13 +7,13 @@ on:
     branches: [next2]
     paths:
       - 'upgrade/**'
-      - 'v2/src/**'
+      - 'src/**'
       - '.github/workflows/upgrade.yml'
   pull_request:
     branches: [next2]
     paths:
       - 'upgrade/**'
-      - 'v2/src/**'
+      - 'src/**'
       - '.github/workflows/upgrade.yml'
 
 concurrency:

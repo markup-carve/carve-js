@@ -1,6 +1,6 @@
 // Contract 3: text that 0.1 left text and 0.2 reads as a construct.
 import { ancestor } from '../blocks.ts'
-import { foldLabel } from '../../../v2/src/ast-attributes.ts'
+import { foldLabel } from '../../../src/ast-attributes.ts'
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01, probe02 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'

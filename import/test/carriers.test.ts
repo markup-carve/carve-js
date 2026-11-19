@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DocumentNode, Inline } from '../../v2/src/index.ts'
+import type { DocumentNode, Inline } from '../../src/index.ts'
 import { importDocument } from '../src/index.ts'
 import { harnessInputs, roundTrip } from '../scripts/roundtrip-harness.ts'
 

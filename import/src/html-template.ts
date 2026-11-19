@@ -1,6 +1,6 @@
 // C2-H-114: the abbreviation template of a `roundtrip` render holds the Carve source of a run of definitions.
 import { type DefaultTreeAdapterTypes as Html } from 'parse5'
-import { parseTree, type AbbreviationDefNode } from '../../v2/src/index.ts'
+import { parseTree, type AbbreviationDefNode } from '../../src/index.ts'
 import { content, has, ignoredCarrier, isElement, isText, type HtmlContext } from './html-dom.ts'
 import { isFootnoteSection } from './html-notes.ts'
 

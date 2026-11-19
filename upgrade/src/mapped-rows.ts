@@ -1,4 +1,4 @@
-import map from '../../v2/data/upgrade-map.json' with { type: 'json' }
+import map from '../../data/upgrade-map.json' with { type: 'json' }
 import { compareHtmlExact } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { type Context } from './context.ts'

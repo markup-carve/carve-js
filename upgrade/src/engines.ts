@@ -1,7 +1,7 @@
-// The two engines the tool stands between. The 0.1 engine is the build of `src/` of this
-// repository; the 0.2 engine is `v2/`. Nothing here is imported by either.
-import { carveToHtml, LIB_VERSION, parse } from '../../dist/index.js'
-import { render } from '../../v2/src/index.ts'
+// The two engines the tool stands between. The 0.1 engine is the build of `upgrade/engine-0.1/`
+// (`build/engine-0.1/`); the 0.2 engine is `src/`. Nothing here is imported by either.
+import { carveToHtml, LIB_VERSION, parse } from '../../build/engine-0.1/index.js'
+import { render } from '../../src/index.ts'
 
 export interface Pos {
   startLine: number

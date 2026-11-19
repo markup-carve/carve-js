@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { render } from '../../v2/src/index.ts'
+import { render } from '../../src/index.ts'
 import { importDocument } from '../src/index.ts'
 
 /** Four shapes of a `roundtrip` render, each holding `n` repeats. */

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defaultTreeAdapter, parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
-import { format, parseTree, render, type DocumentNode } from '../../v2/src/index.ts'
+import { format, parseTree, render, type DocumentNode } from '../../src/index.ts'
 import { importDocument, type Format, type ImportResult } from '../src/index.ts'
 import { commonmarkCases, djotCases, gfmCases, type Case } from './suites.ts'
 import { specExamples } from './spec-examples.ts'

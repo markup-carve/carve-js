@@ -1,0 +1,1093 @@
+/*
+ * Carve AST node definitions.
+ *
+ * The spec lives in markup-carve/carve. Node names here match the
+ * constructs the case-study + EBNF grammar describe. Implementations
+ * of M1 (block parser) and M2 (inline parser) populate these node
+ * types; M3 (HTML renderer) reads them.
+ *
+ * All nodes carry an optional `attrs` field — `{#id .class key=value}`
+ * blocks attach to whatever node they immediately follow.
+ */
+
+/**
+ * Source position of a node, attached unless the parse was given
+ * `{ positions: false }` (default true; `carveToHtml`, `carveToAstJson` and
+ * `lintCarve` force it on because they read positions).
+ *
+ * Line numbers are always in ORIGINAL-document coordinates, including for
+ * blocks nested inside containers (block quotes, divs, list items, footnote
+ * and definition bodies), whose content is re-parsed from a transformed
+ * snippet. Columns and offsets are NOT remapped for such nested blocks: they
+ * remain relative to the container's snippet (the container itself carries
+ * document-space offsets). Consumers needing document-exact positions should
+ * rely on lines; snippet-space offsets of nested blocks may be remapped in a
+ * future version.
+ */
+export interface Position {
+  /** 1-based line number, inclusive */
+  startLine: number
+  /** 1-based line number, inclusive */
+  endLine: number
+  /** 1-based column, counted in CODEPOINTS (PART 12 §4), inclusive */
+  startColumn?: number
+  /** 1-based column, counted in CODEPOINTS (PART 12 §4), exclusive */
+  endColumn?: number
+  /**
+   * 0-based CODEPOINT offset into the source, inclusive (PART 12 §4).
+   *
+   * Codepoints rather than UTF-16 code units or bytes so an AST is exchangeable
+   * and every index lands on a character boundary - a byte offset can point
+   * inside a UTF-8 sequence, a UTF-16 offset inside a surrogate pair. Matches
+   * djot.lua, which converts away from its native byte index for this reason.
+   *
+   * Agrees with the UTF-16 index across the whole Basic Multilingual Plane, so
+   * only astral characters differ. A JavaScript consumer slicing the source
+   * string must convert; `lintCarve` already reports UTF-16 for that reason.
+   */
+  startOffset?: number
+  /** 0-based CODEPOINT offset into the source, exclusive (PART 12 §4). */
+  endOffset?: number
+  /**
+   * Identity of the file these coordinates are measured in, when that is NOT
+   * the document being parsed - the canonical id of the file an include pulled
+   * the node in from (PART 9 §19).
+   *
+   * Absent means the top-level document, so a tree with no includes is
+   * unchanged. Without it every included span is ambiguous: a child's first
+   * paragraph and the parent's first paragraph both report line 1, and a
+   * source-mapped host has no way to tell them apart.
+   */
+  file?: string
+}
+
+export interface Attrs {
+  id?: string
+  classes?: string[]
+  keyValues?: Record<string, string>
+  /**
+   * Source-appearance order of the attribute slots, so the renderer can
+   * emit them in the order the author wrote (matching djot + carve-php).
+   * Entries: `'#id'` for the id, `'.class'` for the (merged) class group,
+   * or a bare key name for a `key=value`. Each slot appears once, at its
+   * first-appearance position. Absent on programmatically-built Attrs,
+   * in which case the renderer falls back to a fixed id/class/key order.
+   */
+  order?: string[]
+}
+
+export interface BaseNode {
+  attrs?: Attrs
+  pos?: Position
+}
+
+// ----- Block nodes -----
+
+export interface Document extends BaseNode {
+  type: 'document'
+  /**
+   * Raw, uninterpreted frontmatter. `content` is the verbatim text between
+   * the fences; `format` is the fence token (default `'yaml'`). Carve does
+   * not parse it - the application interprets the declared format.
+   */
+  frontmatter?: { format: string; content: string; pos?: Position }
+  /**
+   * Where each footnote definition sits in the source, by label.
+   *
+   * Parallel to `footnoteDefs` because that map holds only the body blocks, and
+   * a definition's span starts at its `[^label]:` marker - which is not part of
+   * any of them. Consumed by {@link toAstJson}, which needs a `pos` for the
+   * block node it builds (PART 12 §4); it is not itself serialized.
+   */
+  footnoteDefPos?: Record<string, Position>
+  children: BlockNode[]
+  /**
+   * Blocks emitted by HTML after every generated section has closed. Runtime
+   * only: this placement metadata is not serialized in the PART 12 AST.
+   */
+  trailerBlocks?: BlockNode[]
+  /**
+   * Footnote definitions collected during parsing, keyed by raw label
+   * (`[^label]: …`). The renderer numbers them by reference order and
+   * emits the endnotes section; an unreferenced definition is dropped.
+   */
+  footnoteDefs?: Record<string, BlockNode[]>
+  /**
+   * UTF-8 byte length of the source this document was parsed from. Used by the
+   * renderers to size the abbreviation-expansion budget (DoS guard) so a tiny
+   * input with a huge `*[KEY]: EXPANSION` def cannot amplify output without
+   * bound. Absent when the document was constructed directly (not via parse);
+   * renderers then fall back to the base budget.
+   */
+  srcByteLength?: number
+}
+
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
+
+export interface Heading extends BaseNode {
+  type: 'heading'
+  level: HeadingLevel
+  children: InlineNode[]
+}
+
+export interface Paragraph extends BaseNode {
+  type: 'paragraph'
+  children: InlineNode[]
+  /** Runtime source placement for line comments erased before layout. */
+  transparentComments?: Array<{ line: number; source: string; node: Comment | AbbreviationDef; originalValue: string }>
+  /** Authored lines following a transparent boundary in this paragraph. */
+  transparentFollowingLines?: Array<{ line: number; source: string }>
+  /** Visible source line order retained when public positions are omitted. */
+  transparentVisibleLines?: number[]
+  /** Set after reference resolution when the paragraph contains one resolved image. */
+  blockImage?: true
+}
+
+export interface BlockQuote extends BaseNode {
+  type: 'block_quote'
+  children: BlockNode[]
+  /**
+   * True when the quote was authored as a colon-fence container rather than
+   * with line markers. The two spellings are one node; this records which,
+   * so `renderCarve` writes back what it read. Absent on a prefixed quote,
+   * so a document that predates the fence serializes exactly as it did
+   * (markup-carve/carve#1718).
+   */
+  fenced?: true
+}
+
+export interface List extends BaseNode {
+  type: 'list'
+  ordered: boolean
+  start?: number
+  /** Ordered-list type attribute: a/A (alpha) or i/I (roman); absent = decimal. */
+  olType?: 'a' | 'A' | 'i' | 'I'
+  /**
+   * Ordered-marker delimiter as authored: `.` (`1.`) or `)` (`1)`).
+   * The marker is semantic (section 11: a sibling with a different delimiter
+   * starts a new list), so `renderCarve` preserves it - normalizing would
+   * merge adjacent lists on re-parse (carve issue 286). Absent (e.g. on a
+   * programmatically built AST) fmt falls back to `.`.
+   */
+  delim?: '.' | ')'
+  /**
+   * Bullet character as authored: `-` or `*` (unordered lists only). Same
+   * §11 semantics as {@link delim}: preserved by `renderCarve` so adjacent
+   * lists separated only by their bullet stay separate. Absent -> `-`.
+   */
+  bulletChar?: '-' | '*'
+  /**
+   * Set on an ordered list the author opened with the BARE dot marker -- `. x`
+   * rather than `1. x` (carve#315).
+   *
+   * Both spellings parse to the same decimal-dot list starting at 1, on
+   * purpose, so without this the writer cannot tell them apart and has to pick
+   * one to emit -- normalizing the other away on the first `fmt`. PART 11 §6
+   * makes that the author's choice rather than the writer's, and the AST is
+   * where such a choice is recorded: exactly the role `boldItalic` plays for
+   * the combined bold-italic form, and `bulletChar` and `delim` for the marker
+   * characters beside it.
+   *
+   * Only the FIRST item fixes it, like `start` and `olType`: a list opened
+   * `. a` and continued `2. b` is one list, written back with the opener the
+   * author used.
+   */
+  bareMarker?: true
+  tight: boolean
+  items: ListItem[]
+  /** Invisible source lines that fell between adjacent items before layout. */
+  transparentBetweenItems?: Array<{ after: number; source: string; node: Comment | AbbreviationDef; originalValue: string }>
+}
+
+/** The task marker characters an item can record (PART 12, `taskState`). */
+export type TaskState = ' ' | 'x' | '-' | '_' | '/' | '!' | '>' | '?'
+
+export interface ListItem extends BaseNode {
+  type: 'list_item'
+  /** undefined = plain bullet, true/false = task list (checked / unchecked) */
+  checked?: boolean
+  /** Marker character as authored, when it is not the default for `checked`. */
+  taskState?: TaskState
+  children: BlockNode[]
+}
+
+export interface CodeBlock extends BaseNode {
+  type: 'code_block'
+  lang?: string
+  /**
+   * Optional quoted "header" from the info string (```php "src/Auth.php").
+   * A visible title carried to the `title` attribute on the `<pre>` (a code
+   * block's `<pre><code>` is atomic, so the title rides as an attribute, not a
+   * child element). A preceding `{title=...}` block-attribute line wins.
+   */
+  header?: string
+  /**
+   * Optional bracketed label from the info string (```php [NPM] -> "NPM").
+   * Structured metadata only: it is NOT part of the language/class. The core
+   * renderer ignores it; an extension (e.g. code-group) may use it.
+   */
+  label?: string
+  content: string
+}
+
+export interface ThematicBreak extends BaseNode {
+  type: 'thematic_break'
+  /** The thematic-break character as authored. Absent defaults to `-`. */
+  marker?: '-' | '*' | '_'
+}
+
+/**
+ * One body group of {@link TableRowGroups}, consuming `headRows + bodyRows` of
+ * the table's rows.
+ */
+export interface TableBodyGroup {
+  /** Rows at the start of this group forming its intermediate header. */
+  headRows: number
+  /** Rows in this group after its intermediate header. */
+  bodyRows: number
+  /**
+   * Leading columns of this group's rows that are row headers. Absent means
+   * zero. It sits on the group rather than on the table because that is where
+   * the exchanged model puts it.
+   */
+  rowHeadColumns?: number
+  attrs?: Attrs
+}
+
+/**
+ * An explicit head/body/foot partition of a table's rows (PART 12 §15).
+ *
+ * It PARTITIONS `rows` and never repeats them: the counts consume `rows` in
+ * order, head first, then each body, then the foot, and they MUST account for
+ * every row exactly once. `fromAstJson` refuses a payload where they do not,
+ * because JSON Schema cannot relate one field's value to another's length and
+ * a non-summing partition therefore validates cleanly.
+ *
+ * Carve 0.1 SOURCE has no spelling for it. Absent means the implicit structure
+ * every renderer already derives - the leading run of header rows as the head,
+ * everything after it as one body, no foot, no row-head columns - so a table
+ * that carries it says something that derivation cannot. HTML, plain and ANSI
+ * output use its row order.
+ */
+export interface TableRowGroups {
+  /**
+   * Rows at the start of `rows` forming the table head. Stated rather than
+   * derived, because a body's own intermediate header rows are header rows too
+   * and the leading run alone cannot say where one ends and the other begins.
+   */
+  headRows: number
+  /** The body groups, in order, each consuming the next `headRows + bodyRows`. */
+  bodies: TableBodyGroup[]
+  /** Rows at the end of `rows` forming the table foot. */
+  footRows: number
+  headAttrs?: Attrs
+  footAttrs?: Attrs
+}
+
+export interface Table extends BaseNode {
+  type: 'table'
+  caption?: InlineNode[]
+  /** Structured publishing/navigation label; Carve 0.1 source has no spelling. */
+  shortCaption?: InlineNode[]
+  rowGroups?: TableRowGroups
+  /** Positional metadata for the corresponding table columns. */
+  columns?: TableColumn[]
+  /**
+   * The dash runs of an AUTHORED separator row (PART 12 §3), one entry per
+   * separator cell, alignment colons excluded: `|:-----|---:|` records `[5, 3]`.
+   *
+   * PRESENCE is the larger half of the distinction. `|= a |= b |` and a plain
+   * row above `|---|---|` parse to the same rows and the same alignments, so
+   * absence is what says the author wrote no separator row. An author-choice
+   * field on the same terms as `list.bulletChar` and `thematic_break.marker`:
+   * the canonical writer reproduces it ([CARVE-P11-066]).
+   */
+  separatorWidths?: number[]
+  /** Authored CSV or TSV fence form; absent means a pipe table. */
+  sourceFormat?: 'csv' | 'tsv'
+  rows: TableRow[]
+}
+
+export interface TableColumn {
+  align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
+  /** Fraction of the table width, greater than zero and at most one. */
+  width?: number
+}
+
+export interface TableRow extends BaseNode {
+  type: 'table_row'
+  cells: TableCell[]
+  /** Number of source `+` lines following this row. */
+  continuationLines?: number
+}
+
+export interface TableCell extends BaseNode {
+  type: 'table_cell'
+  header: boolean
+  /** undefined = normal cell, 'rowspan' = `^`, 'colspan' = `<` */
+  span?: 'rowspan' | 'colspan'
+  /**
+   * Explicit per-cell alignment from a tight prefix marker
+   * (`>` right, `<` left, `~` center). When undefined the cell
+   * inherits its physical column's default, if one was declared.
+   */
+  align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
+  /** Inline content from Carve source, or block content imported from another format. */
+  children?: InlineNode[]
+  blocks?: BlockNode[]
+}
+
+/** Explicit sectioning from an interchange format. Carve source has no wrapper spelling. */
+export interface Section extends BaseNode {
+  type: 'section'
+  children: BlockNode[]
+  level?: number
+}
+
+/**
+ * The eight canonical admonition kinds (grammar PART 9 §12, Tier 1). An
+ * `Admonition` carrying one of these renders as a semantic
+ * `<aside class="admonition {kind}">`; any other kind is a Tier-2 generic
+ * container, rendered as a plain `<div class="{kind}">`.
+ *
+ * Shared between the HTML renderer (which picks the wrapper tag) and the
+ * profile filter (which classifies the node for allow/deny purposes, carve
+ * issue 431): a fence opened with a non-Tier-1 word is a generic container,
+ * not a callout, so it must be denied by `denyBlock(['div'])`, not
+ * `denyBlock(['admonition'])`. One shared list keeps the two decisions from
+ * drifting apart the way carve-php's did before markup-carve/carve-php#513.
+ */
+export const CANONICAL_ADMONITION_KINDS: ReadonlySet<string> = new Set([
+  'note',
+  'tip',
+  'warning',
+  'danger',
+  'info',
+  'success',
+  'example',
+  'quote',
+])
+
+export interface Admonition extends BaseNode {
+  type: 'admonition'
+  kind: string
+  title?: InlineNode[]
+  /**
+   * Optional opener `[label]` grouping id (`::: tab [First]`). Inert in core
+   * (not rendered); a group extension (tabs) uses it as the tab name. Mirrors
+   * {@link CodeBlock.label}.
+   */
+  label?: string
+  children: BlockNode[]
+}
+
+/**
+ * The six kinds a `:::` container names to PLACE generated content
+ * (CARVE-P12-057). A named container carrying one of these is a
+ * {@link Directive}; every other named container is an {@link Admonition}.
+ *
+ * The list is CLOSED: the clause names six kinds and rules that "every other
+ * named container is an `admonition`", so a seventh generated-looking word
+ * (`endnotes`, `contents`) is an admonition, not a directive. The schema's
+ * `directive.kind` enum carries the same six.
+ */
+export const GENERATED_CONTENT_KINDS: ReadonlySet<string> = new Set([
+  'bibliography',
+  'footnotes',
+  'glossary',
+  'index',
+  'references',
+  'toc',
+])
+
+/**
+ * Generated-content placement (CARVE-P12-057): a named `:::` container whose
+ * kind asks the renderer to place something the document already holds.
+ *
+ * Its own type rather than an `Admonition` carrying one of six kinds, because a
+ * consumer dispatching on `type` to decide whether to draw a callout otherwise
+ * has to carry the not-a-callout list itself.
+ *
+ * The quoted opener title uses the same inline-node field as an admonition.
+ */
+export interface Directive extends BaseNode {
+  type: 'directive'
+  /** One of {@link GENERATED_CONTENT_KINDS}. */
+  kind: string
+  title?: InlineNode[]
+  /** Opener `[label]` grouping id. Inert in core, like {@link Admonition.label}. */
+  label?: string
+  /** Blocks written inside the opener. Usually empty: the content is generated. */
+  children: BlockNode[]
+}
+
+/**
+ * Generic fenced div — djot's generic container. A `:::` opener with NO
+ * type word (bare `:::` or an attributes-only `::: {.class}`) is a Div;
+ * a typed `::: word` is an Admonition (two-tier rule, PART 9 §12).
+ * Renders to a plain `<div>` carrying its `attrs` (no class added).
+ */
+export interface Div extends BaseNode {
+  type: 'div'
+  /**
+   * Optional opener `[label]` grouping id (bare `::: [First]`). Inert in core;
+   * a group extension (tabs) uses it as the tab name. Mirrors
+   * {@link CodeBlock.label}.
+   */
+  label?: string
+  children: BlockNode[]
+}
+
+/**
+ * Line block (§4.4): a `::: |` fence whose every newline is a hard break.
+ *
+ * Its own type rather than a `div` carrying a `.line-block` class, because the
+ * two are not the same document: a plain div with that class keeps soft breaks,
+ * and a writer given only the class cannot tell which one to emit. The block
+ * vocabulary in the spec's profiles.md lists `line_block` for the same reason -
+ * a profile denying it must be able to name it.
+ */
+export interface LineBlock extends BaseNode {
+  type: 'line_block'
+  children: BlockNode[]
+  lines?: string[][]
+}
+
+/**
+ * Definition list (§4.5): `:: term` lines (one or more) followed by
+ * `:  definition` lines (one or more) form an entry; entries render to a
+ * `<dl>` of `<dt>` (terms) then `<dd>` (definitions). `::` is exactly two
+ * colons (three is a div/admonition); a definition line is colon + two
+ * spaces; deeper-indented lines continue a definition.
+ */
+export interface DefinitionItem {
+  terms: InlineNode[][]
+  definitions: BlockNode[][]
+  /** Source extent of each `:: term`, including its marker. */
+  termSpans?: (Position | undefined)[]
+  /**
+   * 1-based source line of each definition's `:  ` marker line, parallel to
+   * `definitions`. Only populated when parsing with positions; used to stamp
+   * `<dd>` with its marker line (the body may start on a later line, e.g. the
+   * `:  +` first-block form).
+   *
+   * An ENTRY may be undefined while its neighbours are not. `entriesFromWire`
+   * rebuilds this from the wire, where a description that carries no position
+   * sits between two that do, and the array has to stay index-parallel to
+   * `definitions` for the ones that do. A hole reads as "no line recorded",
+   * which is what both consumers already do with a missing array.
+   */
+  definitionLines?: (number | undefined)[]
+  /**
+   * The source extent of each definition's own lines - from its `:  ` marker to
+   * the end of the last line it consumed - parallel to `definitions`. Only
+   * populated when parsing with document offsets.
+   *
+   * A description whose ONLY content hoists to the document root (PART 12 §7:
+   * a link reference, footnote or abbreviation definition) ends up with no
+   * children, and a span derived from children is then no span at all. That is
+   * not §4's exemption: the lines are contiguous, unmoved and still in the
+   * source, and docs/ast-json.md:116-117 narrows the exemption to "nodes that
+   * *cannot* be placed, not nodes that have not been placed yet"
+   * (markup-carve/carve-js#813). This is where the placeable span comes from.
+   */
+  definitionSpans?: (Position | undefined)[]
+}
+
+export interface DefinitionList extends BaseNode {
+  type: 'definition_list'
+  items: DefinitionItem[]
+  /** Authored invisible lines between terms or descriptions, written at that boundary. */
+  transparentBetweenDescriptions?: Array<{
+    item: number; afterDescription: number; afterTerm: number; source: string
+    node: Comment | AbbreviationDef; originalValue: string
+  }>
+  /**
+   * PART 9 §17 L7: the container's descriptions render as BLOCKS rather than as
+   * inline runs, because a preceding `{loose}` block-attribute line said so.
+   */
+  loose?: true
+}
+
+export interface Figure extends BaseNode {
+  type: 'figure'
+  target: Image | BlockQuote | Table | CodeBlock | Paragraph
+  caption: InlineNode[]
+  /** Structured publishing/navigation label; ordinary renderers ignore it. */
+  shortCaption?: InlineNode[]
+}
+
+/**
+ * A composite figure: a bare `::: figure` fence (PART 9 §4c).
+ *
+ * `children` are ordinary blocks in source order; the PANELS are the `figure`
+ * and `table` nodes among them, derived by type rather than repeated under a
+ * second key, so the two can never disagree. `caption` is the group caption
+ * (the `^ ` line after the CLOSING fence); absent means uncaptioned, not empty.
+ *
+ * Discriminated by `type`, deliberately: every `figure` carries a `target`,
+ * the group does not, and a consumer probing for the missing field instead of
+ * reading the type string would break silently the day either shape grows a
+ * field. No `title`, no `label`, no `shortCaption` - that design space belongs
+ * to markup-carve/carve#1118 and markup-carve/carve#1121 and is not claimed
+ * here.
+ */
+export interface FigureGroup extends BaseNode {
+  type: 'figure_group'
+  children: BlockNode[]
+  caption?: InlineNode[]
+}
+
+export interface AbbreviationDef extends BaseNode {
+  type: 'abbreviation_def'
+  abbr: string
+  expansion: string
+  /** Its source line is written through the paragraph that crosses it. */
+  transparentInParagraph?: true
+  transparentInList?: true
+  transparentInDefinitionList?: true
+}
+
+/**
+ * The `[label]: /url "title" {attrs}` definition line.
+ *
+ * PART 12 §10 (NORMATIVE): a link reference definition is a NODE, so a writer can
+ * reproduce it. Before it had one, the canonical writer had nowhere to write the
+ * definition back from and INLINED every resolved reference instead - which lost
+ * `ref`/`rawRef` on the reparse and duplicated one destination into N
+ * (carve-js#690, carve#642).
+ *
+ * It HOISTS to the document exactly as §7 requires of the other definition kinds:
+ * a definition authored inside a block quote or list item is a child of the
+ * document, and `pos` still says where it was written.
+ *
+ * Renders nothing in HTML itself; it feeds every link or image that resolves the
+ * label (PART 9R R1).
+ */
+export interface LinkReferenceDefinition extends BaseNode {
+  type: 'link_reference_definition'
+  /** The label as the AUTHOR wrote it, before any folding. */
+  label: string
+  /** Present and non-empty: a definition with an empty destination is not one. */
+  href: string
+  title?: string
+}
+
+/**
+ * The `[@key]: {author= year=} entry` bibliography line (Tier-2, citations).
+ */
+export interface CitationDefinition extends BaseNode {
+  type: 'citation_definition'
+  /** The citation key as the author wrote it, WITHOUT the `@`. */
+  key: string
+  /** The entry's inline content: what follows the `]: ` separator and the
+   *  optional metadata block. Required, and may be empty - which source lines
+   *  carry no entry is a question §18 leaves open. */
+  children: InlineNode[]
+}
+
+export interface RawBlock extends BaseNode {
+  type: 'raw_block'
+  format: string
+  content: string
+}
+
+export interface Comment extends BaseNode {
+  type: 'comment'
+  block: boolean
+  /** Its source line is written through the paragraph that crosses it. */
+  transparentInParagraph?: true
+  transparentInList?: true
+  transparentInDefinitionList?: true
+  transparentSource?: string
+  transparentOriginalValue?: string
+  /** Present only for the explicitly closed `{% … %}` inline form. */
+  delimited?: boolean
+  content: string
+}
+
+export type BlockNode =
+  | Heading
+  | Section
+  | Paragraph
+  | BlockQuote
+  | List
+  | CodeBlock
+  | ThematicBreak
+  | Table
+  | Admonition
+  | Directive
+  | Div
+  | LineBlock
+  | DefinitionList
+  | Figure
+  | FigureGroup
+  | Image
+  | AbbreviationDef
+  | LinkReferenceDefinition
+  | CitationDefinition
+  | RawBlock
+  | Comment
+
+// ----- Inline nodes -----
+
+/**
+ * Canonical glyph per smart-typography kind.
+ *
+ * Presentation renderers resolve a kind through this table; the Carve renderer
+ * ignores it and emits the author's source run instead. Quote kinds are absent
+ * on purpose: their glyph is locale-dependent and is recorded on the node.
+ */
+export const SMART_PUNCTUATION_GLYPHS: Record<string, string> = {
+  ellipsis: '…',
+  em_dash: '—',
+  en_dash: '–',
+  left_right_arrow: '↔',
+  rightwards_arrow: '→',
+  leftwards_arrow: '←',
+  rightwards_double_arrow: '⇒',
+  leftwards_double_arrow: '⇐',
+  left_right_double_arrow: '⇔',
+  less_than_or_equal: '≤',
+  greater_than_or_equal: '≥',
+  not_equal: '≠',
+  plus_minus: '±',
+  copyright: '©',
+  registered: '®',
+  trademark: '™',
+}
+
+/**
+ * A smart-typography substitution, carrying what it resolved to AND what the
+ * author wrote.
+ *
+ * The substitution used to be written straight into the text buffer, which
+ * discarded the source spelling: by the time the AST existed, `...` could not be
+ * told from a literal ellipsis and the Carve renderer had nothing to reproduce.
+ * Keeping both halves lets presentation renderers emit the glyph while the Carve
+ * renderer emits the source, so `fmt` reproduces the document instead of
+ * normalizing it.
+ *
+ * `kind` is the resolved sort (`ellipsis`, `em_dash`, `rightwards_arrow`,
+ * `left_double_quote`, ...). Quote glyphs are locale-dependent and resolved
+ * during parsing, so a quote node also carries `glyph`; every other kind resolves
+ * through SMART_PUNCTUATION_GLYPHS. For profiles this folds into the `text` trust
+ * class - it is ordinary visible prose, not a distinct capability.
+ */
+export interface SmartPunctuation extends BaseNode {
+  type: 'smart_punctuation'
+  kind: string
+  /** The author's source run, e.g. `...`, `->`, `"`. */
+  value: string
+  /** Resolved glyph, set when the parser fixed it (quotes). */
+  glyph?: string
+}
+
+/**
+ * A character the author escaped with a backslash (`\-`, `\"`).
+ *
+ * Its own type rather than plain text, because the escape carries intent the
+ * literal character alone cannot: the author wrote `\-\-` precisely so a
+ * downstream processor would NOT turn it into an en dash. Flattening it into
+ * text lost that, and the Markdown target emitted the trigger bare where
+ * carve-php reproduced the escape (carve#350). The inline vocabulary in the
+ * spec's profiles.md lists `escaped_text` for the same reason.
+ *
+ * The value is the literal character, without the backslash.
+ */
+export interface EscapedText extends BaseNode {
+  type: 'escaped_text'
+  value: string
+}
+
+export interface NonBreakingSpace extends BaseNode {
+  type: 'non_breaking_space'
+}
+
+export interface Text extends BaseNode {
+  type: 'text'
+  value: string
+}
+
+// Emphasis kinds:
+//   emphasis     = /text/
+//   strong       = *text*
+//   underline    = _text_
+//   strike       = ~text~
+//   superscript  = {^text^}
+//   subscript    = {,text,}
+//   highlight    = =text=
+export interface Emphasis extends BaseNode {
+  type:
+    | 'emphasis'
+    | 'strong'
+    | 'underline'
+    | 'strike'
+    | 'superscript'
+    | 'subscript'
+    | 'highlight'
+  children: InlineNode[]
+  /**
+   * Set on a `strong` the author wrote as the COMBINED bold-italic form -- a
+   * slash-star opener and its mirror closer -- rather than by nesting `*` around
+   * `/`. Both spellings parse to the same `strong` wrapping `emphasis`, so
+   * without this the writer cannot tell them apart, and it normalized the
+   * spelling Carve documents into one documented nowhere
+   * (PART 11 section 6, PART 12 section 3; carve#375).
+   *
+   * Same role as `bulletChar` and `delim` on a list: source fidelity for a
+   * choice the tree would otherwise lose.
+   */
+  boldItalic?: true
+}
+
+export interface InlineCode extends BaseNode {
+  type: 'code'
+  value: string
+  cellWraps?: VerbatimCellWrap[]
+}
+
+/**
+ * A `+` continuation join inside a verbatim payload (CARVE-P12-069):
+ * `offset` counts codepoints up to the joining space in `value` or `content`.
+ */
+export interface VerbatimCellWrap {
+  offset: number
+  line: number
+  row?: number
+  col?: number
+}
+
+export interface Link extends BaseNode {
+  type: 'link'
+  /**
+   * Hyperlink destination. An unresolved reference has an empty destination;
+   * successful resolution retains its authored `ref` and `rawRef` metadata.
+   */
+  href: string
+  title?: string
+  children: InlineNode[]
+  /**
+   * Authored reference label. Parsing resolves explicit definitions; the
+   * resolve pass also checks collapsed references against heading text.
+   * A reference that still has no destination stays in the tree, and renderers
+   * emit its literal `rawRef` source. Use isUnresolvedReference to test its phase.
+   */
+  ref?: string
+  rawRef?: string
+}
+
+export interface Image extends BaseNode {
+  type: 'image'
+  src: string
+  alt: string
+  title?: string
+  /**
+   * Authored reference-image label, retained with `rawRef` after resolution.
+   * Explicit definitions provide the destination; images do not use implicit
+   * heading references. Unresolved images render their literal source.
+   */
+  ref?: string
+  rawRef?: string
+}
+
+/** Inline span: `[text]{attrs}` (PART 9 §14); semantic attributes affect HTML rendering. */
+export interface Span extends BaseNode {
+  type: 'span'
+  children: InlineNode[]
+}
+
+/**
+ * Math, djot form: inline `` $`x` `` and display `` $$`x` ``. `content`
+ * is verbatim LaTeX from the backtick span; rendering wraps it in
+ * `\(…\)` (inline) or `\[…\]` (display) inside `<span class="math …">`.
+ */
+export interface Math extends BaseNode {
+  type: 'math'
+  display: boolean
+  content: string
+  label?: string
+  number?: number
+  cellWraps?: VerbatimCellWrap[]
+}
+
+/**
+ * Raw inline passthrough (djot `` `…`{=format} ``): a verbatim span tagged
+ * with an output format. Emitted verbatim when `format` matches the
+ * renderer's output (html), dropped otherwise.
+ */
+export interface RawInline extends BaseNode {
+  type: 'raw_inline'
+  format: string
+  content: string
+  cellWraps?: VerbatimCellWrap[]
+}
+
+/**
+ * Inline literal (`` !`…` ``): a `!` prefix on a verbatim code span (grammar
+ * PART 9 §27), mirroring the `$`-math prefix. `content` is captured verbatim
+ * by the backtick run exactly as for a code span -- no inline construct is
+ * recognized inside it and smart typography does not apply.
+ *
+ * Unlike raw passthrough (§20) it is EMITTED BY EVERY RENDERER and never
+ * dropped or target-routed, and its content is HTML-escaped on output. The
+ * `<code>` wrapper is dropped: an inline literal is prose, not code. A
+ * trailing attribute block is the ordinary inline attribute block and lands in
+ * `attrs`, rendered on a `<span>`; with none, the content is emitted as bare
+ * text.
+ */
+export interface LiteralInline extends BaseNode {
+  type: 'literal_inline'
+  content: string
+}
+
+/**
+ * Symbol shortcode `:name:` (commonly used for emoji). Resolved against a
+ * processor-supplied name->glyph map at render time; an unmapped name
+ * renders literally as `:name:`.
+ */
+export interface SymbolInline extends BaseNode {
+  type: 'symbol'
+  name: string
+}
+
+export interface AutoLink extends BaseNode {
+  type: 'autolink'
+  href: string
+  /** Display text = the raw content between `<>`: an explicit scheme is kept
+   *  (`<mailto:a@b>` shows `mailto:a@b`), an email autolink shows the address. */
+  text?: string
+}
+
+export interface CrossRef extends BaseNode {
+  type: 'heading_ref'
+  /** Raw id between `</#` and `>`, as the author spelled it. */
+  target: string
+  /**
+   * The resolved destination (`#` + the heading's id), present only where the
+   * crossref resolved. PART 12 §3a: the resolution is published BESIDE the
+   * authored construct, not in place of it, so the spelling the author wrote
+   * survives the wire format.
+   */
+  href?: string
+  /**
+   * The target heading's inline content, for the renderers to emit as the
+   * link's text. NOT serialized (§3a: the display text stays out of the node,
+   * because the heading is in the same document and copying its content into
+   * every reference is unbounded). `toAstJson` strips it.
+   */
+  resolvedText?: InlineNode[]
+}
+
+/**
+ * Caption number placeholder (the bare `#` in `^ Figure #: …`). Emitted
+ * only in caption context; `resolve()` fills `n` with the assigned number.
+ * Renders as the number text.
+ */
+export interface CaptionNumber extends BaseNode {
+  type: 'caption_number'
+  /** Assigned during resolve; undefined until then. */
+  n?: number
+}
+
+/** One citation item inside a citation group. */
+export interface Citation extends BaseNode {
+  type: 'citation'
+  key: string
+  /** Per-item citation mode; absent means parenthetical. */
+  mode?: 'integral'
+  /** Inline prefix text before the `@` (e.g. "see "). */
+  prefix?: InlineNode[]
+  /** Raw inline locator after ", " (e.g. "p. 33"); what the built-in
+   *  formatter prints. Retained for byte-stable visible output. */
+  locator?: InlineNode[]
+  /** Canonical citeproc locator label (e.g. "page"), parsed from `locator`. */
+  locatorLabel?: string
+  /** Locator value (plain text, e.g. "33-35, 38"), parsed from `locator`. */
+  locatorValue?: string
+  /** Inline suffix after the locator value (e.g. "and <em>passim</em>"). */
+  suffix?: InlineNode[]
+  /** `-@key` suppresses the author in author-date mode. */
+  suppressAuthor: boolean
+  /** Assigned during resolve (numbered mode); undefined if key undefined. */
+  number?: number
+  /** Per-key, document-wide use-site index (1-based), assigned when a
+   *  bibliography pool is supplied; drives back-link anchors (#199). */
+  useIndex?: number
+}
+
+/** A `[…@key…]` citation, possibly several `;`-separated items (#90, Tier-2). */
+export interface CitationGroup extends BaseNode {
+  type: 'citation_group'
+  items: Citation[]
+  /** Authored shorthand set by a leading '+' after '['. */
+  mode?: 'integral'
+  /** Verbatim source `[…]` for the undefined-key literal fallback. */
+  raw: string
+}
+
+export interface Mention extends BaseNode {
+  type: 'mention'
+  user: string
+}
+
+export interface Tag extends BaseNode {
+  type: 'tag'
+  name: string
+}
+
+export interface Extension extends BaseNode {
+  type: 'inline_extension'
+  name: string
+  content: InlineNode[]
+}
+
+export interface Abbreviation extends BaseNode {
+  type: 'abbreviation'
+  abbr: string
+  expansion: string
+}
+
+/**
+ * `[^label]` - a reference to a definition collected in `Document.footnoteDefs`.
+ *
+ * Split from `InlineFootnote` because profiles.md lists them as two types and
+ * `footnote` is already the BLOCK type for the definition. One identifier named
+ * all three, so `footnote_ref` and `inline_footnote` named nothing and a
+ * profile could not deny one without denying the other (carve#405).
+ */
+export interface FootnoteRef extends BaseNode {
+  type: 'footnote_ref'
+  /** Reference label (`[^label]`); resolved against Document.footnoteDefs. */
+  label?: string
+  /**
+   * Never present - a reference has no body of its own, it points at a
+   * definition. Declared so code that handles BOTH footnote forms can test
+   * `.inline` directly instead of narrowing on the type first.
+   */
+  inline?: undefined
+  /** Renderer-assigned 1-based number, by document reference order. */
+  number?: number
+  /** Renderer-assigned unique id for this reference (a backlink target). */
+  refId?: string
+}
+
+/** `^[content]` - a footnote whose body is written at the point of use. */
+export interface InlineFootnote extends BaseNode {
+  type: 'inline_footnote'
+  inline: InlineNode[]
+  /**
+   * Never present - an inline footnote carries its body, not a label pointing
+   * at one. The mirror of `FootnoteRef.inline`, for the same reason.
+   */
+  label?: undefined
+  /** Renderer-assigned 1-based number, by document reference order. */
+  number?: number
+  /** Renderer-assigned unique id for this reference (a backlink target). */
+  refId?: string
+}
+
+/**
+ * Either footnote form.
+ *
+ * Both carry a number and a backlink id and render the same marker, so code
+ * that only needs "a footnote reference" keeps working against this alias.
+ */
+export type Footnote = FootnoteRef | InlineFootnote
+
+export interface SoftBreak extends BaseNode {
+  type: 'soft_break'
+}
+
+export interface CellWrap extends BaseNode {
+  type: 'cell_wrap'
+  line: number
+  row?: number
+  col?: number
+}
+
+export interface HardBreak extends BaseNode {
+  type: 'hard_break'
+}
+
+export interface CriticInsert extends BaseNode {
+  type: 'insert'
+  children: InlineNode[]
+  attrs?: Attrs
+}
+
+export interface CriticDelete extends BaseNode {
+  type: 'delete'
+  children: InlineNode[]
+  attrs?: Attrs
+}
+
+export interface CriticSubstitute extends BaseNode {
+  type: 'substitution'
+  /** The deleted half, as inline content (markup-carve/carve#2083). */
+  old: InlineNode[]
+  /** The inserted half. */
+  new: InlineNode[]
+}
+
+export interface CriticComment extends BaseNode {
+  type: 'critic_comment'
+  text: string
+}
+
+export interface RubyPair {
+  base: InlineNode[]
+  annotation: InlineNode[]
+}
+
+/** A sequence of HTML ruby base/annotation pairs. */
+export interface Ruby extends BaseNode {
+  type: 'ruby'
+  pairs: RubyPair[]
+  attrs?: Attrs
+}
+
+export interface SmallCaps extends BaseNode {
+  type: 'small_caps'
+  children: InlineNode[]
+  attrs?: Attrs
+}
+
+export type InlineNode =
+  | Text
+  | EscapedText
+  | SmartPunctuation
+  | Emphasis
+  | InlineCode
+  | Link
+  | Image
+  | Span
+  | Ruby
+  | SmallCaps
+  | Math
+  | RawInline
+  | LiteralInline
+  | SymbolInline
+  | AutoLink
+  | CrossRef
+  | CaptionNumber
+  | CitationGroup
+  | Mention
+  | Tag
+  | Extension
+  | Abbreviation
+  | FootnoteRef
+  | InlineFootnote
+  | NonBreakingSpace
+  | SoftBreak
+  | CellWrap
+  | HardBreak
+  | CriticInsert
+  | CriticDelete
+  | CriticSubstitute
+  | CriticComment
+  | Comment
+
+export type AnyNode = Document | BlockNode | InlineNode

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parse } from '../../v2/src/index.ts'
+import { parse } from '../../src/index.ts'
 import { diffTrees, measure, roundTrip } from '../scripts/roundtrip-harness.ts'
 
 describe('HTML round trip harness', () => {

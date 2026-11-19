@@ -34,7 +34,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node v2/scripts/mutation-gate.mjs --base=origin/next2
+      - run: node scripts/mutation-gate.mjs --base=origin/next2
 
   # THE PIN RESOLVES BY SHA, SO NOTHING ELSE HERE CAN SEE A DANGLING ONE. Every
   # other job checks the spec submodule out and runs against whatever tree the
@@ -88,8 +88,8 @@ jobs:
 
       - name: Public 0.2 declarations with both TypeScript versions
         if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
-        run: npm run check-public-types:v2
-      - run: npm run test:cli:v2
+        run: npm run check-public-types
+      - run: npm run test:cli
 
   test:
     name: corpus + include-conformance (${{ matrix.node-version }}, shard ${{ matrix.shard }}/2)
