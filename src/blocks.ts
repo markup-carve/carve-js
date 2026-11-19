@@ -271,10 +271,8 @@ function lazyStanzaLine(state: BlockState, matched: number, lineStart: number, e
   }
   if (headingLevel(src, pos, end) > 0 || isQuoteMark(src, pos, end) || isAttributeLine(src, pos, end)) return false
   if (isDefinition(src, pos, end)) return false
-  // A lazy line did not carry the item's content-column prefix. Its leading spaces are verse content.
-  const prefix = state.cursor.prefixEnd
-  const start = prefix > lineStart && src[prefix] === ' ' ? prefix + 1 : prefix
-  writeEvent(state, SPAN_TAG, start, end)
+  // C2-B-027, C2-B-130: the containers that own a lazy line strip it; the spaces left are verse content.
+  writeEvent(state, SPAN_TAG, contentStart(state, end, lineBlockStrip(state, matched)), end)
   state.contentEnd = end
   return true
 }
@@ -365,6 +363,11 @@ function isCloser(state: BlockState, lineStart: number, end: number): boolean {
 
 /** C2-B-029: strips at most the opener's indent. C2-B-007: a tab that straddles that column stays. */
 function opaqueContentStart(state: BlockState, end: number): number {
+  return contentStart(state, end, state.leaf.fenceColumn)
+}
+
+/** The start of the line's content once at most `strip` columns past its prefixes are stripped. */
+function contentStart(state: BlockState, end: number, strip: number): number {
   const cursor = state.cursor
   const src = state.src
   let pos = cursor.prefixEnd
@@ -373,7 +376,7 @@ function opaqueContentStart(state: BlockState, end: number): number {
     const code = src.charCodeAt(pos)
     if (!isSpaceOrTab(code)) break
     const after = advanceColumn(column, code)
-    if (after - cursor.origin > state.leaf.fenceColumn) break
+    if (after - cursor.origin > strip) break
     column = after
     pos++
   }
@@ -545,9 +548,9 @@ function noteContentColumn(state: BlockState, end: number): void {
  * C2-B-130: a line block is stripped by the content column of the innermost item, description or footnote
  * body inside the innermost quote, or by the one space behind that quote mark (C2-B-003), not by its opener's indent.
  */
-function lineBlockStrip(state: BlockState): number {
+function lineBlockStrip(state: BlockState, depth: number): number {
   const containers = state.containers
-  for (let index = containers.depth - 1; index > 0; index--) {
+  for (let index = depth - 1; index > 0; index--) {
     const kind = containers.kind[index]!
     if (kind === QUOTE) return 1
     if (isIndentContainer(kind)) return Math.max(containers.content[index]!, 0)
@@ -1083,7 +1086,7 @@ function openDiv(state: BlockState, end: number): boolean {
     // C2-B-123: the body of a line block is one leaf.
     writeEvent(state, enterTag(state, LINE_BLOCK, 0), pos, length)
     openOpaqueLeaf(state, LINE_BLOCK, COLON, length)
-    state.leaf.fenceColumn = lineBlockStrip(state)
+    state.leaf.fenceColumn = lineBlockStrip(state, state.containers.depth)
     return true
   }
   let style = 0
