@@ -10,3 +10,15 @@ export {
 export { mathBlock, type MathBlockOptions } from '../src/extensions/standard/math-block.ts'
 export { codeGroup, type CodeGroupOptions } from '../src/extensions/standard/code-group.ts'
 export { codeCallouts } from '../src/extensions/standard/code-callouts.ts'
+export { details } from '../extensions/blocks/details.ts'
+export { spoiler } from '../extensions/blocks/spoiler.ts'
+export { listTable } from '../extensions/blocks/list-table.ts'
+export { colorSwatch, type ColorSwatchOptions, type SwatchPosition, type SwatchShape } from '../extensions/inline/color-swatch.ts'
+export { semanticSpan } from '../extensions/inline/semantic-span.ts'
+export { wikilinks, type WikilinksOptions } from '../extensions/inline/wikilinks.ts'
+export {
+  isSmartQuoteLocaleSupported, type QuoteCharacters, SMART_QUOTE_LOCALES, smartQuoteLocales, smartQuotes, type SmartQuotesOptions,
+} from '../extensions/inline/smart-quotes.ts'
+export { defaultAttributes, type DefaultAttributesMap } from '../extensions/transforms/default-attributes.ts'
+export { tabNormalize } from '../extensions/transforms/tab-normalize.ts'
+export { inlineFootnotesToParentheses } from '../extensions/transforms/inline-footnotes.ts'

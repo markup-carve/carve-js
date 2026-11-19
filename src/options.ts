@@ -87,7 +87,13 @@ export interface Settings {
   allowed: ReadonlySet<string> | null
   profile: Profile
   strictLosses: boolean
+  /** C2-H-075 order of the semantic span keys, with what extensions add (`ExtensionDefinition.semanticKeys`). */
+  semanticKeys: readonly (readonly [string, string | null])[]
+  /** The quote glyphs of a registered extension, or null for those of C2-H-078. */
+  quotes: readonly [string, string, string, string] | null
 }
+
+export const CORE_SEMANTIC_KEYS: readonly (readonly [string, string | null])[] = [['abbr', 'title'], ['time', 'datetime'], ['kbd', null]]
 
 /** An option that has an unknown name or value, or that this engine does not offer. */
 export class CarveOptionError extends Error {
@@ -309,7 +315,39 @@ function checkRegistrationFields(entry: Readonly<Record<string, unknown>>): void
       throw new CarveOptionError('extensions', 'an invalid slot schema')
     }
   }
+  checkHostFields(entry)
 }
+
+/** The provisional fields a definition carries for the host: semantic keys and quotes. */
+function checkHostFields(entry: Readonly<Record<string, unknown>>): void {
+  const keys = entry['semanticKeys']
+  if (keys !== undefined && !validSemanticKeys(keys)) throw new CarveOptionError('extensions', 'invalid semantic keys')
+  const quotes = entry['quotes']
+  if (quotes !== undefined && !(Array.isArray(quotes) && quotes.length === 4 && quotes.every((glyph) => typeof glyph === 'string'))) {
+    throw new CarveOptionError('extensions', 'invalid quotes')
+  }
+}
+
+function validSemanticKeys(keys: unknown): boolean {
+  if (!Array.isArray(keys)) return false
+  const names = new Set<string>()
+  for (const pair of keys as unknown[]) {
+    if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || !/^[a-z]+$/.test(pair[0]) ||
+      names.has(pair[0]) || (pair[1] !== null && (typeof pair[1] !== 'string' || !/^[a-z-]+$/.test(pair[1])))) return false
+    names.add(pair[0])
+  }
+  return CORE_SEMANTIC_KEYS.every(([key]) => names.has(key))
+}
+
+/** The last registration of a field wins; null when no extension sets it. */
+function lastField<K extends 'semanticKeys' | 'quotes'>(extensions: readonly ExtensionDefinition[], field: K):
+  NonNullable<ExtensionDefinition[K]> | null {
+  let found: NonNullable<ExtensionDefinition[K]> | null = null
+  for (const entry of extensions) if (entry[field] !== undefined) found = entry[field]
+  return found
+}
+
+
 
 function renderersValue(value: unknown): Readonly<Record<string, ExtensionRenderer>> {
   if (value === undefined) return {}
@@ -332,8 +370,9 @@ export function readOptions(options: object | undefined, stage: 'parse' | 'rende
   checkNames(given, stage)
   const policy = urlPolicyValue(given)
   const allowed = schemeSet(policy, 'allow')
+  const extensions = extensionsValue(given['extensions'])
   return {
-    extensions: extensionsValue(given['extensions']),
+    extensions,
     includes: includeSettings(given['includes'], (reason) => new CarveOptionError('includes', reason)),
     renderers: renderersValue(given['renderers']),
     codeBlockRenderer: given['codeBlockRenderer'] as Settings['codeBlockRenderer'],
@@ -352,5 +391,7 @@ export function readOptions(options: object | undefined, stage: 'parse' | 'rende
     allowed,
     profile: enumValue(given, 'profile') as Profile,
     strictLosses: booleanValue(given, 'strictLosses'),
+    semanticKeys: lastField(extensions, 'semanticKeys') ?? CORE_SEMANTIC_KEYS,
+    quotes: lastField(extensions, 'quotes'),
   }
 }

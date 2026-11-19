@@ -14,7 +14,8 @@
  * is safe to inline into the DOM or to encode into a `data:image/svg+xml` URI.
  */
 
-import { isUrlAllowed, type UrlPolicy } from '../../src/index.ts'
+import { isUrlAllowed } from '../../src/html-attributes.ts'
+import type { UrlPolicy } from '../../src/index.ts'
 
 /** Options gate the small set of constructs that are safe only in some
  *  contexts. All default OFF. */

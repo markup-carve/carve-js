@@ -1,4 +1,4 @@
-import { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer } from '../../src/index.ts'
+import type { ExtensionClaim, ExtensionDefinition, ExtensionRenderer } from '../../src/index.ts'
 import { attrValue, authorAttrs } from '../common/attrs.ts'
 import { sanitizeSvg, type SanitizeSvgOptions } from './svg-sanitize.ts'
 

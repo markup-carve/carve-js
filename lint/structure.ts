@@ -2,6 +2,7 @@ import { forEachSlot, INLINE_PARENTS, type Node, type TableCellNode, type TableC
 import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
+import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -473,9 +474,16 @@ function referencesPlacement(node: Node, path: string, context: LintContext): vo
   if (node.kind === 'references') reportNode('references-placement-in-container', node, path, context)
 }
 
+/** C2-H-075 keys with those a registered extension adds (carve-js#5060). */
+function semanticKeys(context: LintContext): readonly (readonly [string, string | null])[] {
+  let keys = CORE_SEMANTIC_KEYS
+  for (const entry of context.options.extensions ?? []) if (entry.semanticKeys !== undefined) keys = entry.semanticKeys
+  return keys
+}
+
 function semanticOutside(node: Node, path: string, context: LintContext): void {
   if (node.type === 'span' || node.attrs?.keyValues === undefined) return
-  for (const name of ['abbr', 'time', 'kbd']) {
+  for (const [name] of semanticKeys(context)) {
     const value = node.attrs.keyValues.find(([key]) => key.toLowerCase() === name)?.[1]
     if (value !== undefined) {
       const range = attributeRange(node, context, name)
@@ -488,7 +496,7 @@ function semanticOutside(node: Node, path: string, context: LintContext): void {
 function semanticValue(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'span') return
   for (const [name, value] of node.attrs?.keyValues ?? []) {
-    if (value !== '' && name === 'kbd') {
+    if (value !== '' && semanticKeys(context).some(([key, target]) => key === name && target === null)) {
       reportAttribute('semantic-attribute-value-ignored', node, path, context, name, true, { name })
     }
   }

@@ -15,6 +15,11 @@ function rubyText(node: RubyNode): string {
 
 const GLYPH_OF_KIND: ReadonlyMap<string, string> = new Map(SMART_KIND_NAMES.map((kind, at) => [kind, SMART_GLYPHS[at] ?? '']))
 
+/** C2-H-078: the one glyph of a kind (data/smart-punctuation.json). */
+export function kindGlyph(kind: string): string | undefined {
+  return GLYPH_OF_KIND.get(kind)
+}
+
 /** C2-H-078, C2-A-098: the glyph a node carries, or else the one glyph of its kind (data/smart-punctuation.json). */
 export function smartGlyph(node: SmartPunctuationNode): string {
   return node.glyph ?? GLYPH_OF_KIND.get(node.kind) ?? node.source

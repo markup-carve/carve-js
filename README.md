@@ -28,6 +28,13 @@ The root entry runs in browsers, Node, Deno and bundlers. `@markup-carve/carve/n
 Djot, BBCode and HTML ([guide](docs/import.md)); the core entry imports HTML. A classic-script build is published as
 `dist/carve.iife.min.js` (the `unpkg` and `jsdelivr` target) and exposes the same API as a `carve` global.
 
+`@markup-carve/carve/extensions` holds the provisional standard extensions, registered by the host:
+
+- blocks: `details`, `spoiler` (also inline), `listTable`
+- inline: `colorSwatch`, `wikilinks`, `semanticSpan`, `smartQuotes` (with `smartQuoteLocales`,
+  `isSmartQuoteLocaleSupported`, `SMART_QUOTE_LOCALES`)
+- document transforms: `defaultAttributes`, `tabNormalize`, `inlineFootnotesToParentheses`
+
 The command line:
 
 ```sh
@@ -45,6 +52,7 @@ npx carve upgrade --check legacy.crv
 
 - [Library API and migration from 0.1](docs/api.md)
 - [Fenced renderers: diagrams, math, code groups and callouts](docs/fenced-renderers.md)
+- [Standard extensions: blocks and inline](docs/extensions-blocks-inline.md)
 - [Engine notes: conformance, byte input, includes, command line](docs/engine.md)
 - [Importing Markdown, Djot, BBCode and HTML](docs/import.md)
 - [Development](docs/development.md)
