@@ -586,7 +586,9 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   const flags = contentFlags(c, e)
   const spelled = writeInlines(c.w, [e], c.flags)
   const content = writeInlines(c.w, e.children, flags)
-  const closer: Node = standIn(c.w, e, 'closer', spelled.slice(spelled.length - (spelled.length - content.length) / 2))
+  const suffix = e.type === 'link' ? spelled.slice(1 + content.length) :
+    spelled.slice(spelled.length - (spelled.length - content.length) / 2)
+  const closer: Node = standIn(c.w, e, 'closer', suffix)
   const word: Node = standIn(c.w, e, 'word', 'x')
   let end = i + 1
   // A label or a bracket pair can run on over a line break (C2-I-076).
@@ -618,7 +620,7 @@ function textsBelow(node: Node): TextNode[] {
 
 // The nodes spelled with one mark before and one after their content, or with a brace around those marks.
 const PAIRED_MARKS: readonly string[] = [
-  'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete',
+  'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete', 'link',
 ]
 
 function isPairedMark(node: Node): node is Node & { children: Node[] } {
