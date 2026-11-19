@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { isDeepStrictEqual } from 'node:util'
 import * as engine from '../src/index.ts'
-import { imgFenceExtensions, imgFenceRenderers } from '../extensions/blocks/img-fence.ts'
+import { imgFence, imgFenceExtensions } from '../extensions/blocks/img-fence.ts'
 import { mermaid } from '../src/extensions/standard/fenced-render.ts'
 import { codeGroup } from '../src/extensions/standard/code-group.ts'
 import { importDocument } from '../import/src/index.ts'
@@ -15,7 +15,8 @@ import { withoutPositions } from './corpus-checks.ts'
 import { applyPatch, diffTree, sourceFingerprint, treeFingerprint } from '../src/tree-patch.ts'
 
 const same = (a, b) => isDeepStrictEqual(a, b)
-const standardRenderers = { ...imgFenceRenderers, ...mermaid().renderers, ...codeGroup().renderers }
+// C2-X-059: the standard img renderer reports a failed SVG under C2-X-050.
+const standardRenderers = { ...imgFence().renderers, ...mermaid().renderers, ...codeGroup().renderers }
 const catalogRows = Object.freeze(JSON.parse(readFileSync(new URL('../data/lint-rules.json', import.meta.url), 'utf8')).rules)
 const parseRows = Object.freeze(Object.fromEntries(catalogRows.filter(row => row.channel !== 'lint').map(row => [row.id, row])))
 const plain = value => JSON.parse(JSON.stringify(value))
