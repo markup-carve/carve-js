@@ -306,7 +306,8 @@ export function target(node: LinkNode | ImageNode, href: string | undefined, pip
   const key = node.key
   if (key !== undefined) return referenceLabel(node, key, pipes)
   const tooltip = node.tooltip
-  const title = tooltip === undefined ? '' : ` ${quoted(tooltip, pipes)}`
+  // C2-I-069: a link tail occupies one line. Keep the link when only its title cannot be spelled.
+  const title = tooltip === undefined ? '' : ` ${quoted(tooltip.replace(/\r\n?|\n/gu, ' '), pipes)}`
   return `(${destination(href ?? '', pipes)}${title})`
 }
 
@@ -351,6 +352,7 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
   escapeLeadingCaret(w, node.children, flags)
+  if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
   const content = writeInlines(w, node.children, flags | IN_BRACKET)
   return `[${collapsedContent(node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`
 }
@@ -439,6 +441,7 @@ function imageNode(w: Writer, node: ImageNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return `!${raw}`
   const pipes = (flags & IN_CELL) !== 0
+  if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
   const alt = collapsedAlt(node, altSource(node.alt ?? ''))
   return `![${pipes ? escapePipes(alt) : alt}]${target(node, node.src, pipes)}`
 }
