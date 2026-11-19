@@ -425,6 +425,12 @@ function sourceLayout(source: SourceText, document: DocumentNode, trace: LayoutT
  */
 export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode, options?: RenderOptions): RenderOutput {
   const settings = readOptions(options, 'render')
+  const registered = registeredTransforms(settings)
+  if (registered.length > 0) return transformedRender(input, registered, settings)
+  return plainRender(input, settings)
+}
+
+function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings): RenderOutput {
   const parsed = inputStage(input, settings, true)
   const resolved = resolveStage(parsed, settings)
   const rendered = renderStage(resolved)
@@ -442,38 +448,41 @@ export interface DocumentTransform {
   transform: (view: DocumentNode) => DocumentNode
 }
 
-/** C2-X-055: authored ids in one render view must be unique in document order. */
-function duplicateViewId(document: DocumentNode): string | null {
-  const seen = new Set<string>()
-  const visit = (node: Node): string | null => {
+/** C2-X-055: how often each authored id occurs in one render view. */
+function viewIdCounts(document: DocumentNode): Map<string, number> {
+  const counts = new Map<string, number>()
+  const visit = (node: Node): void => {
     const id = node.attrs?.id
-    if (id !== undefined) {
-      if (seen.has(id)) return id
-      seen.add(id)
-    }
-    let duplicate: string | null = null
+    if (id !== undefined) counts.set(id, (counts.get(id) ?? 0) + 1)
     forEachSlot(node, (nodes, step) => {
-      if (step === 'fallback' || duplicate !== null) return
-      for (const child of nodes) {
-        duplicate = visit(child)
-        if (duplicate !== null) break
-      }
+      if (step === 'fallback') return
+      for (const child of nodes) visit(child)
     }, undefined, document.extensions)
-    return duplicate
   }
-  return visit(document)
+  visit(document)
+  return counts
+}
+
+/** An id the transform used once more than its input did, where that makes it a duplicate. */
+function addedDuplicate(before: ReadonlyMap<string, number>, after: ReadonlyMap<string, number>): string | undefined {
+  for (const [id, count] of after) if (count > 1 && count > (before.get(id) ?? 0)) return id
+  return undefined
 }
 
 function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[], extensions: Settings['extensions']): {
   view: DocumentNode, failures: Diagnostic[]
 } {
   const failures: Diagnostic[] = []
+  // A duplicate the source already holds is reported by the parse; only one a transform adds fails it.
+  let counts = viewIdCounts(view)
   for (const entry of transforms) {
     try {
       const next = entry.transform(structuredClone(view))
       validateTree(next, undefined, undefined, extensions)
-      const duplicate = duplicateViewId(next)
-      if (duplicate !== null) throw new Error(`duplicate authored id ${duplicate}`)
+      const after = viewIdCounts(next)
+      const added = addedDuplicate(counts, after)
+      if (added !== undefined) throw new Error(`duplicate authored id ${added}`)
+      counts = after
       view = next
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
@@ -484,17 +493,32 @@ function applyDocumentTransforms(view: DocumentNode, transforms: readonly Docume
   return { view, failures }
 }
 
+/** C2-X-053: the document transforms of the registered extensions, in registration order. */
+function registeredTransforms(settings: Settings): DocumentTransform[] {
+  const transforms: DocumentTransform[] = []
+  for (const entry of settings.extensions) {
+    if (entry.documentTransform !== undefined) transforms.push({ name: entry.name, transform: entry.documentTransform })
+  }
+  return transforms
+}
+
 /** C2-X-053 to C2-X-055: transforms run in registration order on a copy, leaving the authored tree intact. */
 export function renderWithDocumentTransforms(
   input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], options?: RenderOptions,
 ): RenderOutput {
   const settings = readOptions(options, 'render')
+  return transformedRender(input, [...registeredTransforms(settings), ...transforms], settings)
+}
+
+function transformedRender(
+  input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], settings: Settings, positions = true,
+): RenderOutput {
   const authored = typeof input === 'string' || input instanceof Uint8Array ? input : structuredClone(input)
-  const parsed = inputStage(authored, settings, true)
+  const parsed = inputStage(authored, settings, positions)
   const resolved = resolveStage(parsed, settings)
   const sourceDiagnostics = parseDiagnostics(resolved, parsed)
-  const { view, failures } = applyDocumentTransforms(structuredClone(resolved.document), transforms, settings.extensions)
-  const rendered = renderWithDiagnostics(view, options)
+  const { view, failures } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
+  const rendered = plainRender(view, settings)
   const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
   ])))
@@ -517,5 +541,12 @@ export function renderWithDocumentTransforms(
  */
 export function render(input: string | Uint8Array | DocumentNode, options?: RenderOptions): string {
   const settings = readOptions(options, 'render')
+  const registered = registeredTransforms(settings)
+  if (registered.length > 0) {
+    const output = transformedRender(input, registered, settings, false)
+    const lost = output.diagnostics.filter((entry) => entry.channel === 'render-loss')
+    if (settings.strictLosses && lost.length > 0) throw new CarveRenderError(lost)
+    return output.html
+  }
   return renderTree(resolveStage(inputStage(input, settings), settings))
 }

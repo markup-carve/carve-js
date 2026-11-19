@@ -1,4 +1,4 @@
-import { type Attrs, type Block, type BlockExtensionNode, type CodeBlockNode, type DivNode,
+import { type Attrs, type Block, type BlockExtensionNode, type CodeBlockNode, type DivNode, type DocumentNode,
   type Inline, type InlineExtensionNode, type Node } from '../ast.ts'
 import { type Mode, type Profile, type UrlPolicy } from '../options.ts'
 
@@ -41,6 +41,8 @@ export interface ExtensionDefinition {
   semanticKeys?: readonly (readonly [string, string | null])[]
   /** Provisional: the opening and closing double, then single, quote glyphs that smart typography writes. */
   quotes?: readonly [string, string, string, string]
+  /** C2-X-053: a document transform the extension registers; it runs in registration order on the render view. */
+  documentTransform?: (view: DocumentNode) => DocumentNode
 }
 
 export interface ExtensionRenderHost {

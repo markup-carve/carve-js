@@ -17,7 +17,7 @@ function check(name: string): void {
   const output = mkdtempSync(join(tmpdir(), 'carve-public-types-'))
   try {
     const args = [
-      compiler(name), 'src/index.ts', 'public/index.ts', 'public/node.ts',
+      compiler(name), 'src/index.ts', 'public/index.ts', 'public/node.ts', 'public/extensions.ts',
       '--declaration', '--emitDeclarationOnly', '--outDir', output,
       '--strict', '--skipLibCheck', 'false', '--noEmitOnError', '--module', 'ESNext', '--moduleResolution', 'Bundler',
       '--target', 'ES2022', '--lib', 'ES2022', '--types', 'node', '--allowImportingTsExtensions',
