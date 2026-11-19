@@ -8,6 +8,7 @@ import { generateWriterTables } from '../scripts/generate-writer-tables.ts'
 import { parseWithLayout } from '../src/api.ts'
 import { format, formatWithDiagnostics } from '../src/index.ts'
 import { writeTreeWithStats, type WriterPath } from '../src/write.ts'
+import { growthRatio } from './support/growth.ts'
 
 const root = join(import.meta.dirname, '..')
 
@@ -627,8 +628,7 @@ describe('the planned writer', () => {
   })
 })
 
-// Shapes that the writer wrote in time above linear: each doubling of the input may at most
-// multiply the time of the writer by 2.8 on average. The fastest of three runs is taken against the noise of the machine.
+// Shapes that previously made the writer grow above linear.
 const STRESS_SHAPES: readonly [string, (n: number) => string][] = [
   ['unclosed braced emphasis openers', (n) => ` ${'{/a {/b /} { '.repeat(n)}\n`],
   ['braced strong around code spans', (n) => `${'{*a {*b `c` *} {*a {*b `c`'.repeat(n)}\n`],
@@ -653,16 +653,15 @@ function fastest(source: string, runs = 5): number {
 describe('time linear in the output', () => {
   for (const [name, shape] of STRESS_SHAPES) {
     it(`C2-W-089: ${name} take time linear in their size`, () => {
-      const small = formatBy(shape(50), 'both').stats
-      expect(small.repaired).toBe(0)
-      expect(small.differences).toEqual([])
-      // One run at the largest size first, so the heap has grown before anything is timed.
-      formatBy(shape(8000), 'plan')
-      const times = [1000, 2000, 4000, 8000].map((n) => fastest(shape(n), 3))
-      // The mean growth per doubling over three doublings, so one noisy step does not decide. Below 1,000 the time of
-      // the compiler tiers decides the first step on a loaded machine; a quadratic writer grows 4 times per doubling.
-      const perDoubling = Math.cbrt(times[3]! / Math.max(times[0]!, 0.5))
-      expect(perDoubling, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(2.8)
+      const baseline = formatBy(shape(50), 'both').stats
+      expect(baseline.repaired).toBe(0)
+      expect(baseline.differences).toEqual([])
+      const base = name === 'braced strong around code spans' ? 125 : 250
+      const small = parseWithLayout(shape(base), { extensions: [] })
+      const large = parseWithLayout(shape(base * 16), { extensions: [] })
+      const write = (parsed: typeof small): void => { writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false) }
+      const { ratio, times } = growthRatio(() => write(small), () => write(large))
+      expect(ratio, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(48)
     })
   }
 })
@@ -670,13 +669,14 @@ describe('time linear in the output', () => {
 describe('time linear in the number of groups', () => {
   it('C2-W-089: planned and repaired groups that alternate take time linear in their count', () => {
     const shape = (n: number): string => '\\# a\n\n\\- b\n\n'.repeat(n)
-    const small = formatBy(shape(10), 'plan').stats
-    expect(small.planned).toBeGreaterThan(0)
-    expect(small.repaired).toBeGreaterThan(0)
-    fastest(shape(4000))
-    const times = [500, 1000, 2000, 4000].map((n) => fastest(shape(n)))
-    const perDoubling = Math.cbrt(times[3]! / Math.max(times[0]!, 0.5))
-    expect(perDoubling, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(2.8)
+    const baseline = formatBy(shape(10), 'plan').stats
+    expect(baseline.planned).toBeGreaterThan(0)
+    expect(baseline.repaired).toBeGreaterThan(0)
+    const small = parseWithLayout(shape(125), { extensions: [] })
+    const large = parseWithLayout(shape(2000), { extensions: [] })
+    const write = (parsed: typeof small): void => { writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false) }
+    const { ratio, times } = growthRatio(() => write(small), () => write(large))
+    expect(ratio, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(48)
   })
 })
 
