@@ -68,7 +68,9 @@ switch (gate) {
     node('scripts/stress-tree.ts', '--sizes', bounds.stressSizes, ...(smoke ? ['--only', 'paragraphs'] : []))
     node('scripts/stress-format.ts', '--sizes', bounds.stressSizes, ...(smoke ? ['--only', 'escaped stars'] : []))
     break
-  case 'benchmark': npm('bench', '--files', smoke ? 'test/fixtures/bench-commonmark-core.crv' : 'test/fixtures/bench-commonmark-core.crv,docs/api.md,docs/engine.md', '--rounds', String(bounds.benchRounds)); break
+  case 'benchmark':
+    if (smoke) run('npx', ['tsc', '-p', 'upgrade/engine-0.1/tsconfig.json'])
+    npm('bench', '--files', smoke ? 'test/fixtures/bench-commonmark-core.crv' : 'test/fixtures/bench-commonmark-core.crv,docs/api.md,docs/engine.md', '--rounds', String(bounds.benchRounds)); break
   case 'proptest':
     if (!smoke) npm('test:proptest')
     for (const target of ['parse', 'render', 'format', 'diagnostics', 'extensions', 'decode', 'cli', 'lint', 'migrate', 'import']) {
