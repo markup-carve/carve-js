@@ -549,6 +549,8 @@ function upgradeSource(input: string): UpgradeResult {
   if (manual.length > 0) {
     const done: Rewritten = { output: input, records: manual, edits: [], context: makeContext(input) }
     const check = selfCheck(input, done)
+    const late = check === 'mismatch' ? latePass(input, input) : null
+    if (late !== null) return { ...late, records: [...manual.filter((record) => record.class !== 'mismatch'), ...late.records] }
     return { output: input, changed: false, records: done.records, check, engine01: ENGINE_01_VERSION }
   }
   const done = rewrite(input)
