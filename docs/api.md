@@ -395,7 +395,7 @@ old and new host HTML. The command line spelling is `carve upgrade --registered-
 | `SMART_PUNCTUATION_GLYPHS` | `SMART_PUNCTUATION` | one entry per kind with its `glyph` and `source` |
 | `CANONICAL_ADMONITION_KINDS`, `GENERATED_CONTENT_KINDS` | gone | fixed tables of the specification data, not of the API |
 | `formatProfileViolation`, `RenderDepthError` | gone | a profile loss is a diagnostic; a too deep tree is a `CarveTreeError` |
-| `imgFence`, `sanitizeSvg` | gone | 0.1 extensions; a host registers its own through the provisional `extensions` and `renderers` options |
+| `imgFence`, `sanitizeSvg` | same names from `@markup-carve/carve/extensions` | `imgFence()` now returns `{ extensions, renderers }`; `sanitizeSvg` remains a standalone sanitizer |
 | `fileSystemResolver` (`./node`) | `fileSystemResolver` (`./node`) | takes the root directory and `{ maxFileBytes, allowAbsolute }` |
 | `DEFAULT_MAX_FILE_BYTES` (`./node`) | the `maxFileBytes` option of `fileSystemResolver`, the `bytes` field of the `includes` option | may be lowered, not raised |
 | `./prettier` | `./prettier` | a plugin on `format` |
