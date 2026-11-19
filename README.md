@@ -37,9 +37,11 @@ npx carve lint README.crv
 npx carve import --from html page.html
 npx carve import --from markdown README.md
 npx carve upgrade --check legacy.crv
+npx carve fix --write notes.crv
+npx carve flatten book.crv > book-all.crv
 ```
 
-`carve upgrade` rewrites a Carve 0.1 document into 0.2 so that it renders the same.
+`carve upgrade` rewrites a Carve 0.1 document into 0.2 so that it renders the same. `carve fix` rewrites Markdown and Djot habits such as `**b**` to their Carve spelling, and `carve flatten` writes a document with its includes expanded in place ([engine commands](docs/cli.md)).
 
 ## Documentation
 
@@ -47,6 +49,7 @@ npx carve upgrade --check legacy.crv
 - [Fenced renderers: diagrams, math, code groups and callouts](docs/fenced-renderers.md)
 - [Engine notes: conformance, byte input, includes, command line](docs/engine.md)
 - [Importing Markdown, Djot, BBCode and HTML](docs/import.md)
+- [Engine commands and flags: flatten, fix, upgrade --migrate, --output, --strict, --ignore](docs/cli.md)
 - [Development](docs/development.md)
 - [Carve documentation](https://markup-carve.github.io/carve/)
 - [Playground](https://markup-carve.github.io/carve/playground)
