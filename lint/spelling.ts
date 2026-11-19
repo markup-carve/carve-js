@@ -50,7 +50,7 @@ function prior(line: Line, context: LintContext): Line | undefined {
 
 function priorParagraph(line: Line, context: LintContext): boolean {
   const previous = prior(line, context)
-  return previous !== undefined && previous.text.trim() !== '' && context.nodeTypes.get(previous.path) === 'paragraph'
+  return previous !== undefined && previous.text.trim() !== '' && previous.paragraphLeaf
 }
 
 function hasAncestor(path: string, context: LintContext, type: string): boolean {

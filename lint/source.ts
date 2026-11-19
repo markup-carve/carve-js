@@ -14,11 +14,11 @@ export function sourceLines(source: string): { bytes: Uint32Array, chars: Uint32
     let end = at
     if (end > start && source.charCodeAt(end - 1) === 13) end--
     lines.push({ text: source.slice(start, end), start, end, number: lines.length + 1, path: '', opaque: false,
-      paragraph: false })
+      paragraph: false, paragraphLeaf: false })
     start = at + 1
   }
   lines.push({ text: source.slice(start), start, end: source.length, number: lines.length + 1, path: '', opaque: false,
-    paragraph: false })
+    paragraph: false, paragraphLeaf: false })
   offsetLines[source.length] = lines.length
   const chars = new Uint32Array(bytes[source.length]! + 1)
   for (let at = 0; at < source.length; at++) {
@@ -38,6 +38,7 @@ export function markNodeLines(lines: Line[], type: string, path: string, firstLi
     if (paragraph) {
       line.path = path
       line.paragraph = true
+      line.paragraphLeaf = type === 'paragraph'
     }
     if (opaque) line.opaque = true
   }
