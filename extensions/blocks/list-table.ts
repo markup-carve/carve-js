@@ -1,5 +1,5 @@
-import { type Attrs, type Block, type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer,
-  type ExtensionRenderHost, type ListItemNode, type ListNode, type Node } from '../../src/index.ts'
+import type { ExtensionBundle } from '../../src/extensions/standard/bundle.ts'
+import type { Attrs, Block, ExtensionClaim, ExtensionDefinition, ExtensionRenderer, ExtensionRenderHost, ListItemNode, ListNode, Node } from '../../src/index.ts'
 import { attrValue, authorAttrs } from '../common/attrs.ts'
 
 interface Cell {
@@ -224,3 +224,8 @@ export const listTableRenderer: ExtensionRenderer = { version: '1', render(node,
   const indent = '  '.repeat(host.blockDepth)
   return indent === '' ? html : html.replaceAll('\n', `\n${indent}`)
 } }
+
+/** `::: list-table` with its renderer, in both channels. */
+export function listTable(): ExtensionBundle {
+  return { extensions: [listTableExtension], renderers: { 'carve.listTable': { ...listTableRenderer, buildTime: listTableRenderer.render! } } }
+}

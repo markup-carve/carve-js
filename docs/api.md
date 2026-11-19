@@ -157,7 +157,8 @@ The extension surface may change in 0.2.x (`spec/0.2/extensions.md`): the `exten
 `ExtensionDefinition`s that claim divs, fences or inline extensions, and the `renderers` option maps an extension
 name to an `ExtensionRenderer`, trusted host code whose HTML is inserted unchanged. `tabsExtensions` and
 `tabsRenderer` are the standard tabs extension. More standard extensions come from `@markup-carve/carve/extensions`;
-[fenced renderers](fenced-renderers.md) covers the diagram presets, `mathBlock`, `codeGroup` and `codeCallouts`.
+[fenced renderers](fenced-renderers.md) covers the diagram presets, `mathBlock`, `codeGroup` and `codeCallouts`, and
+[blocks and inline extensions](extensions-blocks-inline.md) the rest.
 
 ```ts
 import { render, tabsExtensions, tabsRenderer } from '@markup-carve/carve'
@@ -170,7 +171,7 @@ if (!html.includes('Install')) throw new Error(html)
 ## Migrating from 0.1
 
 Each value the 0.1 package root exports, and what replaces it in 0.2. A row marked gone has no 0.2 call; the note
-says what to use instead. Of the 172 values, 84 map to a 0.2 call and 88 are gone.
+says what to use instead. Of the 172 values, 95 map to a 0.2 call and 77 are gone.
 
 | 0.1 call | 0.2 call | Note |
 |---|---|---|
@@ -203,7 +204,8 @@ says what to use instead. Of the 172 values, 84 map to a 0.2 call and 88 are gon
 | `expandIncludes` | `parse(source, { includes })` | a resolver; `fileSystemResolver` from `./node` reads files |
 | `applyProfile`, `Profile` | the `profile` option |  |
 | `LinkPolicy` | the `urlPolicy` option | `isUrlAllowed` tests one URL |
-| `smartQuotes` | the `smartTypography` option |  |
+| `smartQuotes` | the `smartTypography` option with `smartQuotes` from `@markup-carve/carve/extensions` | `smartQuotes(options)` sets the quote glyphs of a locale |
+| `details`, `spoiler`, `semanticSpan`, `listTable`, `colorSwatch`, `wikilinks`, `smartQuoteLocales`, `isSmartQuoteLocaleSupported`, `SMART_QUOTE_LOCALES`, `defaultAttributes`, `tabNormalize` | same names from `@markup-carve/carve/extensions` | provisional; see [blocks and inline extensions](extensions-blocks-inline.md) |
 | `tabs` | `tabsExtensions`, `tabsRenderer` | provisional |
 | `fencedRender`, `mermaid`, `d2`, `graphviz`, `wavedrom`, `abc`, `plantuml`, `vegaLite`, `chart`, `presets`, `mathBlock`, `codeGroup`, `codeCallouts` | same names from `@markup-carve/carve/extensions` | provisional; each returns `{ extensions, renderers }`, see [fenced renderers](fenced-renderers.md) |
 | `parseWithProvenance`, `astNodePaths`, `readNodeIdentity`, `toNodeIdentity`, `readAnnotationRanges`, `toAnnotationRanges`, `readProvenance`, `toProvenance`, `toAuthoredProvenance`, `AstSidecarError` | gone | 0.2 has one sidecar, the source layout; a diagnostic names its node by an RFC 6901 `path` |
@@ -219,10 +221,10 @@ says what to use instead. Of the 172 values, 84 map to a 0.2 call and 88 are gon
 | `renderCarveWithConversionReport`, `djotMigrationWarnings`, `formatMigrationWarnings`, `applyMigrationFixes`, `BbcodeSentinelSpaceExhaustedError` | gone | the importers return `diagnostics`; the BBCode reader needs no sentinel characters |
 | `migrateCaseOnlyReferences`, `stampCarve`, `buildMarker`, `stripTrailingMarker`, `readStamp`, `needsReview`, `compareSpecVersions`, `SPEC_VERSION` | gone | 0.1 to 0.2 source upgrades run in `carve upgrade` |
 | `formatLintWarnings`, `KNOWN_LINT_PLATFORMS` | gone | a diagnostic is plain data; the one platform is `github` |
-| `inspectColonFences`, `decisionTrace`, `decisionTraceJsonLines`, `tabNormalize` | gone | 0.1 debugging helpers |
+| `inspectColonFences`, `decisionTrace`, `decisionTraceJsonLines` | gone | 0.1 debugging helpers |
 | `expandsForTarget`, `findDirectiveSites`, `selectIncludeRegion`, `isDirectiveShape`, `parseDirective`, `headingReference` | gone | include internals; `includeDependencies` lists what a tree includes |
-| `defaultAttributes`, `canonicalType`, `CANONICAL_BLOCK_TYPES`, `CANONICAL_INLINE_TYPES`, `FOLDED_NODE_TYPES`, `CORE_AST_VOCABULARY`, `CANONICAL_ADMONITION_KINDS`, `GENERATED_CONTENT_KINDS`, `SMART_PUNCTUATION_GLYPHS`, `formatProfileViolation`, `RenderDepthError`, `LIB_VERSION` | gone | the node types are the `Block` and `Inline` unions; read the version from `package.json` |
-| `details`, `semanticSpan`, `listTable`, `glossary`, `headingNumbers`, `smartQuoteLocales`, `isSmartQuoteLocaleSupported`, `SMART_QUOTE_LOCALES`, `index`, `citations`, `imgFence`, `sanitizeSvg`, `spoiler`, `colorSwatch`, `wikilinks`, `autolink`, `externalLinks`, `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingLevelShift` | gone | 0.1 extensions; a host registers its own through the provisional `extensions` and `renderers` options |
+| `canonicalType`, `CANONICAL_BLOCK_TYPES`, `CANONICAL_INLINE_TYPES`, `FOLDED_NODE_TYPES`, `CORE_AST_VOCABULARY`, `CANONICAL_ADMONITION_KINDS`, `GENERATED_CONTENT_KINDS`, `SMART_PUNCTUATION_GLYPHS`, `formatProfileViolation`, `RenderDepthError`, `LIB_VERSION` | gone | the node types are the `Block` and `Inline` unions; read the version from `package.json` |
+| `glossary`, `headingNumbers`, `index`, `citations`, `imgFence`, `sanitizeSvg`, `autolink`, `externalLinks`, `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingLevelShift` | gone | 0.1 extensions; a host registers its own through the provisional `extensions` and `renderers` options |
 | `fileSystemResolver` (`./node`) | `fileSystemResolver` (`./node`) | takes the root directory |
 | `DEFAULT_MAX_FILE_BYTES` (`./node`) | the `bytes` field of the `includes` option | may be lowered, not raised |
 | `./prettier` | gone | no 0.2 Prettier plugin yet |

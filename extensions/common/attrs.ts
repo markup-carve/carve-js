@@ -1,4 +1,5 @@
-import { isUrlAllowed, type Attrs, type ExtensionRenderHost } from '../../src/index.ts'
+import { isUrlAllowed } from '../../src/html-attributes.ts'
+import type { Attrs, ExtensionRenderHost } from '../../src/index.ts'
 import { styleIsDangerous } from '../blocks/svg-sanitize.ts'
 
 const SAFE_NAME = /^[a-z_:][\w:.-]*$/i

@@ -3,14 +3,14 @@ import {
   type AbbreviationNode, type Attrs, type AutolinkNode, type CaptionNumberNode, type FootnoteRefNode, type ImageNode,
   type Inline, type InlineExtensionNode, type InlineFootnoteNode, type InlineParent, isBreak, type LinkNode,
   type LinkReferenceDefinitionNode, type LiteralInlineNode, type MathNode, type MentionNode, type Node, type NodeHandlers, type NodeOfType,
-  type RawInlineNode, type RubyNode, type SpanNode, type SymbolNode, type TagNode, type XrefNode,
+  type RawInlineNode, type RubyNode, type SmartPunctuationNode, type SpanNode, type SymbolNode, type TagNode, type XrefNode,
 } from './ast.ts'
 import {
   attributeBlockText, attributes, destination, escapeCarrierText, escapeText, escapeTextNode, isDenied, keyValue, loss, type Pair,
   type Render, type TagParts,
 } from './html-attributes.ts'
 import { inlinesText } from './profile.ts'
-import { smartGlyph } from './ast-text.ts'
+import { kindGlyph, smartGlyph } from './ast-text.ts'
 import { type SocialRequest } from './options.ts'
 import { drawDerivedText } from './derived-text.ts'
 import { withoutUnpairedSurrogates } from './unicode.ts'
@@ -18,8 +18,6 @@ import { utf8Length } from './positions.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
 
-// C2-H-075: the keys that name an element, from inside out, and the attribute the value of each becomes.
-const SEMANTIC_KEYS: readonly (readonly [string, string | null])[] = [['abbr', 'title'], ['time', 'datetime'], ['kbd', null]]
 
 /** A space or tab only text, which a comment-only line may hold beside its comments. */
 function isBlank(value: string): boolean {
@@ -67,6 +65,8 @@ function inlineList(r: Render, nodes: readonly Inline[], nested: boolean): strin
     const node = nodes[at]!
     // Most nodes are text, which needs no writer.
     if (node.type === 'text') out += escapeTextNode(r, node.value)
+    else if (r.settings.quotes !== null && node.type === 'smart_punctuation' && r.settings.smartTypography &&
+      isApostrophe(node, nodes[at - 1], nodes[at + 1])) out += escapeText(smartGlyph(node))
     else if (!isBreak(node) || !isSkippedBreak(nodes, at, nested)) out += writeOwn(r, node.type, node) ?? ''
   }
   return out
@@ -96,10 +96,25 @@ function withoutKeys<N extends Node>(node: N, names: string[], caseInsensitive =
   return { ...node, attrs: { ...node.attrs, keyValues } }
 }
 
+/** A closing single quote between two letters is an apostrophe, which locale quotes leave as it is. */
+function isApostrophe(node: SmartPunctuationNode, before: Inline | undefined, after: Inline | undefined): boolean {
+  return node.kind === 'right_single_quote' && before?.type === 'text' && after?.type === 'text' &&
+    /\p{L}$/u.test(before.value) && /^\p{L}/u.test(after.value)
+}
+
+const QUOTE_KINDS = ['left_double_quote', 'right_double_quote', 'left_single_quote', 'right_single_quote']
+
+/** The glyph of a smart punctuation node; a quote that carries the glyph of its kind takes that of a registered extension. */
+function quoteGlyph(node: SmartPunctuationNode, r: Render): string {
+  const glyph = smartGlyph(node)
+  const at = r.settings.quotes === null ? -1 : QUOTE_KINDS.indexOf(node.kind)
+  return at < 0 || glyph !== kindGlyph(node.kind) ? glyph : r.settings.quotes![at]!
+}
+
 /** C2-H-075: a span with the key `abbr`, `time` or `kbd` is that element; several nest, and the rest goes on the outermost. */
 function span(node: SpanNode, r: Render): string {
   const found: (readonly [string, string | null, string])[] = []
-  for (const [key, target] of SEMANTIC_KEYS) {
+  for (const [key, target] of r.settings.semanticKeys) {
     const value = node.attrs?.keyValues?.find(([name]) => name === key)?.[1]
     if (value !== undefined) found.push([key, target, value])
   }
@@ -413,7 +428,7 @@ const WRITERS: NodeHandlers<string, Render> = {
   hard_break: () => '<br>\n',
   soft_break: () => '\n',
   // C2-H-078.
-  smart_punctuation: (node, r) => escapeText(r.settings.smartTypography ? smartGlyph(node) : node.source),
+  smart_punctuation: (node, r) => escapeText(r.settings.smartTypography ? quoteGlyph(node, r) : node.source),
   abbreviation,
   caption_number: captionNumber,
   inline_extension: inlineExtension,

@@ -34,6 +34,13 @@ export interface ExtensionDefinition {
   children?: 'none'
   transform?: (claim: ExtensionClaim) => BlockExtensionNode | InlineExtensionNode | null
   parent?: { name: string, slot: string }
+  /**
+   * Provisional (carve-js#5060): the semantic span keys from inside out, each with the attribute a value maps to.
+   * The list holds `abbr`, `time` and `kbd` and replaces their order (C2-H-075).
+   */
+  semanticKeys?: readonly (readonly [string, string | null])[]
+  /** Provisional: the opening and closing double, then single, quote glyphs that smart typography writes. */
+  quotes?: readonly [string, string, string, string]
 }
 
 export interface ExtensionRenderHost {

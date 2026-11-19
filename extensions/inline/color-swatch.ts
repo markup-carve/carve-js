@@ -1,4 +1,5 @@
-import { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer, type Inline, type Attrs } from '../../src/index.ts'
+import type { ExtensionBundle } from '../../src/extensions/standard/bundle.ts'
+import type { ExtensionClaim, ExtensionDefinition, ExtensionRenderer, Inline, Attrs } from '../../src/index.ts'
 import { attrValue, authorAttrs, withClass } from '../common/attrs.ts'
 
 export type SwatchPosition = 'before' | 'after' | 'none'
@@ -124,3 +125,9 @@ export function createColorSwatch(options: ColorSwatchOptions = {}): { definitio
 }
 
 export const colorSwatchRenderer = createColorSwatch().renderer
+
+/** `:color[value]` with its swatch renderer, in both channels. */
+export function colorSwatch(options: ColorSwatchOptions = {}): ExtensionBundle {
+  const { definition, renderer } = createColorSwatch(options)
+  return { extensions: [definition], renderers: { 'carve.colorSwatch': { ...renderer, buildTime: renderer.render! } } }
+}
