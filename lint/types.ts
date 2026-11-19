@@ -52,6 +52,8 @@ export interface LintContext {
     footnoteLabels: Map<string, string>
     footnoteKeys: Map<string, string>
     attachedLines: Set<number>
+    descriptionStarts: Set<number>
+    containerClosers: Set<number>
     /** The source characters where an inline node other than text starts, directly in a paragraph. */
     spanStarts: Set<number>
     usedReferences: Set<string>
