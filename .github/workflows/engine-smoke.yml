@@ -1,0 +1,51 @@
+name: engine smoke
+
+on:
+  pull_request:
+    branches: [next2]
+
+concurrency:
+  group: engine-smoke-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: smoke ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [extension-migration, ast-schema-crosscheck, enumerate, enumerate-inline, stress-inline, conformance, enumerate-tree, fuzz-tree, writer-gates, writer-gates-tokens, stress-tree, benchmark, proptest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pinned specification commit
+        if: matrix.gate == 'ast-schema-crosscheck' || matrix.gate == 'conformance'
+        id: pin
+        run: echo "commit=$(node -p "require('./data/spec-pin.json').commit")" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        if: matrix.gate == 'ast-schema-crosscheck'
+        with:
+          repository: markup-carve/carve
+          ref: ${{ steps.pin.outputs.commit }}
+          path: carve
+      - uses: actions/checkout@v7
+        if: matrix.gate == 'conformance'
+        with:
+          repository: markup-carve/carve
+          ref: ${{ steps.pin.outputs.commit }}
+          path: carve-spec
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - if: matrix.gate == 'ast-schema-crosscheck'
+        run: npm ci --allow-git=all
+        working-directory: carve
+      - if: matrix.gate == 'proptest'
+        run: npm ci --prefix import --ignore-scripts
+      - name: Run bounded gate
+        env:
+          CARVE_SPEC_DIR: carve-spec
+        run: node scripts/engine-gate.mjs smoke ${{ matrix.gate }}

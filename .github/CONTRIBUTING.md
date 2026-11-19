@@ -98,3 +98,17 @@ script refuses `npm publish` of any other version, including one run by hand.
 - `npm test` and `npm run typecheck` green.
 - Say what behavior changed in the description. The reasoning belongs in the
   commit body.
+
+## 0.2 engine gates
+
+Pull requests to `next2` run `engine-smoke.yml`. It uses the same gate scripts as
+`engine.yml` with smaller, seeded bounds. The bound table and the single
+`full`/`smoke` switch are in `scripts/engine-gate.mjs`. To reproduce one gate,
+run `node scripts/engine-gate.mjs smoke enumerate` (or replace `smoke` with
+`full`). Some gates need the pinned spec checkout or import dependencies as in
+the workflow.
+
+The full gates run after each push to `next2`, nightly at 03:15 UTC, and through
+manual workflow dispatch. A failed full run opens or comments on the
+`next2 engine gates failing` issue with its run and failing jobs. A later green
+full run closes it.
