@@ -263,6 +263,13 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-B-137, C2-B-192, C2-W-088: refused attribute lines across comments need no escape', () => {
+    for (const source of ['{.a}\n%% c\n{.b}\n', '{footer-rows=1}\n%% c\n%% d\n{.b}\n']) {
+      expect(formatBy(source, 'both').output.source).toBe(source)
+      expect(format(source)).toBe(source)
+    }
+  })
+
   it('C2-B-138: a comment-only line ends the content of an atom, and the openers before it are planned bare', () => {
     const sources = ['x `a\n%% b` y\n', 'x $`a\n%% b` y\n', '- x `a\n  %% b` y\n', '> x !`a\n> %% b` y\n']
     for (const source of [...sources, 'x {% a\n%% b %} y\n', 'x {#a\n%% b#} y\n']) {

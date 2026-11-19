@@ -105,16 +105,29 @@ function takeAttributes(siblings: BlockNode[]): number[] {
 }
 
 /** C2-B-092: attribute lines that no block took are one paragraph that holds them as text. */
+function mergeOrphanAttribute(children: BlockNode[], kept: number, child: BlockNode): number {
+  if (child.kind !== ATTRIBUTES || (child.flags & FLAG_ATTRIBUTES) === 0) return -1
+  let previous = kept - 1
+  while (previous >= 0 && children[previous]!.kind === COMMENT) previous--
+  const before = previous >= 0 ? children[previous]! : null
+  if (before === null || before.kind !== PARAGRAPH) return -1
+  // C2-B-137, C2-B-138, C2-B-192: comments are invisible to the run of
+  // refused attribute lines and become inline children of its paragraph.
+  for (let index = previous + 1; index < kept; index++) {
+    const comment = children[index]!
+    before.spans!.push(comment.spans![0]!, comment.spans![1]!)
+  }
+  before.spans!.push(child.spans![0]!, child.spans![1]!)
+  before.end = child.end
+  return previous + 1
+}
+
 function orphanAttributes(children: BlockNode[]): void {
   let kept = 0
   for (let at = 0; at < children.length; at++) {
     const child = children[at]!
-    const before = kept > 0 ? children[kept - 1]! : null
-    if (child.kind === ATTRIBUTES && (child.flags & FLAG_ATTRIBUTES) !== 0 && before !== null && before.kind === PARAGRAPH) {
-      before.spans!.push(child.spans![0]!, child.spans![1]!)
-      before.end = child.end
-      continue
-    }
+    const merged = mergeOrphanAttribute(children, kept, child)
+    if (merged >= 0) { kept = merged; continue }
     if (child.kind === ATTRIBUTES) child.kind = PARAGRAPH
     children[kept++] = child
   }

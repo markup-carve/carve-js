@@ -678,6 +678,12 @@ describe('attribute lines', () => {
     expect(blocks('- x', '', '  {.a}', '  {.b}', 'y')).toBe('ul(-)[li[p"x" p"{.a}|{.b}"]] p"y"')
   })
 
+  it('C2-B-137, C2-B-138, C2-B-192: comments do not split refused attribute lines', () => {
+    expect(blocks('{.a}', '%% c', '{.b}')).toBe('p"{.a}|%% c|{.b}"')
+    expect(blocks('{.a}', '%% c', '{.b}', '', 'x')).toBe('p"{.a}|%% c|{.b}" p"x"')
+    expect(blocks('{.a}', '%% c', '%% d', '{.b}', '{.e}')).toBe('p"{.a}|%% c|%% d|{.b}|{.e}"')
+  })
+
   it('C2-B-095: every block takes an attribute line, a definition and a comment block included', () => {
     expect(blocks('{.a}', '[b]: /u')).toBe('{.a}def"[b]: /u"')
     expect(blocks('{.a}', '[^b]: x')).toBe('{.a}fn[p"x"]')

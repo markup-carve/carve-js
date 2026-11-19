@@ -380,10 +380,25 @@ function attributeLine(leaf: Leaf, at: number, _place: LeafPlace, first: boolean
   // C2-B-090: a line of braces that is no valid block is text. An include shape (C2-B-156) and a quote or a backslash,
   // whose escape may make the block valid, are left to the repair.
   if (!isAttributeLine(line, 0, line.length)) return line.startsWith('{{') || mayTakeEscape(line) ? UNDECIDED : NO_ESCAPE
-  const next = at + line.length + 1
+  const next = nextStructuralLine(leaf, at + line.length + 1)
   if (next > leaf.codes.length) return NO_ESCAPE
   const [after, afterWhole] = textOfLine(leaf, next)
   return afterWhole && isAttributeLine(after, 0, after.length) ? UNDECIDED : at
+}
+
+/** C2-B-137: comment-only lines do not separate a run of attribute lines. */
+function nextStructuralLine(leaf: Leaf, start: number): number {
+  let next = start
+  while (isLineComment(leaf, next)) {
+    while (next < leaf.codes.length && leaf.codes[next] !== LF) next++
+    next++
+  }
+  return next
+}
+
+function isLineComment(leaf: Leaf, at: number): boolean {
+  const owner = leaf.owners[at]
+  return owner?.type === 'comment' && owner.form === 'line'
 }
 
 function mayTakeEscape(line: string): boolean {
