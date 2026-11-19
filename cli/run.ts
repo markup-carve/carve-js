@@ -191,10 +191,12 @@ interface FileResult {
 class FileFailure extends Error {
   readonly category: string
   readonly result: FileResult
-  constructor(category: string, message: string, result: FileResult) {
+  readonly details: string
+  constructor(category: string, message: string, result: FileResult, details = '') {
     super(message)
     this.category = category
     this.result = result
+    this.details = details
   }
 }
 
@@ -403,8 +405,8 @@ function flattenFile(path: string, display: string, bytes: Uint8Array, args: Par
   const result = parseWithDiagnostics(bytes, includesOf(path, args))
   const failures = result.diagnostics.filter((entry) => INCLUDE_CAUSES.has(entry.code))
   if (failures.length > 0) {
-    process.stderr.write(lines(display, source, failures, bytes))
-    throw new FileFailure('include-unresolved', `${display}: ${failures.length} includes did not expand`, { status: 1 })
+    throw new FileFailure('include-unresolved', `${display}: ${failures.length} includes did not expand`,
+      { status: 1 }, lines(display, source, failures, bytes))
   }
   let flat: ReturnType<typeof flatten>
   try { flat = flatten(result.document) }
@@ -606,6 +608,7 @@ function runFiles(files: readonly string[], args: ParsedArgs, collected: Collect
     catch (error) {
       if (!(error instanceof FileFailure)) throw error
       process.stderr.write(`carve[${error.category}]: ${error.message}\n`)
+      if (error.details !== '') process.stderr.write(error.details)
       result = error.result
     }
     collect(collected, result)
