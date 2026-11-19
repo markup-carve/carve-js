@@ -26,6 +26,21 @@ fallback and reports `extension-fallback-rendered` (C2-X-035).
 | `details()` | `::: details "Title"` | `carve.details` | `<details>` with the title as `<summary>`, `Details` without one |
 | `spoiler()` | `::: spoiler "Title"` | `carve.spoilerBlock` | `<details class="spoiler">`, `Spoiler` without a title |
 | `listTable()` | `::: list-table` holding a list of lists | `carve.listTable` | a `<table>` |
+| `imgFence()` | ` ```img ` or ` ```image ` holding SVG | `carve.imgFence.img` or `carve.imgFence.image` | a sanitized, percent-encoded SVG in one `<img>` |
+
+`imgFence()` registers both language words and the standard renderer. Pass its bundle to `render` as options. The
+sanitizer keeps a single well-formed SVG root, drops scripts, foreign content, event handlers and unsafe references,
+and writes its own data URL directly to the image source. An authored data URL still follows the ordinary URL policy.
+If sanitization fails, the source appears as a code block. `imgFenceExtensions` and `imgFenceRenderers` expose the
+registrations separately; `sanitizeSvg` exposes the sanitizer for hosts that need it.
+
+```ts
+import { render } from '@markup-carve/carve'
+import { imgFence } from '@markup-carve/carve/extensions'
+
+const source = '```img\n<svg><circle r="4"/></svg>\n```\n'
+const html = render(source, imgFence())
+```
 
 In static mode (`mode: 'static'`) `details` writes `<details open>`, and the block spoiler writes a
 `<section class="spoiler spoiler-revealed">` whose `<h3 class="spoiler-title">` holds the title. The fallback of

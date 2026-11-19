@@ -36,7 +36,7 @@ files as `carve fmt` does. A classic-script build is published as
 
 `@markup-carve/carve/extensions` holds the provisional standard extensions, registered by the host:
 
-- blocks: `details`, `spoiler` (also inline), `listTable`
+- blocks: `details`, `spoiler` (also inline), `listTable`, `imgFence`
 - tabs: `standardTabsRenderer({ mode: 'aria' })` selects ARIA controls; CSS radios remain the default
 - inline: `colorSwatch`, `wikilinks`, `semanticSpan`, `smartQuotes` (with `smartQuoteLocales`,
   `isSmartQuoteLocaleSupported`, `SMART_QUOTE_LOCALES`)

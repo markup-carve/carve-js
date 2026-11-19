@@ -12,6 +12,8 @@ export { detailsExtension, spoilerExtension, spoilerBlockExtension, spoilerExten
 export { standardTabsRenderer } from '../src/extensions/tabs.ts'
 export { codeGroup, type CodeGroupOptions } from '../src/extensions/standard/code-group.ts'
 export { codeCallouts } from '../src/extensions/standard/code-callouts.ts'
+export { imgFence, imgFenceExtensions, imgFenceRenderers } from '../extensions/blocks/img-fence.ts'
+export { sanitizeSvg, type SanitizeSvgOptions, type SanitizeResult } from '../extensions/blocks/svg-sanitize.ts'
 export { details } from '../extensions/blocks/details.ts'
 export { spoiler } from '../extensions/blocks/spoiler.ts'
 export { listTable } from '../extensions/blocks/list-table.ts'
