@@ -430,7 +430,10 @@ export function renderWithDocumentTransforms(
 ): RenderOutput {
   const settings = readOptions(options, 'render')
   const authored = typeof input === 'string' || input instanceof Uint8Array ? input : structuredClone(input)
-  let view = structuredClone(resolveStage(inputStage(authored, settings), settings).document)
+  const parsed = inputStage(authored, settings, true)
+  const resolved = resolveStage(parsed, settings)
+  let view = structuredClone(resolved.document)
+  const sourceDiagnostics = parseDiagnostics(resolved, parsed)
   const failures: Diagnostic[] = []
   for (const entry of transforms) {
     try {
@@ -446,7 +449,13 @@ export function renderWithDocumentTransforms(
     }
   }
   const rendered = renderWithDiagnostics(view, options)
-  return { ...rendered, diagnostics: [...failures, ...rendered.diagnostics] }
+  const diagnostics = [...sourceDiagnostics, ...failures, ...rendered.diagnostics]
+  if (settings.strictLosses) for (const entry of diagnostics) {
+    if (entry.channel === 'render-loss') entry.severity = 'error'
+  }
+  const capped = capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100)
+  return { html: settings.strictLosses && diagnostics.some((entry) => entry.channel === 'render-loss') ? '' : rendered.html,
+    diagnostics: capped.diagnostics, suppressedDiagnostics: capped.suppressedDiagnostics + rendered.suppressedDiagnostics }
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parse, render, renderWithDocumentTransforms } from '../src/index.ts'
+import { parse, render, renderWithDiagnostics, renderWithDocumentTransforms } from '../src/index.ts'
 
 describe('C2-X-053 to C2-X-055: document transforms', () => {
   it('runs transforms in order on a copy of the resolved view', () => {
@@ -43,5 +43,23 @@ describe('C2-X-053 to C2-X-055: document transforms', () => {
     expect(result.html).toBe('<p><span id="first">X</span> <span id="second">b</span></p>')
     expect(result.diagnostics.some((entry) => entry.code === 'extension-transform-failed' &&
       entry.message.includes('duplicate'))).toBe(true)
+  })
+
+  it('keeps source diagnostics when the render view is transformed', () => {
+    const source = '{{ a.crv }}'
+    const baseline = renderWithDiagnostics(source)
+    const transformed = renderWithDocumentTransforms(source, [{ name: 'identity', transform: (view) => view }])
+    expect(baseline.diagnostics.length).toBeGreaterThan(0)
+    expect(transformed.diagnostics).toEqual(baseline.diagnostics)
+  })
+
+  it('treats a failed transform as a strict render loss', () => {
+    const result = renderWithDocumentTransforms('hello', [
+      { name: 'broken', transform: () => { throw new Error('broken') } },
+    ], { strictLosses: true })
+    expect(result.html).toBe('')
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'extension-transform-failed', severity: 'error', channel: 'render-loss',
+    }))
   })
 })
