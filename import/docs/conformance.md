@@ -10,13 +10,13 @@ Mutation campaign: 1927 suite inputs included 253 writer refusals; 100000 byte m
 
 ## CommonMark
 
-Cases: 652; canonical round trips: 644; raw HTML nodes: 72.
+Cases: 652; canonical round trips: 648; raw HTML nodes: 72.
 
 | Section | Same | Same text | Different |
 | --- | ---: | ---: | ---: |
 | Tabs | 8 | 1 | 2 |
-| Backslash escapes | 12 | 1 | 0 |
-| Entity and numeric character references | 12 | 4 | 1 |
+| Backslash escapes | 13 | 0 | 0 |
+| Entity and numeric character references | 14 | 3 | 0 |
 | Precedence | 1 | 0 | 0 |
 | Thematic breaks | 19 | 0 | 0 |
 | ATX headings | 17 | 0 | 1 |
@@ -24,33 +24,32 @@ Cases: 652; canonical round trips: 644; raw HTML nodes: 72.
 | Indented code blocks | 10 | 0 | 2 |
 | Fenced code blocks | 28 | 1 | 0 |
 | HTML blocks | 37 | 7 | 0 |
-| Link reference definitions | 22 | 2 | 3 |
+| Link reference definitions | 26 | 0 | 1 |
 | Paragraphs | 8 | 0 | 0 |
 | Blank lines | 1 | 0 | 0 |
 | Block quotes | 25 | 0 | 0 |
 | List items | 26 | 2 | 20 |
-| Lists | 17 | 3 | 6 |
+| Lists | 19 | 3 | 4 |
 | Inlines | 1 | 0 | 0 |
-| Code spans | 18 | 4 | 0 |
+| Code spans | 20 | 1 | 1 |
 | Emphasis and strong emphasis | 130 | 2 | 0 |
-| Links | 79 | 7 | 4 |
+| Links | 86 | 1 | 3 |
 | Images | 5 | 0 | 17 |
-| Autolinks | 17 | 1 | 1 |
+| Autolinks | 18 | 0 | 1 |
 | Raw HTML | 14 | 6 | 0 |
-| Hard line breaks | 11 | 4 | 0 |
+| Hard line breaks | 13 | 2 | 0 |
 | Soft line breaks | 2 | 0 | 0 |
 | Textual content | 3 | 0 | 0 |
 
 Different examples by cause:
 
-- block structure differs: CM-4, CM-5, CM-98, CM-108, CM-109, CM-254, CM-256, CM-258, CM-259, CM-262, CM-263, CM-264, CM-270, CM-271, CM-277, CM-286, CM-287, CM-288, CM-290, CM-300, CM-307, CM-316, CM-319, CM-325
-- writer cannot spell tree field: CM-39, CM-79, CM-280, CM-281, CM-282, CM-283, CM-284, CM-315, CM-489, CM-520, CM-554, CM-555, CM-572, CM-574, CM-575, CM-576, CM-577, CM-578, CM-580, CM-581, CM-582, CM-583, CM-584, CM-585, CM-586
-- visible text differs: CM-96
-- degraded foreign node: CM-195, CM-196, CM-200, CM-317, CM-573, CM-588, CM-589, CM-591, CM-609
+- block structure differs: CM-4, CM-5, CM-79, CM-98, CM-108, CM-109, CM-254, CM-256, CM-258, CM-259, CM-262, CM-263, CM-264, CM-270, CM-271, CM-277, CM-286, CM-287, CM-288, CM-290, CM-300, CM-307, CM-319, CM-325, CM-484, CM-487, CM-520, CM-572, CM-573, CM-574, CM-575, CM-576, CM-577, CM-578, CM-580, CM-581, CM-582, CM-583, CM-584, CM-585, CM-586, CM-588, CM-589, CM-591
+- visible text differs: CM-96, CM-609
+- writer cannot spell tree field: CM-196, CM-280, CM-281, CM-282, CM-283, CM-284, CM-315, CM-346
 
 ## GFM
 
-Cases: 648; canonical round trips: 640; raw HTML nodes: 71.
+Cases: 648; canonical round trips: 644; raw HTML nodes: 71.
 
 | Section | Same | Same text | Different |
 | --- | ---: | ---: | ---: |
@@ -62,38 +61,37 @@ Cases: 648; canonical round trips: 640; raw HTML nodes: 71.
 | Indented code blocks | 10 | 0 | 2 |
 | Fenced code blocks | 28 | 1 | 0 |
 | HTML blocks | 36 | 7 | 0 |
-| Link reference definitions | 23 | 2 | 3 |
+| Link reference definitions | 27 | 0 | 1 |
 | Paragraphs | 8 | 0 | 0 |
 | Blank lines | 1 | 0 | 0 |
 | Block quotes | 25 | 0 | 0 |
 | List items | 26 | 2 | 20 |
-| Lists | 18 | 3 | 6 |
-| Backslash escapes | 12 | 1 | 0 |
-| Entity and numeric character references | 12 | 4 | 1 |
-| Code spans | 18 | 4 | 0 |
+| Lists | 20 | 3 | 4 |
+| Backslash escapes | 13 | 0 | 0 |
+| Entity and numeric character references | 14 | 3 | 0 |
+| Code spans | 20 | 1 | 1 |
 | Emphasis and strong emphasis | 120 | 11 | 0 |
-| Links | 76 | 7 | 4 |
+| Links | 85 | 1 | 1 |
 | Images | 5 | 0 | 17 |
-| Autolinks | 12 | 6 | 1 |
+| Autolinks | 14 | 4 | 1 |
 | Raw HTML | 14 | 6 | 0 |
-| Hard line breaks | 11 | 4 | 0 |
+| Hard line breaks | 13 | 2 | 0 |
 | Soft line breaks | 2 | 0 | 0 |
 | Textual content | 3 | 0 | 0 |
 
 Different examples by cause:
 
-- block structure differs: GFM-4, GFM-5, GFM-68, GFM-78, GFM-79, GFM-224, GFM-226, GFM-228, GFM-229, GFM-232, GFM-233, GFM-234, GFM-240, GFM-241, GFM-247, GFM-256, GFM-257, GFM-258, GFM-260, GFM-270, GFM-277, GFM-286, GFM-289, GFM-295
-- writer cannot spell tree field: GFM-49, GFM-250, GFM-251, GFM-252, GFM-253, GFM-254, GFM-285, GFM-325, GFM-486, GFM-516, GFM-550, GFM-551, GFM-568, GFM-570, GFM-571, GFM-572, GFM-573, GFM-574, GFM-576, GFM-577, GFM-578, GFM-579, GFM-580, GFM-581, GFM-582
-- visible text differs: GFM-66
-- degraded foreign node: GFM-164, GFM-165, GFM-169, GFM-287, GFM-569, GFM-584, GFM-585, GFM-587, GFM-605
+- block structure differs: GFM-4, GFM-5, GFM-49, GFM-68, GFM-78, GFM-79, GFM-224, GFM-226, GFM-228, GFM-229, GFM-232, GFM-233, GFM-234, GFM-240, GFM-241, GFM-247, GFM-256, GFM-257, GFM-258, GFM-260, GFM-270, GFM-277, GFM-289, GFM-295, GFM-516, GFM-568, GFM-569, GFM-570, GFM-571, GFM-572, GFM-573, GFM-574, GFM-576, GFM-577, GFM-578, GFM-579, GFM-580, GFM-581, GFM-582, GFM-584, GFM-585, GFM-587
+- visible text differs: GFM-66, GFM-605
+- writer cannot spell tree field: GFM-165, GFM-250, GFM-251, GFM-252, GFM-253, GFM-254, GFM-285, GFM-346
 
 ## Djot
 
-Cases: 253; canonical round trips: 247; raw HTML nodes: 3.
+Cases: 253; canonical round trips: 250; raw HTML nodes: 3.
 
 | Section | Same | Same text | Different |
 | --- | ---: | ---: | ---: |
-| attributes.test | 14 | 19 | 0 |
+| attributes.test | 30 | 3 | 0 |
 | block_quote.test | 15 | 0 | 0 |
 | code_blocks.test | 7 | 0 | 0 |
 | definition_lists.test | 0 | 0 | 4 |
@@ -102,34 +100,34 @@ Cases: 253; canonical round trips: 247; raw HTML nodes: 3.
 | fenced_divs.test | 8 | 0 | 0 |
 | filters.test | 0 | 0 | 2 |
 | footnotes.test | 0 | 0 | 4 |
-| headings.test | 14 | 1 | 1 |
+| headings.test | 15 | 0 | 1 |
 | insert_delete_mark.test | 4 | 0 | 0 |
-| links_and_images.test | 18 | 2 | 8 |
+| links_and_images.test | 20 | 4 | 4 |
 | lists.test | 3 | 27 | 0 |
 | math.test | 0 | 6 | 0 |
 | para.test | 0 | 1 | 0 |
-| raw.test | 3 | 1 | 0 |
-| regression.test | 4 | 1 | 0 |
-| smart.test | 16 | 0 | 2 |
+| raw.test | 2 | 1 | 1 |
+| regression.test | 3 | 1 | 1 |
+| smart.test | 18 | 0 | 0 |
 | spans.test | 3 | 0 | 0 |
 | super_subscript.test | 4 | 0 | 0 |
-| tables.test | 7 | 0 | 2 |
+| tables.test | 8 | 0 | 1 |
 | task_lists.test | 0 | 2 | 0 |
 | thematic_breaks.test | 4 | 0 | 0 |
 | verbatim.test | 7 | 0 | 0 |
 
 Different examples by cause:
 
-- block structure differs: DJOT-definition_lists.test:6, DJOT-definition_lists.test:28, DJOT-tables.test:87
-- writer cannot spell tree field: DJOT-definition_lists.test:49, DJOT-definition_lists.test:83, DJOT-footnotes.test:51, DJOT-headings.test:44, DJOT-links_and_images.test:9, DJOT-links_and_images.test:53, DJOT-links_and_images.test:148, DJOT-links_and_images.test:170, DJOT-links_and_images.test:200, DJOT-smart.test:112, DJOT-smart.test:145
-- visible text differs: DJOT-filters.test:3, DJOT-filters.test:17, DJOT-footnotes.test:1, DJOT-footnotes.test:33, DJOT-footnotes.test:74, DJOT-links_and_images.test:86, DJOT-links_and_images.test:95, DJOT-links_and_images.test:109, DJOT-tables.test:54
+- block structure differs: DJOT-definition_lists.test:6, DJOT-definition_lists.test:28, DJOT-links_and_images.test:9, DJOT-links_and_images.test:148, DJOT-links_and_images.test:200
+- writer cannot spell tree field: DJOT-definition_lists.test:49, DJOT-definition_lists.test:83, DJOT-footnotes.test:33, DJOT-footnotes.test:51, DJOT-headings.test:44, DJOT-links_and_images.test:170, DJOT-raw.test:21, DJOT-regression.test:36
+- visible text differs: DJOT-filters.test:3, DJOT-filters.test:17, DJOT-footnotes.test:1, DJOT-footnotes.test:74, DJOT-tables.test:54
 
 ## HTML rendered specification round trip
 
-Cases: 374.
+Cases: 505.
 
 | Exact | Same meaning | Same rendering | Same text | Lossy |
 | ---: | ---: | ---: | ---: | ---: |
-| 141 | 17 | 204 | 7 | 5 |
+| 159 | 27 | 297 | 16 | 6 |
 
-Lossy examples: syntax-blocks.md:146, syntax-blocks.md:148, syntax-blocks.md:156, syntax-inline.md:93, html.md:29.
+Lossy examples: syntax-blocks.md:146, syntax-blocks.md:148, syntax-blocks.md:156, syntax-blocks.md:234, syntax-inline.md:93, html.md:84.

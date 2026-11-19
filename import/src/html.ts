@@ -374,7 +374,7 @@ function footnoteKeyOf(id: string): string {
   return id
 }
 
-const ADMONITION_KINDS = ['note', 'tip', 'warning', 'danger', 'info', 'success', 'example', 'quote'] as const
+export const ADMONITION_KINDS = ['note', 'tip', 'warning', 'danger', 'info', 'success', 'example', 'quote'] as const
 const DIRECTIVE_KINDS = ['bibliography', 'footnotes', 'glossary', 'index', 'references', 'toc'] as const
 
 function isKind<T extends string>(kinds: readonly T[], value: string | undefined): value is T {
@@ -963,10 +963,17 @@ function parseFragment(input: string): Html.DocumentFragment {
   return fragment
 }
 
-export function importHtml(input: string, rawHtml = false): ImportResult {
+/** What the Markdown and Djot hub adds around the HTML import: carriers set on the parsed HTML, and children restored after it. */
+export interface HubHooks {
+  prepare?: (nodes: Html.ChildNode[]) => void
+  finish?: (children: DocumentNode['children']) => DocumentNode['children']
+}
+
+export function importHtml(input: string, rawHtml = false, hooks: HubHooks = {}): ImportResult {
   const full = isFullDocument(input)
   const foreign = full ? parse(input, { sourceCodeLocationInfo: true }) : parseFragment(input)
   ensureForeignDepth(foreign, 'html')
+  hooks.prepare?.(foreign.childNodes)
   const context: HtmlContext = { format: 'html', input, rawHtml, diagnostics: [], deferred: [],
     notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),
     anchorKeys: new Set() }
@@ -977,7 +984,9 @@ export function importHtml(input: string, rawHtml = false): ImportResult {
   collectTemplates(foreign.childNodes, context)
   const first = foreign.childNodes[0]
   const children = first === undefined ? [] : flow(foreign.childNodes, first, context, documentChild)
-  return complete(context, [...children, ...rebuiltDefinitions(context, children), ...context.footnotes, ...(context.deferred ?? [])])
+  const all: DocumentNode['children'] = [...children, ...rebuiltDefinitions(context, children), ...context.footnotes,
+    ...(context.deferred ?? [])]
+  return complete(context, hooks.finish ? hooks.finish(all) : all)
 }
 
 function fragmentBody(input: string, context: HtmlContext): void {

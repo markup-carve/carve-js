@@ -10,6 +10,7 @@ import {
   writeWithDiagnostics, type DocumentNode, type IncludeResolver, type Writer,
 } from '@markup-carve/carve'
 import { fileSystemResolver } from '@markup-carve/carve/node'
+import { BBCODE_MAX_INPUT_LENGTH, BbcodeInputTooLargeError, importDocument as importFormat } from '@markup-carve/carve/import'
 
 function check(ok: boolean, what: string): void {
   if (!ok) throw new Error(what)
@@ -41,6 +42,11 @@ check(format('a') === 'a\n' && formatWithDiagnostics('a').source === 'a\n', 'for
 check(write(parse('a')) === 'a\n' && writeWithDiagnostics(parse('a')).source === 'a\n', 'write')
 check(lint('![](a.png)').length > 0, 'lint')
 check(importDocument('<p>a</p>', { from: 'html' }).source === 'a\n', 'importDocument')
+check(importFormat('# a *b*', { from: 'gfm' }).source === '= a /b/\n', 'import entry: gfm')
+check(importFormat('_a_', { from: 'djot' }).source === '/a/\n', 'import entry: djot')
+check(importFormat('[b]a[/b]', { from: 'bbcode' }).source === '*a*\n', 'import entry: bbcode')
+refuses(() => importFormat('x'.repeat(BBCODE_MAX_INPUT_LENGTH + 1), { from: 'bbcode' }), BbcodeInputTooLargeError,
+  'BbcodeInputTooLargeError')
 check(includeDependencies(tree)[0]?.read === true, 'includeDependencies')
 check(decodeTree(encodeTree(tree)).children.length === tree.children.length, 'encodeTree')
 check(decodeTree(encodeEnvelope(tree)).children.length === tree.children.length, 'encodeEnvelope')

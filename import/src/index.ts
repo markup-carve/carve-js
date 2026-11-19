@@ -1,8 +1,9 @@
-import { importMarkdown } from './markdown.ts'
-import { importDjot } from './djot.ts'
+import { importThroughHtml } from './hub.ts'
+import { importBbcode } from './bbcode.ts'
 import { importHtml } from './html.ts'
 import { runImport, type Format, type ImportResult } from './kit.ts'
 
+export { BBCODE_MAX_INPUT_LENGTH, BbcodeInputTooLargeError } from './bbcode.ts'
 export { ImportInputError, type ImportDiagnostic, type ImportResult } from './kit.ts'
 export type { Format } from './kit.ts'
 
@@ -17,8 +18,9 @@ export function importDocument(input: string, options: ImportOptions): ImportRes
 function importByFormat(input: string, options: ImportOptions): ImportResult {
   switch (options.from) {
     case 'markdown':
-    case 'gfm': return importMarkdown(input, options.from)
-    case 'djot': return importDjot(input)
+    case 'gfm':
+    case 'djot': return importThroughHtml(input, options.from)
+    case 'bbcode': return importBbcode(input)
     case 'html': return importHtml(input, options.rawHtml === true)
   }
 }
