@@ -1,0 +1,55 @@
+import { change, type Context, type Visit } from '../context.ts'
+
+const MESSAGE = 'a line comment that 0.1 ended before the end of its line is written as a braced comment'
+
+/** The row of the host whose closer ended the 0.1 comment (U-399 to U-402), else U-432. */
+function hostRow(visit: Visit): string {
+  for (let up = visit.parent; up !== null; up = up.parent) {
+    const type = up.node.type
+    if (type === 'link' || type === 'image') return 'U-399'
+    if (type === 'footnote_inline' || type === 'inline_note') return 'U-400'
+    if (type === 'underline' || type === 'delete' || type === 'insert' || type === 'highlight') return 'U-401'
+    if (type === 'extension' || type === 'inline_extension') return 'U-402'
+    if (type === 'paragraph' || type === 'heading') break
+  }
+  return 'U-432'
+}
+
+/** C2-B-169 ends a comment at the cell in both versions. */
+function inTable(visit: Visit): boolean {
+  for (let up = visit.parent; up !== null; up = up.parent) if (up.node.type === 'table') return true
+  return false
+}
+
+function escaped(src: string, at: number): boolean {
+  let slashes = 0
+  while (at - slashes > 0 && src[at - slashes - 1] === '\\') slashes++
+  return slashes % 2 === 1
+}
+
+/**
+ * C2-I-023, C2-I-024: a 0.2 line comment starts only at a line start or after whitespace and takes the
+ * rest of its line. 0.1 also ended it at the closer of an open form and read it directly after an
+ * opener, so those comments become braced comments (C2-I-025), which 0.2 removes in place.
+ */
+export function lineComments(ctx: Context): void {
+  const src = ctx.src
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    if (node.type !== 'comment' || node.block !== false || node.pos === undefined) continue
+    const { startOffset: start, endOffset: end } = node.pos
+    if (src.slice(start, start + 2) !== '%%' || src.charCodeAt(start + 2) === 0x25) continue
+    if (inTable(visit)) continue
+    let lead = start
+    while (lead > 0 && (src[lead - 1] === ' ' || src[lead - 1] === '\t') && !escaped(src, lead - 1)) lead--
+    const lineStartOrSpace = lead < start || lead === 0 || src[lead - 1] === '\n'
+    const atLineEnd = end >= src.length || src[end] === '\n' || src[end] === '\r'
+    if (atLineEnd && lineStartOrSpace) continue
+    const text = src.slice(start + 2, end)
+    // A code or math span in the text is read before the braced comment can close.
+    if (/%\}|\n|`|\$/u.test(text)) continue
+    // 0.1 dropped the spaces before the comment; a braced comment keeps its neighbors, so they go too.
+    const from = lead === 0 || src[lead - 1] === '\n' ? start : lead
+    change(ctx, hostRow(visit), from, end, `{%${text}%}`, MESSAGE)
+  }
+}
