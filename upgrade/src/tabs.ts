@@ -18,6 +18,7 @@ export interface TabsPlan {
 
 const MEANING = new Map(map.source.map((row) => [row.id, row.meaning02]))
 const PUNCTUATION = /[!-/:-@[-`{-~]/gu
+const SOLE_LABEL = /^\{[ \t]*label=("[^"\n]*"|[^\s"{}]+)[ \t]*\}[ \t]*$/u
 
 function meaning(id: string): string { return MEANING.get(id) ?? '' }
 
@@ -99,7 +100,7 @@ function labelEdits(src: string, tab: Node01, label: string, sequence: number): 
   const attrStart = lineStart(lines, at - 1)
   const attrLine = src.slice(attrStart, lineEnd(lines, at - 1))
   const prefix = src.slice(lineStart(lines, at), tab.pos!.startOffset)
-  if (!attrLine.startsWith(prefix) || !/^\{[ \t]*label=("[^"\n]*"|[^\s"{}]+)[ \t]*\}[ \t]*$/u.test(attrLine.slice(prefix.length))) return null
+  if (!attrLine.startsWith(prefix) || !SOLE_LABEL.test(attrLine.slice(prefix.length))) return null
   const line = opener(src, tab)
   const match = /^(:{3,}[ \t]+tab)[ \t]*$/u.exec(line.text)
   const title = quotedTitle(label)
