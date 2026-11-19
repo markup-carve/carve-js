@@ -45,9 +45,9 @@ describe('the brace block', () => {
 describe('the diagnostics of the writer', () => {
   it('C2-W-011: the message names the node, and the field where a field is lost', () => {
     const empty: DocumentNode = { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [] }] }
-    expect(writeWithDiagnostics(empty).diagnostics.map((entry) => entry.message)).toEqual(['a paragraph node has no spelling in Carve source here'])
+    expect(writeWithDiagnostics(empty).diagnostics.map((entry) => entry.message)).toEqual(['Carve source cannot spell a paragraph node here'])
     const deep: DocumentNode = { type: 'document', astVersion: '2.0', children: [{ type: 'heading', level: 7, children: [{ type: 'text', value: 'a' }] }] }
-    expect(writeWithDiagnostics(deep).diagnostics.map((entry) => entry.message)).toEqual(['the field level of a heading node has no spelling in Carve source here'])
+    expect(writeWithDiagnostics(deep).diagnostics.map((entry) => entry.message)).toEqual(['Carve source cannot spell the field level of a heading node here'])
   })
 })
 
