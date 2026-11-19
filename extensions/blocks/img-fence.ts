@@ -42,23 +42,29 @@ function mergeRoot(svg: string, attrs: string): string {
   })
 }
 
-export function createImgFence(options: ImgFenceOptions = {}): {
+function failure(node: Parameters<NonNullable<ExtensionRenderer['render']>>[0],
+  host: Parameters<NonNullable<ExtensionRenderer['render']>>[1], reportFailure: boolean, message: string): string {
+  if (reportFailure) throw new Error(message)
+  return host.blocks(node.fallback ?? [])
+}
+
+export function createImgFence(options: ImgFenceOptions = {}, reportFailure = false): {
   extensions: readonly ExtensionDefinition[], renderers: Record<string, ExtensionRenderer>
 } {
   const renderImage: NonNullable<ExtensionRenderer['render']> = (node, host) => {
     const value = node.payload?.[0]?.value
     const source = typeof value === 'string' ? value : ''
     const sanitized = sanitizeSvg(source, { ...options, urlPolicy: host.urlPolicy })
-    if (!sanitized.ok) throw new Error('the SVG is not a single well-formed safe image')
+    if (!sanitized.ok) return failure(node, host, reportFailure, 'the SVG is not a single well-formed safe image')
     const inline = options.allowInline === true && attrValue(node.attrs, 'inline') !== undefined
     const attrs = authorAttrs(node.attrs, host, ['inline', 'alt', 'sandbox', 'src', 'srcset'])
     if (inline) {
       const merged = sanitizeSvg(mergeRoot(sanitized.svg, attrs), { ...options, urlPolicy: host.urlPolicy })
-      if (!merged.ok) throw new Error('the SVG attributes cannot be sanitized')
+      if (!merged.ok) return failure(node, host, reportFailure, 'the SVG attributes cannot be sanitized')
       return merged.svg
     }
     const src = `data:image/svg+xml,${encodeURIComponent(sanitized.svg)}`
-    if (src.length > 8 * 1024 * 1024) throw new Error('the sanitized SVG URL is above 8 MiB')
+    if (src.length > 8 * 1024 * 1024) return failure(node, host, reportFailure, 'the sanitized SVG URL is above 8 MiB')
     // C2-X-060: this sink alone admits its own sanitized SVG URL; authored data URLs stay under C2-H-159.
     const alt = attrValue(node.attrs, 'alt') ?? svgTitle(sanitized.svg) ?? ''
     return `<img src="${host.escapeAttribute(src)}" alt="${host.escapeAttribute(alt)}"${attrs}>`
@@ -71,4 +77,4 @@ export function createImgFence(options: ImgFenceOptions = {}): {
 export const imgFenceRenderers = createImgFence().renderers
 
 /** The standard img and image fence registrations, with their trusted renderer. */
-export const imgFence = () => createImgFence()
+export const imgFence = () => createImgFence({}, true)
