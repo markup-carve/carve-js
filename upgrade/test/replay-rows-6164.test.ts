@@ -53,3 +53,8 @@ describe('bare spans with a glued attribute block', () => {
     expect(result.records.some((record) => record.entry === 'U-067')).toBe(true)
   })
 })
+
+it('cites no comment row for a comment marker inside a code span', () => {
+  const result = upgrade('`[%% note]` and `a %% b]`\n{:fr}\n{:fr}\n {lang=de}\nText\n')
+  expect(result.records.some((record) => record.entry === 'U-426' || record.entry === 'U-393')).toBe(false)
+})
