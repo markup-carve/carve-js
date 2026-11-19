@@ -65,6 +65,13 @@ describe('C2-W-107 parsed leaf ranges', () => {
   it('C2-W-107 ignores HTML shaped text in a raw span and a math span', () => {
     expect(lint('x `<b>`{=html} and $`<i>`\n').map((entry) => entry.code)).not.toContain('bare-html-tag')
   })
+  it('C2-I-073: an autolink with a denied scheme is no bare tag, and a tag behind it still is', () => {
+    const codes = (source) => lint(source).map((entry) => entry.code)
+    expect(codes('<javascript:alert(1)>\n\n<https://x.org>\n')).toEqual([])
+    expect(codes('> - *<foo:x>*\n')).toEqual([])
+    const after = lint('<javascript:x> <b>t</b>\n').filter((entry) => entry.code === 'bare-html-tag')
+    expect(after.map((entry) => entry.range.startOffset)).toEqual([15])
+  })
   it('C2-W-107 ignores HTML shaped text in raw and comment blocks', () => {
     const source = '```=html\n<b>\n```\n\n%%%\n<i>\n%%%\n'
     expect(lint(source).map((entry) => entry.code)).not.toContain('bare-html-tag')
