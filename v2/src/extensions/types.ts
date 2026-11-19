@@ -1,6 +1,6 @@
 import { type Attrs, type Block, type BlockExtensionNode, type CodeBlockNode, type DivNode,
   type Inline, type InlineExtensionNode, type Node } from '../ast.ts'
-import { type Profile, type UrlPolicy } from '../options.ts'
+import { type Mode, type Profile, type UrlPolicy } from '../options.ts'
 
 export interface ExtensionSource {
   form: 'inline' | 'div' | 'fence'
@@ -47,6 +47,7 @@ export interface ExtensionRenderHost {
   nextId(prefix: string): string
   labels: Readonly<Record<string, string>>
   profile: Profile
+  mode: Mode
   urlPolicy: UrlPolicy
   sourceLines: boolean
   /** C2-H-042: indentation level of the current block, in two-space units. */
@@ -56,5 +57,7 @@ export interface ExtensionRenderHost {
 export interface ExtensionRenderer {
   version: string
   /** C2-X-034: trusted host code; returned HTML is inserted unchanged. Hosts register trusted renderers for untrusted input. */
-  render: (node: BlockExtensionNode | InlineExtensionNode, host: ExtensionRenderHost) => string
+  render?: (node: BlockExtensionNode | InlineExtensionNode, host: ExtensionRenderHost) => string
+  /** C2-X-052: explicitly registered self-contained output for static mode. */
+  buildTime?: (node: BlockExtensionNode | InlineExtensionNode, host: ExtensionRenderHost) => string
 }

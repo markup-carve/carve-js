@@ -69,8 +69,8 @@ describe('migration registration contracts', () => {
     expect(render(image, { ...options, profile })).toContain('&lt;svg')
   })
 
-  it('obeys the default URL policy for a generated image URL', () => {
-    expect(render(image, { extensions: migrationExtensions, renderers: migrationRenderers })).toContain('<pre><code')
+  it('C2-X-060: permits a sanitized generated image URL under the default URL policy', () => {
+    expect(render(image, { extensions: migrationExtensions, renderers: migrationRenderers })).toContain('<img src="data:image/svg+xml,')
   })
 
   it('blanks denied authored URL and CSS values on a swatch', () => {

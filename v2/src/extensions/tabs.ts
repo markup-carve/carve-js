@@ -1,7 +1,7 @@
-import { type Block, type BlockExtensionNode, type DivNode } from '../ast.ts'
+import { type Block, type BlockExtensionNode, type DivNode, type Node } from '../ast.ts'
 import { plainText } from '../ast-text.ts'
 import { divSource, remainingAttrs } from './claims.ts'
-import { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer } from './types.ts'
+import { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer, type ExtensionRenderHost } from './types.ts'
 import { append } from '../append.ts'
 
 function tabNode(node: DivNode): BlockExtensionNode {
@@ -46,10 +46,16 @@ export const tabsExtension: ExtensionDefinition = {
 
 export const tabsExtensions: readonly ExtensionDefinition[] = [tabExtension, tabsExtension]
 
-function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, host: Parameters<ExtensionRenderer['render']>[1]): string {
+function selectedTab(tabs: readonly Node[]): number {
+  const marked = tabs.findIndex((tab) => tab.attrs?.keyValues?.some(([key]) => key === 'selected') === true)
+  return marked < 0 ? 0 : marked
+}
+
+function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, host: ExtensionRenderHost): string {
   if (node.type !== 'block_extension') return ''
   const tabs = node.slots?.['tabs'] ?? []
   const group = host.nextId('tabs')
+  const selected = selectedTab(tabs)
   let controls = ''
   let panels = ''
   for (let at = 0; at < tabs.length; at++) {
@@ -59,7 +65,7 @@ function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, hos
     const body = tab.slots?.['body'] ?? []
     const label = title.length === 0 ? `Tab ${at + 1}` : host.plainText(title)
     const id = `${group}-${at}`
-    controls += `<input type="radio" name="${group}" id="${id}"${at === 0 ? ' checked' : ''}>`
+    controls += `<input type="radio" name="${group}" id="${id}"${at === selected ? ' checked' : ''}>`
     controls += `<label for="${id}">${title.length === 0 ? host.escapeText(label) : host.inlines(title)}</label>`
     panels += `<div class="tab-panel" role="group" aria-label="${host.escapeAttribute(label)}">${host.blocks(body)}</div>`
   }
@@ -67,5 +73,20 @@ function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, hos
   return `<div class="tabs" role="group" aria-label="${groupLabel}">${controls}${panels}</div>`
 }
 
-/** C2-X-043 to C2-X-048: all panel content is present in static HTML. */
-export const tabsRenderer: ExtensionRenderer = { version: '1', render: renderTabs }
+/** C2-X-043: static tabs render as self-contained sections without controls or generated ids. */
+function renderStaticTabs(node: BlockExtensionNode | { type: 'inline_extension' }, host: ExtensionRenderHost): string {
+  if (node.type !== 'block_extension') return ''
+  const tabs = node.slots?.['tabs'] ?? []
+  let sections = ''
+  for (const tab of tabs) {
+    if (tab?.type !== 'block_extension') continue
+    const title = tab.slots?.['title'] ?? []
+    const body = tab.slots?.['body'] ?? []
+    sections += `<section class="tabs-panel"><h3 class="tabs-label">${host.inlines(title)}</h3>${host.blocks(body)}</section>`
+  }
+  const groupLabel = host.escapeAttribute(host.labels['tabsGroup'] ?? 'Tabs')
+  return `<div class="tabs" role="group" aria-label="${groupLabel}">${sections}</div>`
+}
+
+/** C2-X-043 to C2-X-048: both channels keep all panel content. */
+export const tabsRenderer: ExtensionRenderer = { version: '1', render: renderTabs, buildTime: renderStaticTabs }

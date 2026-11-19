@@ -1,6 +1,6 @@
 // The public interface of the 0.2 engine: `parse` gives the tree of contract 2.0, `render` gives HTML.
 // Both are compositions of three stages: parse (source to tree), resolve (tree to resolved tree) and render.
-import { type DocumentNode } from './ast.ts'
+import { type DocumentNode, forEachSlot } from './ast.ts'
 import { buildSource, type ParseFacts, type ParsedTree } from './ast-blocks.ts'
 import { expandTree, reportNoResolver } from './expand.ts'
 import { type LayoutTrace } from './ast-inline.ts'
@@ -170,7 +170,9 @@ function resolveStage(parsed: ParsedTree, settings: Settings): ResolvedTree {
   const rule = profileRule(settings)
   const losses: Findings = { entries: [], nodes: [] }
   const admitted = { block: admitsType(rule, 'block_extension', true), inline: admitsType(rule, 'inline_extension', false) }
-  const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols, settings.renderers, admitted)
+  const selectedRenderers = Object.fromEntries(Object.entries(settings.renderers).filter(([, renderer]) =>
+    settings.mode === 'static' ? renderer.buildTime !== undefined : renderer.render !== undefined))
+  const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols, selectedRenderers, admitted)
   // A degraded node turns source that the inline scan did not read into text.
   const bidi = parsed.facts === null || rule !== NO_PROFILE || parsed.facts.bidi
   const source = parsed.source
@@ -392,6 +394,80 @@ export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode,
   }
   return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html,
     ...capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100) }
+}
+
+/** C2-X-053: one host transform of a copy of the resolved document view. */
+export interface DocumentTransform {
+  name: string
+  transform: (view: DocumentNode) => DocumentNode
+}
+
+/** C2-X-055: authored ids in one render view must be unique in document order. */
+function duplicateViewId(document: DocumentNode): string | null {
+  const seen = new Set<string>()
+  const visit = (node: Node): string | null => {
+    const id = node.attrs?.id
+    if (id !== undefined) {
+      if (seen.has(id)) return id
+      seen.add(id)
+    }
+    let duplicate: string | null = null
+    forEachSlot(node, (nodes, step) => {
+      if (step === 'fallback' || duplicate !== null) return
+      for (const child of nodes) {
+        duplicate = visit(child)
+        if (duplicate !== null) break
+      }
+    }, undefined, document.extensions)
+    return duplicate
+  }
+  return visit(document)
+}
+
+function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[], extensions: Settings['extensions']): {
+  view: DocumentNode, failures: Diagnostic[]
+} {
+  const failures: Diagnostic[] = []
+  for (const entry of transforms) {
+    try {
+      const next = entry.transform(structuredClone(view))
+      validateTree(next, undefined, undefined, extensions)
+      const duplicate = duplicateViewId(next)
+      if (duplicate !== null) throw new Error(`duplicate authored id ${duplicate}`)
+      view = next
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      failures.push({ code: 'extension-transform-failed', severity: 'warning', channel: 'render-loss',
+        message: `The document transform ${entry.name} failed: ${detail}`, path: '' })
+    }
+  }
+  return { view, failures }
+}
+
+/** C2-X-053 to C2-X-055: transforms run in registration order on a copy, leaving the authored tree intact. */
+export function renderWithDocumentTransforms(
+  input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], options?: RenderOptions,
+): RenderOutput {
+  const settings = readOptions(options, 'render')
+  const authored = typeof input === 'string' || input instanceof Uint8Array ? input : structuredClone(input)
+  const parsed = inputStage(authored, settings, true)
+  const resolved = resolveStage(parsed, settings)
+  const sourceDiagnostics = parseDiagnostics(resolved, parsed)
+  const { view, failures } = applyDocumentTransforms(structuredClone(resolved.document), transforms, settings.extensions)
+  const rendered = renderWithDiagnostics(view, options)
+  const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
+    entry.code, entry.channel, entry.message, entry.path,
+  ])))
+  const viewDiagnostics = rendered.diagnostics.filter((entry) => !sourceKeys.has(JSON.stringify([
+    entry.code, entry.channel, entry.message, entry.path,
+  ])))
+  const diagnostics = [...sourceDiagnostics, ...failures, ...viewDiagnostics]
+  if (settings.strictLosses) for (const entry of diagnostics) {
+    if (entry.channel === 'render-loss') entry.severity = 'error'
+  }
+  const capped = capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100)
+  return { html: settings.strictLosses && diagnostics.some((entry) => entry.channel === 'render-loss') ? '' : rendered.html,
+    diagnostics: capped.diagnostics, suppressedDiagnostics: capped.suppressedDiagnostics + rendered.suppressedDiagnostics }
 }
 
 /**

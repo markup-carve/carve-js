@@ -74,7 +74,7 @@ function marker(item: ListItemNode): '<' | '^' | null {
   return value === '^' || value === '<' ? value : null
 }
 
-function extract(node: Parameters<ExtensionRenderer['render']>[0]): TableData | null {
+function extract(node: Parameters<NonNullable<ExtensionRenderer['render']>>[0]): TableData | null {
   const list = node.slots?.['rows']?.[0]
   if (list?.type !== 'list') return null
   const rows: Cell[][] = []

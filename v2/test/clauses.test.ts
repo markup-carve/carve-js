@@ -487,15 +487,15 @@ describe('ordered lists with letters and roman numerals', () => {
     expect(blocks('a1) x')).toBe('p"a1) x"')
   })
 
-  it('C2-B-042: the first marker fixes the style, and the next marker settles a one-roman-letter one', () => {
+  it('C2-B-042: the first marker fixes the style without reading the next marker', () => {
     expect(blocks('i) x')).toBe('ol(i1))[li[p"x"]]')
     expect(blocks('I) x')).toBe('ol(I1))[li[p"x"]]')
     expect(blocks('c) x')).toBe('ol(a3))[li[p"x"]]')
-    expect(blocks('v) x', 'vi) y')).toBe('ol(i5))[li[p"x"] li[p"y"]]')
+    expect(blocks('v) x', 'vi) y')).toBe('ol(a22))[li[p"x"]] ol(i6))[li[p"y"]]')
     expect(blocks('v) x', 'vii) y')).toBe('ol(a22))[li[p"x"]] ol(i7))[li[p"y"]]')
-    expect(blocks('i) x', 'j) y')).toBe('ol(a9))[li[p"x"] li[p"y"]]')
+    expect(blocks('i) x', 'j) y')).toBe('ol(i1))[li[p"x"]] ol(a10))[li[p"y"]]')
     expect(blocks('v) x', '', '', '', 'vi) y')).toBe('ol(a22))[li[p"x"]] ol(i6))[li[p"y"]]')
-    expect(blocks('v) x', '   more', 'vi) y')).toBe('ol(i5))[li[p"x|more"] li[p"y"]]')
+    expect(blocks('v) x', '   more', 'vi) y')).toBe('ol(a22))[li[p"x|more"]] ol(i6))[li[p"y"]]')
     expect(blocks('ii) x')).toBe('ol(i2))[li[p"x"]]')
     expect(blocks('a) x', 'B) y')).toBe('ol(a1))[li[p"x"]] ol(A2))[li[p"y"]]')
   })

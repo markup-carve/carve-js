@@ -45,57 +45,67 @@ describe('the planned writer', () => {
     expect(documents).toBeGreaterThan(200)
   })
 
-  it('C2-W-089: a deep quote group is checked before the plan claims it', () => {
+  it('C2-W-089: a deep quote group enters repair without a failed check', () => {
     const source = readFileSync(join(import.meta.dirname, 'fixtures/plan-quote-depth.crv'), 'utf8')
     const parsed = parseWithLayout(source, { extensions: [] })
     const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', true)
     expect(result.stats.reasons.get('check') ?? 0).toBe(0)
     expect(result.stats.repaired).toBeGreaterThan(0)
-    expect(result.output.diagnostics.some((diagnostic) => diagnostic.code === 'structure-unspellable')).toBe(true)
+    expect(result.output.diagnostics.some((diagnostic) => diagnostic.code === 'structure-unspellable')).toBe(false)
   })
 
-  it('C2-I-024: a comment ending in backslash before a bracket closer enters repair', () => {
+  it('C2-I-023: a percent run directly after a bracket opener is planned as text', () => {
     const parsed = parseWithLayout('[%%\\ ]', { extensions: [] })
     const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', true)
     expect(result.stats.reasons.get('check') ?? 0).toBe(0)
-    expect(result.stats.repaired).toBeGreaterThan(0)
+    expect(result.stats.planned).toBeGreaterThan(0)
+    expect(result.stats.repaired).toBe(0)
   })
 
-  it('C2-I-024: an empty comment after an escaped bang enters repair', () => {
+  it('C2-I-023: a percent run after an escaped bang and a bracket is text', () => {
     const source = ']\\![%%]'
     const parsed = parseWithLayout(source, { extensions: [] })
     const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false)
-    expect(result.stats.repaired).toBeGreaterThan(0)
-    expect(formatWithDiagnostics(source).diagnostics.some((entry) => entry.code === 'structure-unspellable')).toBe(true)
+    expect(result.stats.planned).toBeGreaterThan(0)
+    expect(result.stats.repaired).toBe(0)
+    expect(formatWithDiagnostics(source).source).toBe(']![%%]\n')
   })
 
-  it('C2-W-075: a comment in a collapsed reference checks its folded key without a sidecar', () => {
+  it('C2-I-023: a percent run directly after a reference bracket stays in its folded key', () => {
     const source = '[[%%\n]][]'
     const result = formatWithDiagnostics(source, { normalize: true })
-    expect(result.diagnostics.map((entry) => `${entry.code} ${entry.path}`)).toContain(
-      'field-unspellable /children/0/children/0/key',
-    )
+    expect(result.source).toBe(source + '\n')
+    expect(result.diagnostics).toEqual([])
   })
 
-  it('C2-W-075: an escaped image label checks its collapsed reference key without a sidecar', () => {
-    const source = '![[%%[\n]][]~'
-    const result = formatWithDiagnostics(source, { normalize: true })
-    expect(result.diagnostics.map((entry) => `${entry.code} ${entry.path}`)).toContain(
-      'field-unspellable /children/0/children/0/key',
-    )
-  })
-
-  it('C2-W-075: nested brackets in an image label enter repair during formatting', () => {
-    const source = '![[[%%[\n]][]]()~'
-    for (const normalize of [false, true]) {
-      const result = formatWithDiagnostics(source, { normalize })
-      expect(result.diagnostics.some((entry) => entry.channel === 'render-loss')).toBe(true)
+  it('C2-W-011: a comment after an escaped bang and an unpaired bracket round-trips', () => {
+    for (const source of ['x\\![ %%', 'x\\![\n%%']) {
+      const result = formatWithDiagnostics(source)
+      expect(result.diagnostics).toEqual([])
+      expect(format(result.source)).toBe(result.source)
     }
   })
 
-  it('C2-W-075: a bracket later on an image comment line enters repair', () => {
+  it('C2-I-023: a percent run in an image label is text', () => {
+    const source = '![[%%[\n]][]~'
+    const result = formatWithDiagnostics(source, { normalize: true })
+    expect(result.source).toBe(source + '\n')
+    expect(result.diagnostics).toEqual([])
+  })
+
+  it('C2-I-023: nested brackets behind a percent run need no repair', () => {
+    const source = '![[[%%[\n]][]]()~'
+    for (const normalize of [false, true]) {
+      const result = formatWithDiagnostics(source, { normalize })
+      expect(result.source).toBe(source + '\n')
+      expect(result.diagnostics).toEqual([])
+    }
+  })
+
+  it('C2-I-023: a bracket later on an image percent line is text', () => {
     const result = formatWithDiagnostics('![[%%^[\n]][]~', { normalize: true })
-    expect(result.diagnostics.some((entry) => entry.channel === 'render-loss')).toBe(true)
+    expect(result.source).toBe('![[%%^[\n]][]~\n')
+    expect(result.diagnostics).toEqual([])
   })
 
   it('C2-W-089: prose, emphasis, links, lists, quotes, tables and code are planned with no parse', () => {

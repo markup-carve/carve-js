@@ -9,7 +9,6 @@ import { emailEnd, urlEnd } from './inline-atoms.ts'
 import { attributeBlocksEnd, BacktickRuns, quotedEnd, runLength, skipSpaces } from './lines.ts'
 import { isBoundarySpace, isWhitespace } from './unicode.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
-import { bracedCloserAt } from './inline-brackets.ts'
 
 const NONE = -1
 
@@ -52,7 +51,7 @@ function bracedCommentEnd(src: string, p: number, end: number): number {
   return p + 1
 }
 
-/** The offset behind the atom at `p`, `p` when none starts there, or NONE when a line comment starts there. */
+/** C2-I-074: image alt text is source text, so a percent run inside it is not a comment. */
 function atomEnd(line: ImageLine, p: number): number {
   const src = line.src
   const code = src.charCodeAt(p)
@@ -60,8 +59,7 @@ function atomEnd(line: ImageLine, p: number): number {
   if (code === BACKTICK) return codeSpanEnd(line, p)
   if (code === LESS) return angleEnd(src, p, line.end)
   if (code === BRACE_OPEN && src.charCodeAt(p + 1) === PERCENT) return bracedCommentEnd(src, p, line.end)
-  const atContentStart = line.braced.at(-1)?.contentStart === p && code === PERCENT && src.charCodeAt(p + 1) === PERCENT
-  return isLineComment(src, p) || atContentStart ? NONE : p
+  return p
 }
 
 /** C2-I-076, C2-I-077: the offset of the `]` that ends the label whose `[` is at `p`, or NONE. */
@@ -146,29 +144,9 @@ function bracedMarkEnd(line: ImageLine, at: number): number {
   return at
 }
 
-/** The offset behind the atom at `p`, `p` where none starts; C2-I-024: a line comment ends before its bracket's closer. */
+/** The offset behind the atom at `p`, `p` where none starts; a line comment takes every closer on its line. */
 function skipAtom(line: ImageLine, p: number): number {
-  const atom = atomEnd(line, p)
-  return atom === NONE ? commentCloser(line, p + 2) : atom
-}
-
-/** The offset of the `]` that closes the innermost open bracket behind a line comment, read with code spans, or NONE. */
-function commentCloser(line: ImageLine, from: number): number {
-  const braced = line.braced.at(-1)
-  if (braced !== undefined) {
-    const close = bracedCloserAt(line.src, braced.mark, from, line.end)
-    return close === line.end ? NONE : close
-  }
-  const src = line.src
-  let depth = 0
-  for (let p = from; p < line.end; p++) {
-    const code = src.charCodeAt(p)
-    if (code === BACKSLASH) p++
-    else if (code === BACKTICK) p = codeSpanEnd(line, p) - 1
-    else if (code === BRACKET_OPEN) depth++
-    else if (code === BRACKET_CLOSE && depth-- === 0) return p
-  }
-  return NONE
+  return atomEnd(line, p)
 }
 
 /** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash. */

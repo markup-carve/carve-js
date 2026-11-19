@@ -3,19 +3,18 @@
 import { emptyBlockEnd, readAttributeBlock } from './attributes.ts'
 import { foldLabel } from './ast-attributes.ts'
 import {
-  APOSTROPHE, AT_SIGN, BACKSLASH, BACKTICK, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN,
+  APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN,
   PERCENT, QUOTE_MARK, SPACE,
 } from './chars.ts'
 import {
   ATTRIBUTE_BLOCK, BRACKET_SPAN, ESCAPE, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL,
   LINK,
 } from './inline-kinds.ts'
-import { atDepthCap, enterBracket, innermostBracedOpener, leaveBracket } from './inline-depth.ts'
+import { atDepthCap, enterBracket, leaveBracket } from './inline-depth.ts'
 import {
-  closerMissing, type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, OPEN_PLAIN, pushToken, TOKEN_A, TOKEN_B, TOKEN_BRACED_OPEN, TOKEN_C,
+  closerMissing, type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, OPEN_PLAIN, pushToken, TOKEN_A, TOKEN_B, TOKEN_C,
   TOKEN_CLOSE, TOKEN_END, TOKEN_OPEN, TOKEN_START, TOKEN_TAIL, TOKEN_TEXT, TOKEN_WIDTH,
 } from './inline-state.ts'
-import { BRACED_MARKS } from './inline-tables.ts'
 import { isBoundarySpace, isWhitespace } from './unicode.ts'
 
 
@@ -302,62 +301,6 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   // C2-I-072: the pair forms no construct. It is text and bounds nothing.
   if (!formed) state.tokens[open] = TOKEN_TEXT
   return pos + 1
-}
-
-/** C2-I-023: whether `pos` is the start of the content of a bracket or a braced opener, which counts as a line start. */
-export function followsOpener(state: InlineState, pos: number): boolean {
-  const last = state.tokenLength - TOKEN_WIDTH
-  if (last < 0 || state.tokens[last + TOKEN_END] !== pos) return false
-  const kind = state.tokens[last]
-  return kind === TOKEN_OPEN || kind === TOKEN_BRACED_OPEN
-}
-
-/** The end of a backtick run at `pos` read as a code span opener: past its closer on the line, or past the run. */
-function codeSpanEnd(text: string, pos: number, end: number): number {
-  let run = pos
-  while (run < end && text.charCodeAt(run) === BACKTICK) run++
-  const marks = text.slice(pos, run)
-  for (let p = text.indexOf(marks, run); p >= 0 && p < end; p = text.indexOf(marks, p + marks.length)) {
-    let after = p + marks.length
-    if (text.charCodeAt(after) !== BACKTICK && text.charCodeAt(p - 1) !== BACKTICK) return after
-    while (text.charCodeAt(after) === BACKTICK) after++
-    p = after - marks.length
-  }
-  return run
-}
-
-/**
- * C2-I-024: where a line comment that starts at `from` ends: directly before the closer of the innermost bracket or
- * braced opener open at it, where that closer is on this line, read with code spans and nested openers, or `end`.
- */
-export function commentEnd(state: InlineState, from: number, end: number): number {
-  const braced = innermostBracedOpener(state)
-  if (braced !== NONE) return bracedCloserAt(state.text, BRACED_MARKS.charCodeAt(state.tokens[braced + TOKEN_A]!), from, end)
-  if (state.bracketDepth === 0) return end
-  const text = state.text
-  // C2-I-077: a bracket glued to a closing bracket starts a reference label, whose closer the comment takes.
-  if (text.charCodeAt(state.tokens[state.brackets[state.bracketDepth - 1]! + TOKEN_START]! - 1) === BRACKET_CLOSE) return end
-  let depth = 0
-  for (let p = from; p < end; p++) {
-    const code = text.charCodeAt(p)
-    if (code === BACKSLASH) p++
-    else if (code === BACKTICK) p = codeSpanEnd(text, p, end) - 1
-    else if (code === BRACKET_OPEN) depth++
-    else if (code === BRACKET_CLOSE && depth-- === 0) return p
-  }
-  return end
-}
-
-export function bracedCloserAt(text: string, mark: number, from: number, end: number): number {
-  let depth = 0
-  for (let p = from; p < end; p++) {
-    const code = text.charCodeAt(p)
-    if (code === BACKSLASH) p++
-    else if (code === BACKTICK) p = codeSpanEnd(text, p, end) - 1
-    else if (code === BRACE_OPEN && text.charCodeAt(p + 1) === mark) depth++
-    else if (code === mark && text.charCodeAt(p + 1) === BRACE_CLOSE && depth-- === 0) return p
-  }
-  return end
 }
 
 /** C2-I-119: at the end of the content every bracket that is still open is text. */

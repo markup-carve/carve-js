@@ -475,30 +475,6 @@ function bracesBeforeMarks(leaf: Leaf, escaped: Uint8Array): void {
 }
 
 /**
- * C2-I-023: at the start of the content of a bracket or a braced opener, `%%` opens a line comment too. Decided once
- * the brackets are, since an escaped `[` opens nothing and the `%` then needs no backslash.
- */
-function percentsBehindOpeners(leaf: Leaf, escaped: Uint8Array): void {
-  for (let at = leaf.codes.indexOf(37); at >= 0; at = leaf.codes.indexOf(37, at + 1)) {
-    if (leaf.inTitle || leaf.inLine || leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) continue
-    if (opensContentBefore(leaf, at - 1, escaped)) escaped[at] = 1
-  }
-}
-
-/** Whether the unit `at` ends a bracket or a braced opener, of the tree or of text the reader reads as one. */
-function opensContentBefore(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
-  const value = code(leaf, at)
-  if (leaf.kinds[at] === OPEN) {
-    return value === 91 || (code(leaf, at - 1) === 123 && leaf.kinds[at - 1] === OPEN && BRACED_MARKS.includes(String.fromCharCode(value)))
-  }
-  if (leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped)) return false
-  if (value === 91) return true
-  // A `{` of text before a mark of the tree is escaped for that mark, so it opens nothing.
-  return BRACED_MARKS.includes(String.fromCharCode(value)) && code(leaf, at - 1) === 123 && leaf.kinds[at - 1] === TEXT
-    && !isLiteral(leaf, at - 1, escaped)
-}
-
-/**
  * C2-B-133: behind a `%` of text, or behind a `{` that opens no braced comment (C2-I-025), `%%` stands after no
  * whitespace and is text.
  */
@@ -988,9 +964,22 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) bracesBeforeMarks(leaf, escaped)
   if (leaf.undecided === null) checkPairs(leaf, escaped)
-  if (leaf.undecided === null) percentsBehindOpeners(leaf, escaped)
+  if (leaf.undecided === null) percentsWithinTextOpeners(leaf, escaped)
   if (leaf.undecided === null) commentsBeforeClosers(leaf, escaped)
   return escaped
+}
+
+/** C2-I-023: a text opener can make a later `%%` text, but the reader decides whether it paired. */
+function percentsWithinTextOpeners(leaf: Leaf, escaped: Uint8Array): void {
+  if (leaf.codes.indexOf(37) < 0 || (leaf.codes.indexOf(91) < 0 && leaf.codes.indexOf(123) < 0)) return
+  const depth: CommentDepth = { brackets: 0, textBrackets: 0, textBraces: 0, bracesByMark: new Uint32Array(128) }
+  for (let at = 0; at < leaf.codes.length; at++) {
+    if (leaf.kinds[at] === TEXT && leaf.codes[at] === 37 && leaf.codes[at + 1] === 37 &&
+      escaped[at] !== 0 && (depth.textBrackets > 0 || depth.textBraces > 0)) {
+      return undecide(leaf, 'percent behind text opener')
+    }
+    advanceCommentDepth(leaf, at, escaped, depth)
+  }
 }
 
 /**
@@ -1004,6 +993,11 @@ function commentsBeforeClosers(leaf: Leaf, escaped: Uint8Array): void {
     if (at === 0) {
       advanceCommentDepth(leaf, at, escaped, depth)
       continue
+    }
+    // C2-I-023, C2-I-024: an open bracket or braced form of text can reframe a later
+    // comment line after spelling repair. Let the repair compare the resulting trees.
+    if (startsCommentLine(leaf, at) && (depth.textBrackets > 0 || depth.textBraces > 0)) {
+      return undecide(leaf, 'comment after text opener')
     }
     const before = leaf.owners[at - 1]
     if (before?.type === 'comment' && before.form === 'line' && leaf.owners[at] !== before

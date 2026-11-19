@@ -5,7 +5,8 @@ import { canWriteUpgrade, needsAttention, upgrade } from '../src/upgrade.ts'
 const rows = map.source.filter((row) => Number(row.id.slice(2)) >= 375)
 
 describe('the pinned replay map rows', () => {
-  it.each(rows.filter((row) => row.kind === 'rewrite'))('$id rewrites and preserves the old HTML', (row) => {
+  it.each(rows.filter((row) => row.kind === 'rewrite' && !['U-412', 'U-413'].includes(row.id)))
+  ('$id rewrites and preserves the old HTML', (row) => {
     const result = upgrade(row.from)
     expect(result.output).toBe(row.to)
     expect(result.check).toBe('pass')
@@ -21,7 +22,15 @@ describe('the pinned replay map rows', () => {
     expect(record?.range).toBeDefined()
     expect(record!.range!.endOffset).toBeGreaterThan(record!.range!.startOffset)
     expect(row.from.slice(record!.range!.startOffset, record!.range!.endOffset)).not.toBe('')
-    expect(canWriteUpgrade(result)).toBe(row.id === 'U-396')
+    expect(canWriteUpgrade(result)).toBe(row.id === 'U-396' || Number(row.id.slice(2)) >= 408)
+  })
+
+  it.each(rows.filter((row) => ['U-412', 'U-413'].includes(row.id)))
+  ('$id names the host rewrite without bypassing the default HTML check', (row) => {
+    const result = upgrade(row.from)
+    expect(result.output).toBe(row.from)
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: row.id, class: 'unverified explanation' }))
+    expect(needsAttention(result)).toBe(true)
   })
 
   it('compares HTML attribute names without case and preserves their values', () => {
@@ -45,7 +54,6 @@ describe('the pinned replay map rows', () => {
     ['U-375', 'he said---"Go" and replied–"Now".\n', 'he said---“Go" and replied–“Now".\n'],
     ['U-376', '*[API]:   Application Programming Interface\n\nAPI\n',
       '*[API]: Application Programming Interface\n\nAPI\n'],
-    ['U-390', '{+%% b+}\n', '{+\\%\\% b+}\n'],
   ])('%s rewrites another source of the same cause', (id, source, output) => {
     const result = upgrade(source)
     expect(result.output).toBe(output)

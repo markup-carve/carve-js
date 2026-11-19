@@ -90,6 +90,13 @@ export interface InlineState {
   closedNotes: Set<number> | null
   /** Whether the first pass read a caret pair inside an open note. */
   caretInNote: boolean
+  /**
+   * C2-I-074: the starts of the images that formed in the first pass, whose alt keeps a `%%` as source; null in the
+   * first pass, which keeps it inside every open image and only notes whether one stood there.
+   */
+  formedImages: Set<number> | null
+  /** Whether the first pass kept a `%%` inside an open image. */
+  percentInImage: boolean
   /** The inline footnotes open on the bracket stack. */
   notesOpen: number
   /** C2-B-138: the content offsets of the comment-only lines, which no atom spans, once an atom asked. */
@@ -171,6 +178,8 @@ function createState(): InlineState {
     definitions: null,
     closedNotes: null,
     caretInNote: false,
+    formedImages: null,
+    percentInImage: false,
     notesOpen: 0,
     commentLines: null,
     tokens: new Int32Array(INITIAL_TOKENS),

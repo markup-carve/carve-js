@@ -1865,8 +1865,8 @@
     },
     {
       "id": "U-390",
-      "name": "<p><del></del></p> A comment marker inside a deletion removes its following text under C2-I-023 and C2-I-024. Escape bot",
-      "class": "rewrite",
+      "name": "<p><del>%% b</del></p> Under C2-I-023 `%%` directly after a braced opener is text, as in 0.1. No source edit is needed.",
+      "class": "none",
       "lint": []
     },
     {
@@ -1883,8 +1883,8 @@
     },
     {
       "id": "U-393",
-      "name": "<p><s>a</s> d</p> A comment marker inside a substitution changes which arrow and closer survive under C2-I-023 and C2-I-",
-      "class": "report",
+      "name": "<p>{~a d</p> C2-I-024 makes the line comment take the substitution arrow and closer, as 0.1 did. No source edit is neede",
+      "class": "none",
       "lint": []
     },
     {
@@ -1902,6 +1902,144 @@
     {
       "id": "U-396",
       "name": "<p>a $`</p> C2-I-017 reads a backtick run with no closer of its length as text, and 0.1 wrote an empty math span. An adj",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-397",
+      "name": "<ol type=\"a\" start=\"22\">\n  <li>x</li>\n</ol>\n<ol type=\"i\" start=\"6\">\n  <li>y</li>\n</ol> C2-B-042 fixes the first marker a",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-398",
+      "name": "<ol type=\"i\">\n  <li>x</li>\n</ol>\n<ol type=\"a\" start=\"10\">\n  <li>y</li>\n</ol> C2-B-042 fixes the first marker as roman; C",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-399",
+      "name": "<p>[a</p> C2-I-024 takes the closing bracket and link tail. The proposed braced comment restores the 0.1 link HTML.",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-400",
+      "name": "<p>^[a</p> C2-I-024 takes the closing bracket and following text. The proposed braced comment restores the 0.1 footnote ",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-401",
+      "name": "<p>{_a</p> C2-I-024 takes the closing brace. The proposed braced comment restores the 0.1 underline HTML.",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-402",
+      "name": "<p>:foo[a</p> C2-I-024 takes the closing bracket. The proposed braced comment restores the 0.1 extension HTML.",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-403",
+      "name": "<ol type=\"i\" data-delim=\")\">\n  <li>one</li>\n</ol>\n<ol type=\"a\" start=\"10\" data-delim=\")\">\n  <li>two</li>\n</ol> C2-B-042 ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-404",
+      "name": "<ol type=\"a\" start=\"22\" data-delim=\")\">\n  <li>one</li>\n</ol>\n<ol type=\"i\" start=\"6\" data-delim=\")\">\n  <li>two</li>\n</ol>",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-405",
+      "name": "<p>[%% c] d</p> C2-I-023 keeps `%%` directly after a bracket as text; 0.1 read it as a line comment that ended before th",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-406",
+      "name": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> d</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnot",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-407",
+      "name": "<p><span class=\"ext-f\">%%</span></p> C2-I-023 keeps `%%` at the start of extension content as text; 0.1 read it as a lin",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-408",
+      "name": "A wiki target needs the explicit `:wiki[Page]` extension form (C2-X-057). A reference may instead be a core reference, s",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-409",
+      "name": "A heading target may be written as `</#Page>` or kept as `[Page](#Page)` (C2-X-057). Report only when a former heading-r",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-410",
+      "name": "Use `<https://example.test>` for an autolink (C2-X-057); inspect punctuation and the original link target before rewriti",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-411",
+      "name": "A citation uses `:cite[doe]{locator=\"p. 4\"}` and its definition belongs in a named bibliography or references directive ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-412",
+      "name": "The bracket label becomes the only tab label when moved to a nonempty quoted title (C2-X-040, C2-X-056); this source has",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-413",
+      "name": "The sole `label` attribute is moved to the quoted title (C2-X-056); inspect any other attribute before applying the rewr",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-414",
+      "name": "A first heading is content, not a tab label (C2-X-056). Report because changing it to a title would also change the body",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-415",
+      "name": "A class alone supplies no quoted title (C2-X-056). Report to choose a title without guessing from the class.",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-416",
+      "name": "A host using the former aria mode must review its integration: the standard renderer writes radio controls in interactiv",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-417",
+      "name": "A per-instance host class is not a standard tabs mode (C2-X-056). Report so the host can place its styling outside the s",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-418",
+      "name": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\"><label for=\"tabs-1-0\">A",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-419",
+      "name": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">Install</h3><p>Run.<",
       "class": "report",
       "lint": []
     }

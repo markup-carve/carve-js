@@ -35,7 +35,8 @@ export { type DelimitedTable, readDelimitedTable } from './delimited.ts'
 
 export {
   CarveInputError, CarveRenderError, type LayoutResult, parse, type ParsedTree, type ParseResult, parseTree, parseWithDiagnostics,
-  parseWithLayout, render, type RenderOutput, renderTree, renderWithDiagnostics, type ResolvedTree, resolveTree,
+  parseWithLayout, render, type RenderOutput, renderTree, renderWithDiagnostics, renderWithDocumentTransforms,
+  type DocumentTransform, type ResolvedTree, resolveTree,
 } from './api.ts'
 export {
   AST_VERSION, type Attrs, type BibliographyMetadata, type CitationLocator, type Envelope, type ExtensionDeclaration,
@@ -67,6 +68,7 @@ export { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 export { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer, type ExtensionRenderHost,
   type ExtensionSlot, type ExtensionSource } from './extensions/types.ts'
 export { tabExtension, tabsExtension, tabsExtensions, tabsRenderer } from './extensions/tabs.ts'
+export { wikiExtension, citeExtension } from './extensions/wiki-cite.ts'
 
 /** Block tree of `src`. Leaves keep their source spans; inline content is not parsed. */
 export function parseBlockTree(src: string): BlockNode {

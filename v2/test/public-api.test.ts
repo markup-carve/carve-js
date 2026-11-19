@@ -38,7 +38,7 @@ describe('the public 0.2 entry', () => {
       'CarveWriteError', 'DEFAULT_DENIED_SCHEMES', 'ImportInputError', 'LAYOUT_VERSION', 'MAX_TREE_DEPTH',
       'RESERVED_WRITER_TARGETS', 'createWriterRegistry', 'decodeTree', 'encodeEnvelope', 'encodeTree', 'format',
       'formatWithDiagnostics', 'importDocument', 'includeDependencies', 'isUrlAllowed', 'lint', 'migrateTree', 'parse',
-      'parseWithDiagnostics', 'parseWithLayout', 'render', 'renderWithDiagnostics', 'stringOffsetOfByte', 'tabsExtensions',
+      'parseWithDiagnostics', 'parseWithLayout', 'render', 'renderWithDiagnostics', 'renderWithDocumentTransforms', 'stringOffsetOfByte', 'tabsExtensions',
       'tabsRenderer', 'urlScheme', 'utf8Length', 'validateLayout', 'validateTree', 'write', 'writeDocument',
       'writeWithDiagnostics',
     ].sort())

@@ -5,6 +5,7 @@ import { join, dirname } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { isDeepStrictEqual } from 'node:util'
 import * as engine from '../src/index.ts'
+import { imgFenceExtensions, imgFenceRenderers } from '../extensions/blocks/img-fence.ts'
 import { importDocument } from '../../import/src/index.ts'
 import { CATALOG } from '../lint/catalog.ts'
 import { corpusResolver, hexBytes } from './corpus.ts'
@@ -19,10 +20,31 @@ const decoded = input => typeof input === 'string' ? input : new TextDecoder().d
 
 function optionsOf(entry) {
   const options = { ...entry.options }
-  if (options.extensions?.includes('carve.tabs')) options.extensions = engine.tabsExtensions
-  if (options.renderers?.['carve.tabs'] === 'standard') options.renderers = { 'carve.tabs': engine.tabsRenderer }
+  const extensions = options.extensions ?? []
+  if (extensions.length > 0) options.extensions = [
+    ...(extensions.includes('carve.tabs') ? engine.tabsExtensions : []),
+    ...(extensions.includes('carve.wiki') ? [engine.wikiExtension] : []),
+    ...(extensions.includes('carve.cite') ? [engine.citeExtension] : []),
+    ...(extensions.includes('carve.imgFence.img') ? imgFenceExtensions : []),
+  ]
+  if (options.renderers !== undefined) options.renderers = Object.fromEntries(Object.entries(options.renderers).map(([name, value]) =>
+    [name, value === 'standard' ? name === 'carve.tabs' ? engine.tabsRenderer : imgFenceRenderers[name] : value]))
   if (entry.files !== undefined) options.includes = { resolver: corpusResolver(entry.files), ...options.includes }
   return options
+}
+
+function documentTransforms(entry) {
+  return (entry.host?.documentTransforms ?? []).map((row) => ({ name: row.name, transform(view) {
+    const path = row.after.split('/').slice(1).map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'))
+    const at = Number(path.pop())
+    let parent = view
+    for (const part of path) parent = parent[part]
+    const inserted = structuredClone(row.insert)
+    // C2-A-058: a host fixture's empty slot map constructs an absent slot field in the actual tree.
+    if (inserted.slots && Object.keys(inserted.slots).length === 0) delete inserted.slots
+    parent.splice(at + 1, 0, inserted)
+    return view
+  } }))
 }
 
 function parseOptions(options) {
@@ -186,7 +208,9 @@ function run(entry) {
       ...(expected.suppressed !== undefined && result.suppressedDiagnostics !== expected.suppressed ? ['suppressed'] : [])]
   }
   if (kind === 'render') {
-    const result = engine.renderWithDiagnostics(entry.tree ?? input, options)
+    const result = entry.host?.documentTransforms === undefined
+      ? engine.renderWithDiagnostics(entry.tree ?? input, options)
+      : engine.renderWithDocumentTransforms(entry.tree ?? input, documentTransforms(entry), options)
     const children = expected.children === undefined ? [] : childrenFields(engine.parse(input, parseOptions(options)), expected)
     if (expected.refusal !== undefined) engine.render(entry.tree ?? input, options)
     return [...children, ...(expected.html !== undefined && result.html !== expected.html ? ['html'] : []),

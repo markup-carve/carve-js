@@ -556,6 +556,7 @@ function rendererHost(r: Render, blockDepth: number): ExtensionRenderHost {
     nextId: (prefix) => nextExtensionId(r, prefix),
     labels: r.settings.labels,
     profile: r.settings.profile,
+    mode: r.settings.mode,
     urlPolicy: r.settings.urlPolicy,
     sourceLines: r.settings.sourceLines,
     blockDepth,
@@ -958,12 +959,14 @@ export function renderDocument(
   r.renderExtension = (node, level = 0) => {
     const renderer = settings.renderers[node.name]
     if (renderer === undefined || renderer.version !== node.version) return null
+    const channel = settings.mode === 'static' ? renderer.buildTime : renderer.render
+    if (channel === undefined) return null
     const before = { out: r.out, count: r.count, bidi: r.bidi, extensionIds: r.extensionIds,
       idCount: r.usedIds.log.length, lossCount: r.losses.entries.length, nodeCount: r.losses.nodes.length,
       linkDepth: r.linkDepth, linkNotes: r.linkNotes.slice(), abbrDepth: r.abbrDepth,
       backlinkHost: r.backlinkHost, backlinks: r.backlinks, longDescriptions: r.longDescriptions.slice() }
     try {
-      const result: unknown = renderer.render(node, rendererHost(r, level))
+      const result: unknown = channel(node, rendererHost(r, level))
       if (typeof result !== 'string') throw new TypeError('renderer returned a value that is not a string')
       return result
     } catch (error) {

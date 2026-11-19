@@ -689,7 +689,10 @@ const ENTRIES = 2
 /** C2-W-017, C2-W-018, C2-W-028, C2-W-059: the blank lines between `before` and the block `node` below it. */
 export function blankLinesBetween(w: Writer, before: Node, list: Node | null, node: Node, nested: boolean): number {
   if (node.type === 'comment') return blankLinesBeforeComment(w, before, node)
-  if (list !== null && sameListKind(list, node)) return LIST_BOUNDARY_BLANKS
+  if (list !== null && sameListKind(w, list, node)) return LIST_BOUNDARY_BLANKS
+  if (list?.type === 'list' && node.type === 'list' && list.marker.kind === 'ordered' &&
+    node.marker.kind === 'ordered' && list.marker.style !== node.marker.style &&
+    list.marker.delimiter === node.marker.delimiter) return 0
   return nested ? 0 : 1
 }
 

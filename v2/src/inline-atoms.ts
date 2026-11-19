@@ -12,15 +12,14 @@ import {
   HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import {
-  atomLimit, closerMissing, type InlineState, NONE, OPEN_EXTENSION, pushToken, TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_END, TOKEN_START,
-  TOKEN_WIDTH,
+  atomLimit, closerMissing, type InlineState, NONE, OPEN_EXTENSION, OPEN_IMAGE, pushToken, TOKEN_A,
+  TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_END, TOKEN_START, TOKEN_WIDTH,
 } from './inline-state.ts'
 import {
   BRACED_MARKS, CHARACTER_CLASSES, CLASS_BRACED_MARK, CLASS_EMAIL_DOMAIN, CLASS_EMAIL_LAST, CLASS_EMAIL_LOCAL,
   CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST, CLASS_MENTION, CLASS_RAW_FIRST, CLASS_RAW_REST, CLASS_SCHEME_FIRST,
   CLASS_SCHEME_REST, CLASS_SYMBOL_FIRST, CLASS_SYMBOL_REST, CLASS_URL_BODY,
 } from './inline-tables.ts'
-import { commentEnd, followsOpener } from './inline-brackets.ts'
 import { atDepthCap, countBracedOpen } from './inline-depth.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
@@ -255,18 +254,33 @@ export function scanLess(state: InlineState, pos: number): number {
   return close + 1
 }
 
-/** C2-I-023: `%%` at a line start, after whitespace or at the start of an opener's content, to its line end or the closer of C2-I-024. */
+/** C2-I-023, C2-I-024: a line comment starts after whitespace and takes every closer through the line end. */
 export function scanPercent(state: InlineState, pos: number): number {
   const text = state.text
   if (!state.lineComments || text.charCodeAt(pos + 1) !== PERCENT) return pos + 1
-  if (!isBoundarySpace(pos > 0 ? text.charCodeAt(pos - 1) : NO_CHARACTER) && !followsOpener(state, pos)) return pos + 1
+  if (!isBoundarySpace(pos > 0 ? text.charCodeAt(pos - 1) : NO_CHARACTER)) return pos + 1
+  if (inImageAlt(state)) return pos + 1
   let start = pos
   while (start > state.tokenEnd && isSpaceOrTab(text.charCodeAt(start - 1))) start--
   let lineEnd = text.indexOf('\n', pos)
   if (lineEnd < 0 || lineEnd > state.end) lineEnd = state.end
-  const end = commentEnd(state, pos + 2, lineEnd)
-  pushToken(state, INLINE_COMMENT, start, end, pos + 2, end, 0, NONE)
-  return end
+  pushToken(state, INLINE_COMMENT, start, lineEnd, pos + 2, lineEnd, 0, NONE)
+  return lineEnd
+}
+
+/** C2-I-074, C2-I-024: an image's alt is source text, but an opener that forms no image leaves `%%` a comment. */
+function inImageAlt(state: InlineState): boolean {
+  const formed = state.formedImages
+  for (let at = state.bracketDepth - 1; at >= 0; at--) {
+    const open = state.brackets[at]!
+    if (state.tokens[open + TOKEN_A] !== OPEN_IMAGE) continue
+    if (formed === null) {
+      state.percentInImage = true
+      return true
+    }
+    if (formed.has(state.tokens[open + TOKEN_START]!)) return true
+  }
+  return false
 }
 
 /** C2-I-025, C2-I-063: a braced or an editorial comment, whose closer must follow in the content. */

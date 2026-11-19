@@ -77,7 +77,7 @@ export const colorSwatchExtension: ExtensionDefinition = {
   props: { value: 'string' }, slots: { value: { kind: 'inline' } }, children: 'none', transform,
 }
 
-function renderSwatch(value: string, attrs: Attrs | undefined, options: ColorSwatchOptions, host: Parameters<ExtensionRenderer['render']>[1]): string {
+function renderSwatch(value: string, attrs: Attrs | undefined, options: ColorSwatchOptions, host: Parameters<NonNullable<ExtensionRenderer['render']>>[1]): string {
   const position = options.position ?? 'before'
   const shape = options.shape ?? 'square'
   const reveal = options.reveal === true && position !== 'none'

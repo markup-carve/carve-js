@@ -4,7 +4,8 @@ import {
   AST_VERSION, CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, CarveTreeError, CarveWriteError,
   createWriterRegistry, decodeTree, DEFAULT_DENIED_SCHEMES, encodeEnvelope, encodeTree, format, formatWithDiagnostics,
   importDocument, ImportInputError, includeDependencies, isUrlAllowed, LAYOUT_VERSION, lint, MAX_TREE_DEPTH, migrateTree,
-  parse, parseWithDiagnostics, parseWithLayout, render, RESERVED_WRITER_TARGETS, renderWithDiagnostics, stringOffsetOfByte,
+  parse, parseWithDiagnostics, parseWithLayout, render, RESERVED_WRITER_TARGETS, renderWithDiagnostics,
+  renderWithDocumentTransforms, stringOffsetOfByte,
   tabsExtensions, tabsRenderer, urlScheme, utf8Length, validateLayout, validateTree, write, writeDocument,
   writeWithDiagnostics, type DocumentNode, type IncludeResolver, type Writer,
 } from '@markup-carve/carve/v2'
@@ -35,6 +36,7 @@ check(parseWithDiagnostics('a').suppressedDiagnostics === 0, 'parseWithDiagnosti
 check(validateLayout(JSON.parse(JSON.stringify(parseWithLayout('a').layout))).version === LAYOUT_VERSION, 'parseWithLayout')
 check(render('a /b/') === '<p>a <em>b</em></p>', 'render')
 check(renderWithDiagnostics(raw).diagnostics.length === 1, 'renderWithDiagnostics')
+check(renderWithDocumentTransforms('a', []).html === '<p>a</p>', 'renderWithDocumentTransforms')
 check(format('a') === 'a\n' && formatWithDiagnostics('a').source === 'a\n', 'format')
 check(write(parse('a')) === 'a\n' && writeWithDiagnostics(parse('a')).source === 'a\n', 'write')
 check(lint('![](a.png)').length > 0, 'lint')
@@ -66,4 +68,4 @@ refuses(() => validateLayout({}), CarveLayoutError, 'CarveLayoutError')
 refuses(() => importDocument(1 as never, { from: 'html' }), ImportInputError, 'ImportInputError')
 check(typeof CarveWriteError === 'function', 'CarveWriteError')
 check(typeof fileSystemResolver('.') === 'function', 'fileSystemResolver')
-check(Object.keys(carve).length === 38, `the 0.2 entry exports ${Object.keys(carve).length} values`)
+check(Object.keys(carve).length === 39, `the 0.2 entry exports ${Object.keys(carve).length} values`)

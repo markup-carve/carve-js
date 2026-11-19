@@ -3,7 +3,7 @@
 
 /**
  * The fields of the examples and clause cases whose stated result departs from its own clause. Each is written up, with the
- * clause-correct result, in _EXAMPLE_FIXES.md for the specification; the field must keep failing until the
+ * clause-correct result, in the spec gap report for the pin; the field must keep failing until the
  * corpus is corrected, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
@@ -11,6 +11,10 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
     fix: 'C2-W-138 ranges the key and value rather than the whole span' }],
   ['CC-891', { fields: ['diagnostics:delimited-table-wide-row'],
     fix: 'C2-W-138 ranges the whole table rather than only its fence opener' }],
+  ['CC-1223', { fields: ['html'],
+    fix: 'C2-X-035 wraps the fallback because C2-X-058 keeps the locator as an attribute' }],
+  ['CC-1227', { fields: ['html'],
+    fix: 'C2-H-020 keeps a promoted block image bare when C2-H-159 blanks its denied source' }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
