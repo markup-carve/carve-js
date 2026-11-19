@@ -64,14 +64,12 @@ function skippedResult(node: Record<string, unknown>, name: string, spanMarks: b
   return true
 }
 
-/** The fields of `node` that equality compares, sorted by name. `spanMarks`: the node stands in a table with span marks. */
-function comparedFields(node: Record<string, unknown>, spanMarks: boolean): string[] {
+/** Whether equality compares this field. `spanMarks`: the node stands in a table with span marks. */
+function comparedField(node: Record<string, unknown>, name: string, spanMarks: boolean): boolean {
+  if (node[name] === undefined) return false
   const typed = typeof node['type'] === 'string' && AST_RESULTS.has(node['type'])
-  return Object.keys(node).filter((name) => {
-    if (node[name] === undefined) return false
-    if (typed && (name === 'pos' || name === 'segments' || name === 'srcByteLength')) return false
-    return !skippedResult(node, name, spanMarks)
-  }).sort()
+  if (typed && (name === 'pos' || name === 'segments' || name === 'srcByteLength')) return false
+  return !skippedResult(node, name, spanMarks)
 }
 
 /** C2-A-040: adjacent text nodes compare as one. */
@@ -100,6 +98,17 @@ function hasSpanMarks(table: Record<string, unknown>): boolean {
 }
 
 function equalLists(a: unknown[], b: unknown[], spanMarks: boolean): boolean {
+  // Parsed trees normally contain no adjacent text. Avoid two arrays per comparison in that case.
+  if (a.length === b.length) {
+    let adjacent = false
+    for (let index = 1; index < a.length; index++) {
+      if ((a[index - 1] as { type?: unknown } | null)?.type === 'text' &&
+          (a[index] as { type?: unknown } | null)?.type === 'text' ||
+          (b[index - 1] as { type?: unknown } | null)?.type === 'text' &&
+          (b[index] as { type?: unknown } | null)?.type === 'text') { adjacent = true; break }
+    }
+    if (!adjacent) return a.every((item, index) => equalValues(item, b[index], spanMarks))
+  }
   const left = coalesced(a)
   const right = coalesced(b)
   return left.length === right.length && left.every((item, index) => equalValues(item, right[index], spanMarks))
@@ -107,10 +116,14 @@ function equalLists(a: unknown[], b: unknown[], spanMarks: boolean): boolean {
 
 function equalObjects(a: Record<string, unknown>, b: Record<string, unknown>, spanMarks: boolean): boolean {
   const inner = a['type'] === 'table' ? hasSpanMarks(a) || hasSpanMarks(b) : spanMarks
-  const names = comparedFields(a, inner)
-  const others = comparedFields(b, inner)
-  if (names.length !== others.length || names.some((name, index) => name !== others[index])) return false
-  return names.every((name) => equalValues(a[name], b[name], inner))
+  let count = 0
+  for (const name of Object.keys(a)) {
+    if (!comparedField(a, name, inner)) continue
+    count++
+    if (!Object.hasOwn(b, name) || !comparedField(b, name, inner) || !equalValues(a[name], b[name], inner)) return false
+  }
+  for (const name of Object.keys(b)) if (comparedField(b, name, inner)) count--
+  return count === 0
 }
 
 function equalValues(a: unknown, b: unknown, spanMarks: boolean): boolean {

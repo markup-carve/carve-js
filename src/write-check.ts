@@ -17,10 +17,21 @@ import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
 export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys): DocumentNode {
+  const cacheable = src.length <= 8192 && w.extensions.length === 0 && w.abbreviations.size === 0 &&
+    (linkKeys === null || linkKeys.size === 0)
+  if (cacheable) {
+    const cached = w.parseCache.get(src)
+    if (cached !== undefined) return cached
+  }
   w.parses++
   w.work.chars += src.length
   const extensions = w.extensions
-  return applyExtensions(buildSource(src, true, w.abbreviations, null, extensions.length > 0, linkKeys), extensions).document
+  const parsed = applyExtensions(buildSource(src, true, w.abbreviations, null, extensions.length > 0, linkKeys), extensions).document
+  if (cacheable) {
+    if (w.parseCache.size >= 128) w.parseCache.clear()
+    w.parseCache.set(src, parsed)
+  }
+  return parsed
 }
 
 /** C2-W-133: whether the repair of the group has parsed more than its limit. */

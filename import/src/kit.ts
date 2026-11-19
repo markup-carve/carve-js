@@ -1,5 +1,5 @@
 import {
-  isUrlAllowed, MAX_TREE_DEPTH, validateTree, writeWithDiagnostics,
+  isUrlAllowed, MAX_TREE_DEPTH, writeWithDiagnostics,
   type Attrs, type Block, type Diagnostic, type DocumentNode,
   type Inline, type ListNode, type TableCellNode, type TableRowNode,
 } from '../../src/index.ts'
@@ -154,7 +154,7 @@ export function documentOf(context: Context, children: DocumentNode['children'])
 
 export function complete(context: Context, children: DocumentNode['children']): ImportResult {
   const document = documentOf(context, children)
-  validateTree(document)
+  // writeWithDiagnostics validates the document before writing it.
   const written = writeWithDiagnostics(document)
   return { document, source: written.source, diagnostics: [...context.diagnostics, ...written.diagnostics] }
 }

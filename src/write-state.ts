@@ -68,6 +68,8 @@ export interface Writer {
   plan: Plan | null
   /** The parses the writer made, for the test that the planned path makes none. */
   parses: number
+  /** Parsed short blocks reused when no document-level definitions affect them. */
+  parseCache: Map<string, DocumentNode>
   /** C2-W-088: the result of each probe of the repair by the state it reads (write-check.ts), and an id of each node it read. */
   probes: Map<string, ProbeResult>
   nodeIds: Map<Node, number>
@@ -93,7 +95,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(), parsed: null,
-    prewrittenAttributes: null, plan: null, parses: 0,
+    prewrittenAttributes: null, plan: null, parses: 0, parseCache: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(), work: { chars: 0, limit: Infinity },
   }
 }

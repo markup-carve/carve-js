@@ -265,6 +265,7 @@ export function importBbcode(input: string): ImportResult {
   if (length > BBCODE_MAX_INPUT_LENGTH) throw new BbcodeInputTooLargeError(length)
   const diagnostics: ImportDiagnostic[] = []
   const html = bbcodeHtml(input, diagnostics)
-  const result = importHtml(html, false)
+  // This HTML is generated here; its byte positions do not locate the BBCode input.
+  const result = importHtml(html, false, {}, false)
   return { ...result, diagnostics: [...diagnostics, ...withoutHtmlRanges(result.diagnostics)] }
 }
