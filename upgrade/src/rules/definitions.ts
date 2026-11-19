@@ -261,6 +261,26 @@ export function definitionsNested(ctx: Context): void {
  */
 let top: false | 'moved' | 'kept' = false
 
+/**
+ * U-042: 0.1 and 0.2 both keep the first definition of a note key. A later one in a container left no
+ * block in 0.1, but 0.2 reads it as text there, so the late passes remove it; quote marks before it stay.
+ */
+function droppedNoteDefinitions(ctx: Context): void {
+  const keys = ctx.doc.footnoteDefs
+  if (typeof keys !== 'object' || keys === null) return
+  const notes = ctx.doc.footnoteDefPos as Record<string, { startLine: number }> | undefined
+  const kept = new Set(Object.values(notes ?? {}).map((pos) => pos.startLine))
+  for (let line = 1; line <= ctx.lines.count; line++) {
+    const text = lineText(ctx.lines, line)
+    const marks = quotePrefix(text, quoteDepth(text)).trimEnd()
+    const label = /^\[\^([^\]]+)\]: /u.exec(insideQuotes(text).trimStart())?.[1]
+    if (label === undefined || kept.has(line) || !isGap(ctx, line) || !(label in keys) || prefixLength(text) === 0) continue
+    const start = lineStart(ctx.lines, line)
+    if (marks === '') removeLine(ctx, 'U-042', line, 'a later definition of the note key, which 0.1 dropped, is removed')
+    else change(ctx, 'U-042', start, start + text.length, marks, 'a later definition of the note key, which 0.1 dropped, is removed')
+  }
+}
+
 export function definitions(ctx: Context): void {
   const spans = definitionSpans(ctx)
   enclosing.clear()
@@ -269,6 +289,7 @@ export function definitions(ctx: Context): void {
   const ends = new Map<number, number>()
   for (let index = spans.length - 1; index >= 0; index--) hoist(ctx, spans[index]!, ends)
   droppedLinkDefinitions(ctx)
+  if (ctx.late) droppedNoteDefinitions(ctx)
   duplicates(ctx, 'abbreviation_def', 'abbr', 'U-041')
 }
 

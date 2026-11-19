@@ -12,6 +12,7 @@ const cases: [string, string, string, string][] = [
   ['C2-B-081 U-039', 'See [^a].\n\n1. > [^a]: note body\n', '[^a]: note body\n\nSee [^a].\n\n1. > {%%}\n', 'U-039'],
   ['C2-B-081 U-039', '[^f]: a\n\n  [^g]: b\n\n      [^h]: c\n\n    TAIL\n\nx[^f] [^g] [^h]\n',
     '[^f]: a\n\n[^g]: b\n\n\n  TAIL\n\n[^h]: c\n\nx[^f] [^g] [^h]\n', 'U-039'],
+  ['C2-B-085 U-042', '> [^f]: n\n> [^f]: m\n\nx[^f]\n', '>\n\n[^f]: n\n\nx[^f]\n', 'U-042'],
   ['C2-I-119 U-065', '_x /*a*/{q} b/{c_} c_\n', '{_x */a/*{q} b/\\{c_}} c_\n', 'U-065'],
   ['C2-I-052 U-068', '{/a /*b*/{.k} c/}\n', '{/a */b/*{.k} c/}\n', 'U-068'],
   ['C2-I-011 U-068', '/a /*x*/ b/\n/**/ /**/\n', '/a \\/*x*/ b\\/\n{*{/\\*\\/ \\/\\*/}*}\n', 'U-068'],
