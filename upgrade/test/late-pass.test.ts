@@ -62,6 +62,11 @@ describe('U-021 and the endnotes list', () => {
     expect(result.check).toBe('explained')
     expect(result.records.map((record) => record.entry)).toEqual(expect.arrayContaining(['U-021', 'U-038']))
   })
+  it('C2-B-062 still reaches a sole item in a heading section', () => {
+    const result = upgrade('# H\n\n- a\n\n  b\n')
+    expect(result.check).toBe('explained')
+    expect(result.records.map((record) => record.entry)).toContain('U-021')
+  })
 })
 
 describe('U-258 empty runs in a quote', () => {
