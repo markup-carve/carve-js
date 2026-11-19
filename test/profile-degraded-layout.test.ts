@@ -49,3 +49,17 @@ describe('item at the nesting bound', () => {
       .toBe('<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>')
   })
 })
+
+describe('denied link past the nesting bound', () => {
+  const codes = (source: string): string[] =>
+    renderWithDiagnostics(source, { profile: 'comment' }).diagnostics.map((entry) => entry.code)
+
+  it.each(['> - [x](javascript:x)\n', '- > [x](javascript:x)\n', '> - [*x*](javascript:x)\n', '> - _[x](javascript:x)_\n'])(
+    'C2-H-163, C2-H-165: %j writes the link text and reports only the denied destination', (source) => {
+      expect(codes(source)).toEqual(['destination-denied'])
+    })
+
+  it('C2-H-166: a denied link itself past the bound is still degraded and reported', () => {
+    expect(codes('> > - [x](javascript:x)\n')).toEqual(['profile-construct-degraded'])
+  })
+})
