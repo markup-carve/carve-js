@@ -219,8 +219,11 @@ function isListMarker(text: string): boolean {
   return at > 0 && (text[at] === '.' || text[at] === ')') && text[at + 1] === ' '
 }
 
+// C2-B-151, C2-B-152: one to six `=` or `#` and a space.
+const HEADING_MARK = /^(?:#{1,6}|={1,6}) /
+
 function startsBlock(text: string): boolean {
-  if (text.startsWith('# ') || text.startsWith('= ') || text.startsWith('> ') || text.startsWith(':: ')) return true
+  if (HEADING_MARK.test(text) || text.startsWith('> ') || text.startsWith(':: ')) return true
   if (text.startsWith(': ') || text.startsWith('{.')) return true
   return text.startsWith('[') && text.includes(']:')
 }
@@ -313,7 +316,7 @@ function markdownDefinition(line: Line, context: LintContext): void {
   const { text, start } = lineText(line)
   const previous = prior(line, context)
   // C2-B-074: a later line of its paragraph, below a line that is no `::` term.
-  if (!line.paragraph || previous === undefined || previous.path !== line.path || !text.startsWith(': ')) return
+  if (!line.paragraphLeaf || previous === undefined || previous.path !== line.path || !text.startsWith(': ')) return
   if (lineText(previous).text.startsWith(':: ')) return
   context.report('markdown-definition-paragraph', start, start + text.length, line.path)
 }
@@ -344,10 +347,8 @@ function djotPlus(line: Line, context: LintContext): void {
 }
 
 function definitionInContainer(line: Line, context: LintContext): void {
-  const raw = trimmed(line)
-  const prefix = /^(?:>\s*)+/u.exec(raw.text)?.[0] ?? ''
-  const text = raw.text.slice(prefix.length)
-  const start = raw.start + prefix.length
+  // C2-B-081: the line's text behind every container mark, a list marker or description mark included.
+  const { text, start } = lineText(line)
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
   if (hasAncestor(line.path, context, 'footnote')) return
