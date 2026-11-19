@@ -3,17 +3,40 @@ import { type Attrs, type BlockExtensionNode, type CodeBlockNode, type DivNode, 
   type Node } from '../ast.ts'
 import { plainText } from '../ast-text.ts'
 import { type ParsedTree } from '../ast-blocks.ts'
-import { validateTree, CarveTreeError } from '../ast-validate.ts'
+import { CarveTreeError, fragmentValidator } from '../ast-validate.ts'
 import { addFinding, type Findings } from '../diagnostics.ts'
-import { write } from '../write.ts'
+import { write, writeWithLinkKeys } from '../write.ts'
 import { type ExtensionClaim, type ExtensionDefinition, type ExtensionSource } from './types.ts'
 
 /** The link reference definitions of the document whose claims are being read. */
 let contextDefinitions: DocumentNode['children'] = []
+/**
+ * The keys of those definitions, where writing them adds nothing to a body written before them: they write without
+ * a loss, and no line of theirs is a colon run that could close a div. Null where that is not known yet.
+ */
+let contextKeys: ReadonlySet<string> | false | null = null
 
-/** C2-X-026, C2-W-089: the body is written in its context, so a reference to a definition outside it keeps its form. */
+function definitionKeys(): ReadonlySet<string> | false {
+  if (contextKeys !== null) return contextKeys
+  try {
+    const text = write({ type: 'document', astVersion: '2.0', children: contextDefinitions })
+    contextKeys = text.split('\n').some((line) => /^:+$/u.test(line)) ? false
+      : new Set(contextDefinitions.flatMap((node) => node.type === 'link_reference_definition' ? [node.key] : []))
+  } catch {
+    contextKeys = false
+  }
+  return contextKeys
+}
+
+/**
+ * C2-X-026, C2-W-089: the body is written in its context, so a reference to a definition outside it keeps its form.
+ * The div is the first group of that write and nothing behind it changes it, so the definitions are written once.
+ */
 function sourceBody(node: DivNode): string {
-  const text = write({ type: 'document', astVersion: '2.0', children: [node, ...contextDefinitions] })
+  const keys = contextDefinitions.length === 0 ? null : definitionKeys()
+  const text = keys === false ? write({ type: 'document', astVersion: '2.0', children: [node, ...contextDefinitions] })
+    : keys === null ? write({ type: 'document', astVersion: '2.0', children: [node] })
+      : writeWithLinkKeys({ type: 'document', astVersion: '2.0', children: [node] }, keys)
   const lines = text.split('\n')
   const opener = lines.findIndex((line) => line.startsWith(':::'))
   const run = /^:+/.exec(lines[opener] ?? '')?.[0] ?? ':::'
@@ -68,27 +91,75 @@ function inlineClaim(node: InlineExtensionNode, name: string): ExtensionClaim {
 
 interface ParentSlot { name: string, slot: string }
 
+/** One claim pass: the registry, the definitions that can claim each source name, and what every check of a transform shares. */
+interface Pass {
+  definitions: readonly ExtensionDefinition[]
+  /** The definitions with a transform, by `form:name` of their matcher, in registration order. */
+  claimants: ReadonlyMap<string, readonly ExtensionDefinition[]>
+  /** The check of a transformed node, in a document that declares every registered extension. */
+  validate: (children: DocumentNode['children'], registry: readonly ExtensionDefinition[]) => void
+  /** The registry a transform in a parent slot is checked against: its own definition without the parent. */
+  slotRegistries: Map<ExtensionDefinition, readonly ExtensionDefinition[]>
+  sourceNames: ReadonlyMap<Node, string> | null
+  findings: Findings
+}
+
+function createPass(definitions: readonly ExtensionDefinition[], sourceNames: ReadonlyMap<Node, string> | null,
+  findings: Findings): Pass {
+  const claimants = new Map<string, ExtensionDefinition[]>()
+  for (const definition of definitions) {
+    if (definition.transform === undefined || definition.matcher === undefined) continue
+    const key = `${definition.matcher.form}:${definition.matcher.name}`
+    claimants.set(key, [...claimants.get(key) ?? [], definition])
+  }
+  const declarations = definitions.map((entry) => ({ name: entry.name, version: entry.version,
+    required: false, slots: Object.keys(entry.slots) }))
+  const validate = fragmentValidator(declarations)
+  return { definitions, claimants, validate, slotRegistries: new Map(), sourceNames, findings }
+}
+
+const NO_CLAIMANTS: readonly ExtensionDefinition[] = []
+
+/** The definitions that can claim `node`: only a div, a fence or an inline extension with a matcher name is claimed. */
+function claimantsOf(node: Node, pass: Pass): readonly ExtensionDefinition[] {
+  if (pass.claimants.size === 0) return NO_CLAIMANTS
+  let key: string | undefined
+  if (node.type === 'inline_extension') key = `inline:${node.name}`
+  else if (node.type === 'div' || node.type === 'code_block') {
+    const name = pass.sourceNames?.get(node)
+    if (name !== undefined) key = `${node.type === 'div' ? 'div' : 'fence'}:${name}`
+  }
+  return key === undefined ? NO_CLAIMANTS : pass.claimants.get(key) ?? NO_CLAIMANTS
+}
+
+function registryFor(definition: ExtensionDefinition, pass: Pass, parent: ParentSlot | undefined): readonly ExtensionDefinition[] {
+  if (parent === undefined) return pass.definitions
+  let registry = pass.slotRegistries.get(definition)
+  if (registry === undefined) {
+    registry = pass.definitions.map((entry) => {
+      if (entry !== definition) return entry
+      const copy = { ...entry }
+      delete copy.parent
+      return copy
+    })
+    pass.slotRegistries.set(definition, registry)
+  }
+  return registry
+}
+
 function validTransform(node: BlockExtensionNode | InlineExtensionNode, input: ExtensionClaim,
-  definition: ExtensionDefinition, definitions: readonly ExtensionDefinition[], parent: ParentSlot | undefined): boolean {
+  definition: ExtensionDefinition, pass: Pass, parent: ParentSlot | undefined): boolean {
   if (node === undefined || typeof node !== 'object' ||
     node.type !== (input.form === 'inline' ? 'inline_extension' : 'block_extension') ||
     node.name !== definition.name || node.version !== definition.version) return false
   if (definition.parent !== undefined && (definition.parent.name !== parent?.name ||
     definition.parent.slot !== parent.slot)) return false
   attachClaim(node, input, input.node)
-  const registry = definitions.map((entry) => {
-    if (entry !== definition || parent === undefined) return entry
-    const copy = { ...entry }
-    delete copy.parent
-    return copy
-  })
-  const declarations = definitions.map((entry) => ({ name: entry.name, version: entry.version,
-    required: false, slots: Object.keys(entry.slots) }))
+  const registry = registryFor(definition, pass, parent)
   const children: DocumentNode['children'] = node.type === 'inline_extension' ?
     [{ type: 'paragraph', children: [node] }] : [node]
-  const document: DocumentNode = { type: 'document', astVersion: '2.0', extensions: declarations, children }
   try {
-    validateTree(document, undefined, undefined, registry)
+    pass.validate(children, registry)
     return true
   } catch (error) {
     if (error instanceof CarveTreeError || error instanceof RangeError) return false
@@ -96,16 +167,15 @@ function validTransform(node: BlockExtensionNode | InlineExtensionNode, input: E
   }
 }
 
-function replace(node: Node, definitions: readonly ExtensionDefinition[], sourceNames: ReadonlyMap<Node, string> | null,
-  findings: Findings, parent?: ParentSlot): Node {
-  for (const definition of definitions) {
-    if (definition.transform === undefined) continue
+function replace(node: Node, pass: Pass, parent?: ParentSlot): Node {
+  const { sourceNames, findings } = pass
+  for (const definition of claimantsOf(node, pass)) {
     let input: ExtensionClaim | null
     let transformed: BlockExtensionNode | InlineExtensionNode | null
     try {
       input = claim(node, definition, sourceNames)
       if (input === null) continue
-      transformed = definition.transform(input)
+      transformed = definition.transform!(input)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       addFinding(findings, node, { code: 'extension-transform-failed', severity: 'warning', channel: 'render-loss',
@@ -113,15 +183,15 @@ function replace(node: Node, definitions: readonly ExtensionDefinition[], source
       break
     }
     if (transformed === null) continue
-    if (!validTransform(transformed, input, definition, definitions, parent)) {
+    if (!validTransform(transformed, input, definition, pass, parent)) {
       addFinding(findings, node, { code: 'extension-fallback-rendered', severity: 'warning', channel: 'render-loss',
         message: `Invalid transform of ${definition.name}; the core source node was retained` })
       break
     }
-    replaceChildren(transformed, definitions, sourceNames, findings)
+    replaceChildren(transformed, pass)
     return transformed
   }
-  replaceChildren(node, definitions, sourceNames, findings)
+  replaceChildren(node, pass)
   return node
 }
 
@@ -148,13 +218,12 @@ function slotParent(node: Node, step: string): ParentSlot | undefined {
   return { name: node.name, slot: step.slice(6).replaceAll('~1', '/').replaceAll('~0', '~') }
 }
 
-function replaceChildren(node: Node, definitions: readonly ExtensionDefinition[], sourceNames: ReadonlyMap<Node, string> | null,
-  findings: Findings): void {
+function replaceChildren(node: Node, pass: Pass): void {
   forEachSlot(node, (nodes, step) => {
     if ((node.type === 'block_extension' || node.type === 'inline_extension') && step === 'fallback') return
     const parent = slotParent(node, step)
     for (const [at, child] of nodes.entries()) {
-      Reflect.set(nodes, at, replace(child, definitions, sourceNames, findings, parent))
+      Reflect.set(nodes, at, replace(child, pass, parent))
     }
   })
 }
@@ -183,13 +252,16 @@ export function applyExtensions(parsed: ParsedTree, definitions: readonly Extens
   const document = parsed.document
   const sourceNames = parsed.facts?.sourceNames ?? null
   const findings: Findings = { entries: [], nodes: [] }
+  const pass = createPass(definitions, sourceNames, findings)
   contextDefinitions = document.children.filter((node) => node.type === 'link_reference_definition')
+  contextKeys = null
   try {
     for (const [at, child] of document.children.entries()) {
-      Reflect.set(document.children, at, replace(child, definitions, sourceNames, findings))
+      Reflect.set(document.children, at, replace(child, pass))
     }
   } finally {
     contextDefinitions = []
+    contextKeys = null
   }
   declareExtensions(document, definitions)
   if (findings.entries.length === 0 || parsed.facts === null) return parsed

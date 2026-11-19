@@ -338,3 +338,82 @@ export function isBreak(node: Node | undefined): boolean {
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+const NOT_PLAIN = Symbol('not plain')
+
+function clonePlain(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) return typeof value === 'function' || typeof value === 'symbol' ? NOT_PLAIN : value
+  if (Array.isArray(value)) return Object.getPrototypeOf(value) === Array.prototype ? cloneArray(value) : NOT_PLAIN
+  return Object.getPrototypeOf(value) === Object.prototype ? cloneObject(value as Record<string, unknown>) : NOT_PLAIN
+}
+
+function cloneArray(value: readonly unknown[]): unknown {
+  const copy: unknown[] = new Array<unknown>(value.length)
+  for (let at = 0; at < value.length; at++) {
+    if (!(at in value)) return NOT_PLAIN
+    const item = clonePlain(value[at])
+    if (item === NOT_PLAIN) return NOT_PLAIN
+    copy[at] = item
+  }
+  return copy
+}
+
+function cloneObject(value: Record<string, unknown>): unknown {
+  const copy: Record<string, unknown> = {}
+  for (const key of Object.keys(value)) {
+    // An assignment to `__proto__` sets the prototype instead of copying the key.
+    if (key === '__proto__') return NOT_PLAIN
+    const item = clonePlain(value[key])
+    if (item === NOT_PLAIN) return NOT_PLAIN
+    copy[key] = item
+  }
+  return copy
+}
+
+/**
+ * A copy of a tree of plain objects, arrays and primitives, at a fraction of the cost of `structuredClone`. A tree
+ * has no shared nodes, so a value that stands twice is copied twice. Anything else, or a nesting too deep to recurse,
+ * goes to `structuredClone`.
+ */
+export function cloneTree<T>(value: T): T {
+  try {
+    const copy = clonePlain(value)
+    if (copy !== NOT_PLAIN) return copy as T
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+  }
+  return structuredClone(value)
+}
+
+/**
+ * Whether two trees of plain values are the same: equal primitives, and objects with the same keys in the same order.
+ * A value of any other kind counts as different.
+ */
+export function sameTree(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  const array = Array.isArray(a)
+  if (array !== Array.isArray(b)) return false
+  const prototype = array ? Array.prototype : Object.prototype
+  if (Object.getPrototypeOf(a) !== prototype || Object.getPrototypeOf(b) !== prototype) return false
+  return array ? sameArray(a as unknown[], b as unknown[]) : sameObject(a as Record<string, unknown>, b as Record<string, unknown>)
+}
+
+function sameArray(a: readonly unknown[], b: readonly unknown[]): boolean {
+  if (a.length !== b.length) return false
+  for (let at = 0; at < a.length; at++) {
+    if (!(at in a) || !(at in b) || !sameTree(a[at], b[at])) return false
+  }
+  return true
+}
+
+function sameObject(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const keys = Object.keys(a)
+  const other = Object.keys(b)
+  if (keys.length !== other.length) return false
+  for (let at = 0; at < keys.length; at++) {
+    const key = keys[at]!
+    if (key !== other[at] || !sameTree(a[key], b[key])) return false
+  }
+  return true
+}
