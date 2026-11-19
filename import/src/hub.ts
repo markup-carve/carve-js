@@ -11,7 +11,7 @@ import { gfmTaskListItemHtml } from 'micromark-extension-gfm-task-list-item'
 import { frontmatter } from 'micromark-extension-frontmatter'
 import { math } from 'micromark-extension-math'
 import { directive, directiveHtml, type Directive } from 'micromark-extension-directive'
-import { parse as parseDjot, renderHTML as renderDjot } from '@djot/djot'
+import { parse as parseDjot, parseEvents as parseDjotEvents, renderHTML as renderDjot } from '@djot/djot'
 import type { DocumentNode } from '../../src/index.ts'
 import { ensureForeignDepth, ImportInputError, type ImportResult, withoutHtmlRanges } from './kit.ts'
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
@@ -261,6 +261,36 @@ function dropGeneratedIds(root: object): void {
     if (Array.isArray(children)) pending.push(...(children as unknown[]))
   }
 }
+
+interface InlineMatch { startpos: number, endpos: number, annot: string }
+interface InlineParser { matches: InlineMatch[], addMatch: (startpos: number, endpos: number, annot: string, matchIndex?: number) => void }
+
+/**
+ * djot.js 0.3.2 groups a `!` with the text before it, and the image marker then replaces that whole text run, so
+ * `a ![b](c)` loses `a `. Mirrors the upstream fix (jgm/djot.js c7760b9f, unreleased): the run is cut before the `!`.
+ * The library does not export its inline parser, so the prototype is taken from a parser it opens.
+ */
+function patchDjotImageMarker(): void {
+  const events = parseDjotEvents('x\ny\n')
+  events[Symbol.iterator]().next()
+  const containers: unknown = Reflect.get(events, 'containers')
+  const parser: unknown = Array.isArray(containers) ? Reflect.get(containers.at(-1) as object, 'inlineParser') : undefined
+  if (parser === null || typeof parser !== 'object') return
+  const prototype = Object.getPrototypeOf(parser) as InlineParser & { carveImageMarker?: true }
+  if (prototype.carveImageMarker === true || typeof prototype.addMatch !== 'function') return
+  const addMatch = prototype.addMatch
+  prototype.addMatch = function (this: InlineParser, startpos, endpos, annot, matchIndex) {
+    const previous = matchIndex === undefined ? undefined : this.matches[matchIndex]
+    if (annot === 'image_marker' && previous?.annot === 'str' && previous.startpos < startpos) {
+      previous.endpos = startpos - 1
+      return
+    }
+    addMatch.call(this, startpos, endpos, annot, matchIndex)
+  }
+  prototype.carveImageMarker = true
+}
+
+patchDjotImageMarker()
 
 interface InTags { inTags: (tag: string, node: unknown, newlines: number, extra: Record<string, string>) => string }
 
