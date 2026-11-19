@@ -1,3 +1,4 @@
+import { columnOf } from '../src/layout-lines.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { type Line, type LintContext, type Rule } from './types.ts'
@@ -444,27 +445,30 @@ function listColumnAbove(line: Line, context: LintContext): number | undefined {
     const host = context.lines[at]
     if (host === undefined || host.text.trim() === '' || quoteDepth(host.path, context) !== depth) continue
     const list = ancestorOf(host.path, context, 'definition_list')
-    const listLine = list === undefined ? undefined : firstLineOfPath(list, context)
     const listStart = list === undefined ? undefined : context.layouts.get(list)?.startByte
-    if (listLine === undefined || listStart === undefined) return undefined
-    return (context.chars[listStart] ?? 0) - context.lines[listLine - 1]!.start
+    if (list === undefined || listStart === undefined) return undefined
+    return columnOf(context.source, context.chars[listStart] ?? 0, quoteDepth(list, context))
   }
   return undefined
 }
 
-function belowListColumn(line: Line, context: LintContext): { text: string, start: number, hostColumn: number } | undefined {
+interface BelowColumn { text: string, start: number, column: number, hostColumn: number }
+
+function belowListColumn(line: Line, context: LintContext): BelowColumn | undefined {
   const { text, start } = contentLine(line)
   if (!/^::?(?:[ \t]|$)/.test(text) || opensEntry(line, context)) return undefined
   const hostColumn = listColumnAbove(line, context)
-  return hostColumn !== undefined && hostColumn > start - line.start ? { text, start, hostColumn } : undefined
+  // C2-B-004: columns count tab stops.
+  const column = columnOf(context.source, start, quoteDepth(line.path, context))
+  return hostColumn !== undefined && hostColumn > column ? { text, start, column, hostColumn } : undefined
 }
 
 function descriptionColumn(line: Line, context: LintContext): void {
   const found = belowListColumn(line, context)
   if (found === undefined) return
-  const { text, start, hostColumn } = found
+  const { text, start, column, hostColumn } = found
   context.report('description-separator-below-content-column', start, start + text.length, line.path,
-    { name: text.startsWith('::') ? 'term' : 'description', column: String(start - line.start + 1), 'host.column': String(hostColumn + 1) })
+    { name: text.startsWith('::') ? 'term' : 'description', column: String(column + 1), 'host.column': String(hostColumn + 1) })
 }
 
 const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'admonition', 'figure_group', 'line_block', 'block_quote'])

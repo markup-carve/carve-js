@@ -82,4 +82,7 @@ describe('0.2 lint parity, lintsat1 round', () => {
   it("C2-B-074: a line the column rule reports is left to it", () => {
     expect(count("- :: t\n  : d\n: x\n", 'markdown-definition-paragraph')).toBe(0)
   })
+  it("C2-B-004: a tab-indented term counts its tab stop", () => {
+    expect(count("\t:: t\n   : d\n", 'description-separator-below-content-column')).toBe(1)
+  })
 })
