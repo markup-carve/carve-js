@@ -51,6 +51,10 @@ describe('candidate 17 clause outputs', () => {
       for (const diagnostic of entry.expected.diagnostics ?? []) {
         const code = typeof diagnostic === 'string' ? diagnostic : diagnostic.code
         expect(result.diagnostics.some((actual) => actual.code === code)).toBe(true)
+        if (code === 'extension-fallback-rendered') {
+          expect(result.diagnostics.find((actual) => actual.code === code)?.message)
+            .toMatch(/^Rendered the fallback of the unknown extension "/)
+        }
       }
       for (const code of entry.expected.notReported ?? []) {
         expect(result.diagnostics.some((actual) => actual.code === code)).toBe(false)

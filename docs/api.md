@@ -299,7 +299,7 @@ other writer, and `registerExports` from that entry adds them to a registry.
 The extension surface may change in 0.2.x (`spec/0.2/extensions.md`): the `extensions` option registers
 `ExtensionDefinition`s that claim divs, fences or inline extensions, and the `renderers` option maps an extension
 name to an `ExtensionRenderer`, trusted host code whose HTML is inserted unchanged. `tabsExtensions` and
-`tabsRenderer` are the standard tabs extension. `standardTabsRenderer({ mode: 'aria' })` selects ARIA buttons and panels; `mode: 'css'` is the default. More standard extensions come from `@markup-carve/carve/extensions`;
+`tabsRenderer` are the standard tabs extension. `standardTabsRenderer({ mode: 'aria' })` selects ARIA buttons and panels; the host must supply the script that switches panels in that mode. `mode: 'css'` is the default. More standard extensions come from `@markup-carve/carve/extensions`;
 [fenced renderers](fenced-renderers.md) covers the diagram presets, `mathBlock`, `codeGroup` and `codeCallouts`,
 [blocks and inline extensions](extensions-blocks-inline.md) the rest of the block and inline ones,
 [the reference apparatus](extensions-reference.md) `glossary`, `index` and `citations`, and
