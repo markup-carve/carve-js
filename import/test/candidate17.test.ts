@@ -2,13 +2,13 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { importDocument } from '../src/index.ts'
 
-const entry = (JSON.parse(readFileSync(new URL('../../spec/spec/0.2/conformance/clause-cases.json', import.meta.url), 'utf8')) as {
+const entry = (JSON.parse(readFileSync(new URL('../../test/candidate17-cases.json', import.meta.url), 'utf8')) as {
   cases: {
     id: string, html: string, options: { labels: Record<string, string> },
     expected: { children: unknown[], notReported: string[] }
   }[]
 }).cases.find((item) => item.id === 'CC-1347')!
-const titled = (JSON.parse(readFileSync(new URL('../../spec/spec/0.2/conformance/examples.json', import.meta.url), 'utf8')) as {
+const titled = (JSON.parse(readFileSync(new URL('../../test/candidate17-cases.json', import.meta.url), 'utf8')) as {
   examples: { id: string, html: string, expected: { children: unknown[] } }[]
 }).examples.find((item) => item.id === 'import-html-20')!
 

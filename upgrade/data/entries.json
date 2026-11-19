@@ -2021,8 +2021,8 @@
     },
     {
       "id": "U-416",
-      "name": "A host using the former aria mode must review its integration: the standard renderer writes radio controls in interactiv",
-      "class": "report",
+      "name": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\"><button type=\"button\" role=\"tab\" id=\"tabs-1-0\" aria-selected=\"true\" a",
+      "class": "none",
       "lint": []
     },
     {

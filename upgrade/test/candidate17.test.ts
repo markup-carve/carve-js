@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/upgrade.ts'
 
-const rows = (JSON.parse(readFileSync(new URL('../../spec/spec/0.2/data/upgrade-map.json', import.meta.url), 'utf8')) as {
+const rows = (JSON.parse(readFileSync(new URL('../../data/upgrade-map.json', import.meta.url), 'utf8')) as {
   source: { id: string, from: string, to: string }[]
 }).source.filter(row => ['U-423', 'U-424', 'U-425'].includes(row.id))
 

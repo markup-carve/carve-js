@@ -14,7 +14,7 @@ interface Case {
   options?: Record<string, unknown>
   expected: { html?: string, fingerprint?: string, notReported?: string[], diagnostics?: (string | { code: string })[] }
 }
-const cases = (JSON.parse(readFileSync('spec/spec/0.2/conformance/clause-cases.json', 'utf8')) as { cases: Case[] }).cases
+const cases = (JSON.parse(readFileSync(new URL('./candidate17-cases.json', import.meta.url), 'utf8')) as { cases: Case[] }).cases
 const byId = (id: string): Case => cases.find((entry) => entry.id === id)!
 
 const extensions = {

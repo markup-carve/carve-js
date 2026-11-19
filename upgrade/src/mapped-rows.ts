@@ -19,7 +19,7 @@ const REPORT_IDS = new Set([
   'U-378', 'U-379', 'U-380', 'U-381', 'U-382', 'U-383', 'U-384', 'U-385', 'U-386', 'U-387',
   'U-388', 'U-389', 'U-391', 'U-394', 'U-395',
   'U-397', 'U-398', 'U-403', 'U-404', 'U-408', 'U-409', 'U-410', 'U-411',
-  'U-414', 'U-415', 'U-416', 'U-417', 'U-419',
+  'U-414', 'U-415', 'U-417', 'U-419',
 ])
 
 const BY_SOURCE = new Map(map.source.filter((row) => REWRITE_IDS.has(row.id)).map((row) => [row.from, row]))

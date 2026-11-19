@@ -30,12 +30,16 @@ function target(text: string): Target {
 
 type Render = NonNullable<ExtensionRenderer['render']>
 
+function targetSource(node: Parameters<Render>[0], host: Parameters<Render>[1]): string {
+  return typeof node.props?.['target'] === 'string' ? node.props['target'] : host.plainText(node.fallback ?? [])
+}
+
 /** The standard `:wiki[Page#anchor|Display]` matcher (C2-X-057) with a link renderer. */
 export function wikilinks(options: WikilinksOptions = {}): ExtensionBundle {
   const generate = options.urlGenerator ?? slug
   const classes = (options.cssClass ?? 'wikilink').split(' ').filter((name) => name !== '')
   const link: Render = (node, host) => {
-    const source = typeof node.props?.['target'] === 'string' ? node.props['target'] : host.plainText(node.fallback ?? [])
+    const source = targetSource(node, host)
     const { page, anchor } = target(source)
     const display = host.plainText(node.fallback ?? [])
     const href = generate(page) + anchor

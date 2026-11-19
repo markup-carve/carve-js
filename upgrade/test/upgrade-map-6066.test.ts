@@ -5,13 +5,30 @@ import { canWriteUpgrade, needsAttention, upgrade } from '../src/upgrade.ts'
 const rows = map.source.filter((row) => Number(row.id.slice(2)) >= 375)
 
 describe('the pinned replay map rows', () => {
-  it.each(rows.filter((row) => row.kind === 'rewrite' && !['U-412', 'U-413'].includes(row.id)))
+  it.each(rows.filter((row) => row.kind === 'rewrite' && !['U-412', 'U-413', 'U-423', 'U-424', 'U-425'].includes(row.id)))
   ('$id rewrites and preserves the old HTML', (row) => {
     const result = upgrade(row.from)
     expect(result.output).toBe(row.to)
     expect(result.check).toBe('pass')
     expect(result.records.some((record) => record.entry === row.id)).toBe(true)
     expect(canWriteUpgrade(result)).toBe(true)
+  })
+
+  it.each(rows.filter((row) => ['U-423', 'U-424', 'U-425'].includes(row.id)))
+  ('$id rewrites only with its old host explicitly registered', (row) => {
+    expect(upgrade(row.from).output).toBe(row.from)
+    const result = upgrade(row.from, [row.id === 'U-425' ? 'samp' : 'wikilinks'])
+    expect(result.output).toBe(row.to)
+    expect(result.check).toBe('explained')
+    expect(result.records.some((record) => record.entry === row.id)).toBe(true)
+    expect(canWriteUpgrade(result)).toBe(true)
+  })
+
+  it('U-416 keeps source and reports no migration work', () => {
+    const row = map.source.find((item) => item.id === 'U-416')!
+    const result = upgrade(row.from)
+    expect(result.output).toBe(row.from)
+    expect(result.records.some((record) => record.entry === 'U-416')).toBe(false)
   })
 
   it.each(rows.filter((row) => row.kind === 'report'))('$id reports its parsed source range and blocks writing', (row) => {
