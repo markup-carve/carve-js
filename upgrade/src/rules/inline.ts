@@ -81,8 +81,10 @@ function attributeStart(src: string, end: number): number {
 function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
   if (node.pos === undefined) return
   const { startOffset: start } = node.pos
-  // The closer of a span with a glued attribute block goes before the block.
-  const end = node.attrs === undefined ? node.pos.endOffset : attributeStart(ctx.src, node.pos.endOffset)
+  // The closer of a span with a glued attribute block goes before the block. An underline is left to
+  // U-151: bracing it alone can leave its line half rewritten.
+  const glued = node.attrs !== undefined && bare.entry !== 'U-065'
+  const end = glued ? attributeStart(ctx.src, node.pos.endOffset) : node.pos.endOffset
   if (ctx.src[start] !== bare.mark || ctx.src[end - 1] !== bare.mark || end - start < 2) return
   // C2-B-171: a brace block glued to a cell's pipe is the attribute block of the cell, so a space goes between.
   change(ctx, bare.entry, start, start, ctx.src[start - 1] === '|' ? ' {' : '{', `bare ${bare.name} put in braces`)
