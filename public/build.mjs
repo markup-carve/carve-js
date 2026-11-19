@@ -10,7 +10,7 @@ const shared = { bundle: true, format: 'esm', target: 'es2022', legalComments: '
 
 // Build both entries together so the import entry reuses the exact engine modules loaded by the root entry.
 await build({ ...shared, entryPoints: { index: 'public/index.ts', import: 'public/formats.ts' },
-  outdir: 'dist', splitting: true, chunkNames: 'chunks/[name]-[hash]', platform: 'neutral',
+  outdir: 'dist', splitting: true, chunkNames: 'chunks/shared', platform: 'neutral',
   external: ['parse5', 'micromark', 'micromark-extension-*', '@djot/djot'] })
 await build({ ...shared, entryPoints: ['public/node.ts'], outfile: 'dist/node.js', platform: 'node' })
 await build({ ...shared, entryPoints: ['public/extensions.ts'], outfile: 'dist/extensions.js', platform: 'neutral' })
