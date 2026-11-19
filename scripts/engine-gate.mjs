@@ -13,7 +13,7 @@ const bounds = {
     stressSizes: '1000,10000,100000', inlineStressSizes: '1000,10000,100000', proptest: 100000000, importProptest: 100000000, minutes: 1, benchRounds: 20 },
   smoke: { lines: 2, inline: 2, treeLines: 2, treeTokens: 2, mutants: 1000,
     fuzz: 300, writerLines: 2, writerTokens: 2, writerContents: 200, writerDocuments: 50,
-    stressSizes: '100,1000,10000', inlineStressSizes: '300,3000,30000', proptest: 30, importProptest: 3, minutes: 0, benchRounds: 1 },
+    stressSizes: '100,1000,10000', inlineStressSizes: '500,5000,50000', proptest: 30, importProptest: 3, minutes: 0, benchRounds: 1 },
 }[mode]
 
 function run(command, args, cwd = '.') {

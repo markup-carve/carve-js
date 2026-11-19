@@ -1,7 +1,7 @@
 name: engine
 
-# The checks of the engine that are too slow for the normal test run, on pull
-# requests against next2. Three-line enumeration stays in `npm test`.
+# Full engine checks after next2 pushes and manual dispatch. The default-branch
+# nightly dispatcher starts this workflow on next2. Three-line enumeration stays in `npm test`.
 on:
   schedule:
     - cron: '15 3 * * *'
