@@ -1074,19 +1074,19 @@ export const LINT_MODEL = {
             "any": [
               {
                 "not": {
-                  "has": "next"
+                  "has": "leaf_next"
                 }
               },
               {
-                "f": "next.blank"
+                "f": "leaf_next.blank"
               },
               {
-                "f": "next.closes_container"
+                "f": "leaf_next.closes_container"
               },
               {
                 "ne": [
                   {
-                    "f": "next.leaf_id"
+                    "f": "leaf_next.leaf_id"
                   },
                   {
                     "f": "leaf_id"
@@ -1100,7 +1100,7 @@ export const LINT_MODEL = {
       "report": [
         {
           "when": {
-            "f": "next.blank"
+            "f": "leaf_next.blank"
           },
           "message": 1
         },

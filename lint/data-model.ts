@@ -28,6 +28,7 @@ export interface ModelLine {
   readonly prev2: ModelLine | undefined
   readonly next: ModelLine | undefined
   readonly next2: ModelLine | undefined
+  readonly leaf_next: ModelLine | undefined
 }
 
 export interface ColonContainer { width: number, line: number, column: number, kind: string, start: number }
@@ -133,14 +134,14 @@ function walk(document: Node): Walked[] {
   return out
 }
 
-interface Leaves { type: string[], id: string[], first: boolean[] }
+interface Leaves { type: string[], id: string[], first: boolean[], last: number[] }
 
 const blockType = (node: Node): string => (node.type === 'comment' && node.form === 'block' ? 'comment_block' : node.type)
 
 /** The innermost leaf block of each line: later, deeper nodes of the walk overwrite their holders. */
 function leaves(walked: readonly Walked[], count: number): Leaves {
   const out: Leaves = { type: new Array<string>(count).fill('none'), id: new Array<string>(count).fill(''),
-    first: new Array<boolean>(count).fill(false) }
+    first: new Array<boolean>(count).fill(false), last: new Array<number>(count).fill(0) }
   for (const { node, path } of walked) {
     const type = blockType(node)
     if (!LEAF_TYPES.has(type) || node.pos === undefined) continue
@@ -148,6 +149,7 @@ function leaves(walked: readonly Walked[], count: number): Leaves {
       out.type[number - 1] = type
       out.id[number - 1] = path
       out.first[number - 1] = number === node.pos.startLine
+      out.last[number - 1] = node.pos.endLine
     }
   }
   return out
@@ -166,7 +168,7 @@ function ancestorTypes(path: string, types: Map<string, string>): string[] {
 
 interface LineFields {
   number: number, start: number, end: number, text: string, body: string, body_start: number, body_end: number
-  blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, closes_container: boolean
+  blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, closes_container: boolean, leaf_last: number
 }
 
 class LineRecord {
@@ -187,6 +189,7 @@ class LineRecord {
   private colonCache: ColonContainer[] | undefined = undefined
   private shapeCache: string | undefined = undefined
   private lazyCache: boolean | undefined = undefined
+  private readonly leafLast: number
   private readonly path: string
   private readonly index: number
   private readonly model: ModelLine[]
@@ -206,6 +209,7 @@ class LineRecord {
     this.leaf_first = fields.leaf_first
     this.attached_here = fields.attached_here
     this.closes_container = fields.closes_container
+    this.leafLast = fields.leaf_last
     this.path = path
     this.index = index
     this.model = model
@@ -221,6 +225,7 @@ class LineRecord {
   get prev2(): ModelLine | undefined { return this.model[this.index - 2] }
   get next(): ModelLine | undefined { return this.model[this.index + 1] }
   get next2(): ModelLine | undefined { return this.model[this.index + 2] }
+  get leaf_next(): ModelLine | undefined { return this.leafLast === 0 ? this.next : this.model[this.leafLast] }
 }
 
 function lineRecord(line: Line, index: number, model: ModelLine[], found: Leaves, context: LintContext): ModelLine {
@@ -234,7 +239,7 @@ function lineRecord(line: Line, index: number, model: ModelLine[], found: Leaves
     body, body_start: bodyStart, body_end: bodyStart + body.length,
     blank: leaf === 'none' && /^[\s>]*$/.test(line.text), leaf, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
     attached_here: context.state.attachedLines.has(line.number),
-    closes_container: context.state.containerClosers.has(line.number),
+    closes_container: context.state.containerClosers.has(line.number), leaf_last: found.last[index]!,
   }, line.path, index, model, context)
 }
 

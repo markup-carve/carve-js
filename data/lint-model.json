@@ -123,6 +123,15 @@
       ]
     },
     {
+      "name": "leaf_next",
+      "type": "line",
+      "means": "the line below the last line of the leaf block of the line, or the line below for a line of no leaf block; absent at the end of the document",
+      "clauses": [
+        "C2-B-010",
+        "C2-W-107"
+      ]
+    },
+    {
       "name": "next",
       "type": "line",
       "means": "the line below, absent on the last line; next2 is the second line below",
@@ -1345,19 +1354,19 @@
             "any": [
               {
                 "not": {
-                  "has": "next"
+                  "has": "leaf_next"
                 }
               },
               {
-                "f": "next.blank"
+                "f": "leaf_next.blank"
               },
               {
-                "f": "next.closes_container"
+                "f": "leaf_next.closes_container"
               },
               {
                 "ne": [
                   {
-                    "f": "next.leaf_id"
+                    "f": "leaf_next.leaf_id"
                   },
                   {
                     "f": "leaf_id"
@@ -1371,7 +1380,7 @@
       "report": [
         {
           "when": {
-            "f": "next.blank"
+            "f": "leaf_next.blank"
           },
           "message": 1
         },
