@@ -37,6 +37,10 @@
       "types": "./dist/types/public/node.d.ts",
       "import": "./dist/node.js"
     },
+    "./extensions": {
+      "types": "./dist/types/public/extensions.d.ts",
+      "import": "./dist/extensions.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
