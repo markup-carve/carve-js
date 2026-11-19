@@ -9,7 +9,16 @@ export const JSON_SOURCE_LENGTH = Symbol('jsonSourceLength')
 
 /** The bare tree as JSON, every field included (C2-A-165). */
 export function encodeTree(document: Node): string {
-  return JSON.stringify(document)
+  return canonicalJson(document)
+}
+
+/** C2-A-217: RFC 8785 orders object keys by UTF-16 code units at every depth. */
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record).filter((key) => record[key] !== undefined).sort()
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`
 }
 
 /** C2-A-012, C2-A-013: the tree inside its envelope, for a storage or process boundary. */

@@ -35,7 +35,9 @@ export function wikilinks(options: WikilinksOptions = {}): ExtensionBundle {
   const generate = options.urlGenerator ?? slug
   const classes = (options.cssClass ?? 'wikilink').split(' ').filter((name) => name !== '')
   const link: Render = (node, host) => {
-    const { page, anchor, display } = target(host.plainText(node.fallback ?? []))
+    const source = typeof node.props?.['target'] === 'string' ? node.props['target'] : host.plainText(node.fallback ?? [])
+    const { page, anchor } = target(source)
+    const display = host.plainText(node.fallback ?? [])
     const href = generate(page) + anchor
     // C2-X-057: the target becomes a link only through the URL policy (C2-H-159).
     if ((page === '' && anchor === '') || !isUrlAllowed(href, host.urlPolicy)) return host.inlines(node.fallback ?? [])

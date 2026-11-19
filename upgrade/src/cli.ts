@@ -5,8 +5,9 @@ import { ENGINE_01_VERSION } from './engines.ts'
 import { formatRecord } from './report.ts'
 import { canWriteUpgrade, needsAttention, upgrade, type UpgradeResult } from './upgrade.ts'
 import { decodeUpgradeBytes } from './bytes.ts'
+import { type RegisteredExtension } from './extension-respell.ts'
 
-const USAGE = 'usage: carve-upgrade [--check] [--write] [--json] [--force] FILE...'
+const USAGE = 'usage: carve-upgrade [--check] [--write] [--json] [--force] [--registered-extension=wikilinks|samp] FILE...'
 
 /** U-079: printed once per run, because the tool cannot see what a host set. */
 const OPTION_NOTICE = [
@@ -20,16 +21,22 @@ interface Flags {
   write: boolean
   json: boolean
   force: boolean
+  registeredExtensions: RegisteredExtension[]
   files: string[]
 }
 
 function readFlags(args: string[]): Flags | null {
-  const flags: Flags = { check: false, write: false, json: false, force: false, files: [] }
+  const flags: Flags = { check: false, write: false, json: false, force: false, registeredExtensions: [], files: [] }
   for (const arg of args) {
     if (arg === '--check') flags.check = true
     else if (arg === '--write') flags.write = true
     else if (arg === '--json') flags.json = true
     else if (arg === '--force') flags.force = true
+    else if (arg.startsWith('--registered-extension=')) {
+      const name = arg.slice('--registered-extension='.length)
+      if (name !== 'wikilinks' && name !== 'samp') return null
+      flags.registeredExtensions.push(name)
+    }
     else if (arg.startsWith('--')) return null
     else flags.files.push(arg)
   }
@@ -73,7 +80,7 @@ function run(flags: Flags): number {
   const sources = decodeFiles(flags.files)
   if (sources === null) return 2
   for (const { file, source } of sources) {
-    const result = upgrade(source)
+    const result = upgrade(source, flags.registeredExtensions)
     try { emit(flags, file, result) }
     catch (error) {
       process.stderr.write(`carve[output-unwritable]: ${file}: ${String(error)}\n`)

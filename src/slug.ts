@@ -57,7 +57,8 @@ function transliterate(text: string): string {
     const code = char.codePointAt(0)!
     if (code < COMBINING_START || code > COMBINING_END) out += char
   }
-  return out
+  // Hangul decomposes into Jamo under NFD. Restore composed syllables after stripping marks.
+  return out.normalize('NFC')
 }
 
 function startsWithNumber(slug: string): boolean {

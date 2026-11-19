@@ -1,7 +1,7 @@
 // Option checks of the public calls that the engine does not check itself (C2-H-137: an unknown option is refused).
 import { CarveOptionError, readOptions } from '../src/options.ts'
 
-export type OptionKind = 'boolean' | 'string' | 'count' | 'extensions' | 'layout' | 'losses'
+export type OptionKind = 'boolean' | 'string' | 'count' | 'extensions' | 'extension-names' | 'layout' | 'losses'
 
 function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {
   if (typeof value !== 'object' || value === null) return false
@@ -22,6 +22,11 @@ function checkValue(name: string, kind: OptionKind, value: unknown): void {
       return
     case 'extensions':
       readOptions({ extensions: value }, 'parse')
+      return
+    case 'extension-names':
+      if (!Array.isArray(value) || !value.every(item => item === 'wikilinks' || item === 'samp')) {
+        throw new CarveOptionError(name, 'expected a list of wikilinks or samp')
+      }
       return
     case 'losses':
       readOptions({ [name]: value }, 'render')

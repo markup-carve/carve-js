@@ -27,8 +27,10 @@ function isTab(node: Block, claim: Extract<ExtensionClaim, { form: 'div' }>): no
 function tabsTransform(claim: ExtensionClaim): BlockExtensionNode | null {
   if (claim.form !== 'div' || claim.body.length === 0 || !claim.body.every((node) => isTab(node, claim))) return null
   const tabs = claim.body.filter((node): node is DivNode => isTab(node, claim)).map(tabNode)
+  const attrs = claim.attrs === undefined ? undefined : remainingAttrs(claim.attrs)
   return { type: 'block_extension', name: 'carve.tabs', version: '1', children: [],
-    slots: { tabs }, fallback: structuredClone(tabs.flatMap((tab) => tab.fallback)) }
+    slots: { tabs }, fallback: structuredClone(tabs.flatMap((tab) => tab.fallback)),
+    ...(attrs === undefined ? {} : { attrs }) }
 }
 
 /** C2-X-039 to C2-X-042: the standard extension uses the same registration shape as a host extension. */
@@ -51,7 +53,48 @@ function selectedTab(tabs: readonly Node[]): number {
   return marked < 0 ? 0 : marked
 }
 
-function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, host: ExtensionRenderHost): string {
+/** C2-X-043: the interactive channel offers CSS radios or semantic ARIA controls. */
+export function standardTabsRenderer(options: { mode?: 'css' | 'aria' } = {}): ExtensionRenderer {
+  if (options.mode !== undefined && options.mode !== 'css' && options.mode !== 'aria') throw new Error('invalid tabs mode')
+  return { version: '1', render: (node, host) => renderTabs(node, host, options.mode ?? 'css'), buildTime: renderStaticTabs }
+}
+
+function wrapper(node: BlockExtensionNode, host: ExtensionRenderHost, role: string): string {
+  const keyValues: [string, string][] = [...(node.attrs?.keyValues ?? [])]
+  const authored = (key: string): boolean => keyValues.some(([name]) => name.toLowerCase() === key)
+  if (!authored('role')) keyValues.push(['role', role])
+  if (!authored('aria-label') && !authored('aria-labelledby')) {
+    const label = host.labels['tabsGroup'] ?? 'Tabs'
+    if (label !== '') keyValues.push(['aria-label', label])
+  }
+  return host.attributes({
+    ...node, attrs: { ...(node.attrs ?? {}), classes: ['tabs', ...(node.attrs?.classes ?? [])], keyValues },
+  }, { block: true })
+}
+
+function renderTab(tab: Node, at: number, selected: number, group: string, mode: 'css' | 'aria', host: ExtensionRenderHost): {
+  control: string, panel: string
+} {
+  if (tab.type !== 'block_extension') return { control: '', panel: '' }
+  const title = tab.slots?.['title'] ?? []
+  const body = tab.slots?.['body'] ?? []
+  const label = title.length === 0 ? `Tab ${at + 1}` : host.plainText(title)
+  const shownTitle = title.length === 0 ? host.escapeText(label) : host.inlines(title)
+  const id = `${group}-${at}`
+  if (mode === 'aria') return {
+    control: `<button type="button" role="tab" id="${id}" aria-selected="${at === selected}" aria-controls="${id}-panel"` +
+      `${at === selected ? '' : ' tabindex="-1"'}>${shownTitle}</button>`,
+    panel: `<div class="tab-panel" role="tabpanel" id="${id}-panel" aria-labelledby="${id}"` +
+      `${at === selected ? '' : ' hidden'}>${host.blocks(body)}</div>`,
+  }
+  return {
+    control: `<input type="radio" name="${group}" id="${id}"${at === selected ? ' checked' : ''}>` +
+      `<label for="${id}">${shownTitle}</label>`,
+    panel: `<div class="tab-panel" role="group" aria-label="${host.escapeAttribute(label)}">${host.blocks(body)}</div>`,
+  }
+}
+
+function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, host: ExtensionRenderHost, mode: 'css' | 'aria'): string {
   if (node.type !== 'block_extension') return ''
   const tabs = node.slots?.['tabs'] ?? []
   const group = host.nextId('tabs')
@@ -60,17 +103,12 @@ function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, hos
   let panels = ''
   for (let at = 0; at < tabs.length; at++) {
     const tab = tabs[at]
-    if (tab?.type !== 'block_extension') continue
-    const title = tab.slots?.['title'] ?? []
-    const body = tab.slots?.['body'] ?? []
-    const label = title.length === 0 ? `Tab ${at + 1}` : host.plainText(title)
-    const id = `${group}-${at}`
-    controls += `<input type="radio" name="${group}" id="${id}"${at === selected ? ' checked' : ''}>`
-    controls += `<label for="${id}">${title.length === 0 ? host.escapeText(label) : host.inlines(title)}</label>`
-    panels += `<div class="tab-panel" role="group" aria-label="${host.escapeAttribute(label)}">${host.blocks(body)}</div>`
+    if (tab === undefined) continue
+    const rendered = renderTab(tab, at, selected, group, mode, host)
+    controls += rendered.control
+    panels += rendered.panel
   }
-  const groupLabel = host.escapeAttribute(host.labels['tabsGroup'] ?? 'Tabs')
-  return `<div class="tabs" role="group" aria-label="${groupLabel}">${controls}${panels}</div>`
+  return `<div${wrapper(node, host, mode === 'aria' ? 'tablist' : 'group')}>${controls}${panels}</div>`
 }
 
 /** C2-X-043: static tabs render as self-contained sections without controls or generated ids. */
@@ -84,9 +122,8 @@ function renderStaticTabs(node: BlockExtensionNode | { type: 'inline_extension' 
     const body = tab.slots?.['body'] ?? []
     sections += `<section class="tabs-panel"><h3 class="tabs-label">${host.inlines(title)}</h3>${host.blocks(body)}</section>`
   }
-  const groupLabel = host.escapeAttribute(host.labels['tabsGroup'] ?? 'Tabs')
-  return `<div class="tabs" role="group" aria-label="${groupLabel}">${sections}</div>`
+  return `<div${wrapper(node, host, 'group')}>${sections}</div>`
 }
 
 /** C2-X-043 to C2-X-048: both channels keep all panel content. */
-export const tabsRenderer: ExtensionRenderer = { version: '1', render: renderTabs, buildTime: renderStaticTabs }
+export const tabsRenderer: ExtensionRenderer = standardTabsRenderer()

@@ -15,6 +15,7 @@ const { document, source, diagnostics } = importDocument('# Hello *world*\n', { 
 |---|---|---|
 | `from` | `markdown`, `gfm`, `djot`, `bbcode`, `html` | The input format. Required. |
 | `rawHtml` | boolean, default `false` | HTML only: keeps comments and raw elements as raw nodes (C2-M-065). |
+| `labels` | map of label keys to text | HTML only: identifies generated accessible names from the renderer (C2-M-101). |
 | `strictLosses` | boolean, default `false` | Makes each loss of the import an error (C2-M-082). |
 
 The result holds `document` (the validated tree), `source` (the writer's Carve text) and `diagnostics`. An input

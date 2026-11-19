@@ -215,7 +215,8 @@ function lintedPart(node: IncludeNode, text: string): Linted {
 }
 
 /** C2-N-087: one finding of an included file, or null where it is outside a section or reported already. */
-function located(visit: Visit, node: IncludeNode, text: string, part: Linted, entry: Diagnostic, path: string): Diagnostic | null {
+function located(visit: Visit, node: IncludeNode, text: string, part: Linted, entry: Diagnostic, path: string,
+  includedBy: NonNullable<Diagnostic['includedBy']>): Diagnostic | null {
   const startOffset = (entry.range?.startOffset ?? 0) + part.shift
   const kept = part.kept
   if (kept !== null) {
@@ -229,7 +230,7 @@ function located(visit: Visit, node: IncludeNode, text: string, part: Linted, en
   // A finding of a section outside every selected block, such as one on the file as a whole, points at the include.
   const own = entry.path ?? ''
   const under = part.paths === null ? own : pathUnder(part.paths, own) ?? ''
-  return { ...entry, path: `${path}${under}`, range, file }
+  return { ...entry, path: `${path}${under}`, range, file, includedBy }
 }
 
 function keepLocated(visit: Visit, entry: Diagnostic | null, inclusion: string): void {
@@ -239,37 +240,46 @@ function keepLocated(visit: Visit, entry: Diagnostic | null, inclusion: string):
 }
 
 /** C2-N-086, C2-N-087: lints the source of one expanded Carve include and keeps each distinct finding once. */
-function lintInclude(visit: Visit, node: IncludeNode, path: string): void {
+function lintInclude(visit: Visit, node: IncludeNode, path: string, includedBy: NonNullable<Diagnostic['includedBy']>): void {
   const text = node.file === undefined ? undefined : visit.texts.get(node.file)
   if (text === undefined) return
   if (node.options?.code !== undefined) {
-    lintCodeChild(visit, node, text, path)
+    lintCodeChild(visit, node, text, path, includedBy)
     return
   }
   const part = lintedPart(node, text)
   for (const entry of visit.lintFile(part.source)) {
-    keepLocated(visit, located(visit, node, text, part, entry, path), path)
+    keepLocated(visit, located(visit, node, text, part, entry, path, includedBy), path)
   }
 }
 
 /** C2-N-086: a rule that reads the payload of a block also runs on the child of a code include, in its file. */
-function lintCodeChild(visit: Visit, node: IncludeNode, text: string, path: string): void {
+function lintCodeChild(visit: Visit, node: IncludeNode, text: string, path: string,
+  includedBy: NonNullable<Diagnostic['includedBy']>): void {
   const whole: Linted = { source: text, shift: 0, kept: null, paths: null }
   ;(node.children ?? []).forEach((child, index) => {
     for (const entry of visit.lintPayload(text, child, `/children/${index}`)) {
-      keepLocated(visit, located(visit, node, text, whole, entry, path), path)
+      keepLocated(visit, located(visit, node, text, whole, entry, path, includedBy), path)
     }
   })
 }
 
-function walk(visit: Visit, node: Node, path: string): void {
+function walk(visit: Visit, node: Node, path: string, file: string | undefined,
+  chain: NonNullable<Diagnostic['includedBy']>): void {
+  let childChain = chain
+  let childFile = file
   if (node.type === 'include' && node.children !== undefined) {
+    childChain = node.pos === undefined ? chain : [...chain, { ...(file === undefined ? {} : { file }),
+      range: { startOffset: node.pos.startOffset, endOffset: node.pos.endOffset } }]
+    childFile = node.file
     if (node.options?.code !== undefined) visit.codePaths.push(`${path}/children/`)
-    lintInclude(visit, node, path)
+    lintInclude(visit, node, path, childChain)
   }
   forEachSlot(node, (nodes, step, single) => {
-    if (single) walk(visit, nodes[0]!, `${path}/${step}`)
-    else nodes.forEach((child, index) => walk(visit, child, `${path}/${step}/${index}`))
+    const nextFile = step === 'children' ? childFile : file
+    const nextChain = step === 'children' ? childChain : chain
+    if (single) walk(visit, nodes[0]!, `${path}/${step}`, nextFile, nextChain)
+    else nodes.forEach((child, index) => walk(visit, child, `${path}/${step}/${index}`, nextFile, nextChain))
   })
 }
 
@@ -282,7 +292,7 @@ export function lintIncludes(source: string, value: unknown, own: Diagnostic[], 
   const expanded = parseWithDiagnostics(source, { includes: recording(config, texts) })
   const references = referenceFindings(expanded.document)
   const visit: Visit = { texts, lintFile, lintPayload, references, seen: new Set(), out: [], codePaths: [] }
-  walk(visit, expanded.document, '')
+  walk(visit, expanded.document, '', undefined, [])
   // The file lint pass selects source lines and sections. Keep only expansion findings that it cannot produce.
   const expansion = expanded.diagnostics.filter((entry) => entry.code.startsWith('include-') ||
     visit.codePaths.some((path) => entry.path?.startsWith(path) === true))

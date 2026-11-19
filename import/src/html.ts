@@ -17,6 +17,7 @@ import { abbreviationTemplate, collectTemplates } from './html-template.ts'
 import { resolveAlignments } from './html-table-align.ts'
 import { cell, coalesce, complete, documentOf, ensureForeignDepth, paragraph, row, softText, type ImportResult } from './kit.ts'
 import { append } from '../../src/append.ts'
+import { DEFAULT_LABELS } from '../../src/option-tables.ts'
 
 function htmlInteger(value: string | undefined): number | undefined {
   if (value === undefined) return undefined
@@ -403,7 +404,10 @@ function admonition(node: Html.Element, context: HtmlContext): Block[] | undefin
   const kind = classes[1]
   if (classes[0] !== 'admonition' || !isKind(ADMONITION_KINDS, kind)) return undefined
   const parts = titled(node, context)
-  const mapped = withoutKeys(withoutClasses(attrs(context, node), ['admonition', kind]), ['aria-label', 'aria-labelledby'])
+  const generatedName = parts.title ? 'aria-labelledby' : 'aria-label'
+  const generatedValue = parts.title ? attr(node, generatedName) : context.labels[`admonition${kind[0]!.toUpperCase()}${kind.slice(1)}`]
+  const omit = attr(node, generatedName) === generatedValue ? [generatedName] : []
+  const mapped = withoutKeys(withoutClasses(attrs(context, node), ['admonition', kind]), omit)
   return [{ type: 'admonition', kind, ...(parts.title ? { title: parts.title } : {}),
     ...(parts.groupLabel !== undefined ? { groupLabel: parts.groupLabel } : {}),
     children: flow(parts.rest, node, context), ...mapped }]
@@ -969,12 +973,14 @@ export interface HubHooks {
   finish?: (children: DocumentNode['children']) => DocumentNode['children']
 }
 
-export function importHtml(input: string, rawHtml = false, hooks: HubHooks = {}, sourceLocations = true): ImportResult {
+export function importHtml(
+  input: string, rawHtml = false, hooks: HubHooks = {}, sourceLocations = true, labels: Readonly<Record<string, string>> = {},
+): ImportResult {
   const full = isFullDocument(input)
   const foreign = full ? parse(input, { sourceCodeLocationInfo: sourceLocations }) : parseFragment(input, sourceLocations)
   ensureForeignDepth(foreign, 'html')
   hooks.prepare?.(foreign.childNodes)
-  const context: HtmlContext = { format: 'html', input, rawHtml, diagnostics: [], deferred: [],
+  const context: HtmlContext = { format: 'html', input, rawHtml, labels: { ...DEFAULT_LABELS, ...labels }, diagnostics: [], deferred: [],
     notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),
     anchorKeys: new Set() }
   if (!full) fragmentBody(input, context)

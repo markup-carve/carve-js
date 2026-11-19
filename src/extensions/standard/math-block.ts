@@ -22,7 +22,10 @@ function tex(node: BlockExtensionNode | InlineExtensionNode): string {
 }
 
 function open(node: Node, host: ExtensionRenderHost): string {
-  return `<div${host.attributes({ ...node, attrs: { ...node.attrs, classes: ['math', 'display', ...(node.attrs?.classes ?? [])] } } as Node,
+  const keyValues = [...(node.attrs?.keyValues ?? [])]
+  if (!keyValues.some(([name]) => name.toLowerCase() === 'role')) keyValues.push(['role', 'math'])
+  return `<div${host.attributes({ ...node, attrs: { ...node.attrs, classes: ['math', 'display', ...(node.attrs?.classes ?? [])],
+    keyValues } } as Node,
     { block: true })}>`
 }
 

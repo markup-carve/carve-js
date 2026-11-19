@@ -29,6 +29,7 @@ const UPGRADE_FLAGS: readonly Flag[] = [
   { name: 'json', commands: ['upgrade'], kind: 'switch' },
   { name: 'force', commands: ['upgrade'], kind: 'switch' },
   { name: 'migrate', commands: ['upgrade'], kind: 'switch' },
+  { name: 'registered-extension', commands: ['upgrade'], kind: 'enum', values: ['wikilinks', 'samp'], repeatable: true },
   { name: 'json', commands: ['diff'], kind: 'switch' },
 ]
 // C2-T-003: the commands and flags of the 0.1 command line that the reference engine keeps.
@@ -43,6 +44,7 @@ const ENGINE_FLAGS: readonly Flag[] = [
 
 function specified(row: (typeof cli.flags)[number]): Flag {
   const flag: Flag = { name: row.name, commands: row.commands as Command[], kind: row.kind as ValueKind }
+  if (row.name === 'heading-ids') flag.commands = [...flag.commands, 'lint']
   if ('values' in row) flag.values = row.name === 'from' ? [...row.values, ...EXTRA_FROM] : row.values
   if ('option' in row) flag.option = row.option
   if ('repeatable' in row && row.repeatable === true) flag.repeatable = true

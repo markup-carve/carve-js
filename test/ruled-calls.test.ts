@@ -143,7 +143,8 @@ describe('carve diff', () => {
     const result = cli('--json', 'a.crv', 'b.crv')
     expect(result.status).toBe(1)
     expect(JSON.parse(result.stdout)).toEqual(diffTree(parse('a /b/\n', { positions: false }), parse('a *b*\n', { positions: false })))
-    expect(cli('a.crv', 'b.crv').stdout).toBe('replace /children/0/children/1 {"type":"strong","children":[{"type":"text","value":"b"}]}\n')
+    // C2-A-217: encodeTree uses JSON Canonicalization Scheme key order.
+    expect(cli('a.crv', 'b.crv').stdout).toBe('replace /children/0/children/1 {"children":[{"type":"text","value":"b"}],"type":"strong"}\n')
   })
 
   it('reads source bytes that are not well-formed UTF-8, as render does', () => {

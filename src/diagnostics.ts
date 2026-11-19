@@ -13,6 +13,8 @@ export interface Diagnostic {
   range?: { startOffset: number, endOffset: number }
   /** C2-N-063, C2-N-087: the id of the included file the range is counted in; absent for the top-level document. */
   file?: string
+  /** C2-T-020: include directives from the entry file inward. */
+  includedBy?: { file?: string, range: { startOffset: number, endOffset: number } }[]
 }
 
 /** Entries, each with the node it is about, or null for the document. The positions are filled in once, at the end. */
@@ -62,6 +64,17 @@ function pointerOf(frame: Frame): string {
 interface Place {
   pointer: string
   file: string | undefined
+  includedBy: NonNullable<Diagnostic['includedBy']>
+}
+
+function inclusionOf(frame: Frame): NonNullable<Diagnostic['includedBy']> {
+  const chain: NonNullable<Diagnostic['includedBy']> = []
+  for (let at = frame.above; at !== null; at = at.above) {
+    if (at.node.type !== 'include' || at.node.children === undefined || at.node.pos === undefined) continue
+    chain.push({ ...(at.file === undefined ? {} : { file: at.file }),
+      range: { startOffset: at.node.pos.startOffset, endOffset: at.node.pos.endOffset } })
+  }
+  return chain.reverse()
 }
 
 /** The pointer and the file of each node of `wanted` that stands in the tree below `document`. */
@@ -70,7 +83,8 @@ function pointers(document: DocumentNode, wanted: Set<Node>): Map<Node, Place> {
   const stack: Frame[] = [{ node: document, above: null, step: '', file: undefined }]
   while (stack.length > 0 && found.size < wanted.size) {
     const frame = stack.pop()!
-    if (wanted.has(frame.node)) found.set(frame.node, { pointer: pointerOf(frame), file: frame.file })
+    if (wanted.has(frame.node)) found.set(frame.node, { pointer: pointerOf(frame), file: frame.file,
+      includedBy: inclusionOf(frame) })
     pushSlots(stack, frame, document.extensions ?? [])
   }
   return found
@@ -94,7 +108,10 @@ export function locateFindings(document: DocumentNode, findings: Findings): Diag
     const pos = place === undefined || node === null ? undefined : node.pos
     if (pos !== undefined && entry.range === undefined) entry.range = { startOffset: pos.startOffset, endOffset: pos.endOffset }
     // C2-N-063: the range is counted in the file of the node, which the include around it names.
-    if (place?.file !== undefined) entry.file = place.file
+    if (place?.file !== undefined) {
+      entry.file = place.file
+      if (place.includedBy.length > 0) entry.includedBy = place.includedBy
+    }
   })
   return entries
 }

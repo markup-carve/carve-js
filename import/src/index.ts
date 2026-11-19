@@ -11,6 +11,8 @@ export type { Format } from './kit.ts'
 export interface ImportOptions {
   from: Format
   rawHtml?: boolean
+  /** C2-M-101: the label map used when the HTML was rendered. */
+  labels?: Readonly<Record<string, string>>
   strictLosses?: boolean
   allowLosses?: readonly string[]
   maxLosses?: number
@@ -27,6 +29,6 @@ function importByFormat(input: string, options: ImportOptions): ImportResult {
     case 'gfm':
     case 'djot': return importThroughHtml(input, options.from)
     case 'bbcode': return importBbcode(input)
-    case 'html': return importHtml(input, options.rawHtml === true)
+    case 'html': return importHtml(input, options.rawHtml === true, {}, true, options.labels)
   }
 }

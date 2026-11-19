@@ -27,10 +27,10 @@ HTML importer uses.
 | `formatWithDiagnostics` | as `format` | `{ source, diagnostics }` | `CarveOptionError` |
 | `write` | a tree, `{ layout, alignTables, extensions, check }` | canonical source | `CarveOptionError`, `CarveTreeError`, `CarveWriteError` |
 | `writeWithDiagnostics` | as `write` | `{ source, diagnostics }` | `CarveOptionError`, `CarveTreeError` |
-| `lint` | source, `{ rules, platforms, includes, extensions }` | diagnostics | `CarveOptionError` |
+| `lint` | source, `{ rules, platforms, includes, extensions, headingIds }` | diagnostics | `CarveOptionError` |
 | `fix` | source, `{ rules, platforms, extensions }` | `{ output, applied }`, as `carve lint --fix` writes it ([Lint fixes](#lint-fixes)) | `CarveOptionError` |
 | `fixEdits` | source, a diagnostic of `lint` | the edits that fix that finding, or null | `CarveOptionError` |
-| `importDocument` | HTML, `{ from: 'html', rawHtml, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
+| `importDocument` | HTML, `{ from: 'html', rawHtml, labels, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
 | `includeDependencies` | a tree, `{ ranges }` | its include dependencies; with `ranges`, each directive's byte range | |
 | `flatten` | an expanded tree | `{ source, same }`: one Carve file, and whether it renders as the tree does | `CarveTreeError`, `CarveWriteError` |
 | `includeRegion` | file text, a region name, `{ code }` | `{ ok, text, start, end }` or `{ ok: false, reason }` | `CarveOptionError` |
@@ -40,7 +40,7 @@ HTML importer uses.
 | `treesEqual` | two trees or nodes | whether they are the same document (C2-A-161) | |
 | `applyPatch` | a tree, a patch, `{ fingerprint, extensions }` | the patched tree | `CarveOptionError`, `CarveTreeError`, `CarvePatchError` |
 | `sourceFingerprint`, `treeFingerprint` | source, or a tree | `sha256:` and a hex hash | `CarveOptionError`, `CarveTreeError` |
-| `encodeTree`, `encodeEnvelope` | a tree | JSON text | |
+| `encodeTree`, `encodeEnvelope` | a tree | JSON text; `encodeTree` uses JSON Canonicalization Scheme key order | |
 | `decodeTree` | JSON text, `{ extensions, source }` | the tree | `CarveOptionError`, `CarveTreeError` |
 | `validateTree` | a value, `{ extensions }` | nothing | `CarveOptionError`, `CarveTreeError` |
 | `migrateTree` | the JSON value of a 1.x or draft tree, `{ source }` | `{ document, envelope, layout, diagnostics }` | `CarveOptionError`, `CarveTreeError` |
@@ -77,7 +77,7 @@ if (result.diagnostics[0]?.channel !== 'render-loss') throw new Error('no loss r
 break (`br`), for output such as chat that shows no source line break (C2-H-203). `allowLosses` lists render-loss
 codes the host accepts: they are left out of the diagnostics and never fail a `strictLosses` render (C2-H-204).
 `maxLosses` keeps the first losses, 100 by default, and counts the rest in `suppressedDiagnostics` (C2-H-205).
-`importDocument` reads `allowLosses` and `maxLosses` too.
+`importDocument` reads `allowLosses`, `maxLosses` and `labels` too. Supply the same `labels` map used to render HTML so generated accessible names are recognized during import. `lint` reads `headingIds` so fragment checks use the ids the renderer generates; the CLI flag is `carve lint --heading-ids lower`.
 
 ```ts
 import { render, renderWithDiagnostics } from '@markup-carve/carve'
@@ -299,7 +299,7 @@ other writer, and `registerExports` from that entry adds them to a registry.
 The extension surface may change in 0.2.x (`spec/0.2/extensions.md`): the `extensions` option registers
 `ExtensionDefinition`s that claim divs, fences or inline extensions, and the `renderers` option maps an extension
 name to an `ExtensionRenderer`, trusted host code whose HTML is inserted unchanged. `tabsExtensions` and
-`tabsRenderer` are the standard tabs extension. More standard extensions come from `@markup-carve/carve/extensions`;
+`tabsRenderer` are the standard tabs extension. `standardTabsRenderer({ mode: 'aria' })` selects ARIA buttons and panels; `mode: 'css'` is the default. More standard extensions come from `@markup-carve/carve/extensions`;
 [fenced renderers](fenced-renderers.md) covers the diagram presets, `mathBlock`, `codeGroup` and `codeCallouts`,
 [blocks and inline extensions](extensions-blocks-inline.md) the rest of the block and inline ones,
 [the reference apparatus](extensions-reference.md) `glossary`, `index` and `citations`, and
@@ -312,12 +312,19 @@ import { render, tabsExtensions, tabsRenderer } from '@markup-carve/carve'
 const source = ':::: tabs\n::: tab "Install"\nRun.\n:::\n::::\n'
 const html = render(source, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })
 if (!html.includes('Install')) throw new Error(html)
+
+// A host that supplies the ARIA switching script can opt into ARIA controls.
+// render(source, { extensions: tabsExtensions, renderers: { 'carve.tabs': standardTabsRenderer({ mode: 'aria' }) } })
 ```
 
 ## Migrating from 0.1
 
 Each value the 0.1 package root exports, and what replaces it in 0.2. A row marked gone has no 0.2 call; the note
 says what to use instead. Of the 172 values, 118 map to a 0.2 call and 54 are gone.
+
+For a document whose 0.1 host registered the default `wikilinks` or `samp` semantic span extension, pass
+`registeredExtensions: ['wikilinks', 'samp']` to `upgrade`. It writes U-423 to U-425 source forms and verifies the
+old and new host HTML. The command line spelling is `carve upgrade --registered-extension wikilinks` (repeatable).
 
 | 0.1 call | 0.2 call | Note |
 |---|---|---|

@@ -1,5 +1,7 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
-import { type Block, type BlockExtensionNode, type DocumentNode, type InlineExtensionNode, type Node, type ParagraphNode } from './ast.ts'
+import {
+  type Block, type BlockExtensionNode, type DocumentNode, type InlineExtensionNode, type ListItemNode, type Node, type ParagraphNode,
+} from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { stringOffsetOfByte, utf8Length } from './positions.ts'
@@ -10,6 +12,7 @@ import { BIDI_FIRST, isAsciiLetter, isBidiControl } from './unicode.ts'
 
 /** The state of one render. */
 export interface Render {
+  taskLabels: ReadonlyMap<ListItemNode, string> | undefined
   extensionIds: number
   /** The ids in use, each hyphen-led prefix of them, and the order of additions, so a failed renderer can undo its own. */
   usedIds: { ids: Set<string>, prefixes: Set<string>, log: [Set<string>, string][] }
