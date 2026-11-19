@@ -247,6 +247,8 @@ function openerWidth(text: string): number {
 }
 
 function quoteContinues(line: Line, previous: Line, context: LintContext): boolean {
+  // A lazy line carries no mark of the quote before its content, so its own `>` is the candidate (carve#6178).
+  if (line.content !== undefined && !line.text.slice(0, line.content - line.start).includes('>')) return false
   return previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')
 }
 
@@ -485,7 +487,7 @@ function descriptionColumn(line: Line, context: LintContext): void {
     { name: text.startsWith('::') ? 'term' : 'description', column: String(column + 1), 'host.column': String(hostColumn + 1) })
 }
 
-const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'admonition', 'figure_group', 'line_block', 'block_quote'])
+const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'directive', 'admonition', 'figure_group', 'line_block', 'block_quote'])
 
 function colonKind(type: string, opener: string): string {
   if (type === 'admonition') return 'admonition'
