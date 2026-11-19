@@ -141,7 +141,7 @@ function markedText<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): s
 
 /** The text a degraded block leaves; a captioned block leaves the text of its caption behind its own (C2-H-165). */
 function blockText(node: Node): string {
-  const caption = captionedLeaf(node)
+  const caption = degradedCaption(node)
   if (caption === undefined) return ownText(node)
   return [ownText(node), blockText(caption)].filter((part) => part !== '').join(' ')
 }
@@ -155,6 +155,14 @@ function ownText(node: Node): string {
 /** C2-A-082: the caption of an image paragraph, a math block, a code block or a quote, which HTML writes as a `<figure>`. */
 function captionedLeaf(node: Node): CaptionNode | undefined {
   return node.type === 'paragraph' || node.type === 'code_block' || node.type === 'block_quote' ? node.caption : undefined
+}
+
+/**
+ * The caption a degraded block writes after its own text (C2-H-165): that of a captioned leaf, and that of an
+ * unexpanded include, which C2-N-074 writes as a degraded block's caption.
+ */
+function degradedCaption(node: Node): CaptionNode | undefined {
+  return node.type === 'include' && node.children === undefined ? node.caption : captionedLeaf(node)
 }
 
 function textParagraph(text: string): ParagraphNode[] {
@@ -185,7 +193,7 @@ function tableParagraph(node: TableNode): ParagraphNode[] {
 function degradedBlocks(node: Node): ParagraphNode[] {
   // C2-H-165: a table keeps its caption, with its number, as a paragraph below its rows.
   if (node.type === 'table') return [...tableParagraph(node), ...(node.caption === undefined ? [] : degradedBlocks(node.caption))]
-  const caption = captionedLeaf(node)
+  const caption = degradedCaption(node)
   if (caption !== undefined) return [...textParagraph(ownText(node)), ...degradedBlocks(caption)]
   if (node.type in MARKED_TEXT || isInlineParent(node) || !('children' in node)) return textParagraph(blockText(node))
   const out: ParagraphNode[] = []
@@ -233,7 +241,6 @@ function noteGone(filter: Filter, node: Node): void {
 function degradedItem(node: ListItemNode): ListItemNode[] {
   const children: Block[] = []
   for (const child of node.children) if (!UNWRITTEN.includes(child.type)) append(children, degradedBlocks(child))
-  if (children.length === 0) return []
   const item: ListItemNode = { type: 'list_item', children }
   if (node.pos !== undefined) item.pos = node.pos
   return [item]

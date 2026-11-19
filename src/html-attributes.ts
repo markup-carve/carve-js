@@ -44,6 +44,8 @@ export interface Render {
   derivedLeft: number
   derivedReported: boolean
   xrefTextCache: Map<string, { escaped: string, bytes: number }>
+  /** C2-H-019: the paragraphs a profile left writing nothing, whose refused destinations are reported once. */
+  silenced: Set<Node>
 }
 
 /** An attribute name and its value. A null value writes the bare name (C2-H-117). */
@@ -294,6 +296,11 @@ function schemePasses(r: Render, url: string): boolean {
 /** C2-H-160: a destination the policy denies is written as the empty string, and the denial is reported on `node`. */
 export function destination(r: Render, url: string, node: Node): string {
   return isDenied(r, url, node) ? '' : url
+}
+
+/** C2-H-160: whether the policy denies `url`, with nothing reported. */
+export function deniesUrl(r: Render, url: string): boolean {
+  return !schemePasses(r, url)
 }
 
 /** C2-H-160: whether the policy denies `url`, which is then reported on `node`. */

@@ -6,8 +6,8 @@ import {
   type RawInlineNode, type RubyNode, type SmartPunctuationNode, type SpanNode, type SymbolNode, type TagNode, type XrefNode,
 } from './ast.ts'
 import {
-  attributeBlockText, attributes, destination, escapeCarrierText, escapeText, escapeTextNode, isDenied, keyValue, loss, type Pair,
-  type Render, type TagParts,
+  attributeBlockText, attributes, deniesUrl, destination, escapeCarrierText, escapeText, escapeTextNode, isDenied, keyValue, loss,
+  type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
 import { inlinesText } from './profile.ts'
 import { kindGlyph, smartGlyph } from './ast-text.ts'
@@ -197,6 +197,17 @@ function isDroppedLink(r: Render, href: string, node: Node): boolean {
 /** C2-H-177: a reference with no target, or one that resolved to a heading the profile degraded, is written unresolved. */
 function isUnresolvedLink(r: Render, href: string | undefined, definition: object | undefined): boolean {
   return href === undefined || (definition === undefined && r.resolution.goneTargets?.has(href) === true)
+}
+
+/**
+ * C2-H-163, C2-H-165: whether `node`, standing outside any link, is written as the plain text of its children under
+ * `comment` and that text is empty. Nothing is reported.
+ */
+export function isEmptyDroppedLink(r: Render, node: LinkNode): boolean {
+  if (r.settings.profile !== 'comment') return false
+  const key = node.key
+  if (key !== undefined && isUnresolvedLink(r, node.href, definitionFor(r, node, key))) return false
+  return deniesUrl(r, node.href ?? '') && inlinesText(node.children, r.resolution.xrefText) === ''
 }
 
 function link(node: LinkNode, r: Render): string {

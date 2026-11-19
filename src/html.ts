@@ -11,9 +11,9 @@ import {
 import { blockText, plainText } from './ast-text.ts'
 import { type Findings } from './diagnostics.ts'
 import {
-  attributes, carriesAttributes, escapeAttribute, escapeCarrierText, escapeText, loss, type Pair, type Render, type TagParts,
+  attributes, carriesAttributes, escapeAttribute, escapeCarrierText, escapeText, isDenied, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
-import { inlineHtml, mergedAttrs } from './html-inline.ts'
+import { inlineHtml, isEmptyDroppedLink, mergedAttrs } from './html-inline.ts'
 import { CarveOptionError, type Settings } from './options.ts'
 import { attributesAct, includeSource } from './include.ts'
 import { includeMessage } from './expand.ts'
@@ -91,19 +91,38 @@ function expandedNode(node: Node): readonly Node[] {
 }
 
 /** The blocks of `list` that write something, an expanded include read as its children: `list` itself where all of them do. */
-function visibleBlocks(list: readonly Node[]): readonly Node[] {
+function visibleBlocks(r: Render, list: readonly Node[]): readonly Node[] {
+  const visible = (node: Node): boolean => isVisible(r, node)
   let all = true
   for (const node of list) {
-    if (node.type === 'include' && node.children !== undefined) return expandedBlocks(list).filter(isVisible)
-    all &&= isVisible(node)
+    if (node.type === 'include' && node.children !== undefined) return expandedBlocks(list).filter(visible)
+    all &&= visible(node)
   }
-  return all ? list : list.filter(isVisible)
+  return all ? list : list.filter(visible)
 }
 
 /** A block that writes something. C2-H-019: a paragraph that holds only comments writes nothing. */
-function isVisible(node: Node): boolean {
+function isVisible(r: Render, node: Node): boolean {
   if (INVISIBLE.includes(node.type)) return false
-  return node.type !== 'paragraph' || !onlyComments(node.children)
+  return node.type !== 'paragraph' || !(onlyComments(node.children) || isSilenced(r, node))
+}
+
+/**
+ * C2-H-019: a paragraph whose content writes nothing once the profile has degraded it (C2-H-165), such as one of
+ * refused links with no text. Its denied destinations are reported the first time it is met.
+ */
+function isSilenced(r: Render, node: ParagraphNode): boolean {
+  if (r.silenced.has(node)) return true
+  if (PROFILES.get(r.settings.profile) === undefined || node.caption !== undefined) return false
+  let silent = node.children.length === 0
+  for (const child of node.children) {
+    if (child.type === 'comment' || (child.type === 'link' && isEmptyDroppedLink(r, child))) silent = true
+    else if (child.type !== 'soft_break' && child.type !== 'hard_break') return false
+  }
+  if (!silent) return false
+  r.silenced.add(node)
+  for (const child of node.children) if (child.type === 'link') isDenied(r, child.href ?? '', child)
+  return true
 }
 
 /** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
@@ -156,9 +175,7 @@ function paragraphHtml(r: Render, node: ParagraphNode): string {
 }
 
 function paragraph(r: Render, node: ParagraphNode, level: number): void {
-  if (onlyComments(node.children)) return
-  // C2-H-019: a paragraph whose content the profile degraded to nothing renders nothing.
-  if (node.children.length === 0 && PROFILES.get(r.settings.profile) !== undefined) return
+  if (onlyComments(node.children) || isSilenced(r, node)) return
   if (!isBareImage(node)) return line(r, level, paragraphHtml(r, node))
   line(r, level, inlineHtml(r, node.children.map((child) => withParagraphAttributes(node, child))))
 }
@@ -196,7 +213,7 @@ function headingHtml(r: Render, node: HeadingNode, inSection: boolean): string {
 
 /** C2-H-006: a quote whose only visible child is one paragraph without a caption is written on one line. */
 function quote(r: Render, node: BlockQuoteNode, level: number): void {
-  const visible = visibleBlocks(node.children)
+  const visible = visibleBlocks(r, node.children)
   const first = visible[0]
   if (visible.length === 1 && (isTextParagraph(first) || isIncludeParagraph(first))) {
     const content = isTextParagraph(first) ? paragraphHtml(r, first) : includeParagraph(r, first, false)
@@ -248,7 +265,7 @@ function itemOpen(r: Render, node: ListItemNode, bullet: boolean): string {
 
 /** C2-H-007, C2-H-034, C2-H-035: the first paragraph stands on the line of `<li>`, bare in a tight list. */
 function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, bullet: boolean): void {
-  const blocks = visibleBlocks(node.children)
+  const blocks = visibleBlocks(r, node.children)
   const first = blocks[0]
   let open = itemOpen(r, node, bullet)
   let rest = blocks
@@ -272,7 +289,7 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
 
 /** C2-H-040: a description with one visible block writes a paragraph bare, unless it carries attributes (C2-H-018). */
 function description(r: Render, node: DefinitionDescriptionNode, level: number): void {
-  const blocks = visibleBlocks(node.children)
+  const blocks = visibleBlocks(r, node.children)
   const first = blocks[0]
   if (blocks.length === 1 && isIncludeParagraph(first)) {
     line(r, level, `<dd${tag(r, node)}>${includeParagraph(r, first, true)}</dd>`)
@@ -338,7 +355,7 @@ function admonition(r: Render, node: AdmonitionNode, level: number): void {
 
 /** C2-H-065: a caption with one paragraph writes it bare; with several blocks every paragraph gets `<p>`. */
 function captionLine(r: Render, caption: CaptionNode, name: string, level: number): void {
-  const blocks = caption.children.filter(isVisible)
+  const blocks = caption.children.filter((block) => isVisible(r, block))
   const first = blocks[0]
   if (blocks.length === 1 && isTextParagraph(first)) {
     line(r, level, `<${name}>${inlineHtml(r, first.children)}</${name}>`)
@@ -629,7 +646,7 @@ function isCellParagraph(block: Block | CellParagraphNode): block is CellParagra
 function cellContent(r: Render, cell: TableCellNode, level: number): string {
   const blocks = cell.children
   if (blocks.every(isCellParagraph)) return blocks.map((block) => inlineHtml(r, block.children)).join(' ')
-  const visible = visibleBlocks(blocks)
+  const visible = visibleBlocks(r, blocks)
   const first = visible[0]
   const open = isTextParagraph(first) ? paragraphHtml(r, first) : ''
   const rest = open === '' ? visible : visible.slice(1)
@@ -810,13 +827,13 @@ function noteBlocks(note: Note): Block[] {
 }
 
 /** C2-H-091: a raw block of another format writes nothing (C2-H-054), so it is not the last block that renders. */
-function rendersInNote(node: Node): boolean {
-  return isVisible(node) && (node.type !== 'raw_block' || node.format === 'html')
+function rendersInNote(r: Render, node: Node): boolean {
+  return isVisible(r, node) && (node.type !== 'raw_block' || node.format === 'html')
 }
 
 function writeNote(r: Render, note: Note, level: number): void {
   const blocks = noteBlocks(note)
-  const visible = blocks.filter(rendersInNote)
+  const visible = blocks.filter((block) => rendersInNote(r, block))
   const last = visible[visible.length - 1]
   r.backlinks = backlinksHtml(r, note)
   r.backlinkHost = isTextParagraph(last) && last.children.length > 0 && !onlyComments(last.children) ? last : null
@@ -955,7 +972,7 @@ export function renderDocument(
     settings, resolution, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
-    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(),
+    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }
