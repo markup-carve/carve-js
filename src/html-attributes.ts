@@ -287,9 +287,13 @@ function schemeText(url: string, colon: number, removed: boolean): string {
 
 /** C2-H-160: whether the scheme of `url` passes the URL policy. A URL with no scheme passes. */
 function schemePasses(r: Render, url: string): boolean {
+  return passesPolicy(r.settings, url)
+}
+
+/** C2-H-160: whether the scheme of `url` passes the URL policy of `settings`. */
+export function passesPolicy(settings: Pick<Settings, 'allowed' | 'denied'>, url: string): boolean {
   const scheme = urlScheme(url)
   if (scheme === '') return true
-  const settings = r.settings
   return settings.allowed !== null ? settings.allowed.has(scheme) : !settings.denied!.has(scheme)
 }
 

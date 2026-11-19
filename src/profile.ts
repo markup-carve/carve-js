@@ -10,7 +10,9 @@ import {
 import { plainText } from './ast-text.ts'
 import { NODE_TABLE } from './ast-validate.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
+import { passesPolicy } from './html-attributes.ts'
 import { includeSource } from './include.ts'
+import { type Settings } from './options.ts'
 import { type ProfileRule } from './render-tables.ts'
 import { type Note, type Resolution } from './resolve.ts'
 import { append } from './append.ts'
@@ -26,6 +28,8 @@ interface Filter {
   gone: Set<Node>
   /** C2-H-177: the `#id` targets of the degraded headings, which write no id. */
   goneTargets: Set<string>
+  /** C2-H-163: whether a link the profile keeps is written as the plain text of its children, so nothing in it degrades. */
+  writesAsText: (node: Node) => boolean
 }
 
 /** What a profile did to a tree for one render. */
@@ -287,7 +291,7 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
       for (const part of out) kept.push(part)
       changed = true
       continue
-    } else {
+    } else if (!filter.writesAsText(node)) {
       filterNode(filter, node, depth + 1)
     }
     kept.push(node)
@@ -296,6 +300,12 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
   filter.undo.push([list, [...list]])
   list.length = 0
   for (const node of kept) list.push(node)
+}
+
+/** C2-H-163: a resolved link whose destination fails the URL policy; an unresolved reference keeps its brackets. */
+function isDeniedLink(node: Node, policy: Pick<Settings, 'allowed' | 'denied'>): boolean {
+  if (node.type !== 'link' || (node.key !== undefined && node.href === undefined)) return false
+  return !passesPolicy(policy, node.href ?? '')
 }
 
 /** A member keeps its place: every profile allows the members of the constructs it allows. */
@@ -345,9 +355,11 @@ function filterNode(filter: Filter, node: Node, depth: number): void {
  */
 export function applyProfile(
   document: DocumentNode, name: string, rule: ProfileRule, findings: Findings, texts: ReadonlyMap<Node, string>,
+  policy: Pick<Settings, 'allowed' | 'denied'>,
 ): ProfileRun {
   const filter: Filter = {
     name, rule, findings, declarations: document.extensions ?? [], undo: [], gone: new Set(), goneTargets: new Set(),
+    writesAsText: (node) => name === 'comment' && isDeniedLink(node, policy),
   }
   xrefTexts = texts
   try {
