@@ -180,7 +180,7 @@ function markContent(node: Node, context: LintContext): void {
   if (line !== undefined && at !== undefined && (line.content === undefined || at < line.content)) line.content = at
 }
 
-const OPAQUE_LEAF_TYPES: readonly Node['type'][] = ['code', 'raw_inline', 'literal_inline', 'math', 'comment',
+const OPAQUE_LEAF_TYPES: readonly Node['type'][] = ['autolink', 'code', 'raw_inline', 'literal_inline', 'math', 'comment',
   'code_block', 'raw_block', 'frontmatter', 'include', 'link_reference_definition', 'abbreviation_def']
 
 function maskLeaf(node: Node, path: string, context: LintContext): void {

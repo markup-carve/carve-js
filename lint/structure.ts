@@ -601,22 +601,40 @@ function oldAlignmentPrefix(source: string): string {
   return source[0] === '?' && vertical ? source.slice(0, 2) : ''
 }
 
+/** The 0.1.13 alignment run at the start of `source`, a mark with an optional glued brace block, followed by a space. */
+function oldAlignmentRun(source: string): { prefix: string, braced: string } | null {
+  const mark = oldAlignmentPrefix(source)
+  if (mark === '') return null
+  let block = ''
+  if (source[mark.length] === '{') {
+    const end = source.indexOf('}', mark.length)
+    if (end < 0 || source.slice(mark.length + 1, end).includes('{')) return null
+    block = source.slice(mark.length + 1, end)
+  }
+  const prefix = block === '' && source[mark.length] !== '{' ? mark : source.slice(0, mark.length + block.length + 2)
+  const after = source[prefix.length]
+  if ((after !== ' ' && after !== '\t') || source.slice(prefix.length).trim() === '') return null
+  return { prefix, braced: block.trim() === '' ? `{${mark}}` : `{${mark} ${block.trim()}}` }
+}
+
+/** Whether the text at `start` opens a cell: only padding and the header mark stand between it and its pipe. */
+function opensCell(context: LintContext, start: number): boolean {
+  let at = start - 1
+  while (context.source[at] === ' ' || context.source[at] === '\t') at--
+  if (context.source[at] === '=') at--
+  return context.source[at] === '|'
+}
+
 function deprecatedCellAlignment(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_cell') return
   let source = raw(node, context)
   // C2-B-171: the header mark stands before the prefix.
   if (node.header && source.startsWith('=')) source = source.slice(1)
-  source = source.trimStart()
-  const prefix = oldAlignmentPrefix(source)
-  if (prefix === '') return
-  const after = source[prefix.length]
-  if (after !== ' ' && after !== '\t') return
-  if (source.slice(prefix.length).trim() === '') return
+  const run = oldAlignmentRun(source.trimStart())
   const range = bounds(node, context)
-  if (range !== null) {
-    const at = raw(node, context).indexOf(prefix)
-    context.report('deprecated-cell-alignment', range[0] + at, range[0] + at + prefix.length, path, { prefix, braced: `{${prefix}}` })
-  }
+  if (run === null || range === null) return
+  const at = raw(node, context).indexOf(run.prefix)
+  context.report('deprecated-cell-alignment', range[0] + at, range[0] + at + run.prefix.length, path, run)
 }
 
 function markerRunPadding(node: Node, path: string, context: LintContext): void {
@@ -758,6 +776,11 @@ function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): vo
     if (!'*_/~='.includes(ch) || source[at + 1] !== '{' || escaped(source, at)) continue
     const end = source.indexOf('}', at + 2)
     if (end < 0) continue
+    // C2-B-182: an alignment run that opens a cell is reported by deprecated-cell-alignment.
+    if (at <= 1 && opensCell(context, range[0]) && oldAlignmentRun(source)?.prefix.length === end + 1) {
+      at = end
+      continue
+    }
     context.report('emphasis-marker-before-attributes', range[0] + at, range[0] + end + 1,
       path, { ch }, 0)
     at = end
