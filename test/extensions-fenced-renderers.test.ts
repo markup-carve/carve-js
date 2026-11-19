@@ -35,6 +35,15 @@ describe('fencedRender', () => {
     expect(guarded.match(/<\/script>/g)).toHaveLength(1)
   })
 
+  it('json mode guards <!-- so a <script inside the body cannot keep the element open (#5105)', () => {
+    const guarded = html('```chart\n{"x": "<!--<script>", "y": "<!-- --></script>"}\n```', chart())
+    expect(guarded).toBe('<div class="chart" role="img" aria-label="chart"><script type="application/json">'
+      + '{"x": "<\\u0021--<script>", "y": "<\\u0021-- --><\\/script>"}</script></div>')
+    expect(guarded).not.toContain('<!--')
+    const body = /<script type="application\/json">(.*)<\/script>/.exec(guarded)?.[1] ?? ''
+    expect(JSON.parse(body)).toEqual({ x: '<!--<script>', y: '<!-- --></script>' })
+  })
+
   it('leaves an unclaimed language to the core renderer', () => {
     expect(html('```python\nprint(1)\n```', d2())).toBe(render('```python\nprint(1)\n```'))
   })
