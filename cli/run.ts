@@ -15,7 +15,7 @@ import { FLAGS, type ParsedArgs, UsageError } from './flags.ts'
 import { cliIncludes } from './include-fs.ts'
 import { lint } from '../lint/lint.ts'
 import { fixSource } from './fix.ts'
-import { flatten } from './flatten.ts'
+import { flatten } from '../src/flatten.ts'
 import { migrateCaseOnlyReferences } from '../build/engine-0.1/index.js'
 import includeTable from '../data/includes.json' with { type: 'json' }
 import { EXPORT_LOSS_CODES, exportTo, type ExportOptions, type ExportTarget } from '../src/export/index.ts'

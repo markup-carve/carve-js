@@ -14,7 +14,7 @@ carve lint --strict --ignore vendor/third-party.crv book.crv
 
 ## `carve flatten`
 
-`carve flatten [FILE...]` writes each file as one Carve document with every include expanded in place, through the Carve writer. `fmt` keeps an include as its directive (C2-N-005); `flatten` is the command that replaces it with the included blocks, for a host that has no file system behind it.
+`carve flatten [FILE...]` writes each file as one Carve document with every include expanded in place, through the Carve writer. `fmt` keeps an include as its directive (C2-N-005); `flatten` is the command that replaces it with the included blocks, for a host that has no file system behind it. The library call `flatten` does the same on a parsed tree ([API](api.md#includes)).
 
 Includes resolve as in `render`: below the directory of the entry file, or below `--include-root DIR`. Standard input expands only with `--include-root`. Frontmatter of an included file is dropped, since it renders nothing.
 
