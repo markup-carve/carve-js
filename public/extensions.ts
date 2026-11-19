@@ -22,3 +22,8 @@ export {
 export { defaultAttributes, type DefaultAttributesMap } from '../extensions/transforms/default-attributes.ts'
 export { tabNormalize } from '../extensions/transforms/tab-normalize.ts'
 export { inlineFootnotesToParentheses } from '../extensions/transforms/inline-footnotes.ts'
+export { glossary, glossaryExtension, glossaryRenderer, termExtension, termRenderer } from '../src/extensions/glossary.ts'
+export { index, indexExtension, indexRenderer, type IndexOptions, indexTermExtension, indexTermRenderer } from '../src/extensions/index-terms.ts'
+export {
+  citations, type CitationsOptions, citeExtension, type CslEntry, type CslName, referencesExtension, referencesRenderer,
+} from '../src/extensions/citations.ts'
