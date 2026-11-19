@@ -312,7 +312,12 @@ export const LINT_MODEL = {
         },
         {
           "when": {
-            "f": "attribute_line"
+            "eq": [
+              {
+                "f": "shape"
+              },
+              "attribute_line"
+            ]
           },
           "start": {
             "f": "body_start"
@@ -580,11 +585,11 @@ export const LINT_MODEL = {
       "when": {
         "all": [
           {
-            "matches": [
+            "eq": [
               {
-                "f": "body"
+                "f": "shape"
               },
-              "^:{3,}$"
+              "div_bare_run"
             ]
           },
           {
@@ -1024,7 +1029,12 @@ export const LINT_MODEL = {
             "f": "leaf_first"
           },
           {
-            "f": "attribute_line"
+            "eq": [
+              {
+                "f": "shape"
+              },
+              "attribute_line"
+            ]
           },
           {
             "not": {

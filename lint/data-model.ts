@@ -1,7 +1,7 @@
 import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
 import { columnOf } from '../src/layout-lines.ts'
 import { type NodeLayout } from '../src/layout.ts'
-import { isAttributeLine } from '../src/lines.ts'
+import { shapeOf } from './data-shape.ts'
 import { type Line, type LintContext } from './types.ts'
 
 /** The shared line model of `data/lint-model.json`: one record per source line and per block. */
@@ -18,9 +18,10 @@ export interface ModelLine {
   leaf_id: string
   leaf_first: boolean
   attached_here: boolean
-  attribute_line: boolean
   closes_container: boolean
   readonly ancestors: string[]
+  readonly shape: string
+  readonly lazy: boolean
   readonly open_colon: ColonContainer[]
   readonly prev: ModelLine | undefined
   readonly prev2: ModelLine | undefined
@@ -164,8 +165,7 @@ function ancestorTypes(path: string, types: Map<string, string>): string[] {
 
 interface LineFields {
   number: number, start: number, end: number, text: string, body: string, body_start: number, body_end: number
-  blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, attribute_line: boolean
-  closes_container: boolean
+  blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, closes_container: boolean
 }
 
 class LineRecord {
@@ -181,10 +181,11 @@ class LineRecord {
   readonly leaf_id: string
   readonly leaf_first: boolean
   readonly attached_here: boolean
-  readonly attribute_line: boolean
   readonly closes_container: boolean
   private ancestorsCache: string[] | undefined = undefined
   private colonCache: ColonContainer[] | undefined = undefined
+  private shapeCache: string | undefined = undefined
+  private lazyCache: boolean | undefined = undefined
   private readonly path: string
   private readonly index: number
   private readonly model: ModelLine[]
@@ -203,7 +204,6 @@ class LineRecord {
     this.leaf_id = fields.leaf_id
     this.leaf_first = fields.leaf_first
     this.attached_here = fields.attached_here
-    this.attribute_line = fields.attribute_line
     this.closes_container = fields.closes_container
     this.path = path
     this.index = index
@@ -213,6 +213,8 @@ class LineRecord {
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
   get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
+  get shape(): string { return (this.shapeCache ??= shapeOf(this.body)) }
+  get lazy(): boolean { return (this.lazyCache ??= isLazy(this, this.context)) }
   get prev(): ModelLine | undefined { return this.model[this.index - 1] }
   get prev2(): ModelLine | undefined { return this.model[this.index - 2] }
   get next(): ModelLine | undefined { return this.model[this.index + 1] }
@@ -230,9 +232,35 @@ function lineRecord(line: Line, index: number, model: ModelLine[], found: Leaves
     body, body_start: bodyStart, body_end: bodyStart + body.length,
     blank: leaf === 'none' && /^[\s>]*$/.test(line.text), leaf, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
     attached_here: context.state.attachedLines.has(line.number),
-    attribute_line: body.startsWith('{') && isAttributeLine(body, 0, body.length),
     closes_container: context.state.containerClosers.has(line.number),
   }, line.path, index, model, context)
+}
+
+const TEXT_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'table_cell'])
+
+function quoteMarks(line: ModelLine): number {
+  let marks = 0
+  let at = 0
+  for (;;) {
+    while (line.text[at] === ' ' || line.text[at] === '\t') at++
+    if (line.text[at] !== '>' || (at + 1 < line.text.length && line.text[at + 1] !== ' ')) return marks
+    marks++
+    at++
+  }
+}
+
+/** C2-B-024: a later line of a text leaf that lacks a quote mark or the indent of a container that holds the leaf. */
+function isLazy(line: ModelLine, context: LintContext): boolean {
+  if (!TEXT_LEAVES.has(line.leaf) || line.leaf_first) return false
+  const types = context.nodeTypes as Map<string, string>
+  const marks = quoteMarks(line)
+  if (marks < quoteDepth(line.leaf_id, types)) return true
+  for (let path = line.leaf_id, split = path.lastIndexOf('/children/'); split >= 0; split = path.lastIndexOf('/children/')) {
+    path = path.slice(0, split)
+    const content = context.layouts.get(path)?.contentColumn
+    if (content !== undefined) return columnOf(context.source, line.body_start, marks) < content
+  }
+  return false
 }
 
 /** The owner of a block: its parent, a description list skipped, since its terms and descriptions own their lines. */
