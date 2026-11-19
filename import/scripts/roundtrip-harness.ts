@@ -1,8 +1,8 @@
 // C2-H-112 to C2-H-120: parse, render with `roundtrip`, import the HTML, and compare the trees (C2-A-161, C2-A-162).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { parse, render, treesEqual, type DocumentNode } from '../../v2/src/index.ts'
-import { generate, loadCorpus, random } from '../../v2/proptest/generate.ts'
+import { parse, render, treesEqual, type DocumentNode } from '../../src/index.ts'
+import { generate, loadCorpus, random } from '../../proptest/generate.ts'
 import { importDocument } from '../src/index.ts'
 import { project } from './roundtrip-losses.ts'
 import { specExamples } from './spec-examples.ts'
@@ -12,7 +12,7 @@ type Fields = Record<string, unknown>
 
 interface ResultEntry { field: string, when?: string }
 const root = join(import.meta.dirname, '../..')
-const results = (JSON.parse(readFileSync(join(root, 'v2/data/ast-results.json'), 'utf8')) as
+const results = (JSON.parse(readFileSync(join(root, 'data/ast-results.json'), 'utf8')) as
   { nodes: Record<string, ResultEntry[]> }).nodes
 const GEOMETRY = ['pos', 'segments', 'srcByteLength']
 

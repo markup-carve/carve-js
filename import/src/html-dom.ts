@@ -1,6 +1,6 @@
 // The parse5 reading shared by the HTML import modules, and the import state of one document.
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
-import type { AbbreviationDefNode, Attrs, Block, FootnoteNode, LinkReferenceDefinitionNode } from '../../v2/src/index.ts'
+import type { AbbreviationDefNode, Attrs, Block, FootnoteNode, LinkReferenceDefinitionNode } from '../../src/index.ts'
 import { attrsOf, classNames, finding, isKey, type Context, type HtmlImportCode } from './kit.ts'
 
 /** C2-H-115: the reserved names that a render with `roundtrip` writes; `data-carve-src` is reserved and never written. */

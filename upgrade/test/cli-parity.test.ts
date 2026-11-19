@@ -5,15 +5,15 @@ import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
 const standalone = join(import.meta.dirname, '../src/cli.ts')
-const carve2 = join(import.meta.dirname, '../../v2/cli/main.ts')
+const carveCli = join(import.meta.dirname, '../../cli/main.ts')
 
 function run(file: string, integrated: boolean): ReturnType<typeof spawnSync> {
-  const args = integrated ? [carve2, 'upgrade', '--json', file] : [standalone, '--json', file]
+  const args = integrated ? [carveCli, 'upgrade', '--json', file] : [standalone, '--json', file]
   return spawnSync(process.execPath, args)
 }
 
 function writeRun(file: string, integrated: boolean, force = false): ReturnType<typeof spawnSync> {
-  const args = integrated ? [carve2, 'upgrade', '--write'] : [standalone, '--write']
+  const args = integrated ? [carveCli, 'upgrade', '--write'] : [standalone, '--write']
   if (force) args.push('--force')
   return spawnSync(process.execPath, [...args, file])
 }
@@ -71,7 +71,7 @@ describe('C2-W-100: upgrade command record and exit parity', () => {
       const bytes = Buffer.from('/***/\n\n{valigns=top,bottom widths=40}\n| a | b | c |\n')
       writeFileSync(file, bytes)
       for (const integrated of [false, true]) {
-        const args = integrated ? [carve2, 'upgrade', '--check', '--force', file]
+        const args = integrated ? [carveCli, 'upgrade', '--check', '--force', file]
           : [standalone, '--check', '--force', file]
         const done = spawnSync(process.execPath, args)
         expect(done.status).toBe(1)
@@ -84,7 +84,7 @@ describe('C2-W-100: upgrade command record and exit parity', () => {
     ['plain', 'text\n'],
     ['rewrite', '```js{1,3}\na\n```\n'],
     ['difference', 'a [link^[note]](/url) b\n~~~ js "a`b"\nx\n~~~\n'],
-  ])('C2-W-100: %s has the same JSON and status as carve2', (_name, input) => {
+  ])('C2-W-100: %s has the same JSON and status as carve', (_name, input) => {
     const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-parity-'))
     try {
       const file = join(dir, 'case.crv')
@@ -96,7 +96,7 @@ describe('C2-W-100: upgrade command record and exit parity', () => {
     } finally { rmSync(dir, { recursive: true }) }
   })
 
-  it('C2-W-101: invalid UTF-8 has the same categorized status as carve2', () => {
+  it('C2-W-101: invalid UTF-8 has the same categorized status as carve', () => {
     const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-parity-'))
     try {
       const file = join(dir, 'case.crv')

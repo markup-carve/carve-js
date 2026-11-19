@@ -1,5 +1,5 @@
 // C2-B-213 read backwards: a render writes on every cell the alignment it resolves from the cell, the head and the column.
-import type { TableCellNode, TableColumnNode, TableNode } from '../../v2/src/index.ts'
+import type { TableCellNode, TableColumnNode, TableNode } from '../../src/index.ts'
 
 interface Placed { cell: TableCellNode, column: number, head: boolean }
 

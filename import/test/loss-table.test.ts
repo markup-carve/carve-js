@@ -1,7 +1,7 @@
 // C2-H-195, C2-H-196: each row of the loss table, and Examples 51 and 52 of the HTML document, rendered with `roundtrip`,
 // imported and written again by the canonical writer. Row 13 starts from a supplied tree and has no source to render.
 import { describe, expect, it } from 'vitest'
-import { render, type RenderOptions } from '../../v2/src/index.ts'
+import { render, type RenderOptions } from '../../src/index.ts'
 import { importDocument } from '../src/index.ts'
 
 const FENCE = '```'

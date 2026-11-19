@@ -2,7 +2,7 @@
 #
 #   repos:
 #     - repo: https://github.com/markup-carve/carve-js
-#       rev: v0.1.2
+#       rev: v0.2.0
 #       hooks:
 #         - id: carve-fmt
 #         - id: carve-lint
@@ -34,25 +34,5 @@
     reference link, a duplicate heading id, a missing or unused footnote, a line
     that opens like a block and parsed as plain text.
   entry: carve lint
-  language: node
-  files: \.crv$
-
-- id: carve-lint-from-djot
-  name: carve lint (--from-djot)
-  description: >
-    carve-lint, plus valid Carve whose meaning differs from Djot (`_x_` is
-    underline not emphasis, `~x~` is strike not subscript). Noise for
-    hand-written Carve; useful while migrating a Djot corpus.
-  entry: carve lint --from-djot
-  language: node
-  files: \.crv$
-
-- id: carve-lint-portable
-  name: carve lint (--portable)
-  description: >
-    carve-lint, plus a `>` blockquote marker with no space after it, which
-    parses differently under Djot. Advisory: the document is correct in Carve
-    either way; useful for a document that has to stay valid Djot source.
-  entry: carve lint --portable
   language: node
   files: \.crv$

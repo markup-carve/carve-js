@@ -1,6 +1,6 @@
 // The clauses of spec/0.2/import-html.md, each test named by the clause it proves.
 import { describe, expect, it } from 'vitest'
-import { encodeTree, parse, render, validateTree } from '../../v2/src/index.ts'
+import { encodeTree, parse, render, validateTree } from '../../src/index.ts'
 import { importDocument } from '../src/index.ts'
 
 const children = (html: string, rawHtml?: boolean): unknown => {

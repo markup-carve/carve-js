@@ -8,7 +8,7 @@ import { mathFromMarkdown } from 'mdast-util-math'
 import { directive } from 'micromark-extension-directive'
 import { directiveFromMarkdown } from 'mdast-util-directive'
 import type { RootContent, PhrasingContent, TableRow } from 'mdast'
-import type { Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
+import type { Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../src/index.ts'
 import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, softText,
   withDestination,
   type Context, type ImportResult } from './kit.ts'

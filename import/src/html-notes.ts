@@ -1,10 +1,10 @@
 // The footnote section of a render (C2-H-089 to C2-H-093).
 import { type DefaultTreeAdapterTypes as Html } from 'parse5'
-import { foldLabel } from '../../v2/src/index.ts'
+import { foldLabel } from '../../src/index.ts'
 import {
   attr, classList, content, elements, has, ignoredCarrier, isBlank, isElement, isRawSpan, isText, type HtmlContext, type NoteEntry,
 } from './html-dom.ts'
-import { append } from '../../v2/src/append.ts'
+import { append } from '../../src/append.ts'
 
 export function isFootnoteSection(node: Html.Element): boolean {
   return attr(node, 'role') === 'doc-endnotes' || attr(node, 'class')?.split(' ').includes('footnotes') === true

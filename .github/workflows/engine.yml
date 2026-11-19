@@ -1,0 +1,349 @@
+name: engine
+
+# The checks of the engine that are too slow for the normal test run, on pull
+# requests against next2. Three-line enumeration stays in `npm test`.
+on:
+  pull_request:
+    branches: [next2]
+  push:
+    branches: [next2]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  extension-migration:
+    name: extension migration typecheck, lint, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check:extension-migration
+
+  ast-schema-crosscheck:
+    name: AST schema agreement, 100,000 mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The schema and the reader of the pinned commit, not of the moving branch head.
+      - name: Pinned specification commit
+        id: pin
+        run: echo "commit=$(node -p "require('./data/spec-pin.json').commit")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: markup-carve/carve
+          ref: ${{ steps.pin.outputs.commit }}
+          path: carve
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install spec cross-check dependencies
+        run: npm ci --allow-git=all
+        working-directory: carve
+
+      - name: Example inputs for the cross-check
+        run: node scripts/write-example-inputs.ts
+
+      # The cross-check of a spec pin from before the 0.2 rename reads the engine under v2/.
+      - name: Engine paths for the pinned cross-check
+        run: mkdir -p v2 && ln -sfn ../src v2/src && ln -sfn ../data v2/data && ln -sfn ../test v2/test
+
+      - name: Schema and reader cross-check
+        run: AST_FUZZ_COUNT=100000 node --stack-size=8192 scripts/spec2-ast-crosscheck.mjs ..
+        working-directory: carve
+        continue-on-error: true
+
+      - name: Require explained cross-check results
+        run: node scripts/check-ast-crosscheck.ts _AST_CROSSCHECK_FINDINGS.json.gz
+
+  enumerate:
+    name: enumerator, four lines
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Every document of up to four lines over the alphabet of line shapes,
+      # through the property checks. Fails on the first violated property.
+      - name: Enumerate
+        run: npm run enumerate -- 4
+
+  enumerate-inline:
+    name: inline enumerator, five tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Every content of up to five tokens over the alphabet of inline tokens,
+      # through the property checks of the inline pass.
+      - name: Enumerate
+        run: npm run enumerate-inline -- 5
+
+  stress-inline:
+    name: inline stress shapes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Shapes that make a naive inline scan quadratic, at three sizes ten times apart.
+      # Fails when a step takes more than 30 times the step before it.
+      - name: Stress
+        run: npm run stress-inline
+
+      # Writer cases that take seconds, kept out of the everyday test run.
+      - name: Writer stress cases
+        run: npm run test:stress
+
+  conformance:
+    name: examples of the specification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run test:lint
+      - run: npm run build
+
+      # The corpus of the specification at the pinned commit: every example, clause case, refused and
+      # positive tree and layout sidecar. Prints the table per kind and fails on an entry that is not held.
+      - name: Conformance
+        run: npm run conformance
+
+      - name: Pinned specification commit
+        id: pin
+        run: echo "commit=$(node -p "require('./data/spec-pin.json').commit")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: markup-carve/carve
+          ref: ${{ steps.pin.outputs.commit }}
+          path: carve-spec
+
+      # The copies in data equal the corpus and the trees of the specification at the pin.
+      - name: Corpus copies
+        run: CARVE_SPEC_DIR=carve-spec npx vitest run test/corpus.test.ts
+      - run: npm run differential-migrate
+      - run: npm run test:migrate
+
+  enumerate-tree:
+    name: tree and HTML properties, three lines and four tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The public tree and the HTML of every enumerated document: the validator accepts the tree,
+      # positions are those of the source, encode then decode gives the same tree, the HTML is well formed.
+      - name: Documents of up to three lines
+        run: npm run enumerate-tree -- lines 3
+
+      - name: Contents of up to four tokens
+        run: npm run enumerate-tree -- tokens 4
+
+  fuzz-tree:
+    name: tree reader fuzz, 20,000 mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Random single mutations of the trees of the examples through decodeTree: each is refused with a
+      # path into the mutant (C2-A-167) or accepted and then rendered and written without throwing.
+      - name: Fuzz
+        run: npm run fuzz-tree -- --count 20000
+
+  writer-gates:
+    name: writer gates, examples, three lines and a random run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The two gates of the writer on every input, with and without the source-layout record:
+      # the written form parses to the tree it was written from, and formatting it again gives
+      # the same bytes. Also: a canonical input stays as it is, and no escape is needless.
+      - name: Example inputs of the specification
+        run: npm run writer-gates -- examples
+
+      - name: Documents of up to three lines
+        run: npm run writer-gates -- lines 3
+
+      # Seeded random contents of 5 to 9 tokens and documents of 4 to 12 lines. It fails on an output
+      # that reads back as another tree without a reported loss; the losses it prints are open defects.
+      - name: A short random run
+        run: npm run writer-gates -- random 50000 5000 1 --silent
+
+  writer-gates-tokens:
+    name: writer gates, four tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Contents of up to four tokens
+        run: npm run writer-gates -- tokens 4
+
+  stress-tree:
+    name: tree and HTML stress shapes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Block and inline shapes that make a naive pass quadratic, through `parse` and `render`, at
+      # three sizes ten times apart. Fails when a step takes more than 60 times the step before it.
+      - name: Stress
+        run: node --max-old-space-size=4096 scripts/stress-tree.ts
+
+      # The same shapes, and shapes whose written form takes escapes or another spelling, through
+      # `format`: parse with the source-layout record, write, and parse each written group again.
+      - name: Stress of the formatter
+        run: node --max-old-space-size=4096 scripts/stress-format.ts
+
+  benchmark:
+    name: benchmark (prints, never fails on a number)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # A shared runner is not idle, so there is no threshold yet.
+      # `npm ci` builds the 0.1 reader into build/engine-0.1/, which the second table compares with.
+      - name: Block pass, inline pass, source to HTML and source to canonical source, CPU time per document
+        run: npm run bench -- --files test/fixtures/bench-commonmark-core.crv,docs/api.md,docs/engine.md --rounds 20
+
+  proptest:
+    name: source property tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix import --ignore-scripts
+      - name: Regression corpus
+        run: npm run test:proptest
+      - name: Source property targets
+        shell: bash
+        run: |
+          status=0
+          for target in parse render format diagnostics extensions decode cli lint migrate import; do
+            node proptest/run.ts --target "$target" --seed 1794696020 --count 100000000 --minutes 1 --max-bytes 4096 || status=1
+          done
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: proptest-findings
+          path: proptest/findings

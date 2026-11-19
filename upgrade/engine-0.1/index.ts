@@ -1,0 +1,978 @@
+/*
+ * Public API for @markup-carve/carve.
+ */
+
+import type { Document } from './ast.js'
+import type { CarveExtension } from './extension.js'
+import { applyTransforms } from './extension/extension-transforms.js'
+import type { ParseOptions } from './parse.js'
+import {
+  resolveHeadingIds,
+  resolveHeadingIdsWithRegistry,
+  headingIdSlugOpts,
+  type AsciiHeadingIdMode,
+} from './heading/heading-ids.js'
+import { parseDocument, parseDocumentForHtml } from './parse/parse-document.js'
+import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
+import { numberFootnotes } from './heading/footnote-numbering.js'
+import { Profile } from './profile.js'
+import { applyProfile as applyProfileImpl } from './profile-filter.js'
+import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
+import {
+  renderMarkdown as renderMarkdownImpl,
+  type MarkdownRenderOptions,
+} from './render-markdown.js'
+import {
+  renderCarve as renderCarveImpl,
+  type CarveRenderOptions,
+} from './render-carve.js'
+import {
+  renderPlainText as renderPlainTextImpl,
+  type PlainTextRenderOptions,
+} from './render-plain.js'
+import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-ansi.js'
+import { adoptBlockFootnoteDefs } from './ast/legacy-nodes.js'
+import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
+import { coalesceTextRuns } from './coalesce-text-runs.js'
+import { DocumentIdRegistry, inheritDocumentIds, rememberDocumentIds } from './ast/document-ids.js'
+import { toSourceLayout, type SourceLayout } from './source-layout.js'
+import { toAuthoredProvenance as authoredProvenance, type ProvenanceSidecar } from './ast-sidecars.js'
+import { tryFastHtml } from './fast-html.js'
+import { tryFastAstDocument } from './parse/fast-ast-document.js'
+import { createEditorSession as createEditorSessionInternal } from './editor-session.js'
+import {
+  checkedRender,
+  type CheckedRenderOptions,
+  type RenderLoss,
+  type RenderResult,
+} from './render/render-loss.js'
+import { createSourcePatch, type SourcePatch } from './source-patch.js'
+import { assessTablePreservation, type PreservationTarget, type PreservationOptions, type TablePreservationReport } from './table/table-preservation.js'
+import { renderCarveWithConversionReport as collectCarveConversionDiagnostics } from './import/markdown/conversion-diagnostics.js'
+
+export { assessTablePreservation, PreservationError, type PreservationTarget, type PreservationOptions, type PreservationDiagnostic, type TablePreservationReport } from './table/table-preservation.js'
+export * from './ast.js'
+export {
+  htmlToAst,
+  htmlToCarve,
+  HtmlImportLimitError,
+  type HtmlImportAdapter,
+  type HtmlImportDiagnostic,
+  type HtmlImportDiagnosticCode,
+  type HtmlImportMode,
+  type HtmlImportOptions,
+  type HtmlImportResult,
+} from './html-import.js'
+export type { ParseOptions } from './parse.js'
+export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
+export type { ConversionDiagnostic, ConversionDiagnostics, CarveConversionResult } from './import/markdown/conversion-diagnostics.js'
+export {
+  astNodePaths,
+  readNodeIdentity,
+  toNodeIdentity,
+  readAnnotationRanges,
+  toAnnotationRanges,
+  readProvenance,
+  toProvenance,
+  toAuthoredProvenance,
+  AstSidecarError,
+  type NodeIdentity,
+  type NodeIdentitySidecar,
+  type AnnotationAnchor,
+  type AnnotationRange,
+  type AnnotationRangeSidecar,
+  type ProvenanceSource,
+  type NodeProvenance,
+  type ProvenanceSidecar,
+} from './ast-sidecars.js'
+export { lintAccessibility, type AccessibilityDiagnostic } from './extension/accessibility.js'
+export { tryRenderHtmlStreaming, type StreamOutcome } from './stream.js'
+export {
+  EditorChangeError,
+  type EditorChange,
+  type EditorMappedNode,
+  type EditorRange,
+  type EditorSession,
+  type EditorSnapshot,
+  type EditorToken,
+  type EditorUpdate,
+} from './editor-session.js'
+export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
+export {
+  applySourcePatch,
+  createSourcePatch,
+  sourceFingerprint,
+  type SourceEdit,
+  type SourcePatch,
+  type SourceSuggestion,
+} from './source-patch.js'
+export {
+  applyAstPatch,
+  applyReversibleAstPatch,
+  createAstPatch,
+  createReversibleAstPatch,
+  AstPatchError,
+  type AstPatchOperation,
+  type ReversibleAstPatch,
+} from './ast-patch.js'
+export {
+  mergeAst,
+  type MergeConflict,
+  type MergeOptions,
+  type MergeResolution,
+  type MergeResult,
+} from './merge.js'
+export {
+  checkPortability,
+  normalizeHtml,
+  type DjotEngine,
+  type Divergence,
+  type NormalizedHtml,
+  type PortabilityReport,
+} from './portability.js'
+export {
+  toAstJson,
+  fromAstJson,
+  AstJsonDepthError,
+  AstJsonRootError,
+  // PART 12 §9(b) and §12 both ask for a TYPED, DOCUMENTED refusal. A class a
+  // consumer cannot import is neither, so every ingest error the decoder raises
+  // is exported - `AstJsonUnknownFieldError` included, which §11 added without
+  // a way to catch it by type.
+  AstJsonRootFieldError,
+  AstJsonUnknownFieldError,
+  AstJsonMisplacedNodeTypeError,
+  AstJsonUnknownNodeTypeError,
+  AstJsonNodeTypeError,
+  AstJsonPartitionError,
+  AstJsonSchemaError,
+  MAX_AST_JSON_DEPTH,
+  type AstJsonDocument,
+  type AstJsonBlock,
+  type FrontmatterNode,
+  type FootnoteDefNode,
+} from './ast-json.js'
+export {
+  toAstEnvelope,
+  fromAstEnvelope,
+  AST_CONTRACT_VERSION,
+  CORE_AST_VOCABULARY,
+  AstEnvelopeShapeError,
+  AstEnvelopeVersionError,
+  AstEnvelopeExtensionError,
+  AstEnvelopeVocabularyError,
+  type AstEnvelope,
+  type AstEnvelopeExtension,
+  type ToAstEnvelopeOptions,
+  type FromAstEnvelopeOptions,
+} from './ast-envelope.js'
+export { RenderDepthError, MAX_RENDER_DEPTH } from './render/render-depth.js'
+export {
+  RenderLossError,
+  type CheckedRenderOptions,
+  type RenderLoss,
+  type RenderLossCode,
+  type RenderResult,
+  type RenderTarget,
+} from './render/render-loss.js'
+export { SourceUnspellableError } from './source/source-unspellable-error.js'
+export type {
+  RenderOptions,
+  SocialLinkAttrs,
+  SocialLinkKind,
+  SocialLinkResolver,
+  SocialLinkResolverInput,
+} from './render-html.js'
+export type { MarkdownRenderOptions } from './render-markdown.js'
+export type { CarveRenderOptions } from './render-carve.js'
+export type { PlainTextRenderOptions } from './render-plain.js'
+export type { AnsiRenderOptions } from './render-ansi.js'
+export type {
+  CarveExtension,
+  BeforeRenderContext,
+  ExtensionRenderer,
+  ExtensionRenderContext,
+  BlockExtensionRenderer,
+  BlockExtensionRenderContext,
+  InlineMatch,
+  BlockMatch,
+  MatcherContext,
+  InlineMatcher,
+  BlockMatcher,
+} from './extension.js'
+export {
+  djotMigrationWarnings,
+  formatMigrationWarnings,
+  applyMigrationFixes,
+  type MigrationWarning,
+  type MigrationCategory,
+  type MigrationFixResult,
+} from './djot-migrate.js'
+export {
+  bbcodeToCarve,
+  BbcodeInputTooLargeError,
+  BbcodeSentinelSpaceExhaustedError,
+  BBCODE_MAX_INPUT_LENGTH,
+} from './bbcode-migrate.js'
+export { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
+export { djotToCarve } from './import/djot/djot-import.js'
+export {
+  migrateDjot,
+  migrateBbcode,
+  migrateHtml,
+  migrateMarkdown,
+  type MigrationConfidence,
+  type MigrationDiagnostic,
+  type MigrationFidelity,
+  type MigrationResult,
+  type SourceFormat,
+} from './migration.js'
+export {
+  lintCarve,
+  lintIncludes,
+  formatLintWarnings,
+  type LintWarning,
+  type LintPlatform,
+  KNOWN_LINT_PLATFORMS,
+} from './lint.js'
+export { migrateCaseOnlyReferences } from './import/markdown/case-migrate.js'
+export { inspectColonFences, type ColonFenceSite, type ColonFenceMismatch } from './parse/block/colon-fences.js'
+export { decisionTrace, decisionTraceJsonLines, type TraceRecord } from './parse/decision-trace.js'
+export { tabNormalize } from './tab-normalize.js'
+export { details } from './extension/details.js'
+export { semanticSpan } from './semantic-span.js'
+export { listTable } from './table/list-table.js'
+export { glossary } from './extension/glossary.js'
+export { headingNumbers, type HeadingNumbersOptions } from './heading/heading-numbers.js'
+export { codeCallouts } from './extension/code-callouts.js'
+export {
+  smartQuotes,
+  smartQuoteLocales,
+  isSmartQuoteLocaleSupported,
+  SMART_QUOTE_LOCALES,
+  type QuoteCharacters,
+  type SmartQuotesOptions,
+} from './extension/smart-quotes.js'
+export { index, type IndexOptions } from './heading/index-terms.js'
+export {
+  citations,
+  type CitationsOptions,
+  type CslEntry,
+  type CslName,
+} from './extension/citations.js'
+export {
+  fencedRender,
+  mermaid,
+  d2,
+  graphviz,
+  wavedrom,
+  abc,
+  plantuml,
+  vegaLite,
+  chart,
+  presets,
+  type FencedRenderOptions,
+  type FencedRenderContentMode,
+} from './render/fenced-render.js'
+export { imgFence, type ImgFenceOptions } from './extension/svg-fence.js'
+export { sanitizeSvg, type SanitizeSvgOptions, type SanitizeResult } from './extension/svg-sanitize.js'
+export { mathBlock, type MathBlockOptions } from './extension/math-block.js'
+export { spoiler } from './extension/spoiler.js'
+export {
+  colorSwatch,
+  type ColorSwatchOptions,
+  type SwatchPosition,
+  type SwatchShape,
+} from './extension/color-swatch.js'
+export { wikilinks, type WikilinksOptions } from './extension/wikilinks.js'
+export { autolink, type AutolinkOptions } from './extension/autolink.js'
+export { externalLinks, type ExternalLinksOptions } from './extension/external-links.js'
+export { tableOfContents, tocPlacement, type TableOfContentsOptions } from './extension/table-of-contents.js'
+export { headingPermalinks, type HeadingPermalinksOptions } from './heading/heading-permalinks.js'
+export { codeGroup, type CodeGroupOptions } from './extension/code-group.js'
+export { tabs, type TabsOptions, type TabsMode } from './extension/tabs.js'
+export { headingLevelShift, type HeadingLevelShiftOptions } from './heading/heading-level-shift.js'
+// `fileSystemResolver` is NOT re-exported here: it needs `node:fs`, and this
+// entry is bundled for the browser verbatim. It lives on the `./node` subpath.
+export {
+  expandIncludes,
+  expandsForTarget,
+  findDirectiveSites,
+  selectIncludeRegion,
+  type DirectiveSite,
+  type IncludeRegionMode,
+  type IncludeRegionResult,
+  type IncludeContext,
+  type IncludeDenial,
+  type IncludeDependency,
+  type IncludeOptions,
+  type IncludeResult,
+  type IncludedContent,
+  type IncludeSite,
+  type IncludeWarning,
+  type IncludeResolver,
+  type IncludeResolved,
+  type IncludeUnresolved,
+} from './includes.js'
+// Recognition only. `findDirectiveSites` above answers WHERE a live directive
+// is; these two answer whether a token a host already holds is one. The scan
+// regexes stay internal on purpose: a host matching source text with them
+// would disagree with the expander about a token in a code block (carve-js#1678).
+//
+// EXPORTED AS `IncludeDirective`, not as `Directive`. `directive` is a block
+// node type as of CARVE-P12-057, and `Directive` is its interface in `ast.ts` -
+// a name an explicit re-export here would shadow, leaving the AST type with no
+// reachable name at the package root. The two are unrelated: this one is a
+// parsed `{{include}}` token, which is what the module is called.
+export {
+  isDirectiveShape,
+  parseDirective,
+  type Directive as IncludeDirective,
+} from './include-directive.js'
+export { headingReference, type HeadingReferenceOptions } from './heading/heading-reference.js'
+export {
+  defaultAttributes,
+  type DefaultAttributesOptions,
+  type DefaultAttributesMap,
+} from './extension/default-attributes.js'
+export {
+  Profile,
+  LinkPolicy,
+  ProfileViolationError,
+  formatProfileViolation,
+  canonicalType,
+  CANONICAL_BLOCK_TYPES,
+  CANONICAL_INLINE_TYPES,
+  FOLDED_NODE_TYPES,
+  type DisallowedAction,
+  type ProfileViolation,
+} from './profile.js'
+export { applyProfile, type ProfileFilterResult } from './profile-filter.js'
+export {
+  stampCarve,
+  buildMarker,
+  stripTrailingMarker,
+  readStamp,
+  needsReview,
+  compareSpecVersions,
+  type StampForm,
+  type Stamp,
+} from './stamp.js'
+export { SPEC_VERSION, LIB_VERSION } from './version.js'
+
+/**
+ * Options shared by every `carveTo*` entry point for profile-based feature
+ * restriction. A profile runs as an AST transform after resolve() and before
+ * the renderer, so it applies identically to HTML/Markdown/plain/ANSI output.
+ */
+export interface ProfileOptions {
+  /**
+   * Feature-restriction profile. When set, disallowed nodes are converted to
+   * text / stripped / error'd per the profile's action, link/image URLs are
+   * gated by its link policy, and maxNesting / maxLength are enforced. Omit
+   * for no restriction (all features pass through).
+   */
+  profile?: Profile
+  /**
+   * Current document host, used by the profile's link policy to tell internal
+   * from external links (e.g. `internalOnly`). Optional.
+   */
+  profileBaseHost?: string
+}
+
+/**
+ * Enforce the profile's maximum input length BEFORE parsing, so an oversize
+ * untrusted input is rejected without the parser doing any work (a giant input
+ * is otherwise linear parse work even after the O(n) inline fixes). No-op when
+ * no profile is set or its maxLength is 0 (unlimited). Length is measured in
+ * UTF-8 bytes, matching carve-php's pre-parse strlen() check.
+ */
+function enforceProfileMaxLength(source: string, opts: ProfileOptions): void {
+  const profile = opts.profile
+  if (!profile) return
+  const maxLength = profile.getMaxLength()
+  if (maxLength > 0 && byteLength(source) > maxLength) {
+    throw new RangeError(
+      `Input exceeds the profile's maximum length of ${maxLength} bytes ` +
+        `(got ${byteLength(source)} bytes).`,
+    )
+  }
+}
+
+/**
+ * Apply a profile's feature / link / nesting restrictions to a resolved
+ * document (after resolve, before render). Mutates and returns `doc`.
+ *
+ * Input-length enforcement is NOT done here - it runs pre-parse via
+ * {@link enforceProfileMaxLength} in the `carveToX` entry points, so an oversize
+ * input is rejected before the parser runs.
+ */
+function runProfile(doc: Document, opts: ProfileOptions): Document {
+  const profile = opts.profile
+  if (!profile) return doc
+  return applyProfileImpl(doc, profile, opts.profileBaseHost ?? null).doc
+}
+
+/** UTF-8 byte length, matching PHP's strlen() on the source string. */
+function byteLength(s: string): number {
+  return new TextEncoder().encode(s).length
+}
+
+/**
+ * Parse Carve source into a typed AST.
+ *
+ * This is the syntactic pass only. Semantic resolution (heading ids,
+ * crossrefs, implicit heading refs, unresolved-ref fallback to literal
+ * text) happens in `resolve()`. Most callers want `carveToHtml()` or
+ * `renderHtml(resolve(parse(src)))`.
+ */
+export function parse(source: string, opts: ParseOptions = {}): Document {
+  return parseDocument(source, opts)
+}
+
+/** Parse once and return canonical AST JSON plus the opt-in source-layout sidecar. */
+export function parseWithSourceLayout(source: string, opts: ParseOptions = {}): {
+  ast: AstJsonDocument
+  layout: SourceLayout
+} {
+  const ast = toAstJsonImpl(parse(source, opts))
+  return { ast, layout: toSourceLayout(source, ast) }
+}
+
+/** Parse source and measure provenance for its top-level authored blocks. */
+export function parseWithProvenance(source: string, uri: string, opts: ParseOptions = {}): {
+  ast: AstJsonDocument
+  provenance: ProvenanceSidecar
+} {
+  const ast = toAstJsonImpl(parse(source, { ...opts, positions: true }))
+  return { ast, provenance: authoredProvenance(ast, source, uri) }
+}
+
+/** Create a source-authoritative, UTF-16-addressed editor session. */
+export function createEditorSession(source: string, opts: ParseOptions = {}) {
+  return createEditorSessionInternal(source, (next, options) => toAstJsonImpl(parse(next, options)), opts, true)
+}
+
+/** Render a Carve AST to HTML matching the spec corpus. */
+export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
+  const ready = adoptBlockFootnoteDefs(ast)
+  inheritDocumentIds(ast, ready)
+  return renderHtmlImpl(ready, opts)
+}
+
+export function renderHtmlWithReport(
+  ast: Document,
+  opts: RenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderHtml(ast, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
+/** Render a resolved Carve AST to Markdown. */
+export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
+  return renderMarkdownImpl(adoptBlockFootnoteDefs(ast), opts)
+}
+
+export function renderMarkdownWithReport(
+  ast: Document,
+  opts: MarkdownRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderMarkdown(ast, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
+/** Render a resolved Carve AST to canonical Carve source. */
+export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+  return renderCarveImpl(adoptBlockFootnoteDefs(ast), opts)
+}
+
+export function renderCarveWithReport(
+  ast: Document,
+  opts: CarveRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender((onRenderLoss) => renderCarve(ast, { ...opts, onRenderLoss }), opts)
+}
+
+/** Render an AST and report structures or fields with no Carve spelling. */
+export function renderCarveWithConversionReport(
+  ast: Document,
+  opts: CarveRenderOptions = {},
+  maxDiagnostics = 100,
+): import('./import/markdown/conversion-diagnostics.js').CarveConversionResult {
+  return collectCarveConversionDiagnostics(ast, (tree) => renderCarve(tree, opts), maxDiagnostics)
+}
+
+/** Render a resolved Carve AST to plain text. */
+export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
+  return renderPlainTextImpl(adoptBlockFootnoteDefs(ast), opts)
+}
+
+export function renderPlainTextWithReport(
+  ast: Document,
+  opts: PlainTextRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderPlainText(ast, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
+/** Render a resolved Carve AST to ANSI terminal text. */
+export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
+  return renderAnsiImpl(adoptBlockFootnoteDefs(ast), opts)
+}
+
+export function renderAnsiWithReport(
+  ast: Document,
+  opts: AnsiRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderAnsi(ast, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
+/**
+ * Post-parse semantic resolution: heading ids, `</#id>` crossrefs,
+ * implicit heading references (`[Foo][]` -> `#foo`), footnote numbering
+ * (`footnote_ref` / `inline_footnote` `.number`, by document reference
+ * order), and finalization of any reference-link placeholder the parse
+ * phase left unresolved (no explicit `[label]: url` def and no matching
+ * heading) to its literal source text.
+ */
+export function resolve(
+  doc: Document,
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
+): Document {
+  const registry = new DocumentIdRegistry()
+  const resolved = resolveDocument(doc, opts, registry)
+  rememberDocumentIds(resolved, registry)
+  return resolved
+}
+
+function resolveDocument(
+  doc: Document,
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean },
+  documentIds?: DocumentIdRegistry,
+): Document {
+  const slugOpts = headingIdSlugOpts(opts)
+  const resolved = documentIds
+    ? resolveHeadingIdsWithRegistry(doc, slugOpts, documentIds)
+    : resolveHeadingIds(doc, slugOpts)
+  // Footnote `number` (PART 12 §5): document reference order, so it is a
+  // resolution result rather than a rendering one. `renderHtml()` numbers
+  // the same way standalone (carve-js#479) via the same shared pass.
+  numberFootnotes(resolved)
+  // §1a again, because this stage breaks it: `parse()` returns a coalesced tree
+  // and the passes above re-split runs when a reference degrades to text or a
+  // nested autolink is unwrapped. The resolved tree is what the CLI and every
+  // `carveToAstJson` caller publish, so it has to hold (carve-js#549).
+  return coalesceTextRuns(resolved)
+}
+
+/** Convenience: parse + resolve + render in one call. */
+export function carveToHtml(
+  source: string,
+  opts: ParseOptions & RenderOptions & ProfileOptions = {},
+): string {
+  enforceProfileMaxLength(source, opts)
+  const fast = tryFastHtml(source, opts)
+  if (fast !== undefined) return fast
+  const exts: CarveExtension[] = opts.extensions ?? []
+  // Two HTML features read source positions:
+  //
+  // - `sourceLine` rendering stamps each block with the line it starts on.
+  // - resolution applies the strict column-0 figure rule from the image's own
+  //   `startColumn`, and promotes when there is no position to consult - right
+  //   for a tree that arrived from JSON or an HTML import, wrong for one this
+  //   call just parsed. Without the force, ` ![a](p.png)` over ` ^ cap` renders
+  //   a `figure` where the default path renders a paragraph (carve-js#1263).
+  //
+  // Keep positions for extensions and reports, which may inspect the tree.
+  // Otherwise the HTML-only path does not attach most inline positions when
+  // the source has no image. Block and definition location fields may remain
+  // on its transient tree, which no caller receives.
+  // Extensions are forwarded to the parse so their matchers add syntax.
+  const parseOpts: ParseOptions = {
+    ...opts,
+    extensions: exts,
+    positions: opts.positions === true || opts.sourceLine === true || source.includes('![') ||
+      exts.length !== 0 || opts.profile !== undefined || opts.onRenderLoss !== undefined,
+  }
+  // With no transform/profile capable of inserting new ids, resolution can
+  // seed the renderer namespace during its existing mandatory AST walk. Public
+  // parse/resolve/render composition and mutable extension paths keep the
+  // conservative render-time collection.
+  const documentIds = exts.length === 0 && opts.profile === undefined
+    ? new DocumentIdRegistry()
+    : undefined
+  let doc = applyTransforms(
+    // This tree is never returned to callers. Keep its remaining internal
+    // location fields so the position-free HTML path avoids a full-tree copy.
+    resolveDocument(parseOpts.positions === false
+      ? (tryFastAstDocument(source) ?? parseDocumentForHtml(source, parseOpts))
+      : parse(source, parseOpts), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }, documentIds),
+    exts,
+    opts,
+    true,
+  )
+  doc = runProfile(doc, opts)
+  return renderHtmlImpl(adoptBlockFootnoteDefs(doc), opts, documentIds)
+}
+
+export function carveToHtmlWithReport(
+  source: string,
+  opts: ParseOptions & RenderOptions & ProfileOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => carveToHtml(source, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
+/** A render target {@link renderDocument} can drive. */
+export type DocumentRenderTarget = 'html' | 'markdown' | 'plain' | 'ansi'
+
+/**
+ * Options for {@link renderDocument}: the render options of every string
+ * target, the profile options, the two resolution switches that live on
+ * `ParseOptions` because `parse()` is where a caller sets them, and the
+ * target to render to.
+ */
+export interface RenderDocumentOptions extends RenderOptions, ProfileOptions {
+  /** Which renderer to finish with. Default `'html'`. */
+  target?: DocumentRenderTarget
+  /** See `ParseOptions.lowercaseHeadingIds`; consumed by resolution. */
+  lowercaseHeadingIds?: boolean
+  /** See `ParseOptions.asciiHeadingIds`; consumed by resolution. */
+  asciiHeadingIds?: AsciiHeadingIdMode
+}
+
+/**
+ * Render a document the caller already holds through the same composition
+ * `carveToHtml` / `carveToMarkdown` / `carveToPlainText` / `carveToAnsi` use,
+ * entered one step later: resolution, the extension transforms (`afterParse`,
+ * `beforeRender`), the profile pass, then the renderer for `target`.
+ *
+ * This is the seam for a host that produced a tree rather than a string -
+ * `expandIncludes` for a preview with includes merged in, an AST patch, an
+ * editor session - and would otherwise have to reproduce that order by hand.
+ * Reproducing it is the failure this exists to prevent: the order is internal,
+ * a hand-composed pipeline that omits a step still renders, and what it omits
+ * (a `beforeRender` hook's numbering, a profile's link policy) shows up as
+ * output that looks right (markup-carve/carve-js#1677).
+ *
+ * TWO HOST OBLIGATIONS, because the seam starts after the parse and cannot
+ * undo either:
+ *
+ * - **Parse with the same `extensions` you pass here.** `matchInline` and
+ *   `matchBlock` are parse-stage: an extension that adds syntax has already
+ *   had its chance by the time a document reaches this function, and passing
+ *   it here only reaches its transform and renderer hooks.
+ * - **Parse with `positions: true`** when the source contains an image.
+ *   `carveToHtml` does this automatically. Resolution reads a block image's
+ *   `startColumn` for the strict column-0 figure rule. With no position, it
+ *   promotes the image and resolves to a different document.
+ *
+ * The document is transformed IN PLACE, exactly as the string entry points
+ * transform the tree they just parsed - a `beforeRender` hook that shifts
+ * heading levels shifts the caller's nodes. Invisible when the entry point
+ * owns a fresh parse, visible here, so a host re-rendering on every keystroke
+ * hands over a freshly produced tree (re-parse, re-expand) rather than one it
+ * has already rendered.
+ *
+ * A profile's `maxLength` is NOT enforced here: it is a pre-parse guard
+ * measured on source bytes (`carveToHtml` applies it before parsing) and
+ * there is no source at this seam. A host feeding untrusted input measures it
+ * before it parses; an include expansion has its own byte budget.
+ *
+ * `'carve'` is deliberately not a target. `carveToCarve` runs a DIFFERENT
+ * composition on purpose - no resolution, no transforms, no profile - because
+ * a formatter must write back what the author wrote, so routing it through
+ * this seam would bake render-time enrichment into source.
+ */
+export function renderDocument(doc: Document, opts: RenderDocumentOptions = {}): string {
+  const target = opts.target ?? 'html'
+  const targetIsHtml = target === 'html'
+  const exts: CarveExtension[] = opts.extensions ?? []
+  // Same condition as `carveToHtml`: with no transform and no profile able to
+  // insert new ids, resolution can seed the renderer's id namespace during the
+  // walk it already makes.
+  const documentIds = targetIsHtml && exts.length === 0 && opts.profile === undefined
+    ? new DocumentIdRegistry()
+    : undefined
+  let out = applyTransforms(
+    resolveDocument(doc, {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }, documentIds),
+    exts,
+    opts,
+    targetIsHtml,
+  )
+  out = runProfile(out, opts)
+  const ready = adoptBlockFootnoteDefs(out)
+  switch (target) {
+    case 'html':
+      return renderHtmlImpl(ready, opts, documentIds)
+    case 'markdown':
+      return renderMarkdownImpl(ready, opts)
+    case 'plain':
+      return renderPlainTextImpl(ready, opts)
+    case 'ansi':
+      return renderAnsiImpl(ready, opts)
+  }
+}
+
+/** {@link renderDocument} with a render-loss report. */
+export function renderDocumentWithReport(
+  doc: Document,
+  opts: RenderDocumentOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderDocument(doc, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
+/**
+ * Convenience: parse + resolve to the PART 12 exchange shape in one call.
+ *
+ * Positions are forced on. PART 12 §4 lets an implementation gate position
+ * TRACKING behind a parse option - recording a span per node is not free - but
+ * not serialization: "JSON it is handed carries positions". A serializer that
+ * honored `positions: false` would publish a tree an editor or language server
+ * cannot navigate, which is the one thing the format exists to prevent.
+ *
+ * Resolution runs first, because §5 keeps resolution RESULTS (footnote numbers,
+ * caption numbers) in the serialized form: recomputing them means reimplementing
+ * PART 9R, which is exactly the work a consumer is reading an AST to avoid.
+ */
+export function carveToAstJson(
+  source: string,
+  opts: ParseOptions & ProfileOptions = {},
+): AstJsonDocument {
+  enforceProfileMaxLength(source, opts)
+  const exts: CarveExtension[] = opts.extensions ?? []
+  let doc = applyTransforms(
+    resolve(parse(source, { ...opts, extensions: exts, positions: true }), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    exts,
+    opts,
+    // The exchange shape is not HTML. A hook that emits HTML must leave the
+    // source node alone here, exactly as it does for Markdown/plain/ANSI.
+    false,
+  )
+  doc = runProfile(doc, opts)
+  return toAstJsonImpl(doc)
+}
+
+/** Convenience: parse + resolve + render Markdown in one call. */
+export function carveToMarkdown(
+  source: string,
+  opts: ParseOptions & MarkdownRenderOptions & ProfileOptions = {},
+): string {
+  enforceProfileMaxLength(source, opts)
+  let doc = applyTransforms(
+    resolve(parse(source, opts), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    opts.extensions,
+    opts,
+    false,
+  )
+  doc = runProfile(doc, opts)
+  return renderMarkdown(doc, opts)
+}
+
+export function carveToMarkdownWithReport(
+  source: string,
+  opts: ParseOptions & MarkdownRenderOptions & ProfileOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => {
+      const rendered: RenderLoss[] = []
+      const dangling: RenderLoss[] = []
+      const value = carveToMarkdown(source, {
+        ...opts,
+        onRenderLoss: loss => rendered.push(loss),
+        onDanglingBlockAttributes: run => {
+          opts.onDanglingBlockAttributes?.(run)
+          dangling.push({
+            code: 'markdown-attributes-dropped', target: 'markdown', nodeType: 'block',
+            message: 'Dropped an unattached block attribute while rendering Markdown',
+            pos: {
+              startLine: run.line, endLine: run.line,
+              startColumn: run.column, endColumn: run.column + run.endOffset - run.startOffset,
+              startOffset: run.startOffset, endOffset: run.endOffset,
+            },
+          })
+        },
+      })
+      dangling.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
+      let next = 0
+      let renderedOffset = -1
+      for (const loss of rendered) {
+        renderedOffset = Math.max(renderedOffset, loss.pos?.startOffset ?? renderedOffset)
+        while (next < dangling.length && (dangling[next]!.pos?.startOffset ?? 0) < renderedOffset) onRenderLoss(dangling[next++]!)
+        onRenderLoss(loss)
+      }
+      while (next < dangling.length) onRenderLoss(dangling[next++]!)
+      return value
+    },
+    opts,
+  )
+}
+
+/**
+ * Convenience: parse + render canonical Carve source in one call.
+ *
+ * Unlike the other `carveToX` helpers, the formatter deliberately does NOT run
+ * `resolve()` / extension transforms / profiles. Those are render-time
+ * enrichments (auto heading ids, footnote/crossref numbering, default
+ * attributes) and baking them back into the source would make the formatter
+ * non-conservative - it must format what the author wrote, not the resolved
+ * output. The semantic invariant still holds because `carveToHtml` re-applies
+ * resolution on the formatted source.
+ *
+ * The one structural pass it DOES run is `promoteBlockImages`: a reference
+ * image with a caption parses as a paragraph `[Image, SoftBreak, "^ …"]`, and
+ * without promoting it to a <figure> the serializer would escape the caption's
+ * leading `^` to `\^` (only carve-js's lenient parser reads that back as a
+ * caption; carve-rs / carve-php lose the figure). Promoting first yields a
+ * portable, unescaped `^ …` caption line, matching carve-php and carve-rs. This
+ * is representation, not enrichment - it changes no author-visible content.
+ */
+export function carveToCarve(
+  source: string,
+  opts: ParseOptions & CarveRenderOptions = {},
+): string {
+  return canonicalCarveWrite(source, opts)
+}
+
+export function carveToCarveWithReport(
+  source: string,
+  opts: ParseOptions & CarveRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(() => carveToCarve(source, opts), opts)
+}
+
+/** Prepare a stale-safe patch without changing the caller's source. */
+export function carveToCarvePatch(
+  source: string,
+  opts: ParseOptions & CarveRenderOptions & CheckedRenderOptions = {},
+): SourcePatch {
+  let recoveredMetadata = false
+  const result = carveToCarveWithReport(source, {
+    ...opts,
+    onInvalidContainerMetadata: (container) => {
+      recoveredMetadata = true
+      opts.onInvalidContainerMetadata?.(container)
+    },
+  })
+  const patch = createSourcePatch(source, result.value, 'formatting', 'canonical-format')
+  if (result.totalLosses > 0) {
+    patch.edits = []
+    patch.unresolved = [{
+      start: 0,
+      end: patch.sourceBytes,
+      replacement: result.value,
+      kind: 'formatting',
+      code: 'format-loss',
+      message: `Canonical formatting reports ${result.totalLosses} rendering loss${result.totalLosses === 1 ? '' : 'es'}; review the proposed source.`,
+    }]
+  }
+  if (recoveredMetadata && patch.edits.length > 0) {
+    patch.edits = []
+    patch.unresolved = [{
+      start: 0, end: patch.sourceBytes, replacement: result.value,
+      kind: 'formatting', code: 'invalid-container-metadata',
+      message: 'Canonical formatting drops invalid container metadata; review the proposed source.',
+    }]
+  }
+  return patch
+}
+
+/** Convenience: parse + resolve + render plain text in one call. */
+export function carveToPlainText(
+  source: string,
+  opts: ParseOptions & PlainTextRenderOptions & ProfileOptions = {},
+): string {
+  enforceProfileMaxLength(source, opts)
+  let doc = applyTransforms(
+    resolve(parse(source, opts), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    opts.extensions,
+    opts,
+    false,
+  )
+  doc = runProfile(doc, opts)
+  return renderPlainText(doc, opts)
+}
+
+export function carveToPlainTextWithReport(
+  source: string,
+  opts: ParseOptions & PlainTextRenderOptions & ProfileOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => carveToPlainText(source, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
+/** Convenience: parse + resolve + render ANSI terminal text in one call. */
+export function carveToAnsi(
+  source: string,
+  opts: ParseOptions & AnsiRenderOptions & ProfileOptions = {},
+): string {
+  enforceProfileMaxLength(source, opts)
+  let doc = applyTransforms(
+    resolve(parse(source, opts), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    opts.extensions,
+    opts,
+    false,
+  )
+  doc = runProfile(doc, opts)
+  return renderAnsi(doc, opts)
+}
+
+export function carveToAnsiWithReport(
+  source: string,
+  opts: ParseOptions & AnsiRenderOptions & ProfileOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => carveToAnsi(source, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
+/** Render source with separate render-loss and table-preservation assessments. */
+export function carveToPreservationReport(
+  source: string,
+  target: PreservationTarget,
+  opts: ParseOptions & ProfileOptions & RenderOptions & MarkdownRenderOptions & PlainTextRenderOptions & AnsiRenderOptions & CheckedRenderOptions & PreservationOptions = {},
+): RenderResult & { preservation: TablePreservationReport } {
+  const preservation = assessTablePreservation(carveToAstJson(source, opts), target, opts)
+  const renderers = {
+    html: carveToHtmlWithReport, markdown: carveToMarkdownWithReport,
+    plain: carveToPlainTextWithReport, ansi: carveToAnsiWithReport,
+  }
+  return { ...renderers[target](source, opts), preservation }
+}
+
+export type { SmartTypographyMode, SmartTypographyFamilies, SmartTypographyOption } from './extension/smart-typography-mode.js'

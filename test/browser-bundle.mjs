@@ -6,13 +6,14 @@
 // level instead of solving it. So this builds `dist/carve.iife.min.js` and
 // asserts, against the ESM build in `dist/`, that
 //
-//   • the `carve` global exports exactly the names `src/index.ts` exports -
+//   • the `carve` global exports exactly the names `public/index.ts` exports -
 //     no name silently dropped by treeshaking or renamed by the minifier, and
 //     none added;
-//   • every document in the spec corpus renders byte-identically through the
-//     bundle and through the ESM build, thrown errors included;
-//   • the non-render surface (markdown/carve/plain/ansi writers, linter,
-//     importers, diff) agrees too, since the global claims the whole API.
+//   • every Carve example of the pinned conformance corpus renders
+//     byte-identically through the bundle and through the ESM build, thrown
+//     errors included;
+//   • the non-render surface (writer, formatter, linter, HTML import, tree
+//     codec) agrees too, since the global claims the whole API.
 //
 // The bundle is loaded in a `vm` context holding only globals a browser also
 // provides, so a Node builtin creeping into the entry fails here rather than
@@ -27,7 +28,7 @@
 // `npx` at a pinned version (see scripts/build-browser.mjs); nothing is added
 // to devDependencies. Exits non-zero on any mismatch.
 
-import { readdirSync, readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -36,15 +37,8 @@ import { buildBrowserBundle, BUNDLE } from '../scripts/build-browser.mjs'
 import * as esm from '../dist/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const corpusDir = resolve(__dirname, '../spec/tests/corpus')
-
-if (!existsSync(corpusDir)) {
-  throw new Error(
-    `Spec corpus not found at ${corpusDir}.\n` +
-      `Did you initialize the submodule?\n` +
-      `  git submodule update --init`,
-  )
-}
+const examples = JSON.parse(readFileSync(resolve(__dirname, '../data/conformance/examples.json'), 'utf8')).examples
+  .filter((example) => typeof example.input === 'string')
 
 /**
  * Load an IIFE bundle and hand back its `carve` global.
@@ -72,7 +66,16 @@ function loadBundle(file) {
   if (!api || typeof api !== 'object') {
     throw new Error(`${basename(file)} defined no \`carve\` global`)
   }
+  realms.set(api, context)
   return api
+}
+
+const realms = new WeakMap()
+
+/** `value` as an object of the realm `api` runs in: the options checks refuse an object of another realm. */
+function own(api, value) {
+  const context = realms.get(api)
+  return context === undefined ? value : vm.runInContext('JSON.parse', context)(JSON.stringify(value))
 }
 
 /**
@@ -97,12 +100,14 @@ function threw(fn) {
   return outcome(fn).startsWith('THREW ')
 }
 
-// One document exercising the writers, the linter, the importers and the diff.
+// One document exercising the writer, the formatter, the linter, the importer and the tree codec.
 // The corpus sweep below covers rendering breadth; this covers API breadth.
 const PROBE = [
   '# Heading /one/',
   '',
-  'Text with *bold*, `code`, a [link](https://example.com) and a ^[note].',
+  'Text with *bold*, `code`, a [link](https://example.com) and a footnote.[^n]',
+  '',
+  '[^n]: The note.',
   '',
   '- item one',
   '- item two',
@@ -111,28 +116,22 @@ const PROBE = [
   'const x = 1',
   '```',
   '',
-  '| a | b |',
-  '|---|---|',
+  '|= a |= b |',
   '| 1 | 2 |',
 ].join('\n')
 
 const PROBES = {
-  carveToHtml: (api) => api.carveToHtml(PROBE),
-  renderHtml: (api) => api.renderHtml(api.resolve(api.parse(PROBE))),
-  renderMarkdown: (api) => api.renderMarkdown(api.resolve(api.parse(PROBE))),
-  renderCarve: (api) => api.renderCarve(api.parse(PROBE)),
-  renderPlainText: (api) => api.renderPlainText(api.resolve(api.parse(PROBE))),
-  renderAnsi: (api) => api.renderAnsi(api.resolve(api.parse(PROBE))),
-  lintCarve: (api) => api.lintCarve(PROBE),
-  markdownToCarve: (api) => api.markdownToCarve('# md\n\n**b** and _i_\n'),
-  djotToCarve: (api) => api.djotToCarve('_i_ and ~n~\n'),
-  bbcodeToCarve: (api) => api.bbcodeToCarve('[b]b[/b] and [i]i[/i]'),
-  htmlToCarve: (api) => api.htmlToCarve('<h1>h</h1><p><em>i</em></p>'),
+  render: (api) => api.render(PROBE),
+  renderWithDiagnostics: (api) => api.renderWithDiagnostics(PROBE),
   parse: (api) => api.parse(PROBE),
-  toSourceLayout: (api) => api.toSourceLayout(PROBE, api.parse(PROBE)),
-  diffAst: (api) => api.diffAst(api.parse(PROBE), api.parse(PROBE + '\n\nextra\n')),
-  SPEC_VERSION: (api) => api.SPEC_VERSION,
-  LIB_VERSION: (api) => api.LIB_VERSION,
+  parseWithLayout: (api) => api.parseWithLayout(PROBE),
+  format: (api) => api.formatWithDiagnostics(PROBE),
+  write: (api) => api.writeWithDiagnostics(api.parse(PROBE)),
+  lint: (api) => api.lint(PROBE),
+  importDocument: (api) => api.importDocument('<h1>h</h1><p><em>i</em></p>', own(api, { from: 'html' })),
+  encodeTree: (api) => api.encodeTree(api.parse(PROBE)),
+  decodeTree: (api) => api.decodeTree(api.encodeTree(api.parse(PROBE))),
+  AST_VERSION: (api) => api.AST_VERSION,
 }
 
 /**
@@ -161,21 +160,17 @@ function check(file) {
     }
   }
 
-  const documents = readdirSync(corpusDir)
-    .filter((name) => name.endsWith('.crv'))
-    .sort()
   let diverged = 0
-  for (const name of documents) {
-    const source = readFileSync(join(corpusDir, name), 'utf8')
-    if (outcome(() => api.carveToHtml(source)) !== outcome(() => esm.carveToHtml(source))) {
-      if (diverged < 5) failures.push(`corpus document renders differently: ${name}`)
+  for (const example of examples) {
+    if (outcome(() => api.render(example.input)) !== outcome(() => esm.render(example.input))) {
+      if (diverged < 5) failures.push(`corpus document renders differently: ${example.id}`)
       diverged += 1
     }
   }
   if (diverged > 5) failures.push(`… and ${diverged - 5} more corpus documents`)
-  if (!documents.length) failures.push('the corpus held no documents to compare')
+  if (!examples.length) failures.push('the corpus held no documents to compare')
 
-  return { failures, documents: documents.length }
+  return { failures, documents: examples.length }
 }
 
 /**
@@ -191,13 +186,13 @@ function selfcheck() {
       // Appended after the IIFE assigns the global, so the artifact renders
       // something the library does not. The global's own properties are
       // getters, so each footer rebuilds it as a plain object first.
-      args: ['--footer:js=carve={...carve,carveToHtml:()=>"<!--mutant-->"}'],
+      args: ['--footer:js=carve={...carve,render:()=>"<!--mutant-->"}'],
       expect: /corpus document renders differently|api probe diverges/,
     },
     {
       name: 'a dropped export',
-      args: ['--footer:js=carve=(()=>{const c={...carve};delete c.lintCarve;return c})()'],
-      expect: /exports missing from the bundle: .*lintCarve/,
+      args: ['--footer:js=carve=(()=>{const c={...carve};delete c.lint;return c})()'],
+      expect: /exports missing from the bundle: .*\blint\b/,
     },
   ]
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import map from '../../v2/data/upgrade-map.json' with { type: 'json' }
+import map from '../../data/upgrade-map.json' with { type: 'json' }
 import { canWriteUpgrade, needsAttention, upgrade } from '../src/upgrade.ts'
 
 const rows = map.source.filter((row) => Number(row.id.slice(2)) >= 375)

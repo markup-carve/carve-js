@@ -2,7 +2,7 @@ import {
   isUrlAllowed, MAX_TREE_DEPTH, validateTree, writeWithDiagnostics,
   type Attrs, type Block, type Diagnostic, type DocumentNode,
   type Inline, type ListNode, type TableCellNode, type TableRowNode,
-} from '../../v2/src/index.ts'
+} from '../../src/index.ts'
 
 export type Format = 'markdown' | 'gfm' | 'djot' | 'html'
 export type ImportDiagnostic = Diagnostic & { foreignType?: string }
@@ -138,7 +138,7 @@ function addClasses(attrs: Attrs, names: string[]): void {
 }
 
 // C2-I-030: the writer's key test, so that the importer keeps only a key the writer can spell.
-export { isKey } from '../../v2/src/write-attributes.ts'
+export { isKey } from '../../src/write-attributes.ts'
 
 /** Splits a class attribute at ASCII whitespace (C2-M-052). */
 export function classNames(value: string): string[] {

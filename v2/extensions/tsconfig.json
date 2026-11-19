@@ -1,4 +1,0 @@
-{
-  "extends": "../tsconfig.json",
-  "include": ["**/*.ts", "../test/extension-migration/**/*.ts", "../src/**/*.ts", "../../import/src/mdast-extensions.d.ts"]
-}

@@ -1,8 +1,8 @@
 // U-121, C2-I-072: keep a 0.1 text pair from becoming a defined shortcut.
-import { childNodes, type Node } from '../../../v2/src/ast.ts'
-import { parseTree } from '../../../v2/src/api.ts'
+import { childNodes, type Node } from '../../../src/ast.ts'
+import { parseTree } from '../../../src/api.ts'
 import { change, type Context } from '../context.ts'
-import { append } from '../../../v2/src/append.ts'
+import { append } from '../../../src/append.ts'
 
 function wasText(ctx: Context, start: number): boolean {
   return ctx.visits.some(({ node }) => node.type === 'text' && node.pos !== undefined &&

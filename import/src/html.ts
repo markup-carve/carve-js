@@ -2,21 +2,21 @@ import { defaultTreeAdapter, html, parse, Parser, type DefaultTreeAdapterMap, ty
 import type {
   Attrs, Block, CaptionNode, DocumentNode, Inline, LinkReferenceDefinitionNode, ListItemNode, ListNode, TableCellNode, TableColumnNode,
   TableNode, TableRowNode,
-} from '../../v2/src/index.ts'
-import { resolveTree } from '../../v2/src/index.ts'
+} from '../../src/index.ts'
+import { resolveTree } from '../../src/index.ts'
 import {
   asciiLower, attr, attrs, CARRIERS, classList, content, directionOf, droppedAttribute, elements, has, ignoredCarrier, isBlank,
   isComment, isElement, isRawSpan,
   isText, plain, report, withoutClasses, withoutKeys, type HtmlContext, type MappedAttrs,
 } from './html-dom.ts'
 import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
-import { TASK_NO_STATE, TASK_STATUS } from '../../v2/src/tree-tables.ts'
+import { TASK_NO_STATE, TASK_STATUS } from '../../src/tree-tables.ts'
 import { htmlImage, inline, inlineChildren, normalizeBreaks, trimInlineEdges } from './html-inline.ts'
 import { collectNotes, isFootnoteSection } from './html-notes.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
 import { resolveAlignments } from './html-table-align.ts'
 import { cell, coalesce, complete, documentOf, ensureForeignDepth, paragraph, row, softText, type ImportResult } from './kit.ts'
-import { append } from '../../v2/src/append.ts'
+import { append } from '../../src/append.ts'
 
 function htmlInteger(value: string | undefined): number | undefined {
   if (value === undefined) return undefined

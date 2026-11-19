@@ -1,6 +1,6 @@
 // Inline HTML to Carve inline nodes: foreign markup, and the elements and carriers of a 0.2 render (C2-H-072 to C2-H-101).
 import { type DefaultTreeAdapterTypes as Html } from 'parse5'
-import { foldLabel, type Inline, type RubyPairNode } from '../../v2/src/index.ts'
+import { foldLabel, type Inline, type RubyPairNode } from '../../src/index.ts'
 import {
   at, attr, attrs, classList, content, elements, has, ignoredCarrier, isComment, isElement, isText, plain, report,
   withoutClasses, withoutKeys, isRawFormat, isRawSpan, type HtmlContext, type NoteEntry,
@@ -8,7 +8,7 @@ import {
 import { isBacklink } from './html-notes.ts'
 import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
 import { coalesce, isKey, paragraph, safeUrl, softText, text, withDestination } from './kit.ts'
-import { append } from '../../v2/src/append.ts'
+import { append } from '../../src/append.ts'
 
 const EDGE_ELEMENTS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'dt', 'caption', 'figcaption']
 

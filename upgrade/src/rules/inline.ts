@@ -1,5 +1,5 @@
 // Contract 2.11 and 2.13: inline spellings, read off the inline nodes of the 0.1 tree.
-import { isAsciiDigit, isWordCharacter } from '../../../v2/src/unicode.ts'
+import { isAsciiDigit, isWordCharacter } from '../../../src/unicode.ts'
 import { ancestor, isInside } from '../blocks.ts'
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'

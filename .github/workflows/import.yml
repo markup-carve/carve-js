@@ -5,14 +5,14 @@ on:
     branches: [next2]
     paths:
       - 'import/**'
-      - 'v2/src/**'
+      - 'src/**'
       - 'eslint.config.mjs'
       - '.github/workflows/import.yml'
   pull_request:
     branches: [next2]
     paths:
       - 'import/**'
-      - 'v2/src/**'
+      - 'src/**'
       - 'eslint.config.mjs'
       - '.github/workflows/import.yml'
 
