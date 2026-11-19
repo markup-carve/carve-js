@@ -1,10 +1,30 @@
 // The lint differences between this engine and the Rust engine, each decided from its clause.
 import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
+import { citations } from '../src/extensions/citations.ts'
+import { glossary } from '../src/extensions/glossary.ts'
 
 const codes = (source) => lint(source).map((entry) => entry.code)
 
 describe('lint difference classes', () => {
+  it('C2-B-003 and C2-B-025: owner columns exclude quote prefixes and include div opener indentation', () => {
+    expect(codes('> :: a')).toEqual([])
+    expect(codes('- x\n\n  :: a')).not.toContain('block-opener-overindented')
+    expect(codes('::: note\n  ::: references\n  x\n  :::\n:::'))
+      .toContain('block-opener-overindented')
+  })
+
+  it('C2-B-127 and C2-I-101: the reserved references placement rule has no core trigger', () => {
+    expect(codes('> ::: references\n> :::')).toEqual([])
+    expect(codes('::: note\n::: references\n:::\n:::'))
+      .not.toContain('references-placement-in-container')
+    const source = '> ::: references\n> :::'
+    expect(lint(source, { extensions: glossary().extensions }).map((entry) => entry.code))
+      .not.toContain('references-placement-in-container')
+    expect(lint(source, { extensions: citations().extensions }).map((entry) => entry.code))
+      .not.toContain('references-placement-in-container')
+  })
+
   it('C2-N-085: without a resolver lint reports each include with include-no-resolver', () => {
     expect(codes('{{ v }}')).toEqual(['include-no-resolver'])
   })

@@ -50,6 +50,7 @@ function validateOptions(options: unknown): asserts options is LintOptions {
 }
 
 function active(id: RuleId, options: LintOptions): boolean {
+  if ('status' in CATALOG[id] && CATALOG[id].status === 'void') return false
   if (id.startsWith('platform-')) return options.platforms?.includes('github') === true && options.rules?.[id] !== 'off'
   const setting = options.rules?.[id] ?? CATALOG[id].default
   if (setting !== 'on') return false

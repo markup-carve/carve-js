@@ -266,15 +266,13 @@ describe('C2-W-106 catalog rules', () => {
     const positives = new Set(CLAUSE_CASES.flatMap((entry) => (entry.expected.diagnostics ?? []).map((finding) => finding.code))
       .filter((id) => active.has(id)))
     const misses = new Set(CLAUSE_CASES.flatMap((entry) => entry.expected.notReported ?? []).filter((id) => active.has(id)))
-    for (const id of ['references-placement-in-container', 'table-row-without-closing-pipe']) {
-      positives.add(id)
-      misses.add(id)
-    }
-    expect(positives).toEqual(new Set(Object.keys(CATALOG)))
-    expect(misses).toEqual(new Set(Object.keys(CATALOG)))
+    const coreRules = Object.keys(CATALOG).filter((id) => !('status' in CATALOG[id] && CATALOG[id].status === 'void'))
+    expect(positives).toEqual(new Set(coreRules))
+    expect(misses).toEqual(new Set(coreRules))
   })
 
   for (const id of Object.keys(CATALOG)) {
+    if ('status' in CATALOG[id] && CATALOG[id].status === 'void') continue
     it(`${id} has a candidate 13 trigger, near miss, message variant, and byte range`, () => {
       // Later clause cases carry the latest catalog range when an older case predates a ruling.
       const positive = CLAUSE_CASES.findLast((entry) => entry.expected.diagnostics?.some((finding) => finding.code === id))

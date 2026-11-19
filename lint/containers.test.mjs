@@ -27,11 +27,11 @@ const CASES = [
   { id: 'djot-heading-continuation', trigger: '# h\ntext', near: '# h\n\ntext' },
   { id: 'caption-looking-paragraph', trigger: '| a |\n\nTable: cap', near: '| a |\n^ cap' },
   { id: 'colon-fence-length-mismatch', trigger: '::: note\na\n::::', near: '::: note\na\n:::' },
-  { id: 'table-row-without-closing-pipe', trigger: 'a\n| a | b', near: 'a\n| a | b |' },
 ]
 
 // The catalog scopes these rules to a shape that a container prefix changes.
 const SCOPED = {
+  'table-row-without-closing-pipe': 'void in the 0.2 catalog',
   'blockquote-marker-without-space': 'C2-B-031: column 1, no indent and no container prefix',
   'indented-code-block': 'a top-level indent, which a container prefix replaces',
   'definition-in-container': 'reports inside containers only',

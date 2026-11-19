@@ -3,6 +3,7 @@ import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
+import { columnOf } from '../src/layout-lines.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -1101,28 +1102,50 @@ function listMarkerBelowColumn(node: Node, path: string, context: LintContext): 
   })
 }
 
-function ownerContentColumn(ownerPath: string, ownerType: string, context: LintContext): number {
+function quoteDepth(path: string, context: LintContext): number {
+  let depth = 0
+  for (let split = path.lastIndexOf('/children/'); split > 0; split = path.lastIndexOf('/children/', split - 1)) {
+    if (context.nodeTypes.get(path.slice(0, split)) === 'block_quote') depth++
+  }
+  return depth
+}
+
+function ownerContentColumn(ownerPath: string, ownerType: string, quotes: number, context: LintContext): number {
+  if (ownerType === 'block_quote' || ownerType === 'document') return 0
   const ownerLayout = context.layouts.get(ownerPath)
-  if (ownerType !== 'block_quote') return ownerLayout?.contentColumn ?? 0
-  const ownerStart = context.chars[ownerLayout?.startByte ?? 0] ?? 0
-  const ownerLine = context.lines[(context.offsetLines[ownerStart] ?? 1) - 1]
-  return ownerStart - (ownerLine?.start ?? ownerStart) + 2
+  if (ownerLayout?.contentColumn !== undefined) return ownerLayout.contentColumn
+  if (ownerLayout === undefined) return 0
+  const ownerStart = context.chars[ownerLayout.startByte] ?? 0
+  return columnOf(context.source, ownerStart, quotes)
+}
+
+function blockOwner(path: string, context: LintContext): { path: string, type: string } {
+  let split = path.lastIndexOf('/children/')
+  let ownerPath = split < 0 ? '' : path.slice(0, split)
+  let ownerType = context.nodeTypes.get(ownerPath) ?? 'document'
+  while (ownerType === 'definition_list' && split > 0) {
+    split = ownerPath.lastIndexOf('/children/')
+    ownerPath = split < 0 ? '' : ownerPath.slice(0, split)
+    ownerType = context.nodeTypes.get(ownerPath) ?? 'document'
+  }
+  return { path: ownerPath, type: ownerType }
 }
 
 function blockOverindent(node: Node, path: string, context: LintContext): void {
   if (node.pos === undefined) return
-  const split = path.lastIndexOf('/children/')
-  const ownerPath = split < 0 ? '' : path.slice(0, split)
-  const ownerType = context.nodeTypes.get(ownerPath) ?? 'document'
+  const { path: ownerPath, type: ownerType } = blockOwner(path, context)
   if (ownerType === 'list_item') return
   const start = context.chars[node.pos.startOffset] ?? 0
   const line = context.lines[node.pos.startLine - 1]
   if (line === undefined) return
-  const column = start - line.start
-  const content = ownerContentColumn(ownerPath, ownerType, context)
+  const quotes = quoteDepth(path, context)
+  const column = columnOf(context.source, start, quotes)
+  const content = ownerContentColumn(ownerPath, ownerType, quotes, context)
   if (column <= content) return
-  const kind = node.type === 'block_quote' ? 'quote' : node.type.replaceAll('_', ' ')
-  const width = node.type === 'definition_term' ? 2 : node.type === 'div' ? 3 : 1
+  const colonDiv = node.type === 'div' || node.type === 'directive' || node.type === 'admonition'
+    || node.type === 'figure_group'
+  const kind = node.type === 'block_quote' ? 'quote' : colonDiv ? 'div' : node.type.replaceAll('_', ' ')
+  const width = node.type === 'definition_term' ? 2 : colonDiv ? 3 : 1
   const past = column - content
   context.report('block-opener-overindented', start, start + width, path,
     { kind, past: String(past), columns: past === 1 ? 'column' : 'columns', owner: ownerType.replaceAll('_', ' ') })
@@ -1475,7 +1498,8 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('list-item-body-below-content-column', ['list_item'], listItemBodyColumn),
   nodeRule('list-item-block-overindented', ['list_item'], listItemBlockIndent),
   nodeRule('list-marker-below-content-column', ['list'], listMarkerBelowColumn),
-  nodeRule('block-opener-overindented', ['block_quote', 'div', 'code_block', 'line_block', 'definition_term', 'heading',
+  nodeRule('block-opener-overindented', ['block_quote', 'div', 'directive', 'admonition', 'figure_group',
+    'code_block', 'line_block', 'definition_term', 'heading',
     'thematic_break', 'table'], blockOverindent),
   nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
   nodeRule('consumed-key-near-miss', ['code_block'], consumedNearMiss),

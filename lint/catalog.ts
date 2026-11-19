@@ -802,7 +802,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "references-placement-in-container": { severity: "warning", default: "on", messages: [
+  "references-placement-in-container": { status: "void", severity: "warning", default: "on", messages: [
     [
       "This \"::: references\" marker is inside a container and does not plac",
       "e the reference list. Move it to document level, or remove it if no ",
@@ -921,7 +921,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "table-row-without-closing-pipe": { severity: "hint", default: undefined, messages: [
+  "table-row-without-closing-pipe": { status: "void", severity: "hint", default: undefined, messages: [
     [
       "This row has no closing pipe. carve fmt adds it; escape the first pi",
       "pe if the line is text.",
