@@ -28,13 +28,25 @@ function canCloseRun(visit: Visit, late: boolean): boolean {
     && ancestor(visit, 'table') === null && ancestor(visit, 'figure') === null
 }
 
+function canReportRun(visit: Visit, late: boolean): boolean {
+  if (late) return canCloseRun(visit, late)
+  return OPEN_RUNS.includes(visit.node.type) && visit.node.pos !== undefined && ancestor(visit, 'line_block') === null
+    && ancestor(visit, 'table') === null && ancestor(visit, 'figure') === null
+}
+
+/** Where the backticks of a run start, after a literal or math sigil. */
+function runStart(src: string, start: number): number {
+  let at = start
+  if (src[at] === '!' || src[at] === '$') at++
+  if (src[start] === '$' && src[at] === '$') at++
+  return at
+}
+
 function unclosedRun(ctx: Context, visit: Visit): void {
   const node = visit.node
-  if (!canCloseRun(visit, ctx.late)) return
+  if (!canReportRun(visit, ctx.late)) return
   const { startOffset: start, endOffset: end, startLine } = node.pos!
-  let at = start
-  if (ctx.src[at] === '!' || ctx.src[at] === '$') at++
-  if (ctx.src[start] === '$' && ctx.src[at] === '$') at++
+  const at = runStart(ctx.src, start)
   if (ctx.src[at] !== '`') return
   let width = 0
   while (ctx.src[at + width] === '`') width++
@@ -42,7 +54,9 @@ function unclosedRun(ctx: Context, visit: Visit): void {
   const mark = '`'.repeat(width)
   if (hasClosingRun(ctx.src, openerEnd, end, width)) return
   if (ctx.findings.some((finding) => finding.edit !== null && start <= finding.offset && finding.offset <= end)) return
+  // An empty run is only reported, so a quote can hold it too.
   if (end > openerEnd) {
+    if (!canCloseRun(visit, ctx.late)) return
     // C2-I-016: a value that starts or ends with a backtick is padded with one space on each side.
     const pad = ctx.src[end - 1] === '`'
     const from = pad ? openerEnd : end

@@ -63,3 +63,12 @@ describe('U-021 and the endnotes list', () => {
     expect(result.records.map((record) => record.entry)).toEqual(expect.arrayContaining(['U-021', 'U-038']))
   })
 })
+
+describe('U-258 empty runs in a quote', () => {
+  it('C2-I-017 reports the empty 0.1 code value in a quote', () => {
+    const result = upgrade('a\n> `\n')
+    expect(result.output).toBe('a\n\n> `\n')
+    expect(result.check).toBe('explained')
+    expect(result.records.map((record) => record.entry)).toEqual(expect.arrayContaining(['U-002', 'U-258']))
+  })
+})
