@@ -811,9 +811,9 @@ function textUnit(leaf: Leaf, at: number, escaped: Uint8Array): number {
   if (block >= 0 && behindHost(leaf, at)) hostBlockEscape(leaf, at, block, escaped)
   else if (block >= 0) return opaqueBlock(leaf, at, block)
   RESOLVERS[String.fromCharCode(value)]?.(leaf, at, escaped)
-  if (DELIMITER_CHARACTERS.includes(String.fromCharCode(value))) leaf.textMark = true
+  if (DELIMITER_CODES[value] === 1) leaf.textMark = true
   // Escaped or not: the procedure reaches a later unit with this one still bare.
-  if (TEXT_OPENERS.includes(String.fromCharCode(value)) && leaf.kinds[at - 1] !== ESCAPE) leaf.textOpener = true
+  if (TEXT_OPENER_CODES[value] === 1 && leaf.kinds[at - 1] !== ESCAPE) leaf.textOpener = true
   return at + 1
 }
 
@@ -822,6 +822,14 @@ const LONGEST_BLOCK = 256
 const DELIMITER_CHARACTERS = '*+,-/=^_~{'
 // The characters of text that can open a construct whose end lies further on.
 const TEXT_OPENERS = '*+,-/=^_~{[<!$:@#%&`"\''
+const DELIMITER_CODES = codeTable(DELIMITER_CHARACTERS)
+const TEXT_OPENER_CODES = codeTable(TEXT_OPENERS)
+
+function codeTable(chars: string): Uint8Array {
+  const table = new Uint8Array(128)
+  for (let at = 0; at < chars.length; at++) table[chars.charCodeAt(at)] = 1
+  return table
+}
 
 /**
  * C2-I-043: the end of the valid attribute block that the text brace at `at` opens, or -1. A quoted value may hold a
@@ -1054,9 +1062,13 @@ function endsAComment(leaf: Leaf, at: number, depth: CommentDepth): boolean {
 }
 
 function record(plan: Plan, leaf: Leaf, escaped: Uint8Array): void {
+  let covered: Node | null = null
   for (let at = 0; at < leaf.codes.length; at++) {
     const owner = leaf.owners[at]!
-    if (leaf.kinds[at] === TEXT && owner.type === 'text') plan.covered.add(owner)
+    if (owner !== covered && leaf.kinds[at] === TEXT && owner.type === 'text') {
+      plan.covered.add(owner)
+      covered = owner
+    }
     if (escaped[at] === 0 || owner.type !== 'text') continue
     const list = plan.escapes.get(owner)
     if (list === undefined) plan.escapes.set(owner, [leaf.offsets[at]!])

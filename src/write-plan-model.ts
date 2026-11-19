@@ -101,7 +101,7 @@ export function inNote(leaf: Leaf, at: number): boolean {
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
-  const read = kind === OPEN || kind === CLOSE || (kind === TEXT && leaf.kinds.at(-1) !== ESCAPE)
+  const read = kind === OPEN || kind === CLOSE || (kind === TEXT && leaf.kinds[leaf.kinds.length - 1] !== ESCAPE)
   if (read) {
     if (code === 91) leaf.openBrackets++
     else if (code === 93 && leaf.openBrackets > 0) leaf.openBrackets--
@@ -141,8 +141,24 @@ function textUnits(w: Writer, leaf: Leaf, node: TextNode, flags: number): void {
       next++
       push(leaf, BACKSLASH, ESCAPE, node, at)
     }
-    push(leaf, value.charCodeAt(at), TEXT, node, at)
+    pushText(leaf, value.charCodeAt(at), node, at)
   }
+}
+
+/** `push` of a unit of text. */
+function pushText(leaf: Leaf, code: number, owner: Node, offset: number): void {
+  const length = leaf.codes.length
+  if (leaf.kinds[length - 1] !== ESCAPE) {
+    if (code === 91) leaf.openBrackets++
+    else if (code === 93 && leaf.openBrackets > 0) leaf.openBrackets--
+    else if (code === 123) leaf.openBraces++
+    else if (code === 125 && leaf.openBraces > 0) leaf.openBraces--
+  }
+  if (code === 93) leaf.lastBracket = length
+  leaf.codes.push(code)
+  leaf.kinds.push(TEXT)
+  leaf.owners.push(owner)
+  leaf.offsets.push(offset)
 }
 
 /** Takes the spaces and tabs of text from the end of the leaf (C2-W-022). */

@@ -14,6 +14,13 @@ const STAR = 42
 const BRACKET_OPEN = 91
 const BRACKET_CLOSE = 93
 const MARKS = '*+,-/=^_~'
+const MARK_INDEX = new Int8Array(128).fill(-1)
+for (let index = 0; index < MARKS.length; index++) MARK_INDEX[MARKS.charCodeAt(index)] = index
+
+/** The index of the code in MARKS, or -1. */
+function markIndex(code: number): number {
+  return code >= 0 && code < 128 ? MARK_INDEX[code]! : -1
+}
 
 const DELIMITER = 0
 const BRACED_OPEN = 1
@@ -134,7 +141,7 @@ function bareMark(tokens: Token[], leaf: Leaf, at: number, escaped: Uint8Array):
   let last = at
   while (last + 1 < codes.length && codes[last + 1] === code && escaped[last + 1] === 0 && leaf.kinds[last + 1] !== ATOM) last++
   const closer = last + 1 < codes.length && codes[last + 1] === BRACE_CLOSE && leaf.kinds[last + 1] !== ATOM
-  const mark = MARKS.indexOf(String.fromCharCode(code))
+  const mark = markIndex(code)
   if (last > at) {
     if (closer) addToken(tokens, BRACED_CLOSE, last, last + 2, mark, 0)
     return closer ? last + 2 : last + 1
@@ -176,15 +183,18 @@ function scanAt(tokens: Token[], leaf: Leaf, at: number, escaped: Uint8Array): n
   const codes = leaf.codes
   const code = codes[at]!
   if (bracketToken(tokens, leaf, at)) return at + 1
-  // C2-I-050: a mark before a combining mark is text, and so is the brace before it.
-  const braced = MARKS.includes(String.fromCharCode(codes[at + 1] ?? 0)) && !isJoining(rawCodePoint(leaf, at + 2))
-  if (code === BRACE_OPEN && isPlain(leaf, escaped, at + 1) && braced) {
-    addToken(tokens, BRACED_OPEN, at, at + 2, MARKS.indexOf(String.fromCharCode(codes[at + 1]!)), 0)
-    return at + 2
+  if (code === BRACE_OPEN && isPlain(leaf, escaped, at + 1)) {
+    // C2-I-050: a mark before a combining mark is text, and so is the brace before it.
+    const mark = markIndex(codes[at + 1] ?? 0)
+    if (mark >= 0 && !isJoining(rawCodePoint(leaf, at + 2))) {
+      addToken(tokens, BRACED_OPEN, at, at + 2, mark, 0)
+      return at + 2
+    }
   }
   if (code === SLASH || code === STAR) return bareMark(tokens, leaf, at, escaped)
-  if (MARKS.includes(String.fromCharCode(code)) && isPlain(leaf, escaped, at + 1) && codes[at + 1] === BRACE_CLOSE) {
-    addToken(tokens, BRACED_CLOSE, at, at + 2, MARKS.indexOf(String.fromCharCode(code)), 0)
+  const mark = markIndex(code)
+  if (mark >= 0 && isPlain(leaf, escaped, at + 1) && codes[at + 1] === BRACE_CLOSE) {
+    addToken(tokens, BRACED_CLOSE, at, at + 2, mark, 0)
     return at + 2
   }
   return at + 1

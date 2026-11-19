@@ -70,19 +70,19 @@ export function withoutHtmlRanges(diagnostics: ImportDiagnostic[]): ImportDiagno
 }
 
 export function ensureForeignDepth(root: unknown, format: Format): void {
-  const pending: { value: unknown, depth: number }[] = [{ value: root, depth: 0 }]
-  while (pending.length > 0) {
-    const entry = pending.pop()
-    if (entry === undefined) continue
-    if (entry.depth > MAX_TREE_DEPTH) {
+  const values: unknown[] = [root]
+  const depths: number[] = [0]
+  while (depths.length > 0) {
+    const value = values.pop()
+    const depth = depths.pop()!
+    if (depth > MAX_TREE_DEPTH) {
       throw new ImportInputError(`Foreign input exceeds the engine tree depth limit of ${MAX_TREE_DEPTH}`, format)
     }
-    const value = entry.value
     if (value === null || typeof value !== 'object') continue
     const children: unknown = Reflect.get(value, 'children') ?? Reflect.get(value, 'childNodes')
-    if (Array.isArray(children)) for (const child of children) pending.push({ value: child, depth: entry.depth + 1 })
+    if (Array.isArray(children)) for (const child of children) { values.push(child); depths.push(depth + 1) }
     const content: unknown = Reflect.get(value, 'content')
-    if (content !== null && typeof content === 'object') pending.push({ value: content, depth: entry.depth + 1 })
+    if (content !== null && typeof content === 'object') { values.push(content); depths.push(depth + 1) }
   }
 }
 

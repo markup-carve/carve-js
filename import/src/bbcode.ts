@@ -26,7 +26,10 @@ const KNOWN = new Set([...BLOCK, ...VERBATIM, ...Object.keys(INLINE), ...PLAIN, 
   'tr', 'td', 'th', '*'])
 const TAG = /\[(\/?)([a-z*]+)(?:=([^\]]*)|[ \t]+([^\]]*))?\]/giu
 
+const HTML_SPECIAL = /[&<>"]/u
+
 function escapeHtml(value: string): string {
+  if (!HTML_SPECIAL.test(value)) return value
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 }
 

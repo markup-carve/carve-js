@@ -591,7 +591,8 @@ function writerEqual(expected: Node, actual: Node): boolean {
 
 /** C2-W-002: whether the written group reads back as its blocks. */
 function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
-  const parsed = parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`).children
+  // Equality disregards positions (C2-A-161), so the readback builds none.
+  const parsed = parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.linkKeys, false).children
   return parsed.length === group.length && parsed.every((node, at) => writerEqual(group[at]!, node))
 }
 

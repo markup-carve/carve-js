@@ -63,22 +63,30 @@ export function decodeTree(json: string, source?: string, extensions: readonly E
   return document
 }
 
-function skippedResult(node: Record<string, unknown>, name: string, spanMarks: boolean): boolean {
+/** The `when` of each result field, by node type; the first entry of a field decides, as in AST_RESULTS. */
+const RESULT_WHEN: ReadonlyMap<string, ReadonlyMap<string, string | undefined>> = new Map([...AST_RESULTS].map(([type, fields]) => {
+  const byField = new Map<string, string | undefined>()
+  for (const entry of fields as readonly ResultField[]) if (!byField.has(entry.field)) byField.set(entry.field, entry.when)
+  return [type, byField]
+}))
+
+/** The result fields of the type of `node`, or null where it has no typed entry. */
+function resultsOf(node: Record<string, unknown>): ReadonlyMap<string, string | undefined> | null {
   const type = node['type']
-  if (typeof type !== 'string') return false
-  const result = AST_RESULTS.get(type)?.find((entry: ResultField) => entry.field === name)
-  if (result === undefined) return false
-  if (result.when === 'reference use') return node['key'] !== undefined
-  if (result.when === 'derived from authored span mark') return spanMarks
-  return true
+  return typeof type === 'string' ? RESULT_WHEN.get(type) ?? null : null
 }
 
 /** Whether equality compares this field. `spanMarks`: the node stands in a table with span marks. */
-function comparedField(node: Record<string, unknown>, name: string, spanMarks: boolean): boolean {
+function comparedField(node: Record<string, unknown>, results: ReadonlyMap<string, string | undefined> | null, name: string,
+  spanMarks: boolean): boolean {
   if (node[name] === undefined) return false
-  const typed = typeof node['type'] === 'string' && AST_RESULTS.has(node['type'])
-  if (typed && (name === 'pos' || name === 'segments' || name === 'srcByteLength')) return false
-  return !skippedResult(node, name, spanMarks)
+  if (results === null) return true
+  if (name === 'pos' || name === 'segments' || name === 'srcByteLength') return false
+  if (!results.has(name)) return true
+  const when = results.get(name)
+  if (when === 'reference use') return node['key'] === undefined
+  if (when === 'derived from authored span mark') return !spanMarks
+  return false
 }
 
 /** C2-A-040: adjacent text nodes compare as one. */
@@ -116,7 +124,11 @@ function equalLists(a: unknown[], b: unknown[], spanMarks: boolean): boolean {
           (b[index - 1] as { type?: unknown } | null)?.type === 'text' &&
           (b[index] as { type?: unknown } | null)?.type === 'text') { adjacent = true; break }
     }
-    if (!adjacent) return a.every((item, index) => equalValues(item, b[index], spanMarks))
+    if (!adjacent) {
+      // `every` skipped the holes of a sparse list, so this loop does too.
+      for (let index = 0; index < a.length; index++) if (index in a && !equalValues(a[index], b[index], spanMarks)) return false
+      return true
+    }
   }
   const left = coalesced(a)
   const right = coalesced(b)
@@ -125,13 +137,15 @@ function equalLists(a: unknown[], b: unknown[], spanMarks: boolean): boolean {
 
 function equalObjects(a: Record<string, unknown>, b: Record<string, unknown>, spanMarks: boolean): boolean {
   const inner = a['type'] === 'table' ? hasSpanMarks(a) || hasSpanMarks(b) : spanMarks
+  const left = resultsOf(a)
+  const right = resultsOf(b)
   let count = 0
   for (const name of Object.keys(a)) {
-    if (!comparedField(a, name, inner)) continue
+    if (!comparedField(a, left, name, inner)) continue
     count++
-    if (!Object.hasOwn(b, name) || !comparedField(b, name, inner) || !equalValues(a[name], b[name], inner)) return false
+    if (!Object.hasOwn(b, name) || !comparedField(b, right, name, inner) || !equalValues(a[name], b[name], inner)) return false
   }
-  for (const name of Object.keys(b)) if (comparedField(b, name, inner)) count--
+  for (const name of Object.keys(b)) if (comparedField(b, right, name, inner)) count--
   return count === 0
 }
 
