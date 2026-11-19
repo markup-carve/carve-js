@@ -114,6 +114,16 @@ const DELIMITER = /[*/_{}~^=+\-%`[\]!<$|"']/u
 
 interface Planned { start: number; end: number; text: string; entry: string }
 
+/** Escapes every delimiter character of a text node, or false when its source is not its text. */
+function escapeText(src: string, node: Node01, out: Planned[]): boolean {
+  const { startOffset: start, endOffset: end } = node.pos!
+  if (src.slice(start, end) !== node.value) return false
+  for (let at = start; at < end; at++) {
+    if (DELIMITER.test(src[at]!)) out.push({ start: at, end: at, text: '\\', entry: 'U-273' })
+  }
+  return true
+}
+
 /** The edits that spell the inline tree under `node` explicitly, or false when it holds a form other than text and plain spans. */
 function explicitEdits(src: string, node: Node01, out: Planned[]): boolean {
   for (const child of node.children ?? []) {
@@ -121,10 +131,7 @@ function explicitEdits(src: string, node: Node01, out: Planned[]): boolean {
     if (pos === undefined) return false
     if (child.type === 'soft_break' || child.type === 'hard_break') continue
     if (child.type === 'text') {
-      if (src.slice(pos.startOffset, pos.endOffset) !== child.value) return false
-      for (let at = pos.startOffset; at < pos.endOffset; at++) {
-        if (DELIMITER.test(src[at]!)) out.push({ start: at, end: at, text: '\\', entry: 'U-273' })
-      }
+      if (!escapeText(src, child, out)) return false
       continue
     }
     const span = spanOf(src, child)
