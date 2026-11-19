@@ -432,11 +432,13 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   while (next < node.pos.endLine && context.lines[next]?.text.trimStart().startsWith('%%') === true) next++
   const second = next < node.pos.endLine ? context.lines[next] : undefined
   if (first === undefined || second === undefined) return
-  const marker = first.text.trimStart()
-  const column = first.text.indexOf(marker[0]!)
-  let indent = 0
-  while (second.text[indent] === ' ') indent++
-  if (indent > column) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
+  const marker = context.layouts.get(path)?.markerColumn
+  if (marker === undefined) return
+  const firstInline = node.children.find((child) => child.pos?.startLine === second.number && child.type !== 'soft_break')
+  const content = firstInline?.pos === undefined ? undefined : context.chars[firstInline.pos.startOffset]
+  if (content === undefined) return
+  const indent = columnOf(context.source, content, quoteDepth(path, context))
+  if (indent > marker) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
 }
 
 /** C2-B-127: a bare `::: figure` in the body of a figure group, which opens a plain div. */
@@ -1045,7 +1047,7 @@ function overindentedBlocks(node: Node, path: string, context: LintContext,
     const child = node.children[at]
     if (child === undefined || child.type === 'paragraph' || child.type === 'list' || child.pos === undefined) continue
     const line = context.lines[child.pos.startLine - 1]
-    const column = itemColumn(node, marker, child)
+    const column = context.layouts.get(`${path}/children/${at}`)?.markerColumn ?? itemColumn(node, marker, child)
     if (line === undefined || column === undefined || column <= content) continue
     visit(at, child, line.start + child.pos.startColumn - 1, line.end, column - content, content)
   }

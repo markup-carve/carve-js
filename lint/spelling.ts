@@ -266,6 +266,7 @@ function listWithoutBlank(line: Line, context: LintContext): void {
   const own = context.nodeTypes.get(line.path)
   const term = own === 'definition_term' || own === 'definition_description'
     || hasAncestor(line.path, context, 'definition_term') || hasAncestor(line.path, context, 'definition_description')
+  if (!line.paragraphLeaf && !term) return
   if (isListMarker(text)) context.report('list-marker-without-blank-line', start, start + text.length, line.path,
     {}, term ? 1 : 0)
 }
