@@ -13,6 +13,7 @@ import { fileSystemResolver } from '@markup-carve/carve/node'
 import { BBCODE_MAX_INPUT_LENGTH, BbcodeInputTooLargeError, importDocument as importFormat } from '@markup-carve/carve/import'
 import * as prettierPlugin from '@markup-carve/carve/prettier'
 import { upgrade } from '@markup-carve/carve/upgrade'
+import { tableOfContents, tocRenderers } from '@markup-carve/carve/extensions'
 
 function check(ok: boolean, what: string): void {
   if (!ok) throw new Error(what)
@@ -67,6 +68,7 @@ check(utf8Length('ä') === 2 && stringOffsetOfByte('äb', 2) === 1, 'positions')
 check(MAX_TREE_DEPTH > 0, 'MAX_TREE_DEPTH')
 const tabs = ':::: tabs\n::: tab "A"\nB\n:::\n::::\n'
 check(render(tabs, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } }).includes('A'), 'tabs')
+check(render('= A\n', { extensions: [tableOfContents()], renderers: tocRenderers }).startsWith('<nav class="toc"'), 'extensions entry')
 
 refuses(() => render('a', { headingIds: 'upper' } as never), CarveOptionError, 'CarveOptionError')
 refuses(() => render('x'.repeat(10_001), { profile: 'minimal' }), CarveInputError, 'CarveInputError')

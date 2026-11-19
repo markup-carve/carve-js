@@ -55,7 +55,7 @@ try {
   run(join(consumer, 'node_modules/.bin/carve'), ['--version'], consumer)
   run(join(consumer, 'node_modules/.bin/carve'), ['upgrade', '--write', 'legacy.crv'], consumer)
   run(join(consumer, 'node_modules/.bin/carve'), ['fmt', '--check', 'legacy.crv'], consumer)
-  console.log('Packed root, Node and import entry points and the carve bin passed the consumer check.')
+  console.log('Packed root, Node, import and extensions entry points and the carve bin passed the consumer check.')
 } finally {
   rmSync(consumer, { recursive: true, force: true })
 }

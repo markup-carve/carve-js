@@ -27,3 +27,11 @@ export { index, indexExtension, indexRenderer, type IndexOptions, indexTermExten
 export {
   citations, type CitationsOptions, citeExtension, type CslEntry, type CslName, referencesExtension, referencesRenderer,
 } from '../src/extensions/citations.ts'
+export { type TableOfContentsOptions, tableOfContents, tocPlacement, tocRenderers } from '../src/extensions/navigation/toc.ts'
+export {
+  headingLevelShift, type HeadingLevelShiftOptions, headingNumbers, type HeadingNumbersOptions, headingPermalinks,
+  type HeadingPermalinksOptions, headingReference, type HeadingReferenceOptions,
+} from '../src/extensions/navigation/headings.ts'
+export {
+  autolink, type AutolinkOptions, externalLinks, type ExternalLinksOptions, linkPolicy, type LinkPolicyOptions,
+} from '../src/extensions/navigation/links.ts'

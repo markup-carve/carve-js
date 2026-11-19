@@ -326,6 +326,9 @@ function validQualifiedName(name: string): boolean {
 }
 
 function checkRegistrationFields(entry: Readonly<Record<string, unknown>>): void {
+  if (entry['documentTransform'] !== undefined && typeof entry['documentTransform'] !== 'function') {
+    throw new CarveOptionError('extensions', 'an invalid document transform')
+  }
   const props = entry['props']
   const slots = entry['slots']
   if (!isPlainObject(props) || !isPlainObject(slots)) return

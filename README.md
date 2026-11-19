@@ -36,6 +36,8 @@ files as `carve fmt` does. A classic-script build is published as
 - inline: `colorSwatch`, `wikilinks`, `semanticSpan`, `smartQuotes` (with `smartQuoteLocales`,
   `isSmartQuoteLocaleSupported`, `SMART_QUOTE_LOCALES`)
 - document transforms: `defaultAttributes`, `tabNormalize`, `inlineFootnotesToParentheses`
+- navigation: `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingNumbers`, `headingLevelShift`,
+  `headingReference`, `externalLinks`, `linkPolicy`, `autolink` ([guide](docs/extensions-navigation.md))
 
 The command line:
 
@@ -61,6 +63,7 @@ the trees of two files.
 - [Standard extensions: blocks and inline](docs/extensions-blocks-inline.md)
 - [Exports: Markdown, plain text and ANSI](docs/export.md) (`@markup-carve/carve/export`)
 - [Extensions: glossary, index, citations](docs/extensions-reference.md)
+- [Standard extensions: navigation](docs/extensions-navigation.md)
 - [Engine notes: conformance, byte input, includes, command line](docs/engine.md)
 - [Importing Markdown, Djot, BBCode and HTML](docs/import.md)
 - [Engine commands and flags: flatten, fix, upgrade --migrate, --output, --strict, --ignore](docs/cli.md)

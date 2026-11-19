@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parse, render, renderWithDiagnostics, renderWithDocumentTransforms, tabsExtensions, tabsRenderer } from '../src/index.ts'
+import { CarveRenderError, parse, render, renderWithDiagnostics, renderWithDocumentTransforms, tabsExtensions, tabsRenderer } from '../src/index.ts'
+import { type ExtensionDefinition } from '../src/extensions/types.ts'
 
 describe('C2-X-053 to C2-X-055: document transforms', () => {
   it('runs transforms in order on a copy of the resolved view', () => {
@@ -83,5 +84,34 @@ describe('C2-X-053 to C2-X-055: document transforms', () => {
     ], options)
     expect(result.html).toBe(render(source, options))
     expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'extension-transform-failed' }))
+  })
+
+  it('does not fail a transform over a duplicate id the source already holds', () => {
+    const result = renderWithDocumentTransforms('[a]{#x} [b]{#x}', [{ name: 'mark', transform: (view) => {
+      const paragraph = view.children[0]
+      if (paragraph?.type === 'paragraph') paragraph.children.push({ type: 'text', value: '!' })
+      return view
+    } }])
+    expect(result.html).toBe('<p><span id="x">a</span> <span id="x">b</span>!</p>')
+    expect(result.diagnostics.map((entry) => entry.code)).not.toContain('extension-transform-failed')
+  })
+
+  it('runs the document transforms registered in extensions, in registration order', () => {
+    const suffix = (name: string, text: string): ExtensionDefinition => ({ name, version: '1', props: {}, slots: {},
+      documentTransform: (view) => {
+        const paragraph = view.children[0]
+        if (paragraph?.type === 'paragraph') paragraph.children.push({ type: 'text', value: text })
+        return view
+      } })
+    const options = { extensions: [suffix('host.first', '1'), suffix('host.second', '2')] }
+    expect(render('a', options)).toBe('<p>a12</p>')
+    expect(renderWithDiagnostics('a', options).html).toBe('<p>a12</p>')
+    expect(renderWithDocumentTransforms('a', [{ name: 'third', transform: (view) => view }], options).html).toBe('<p>a12</p>')
+    const failing: ExtensionDefinition = { name: 'host.broken', version: '1', props: {}, slots: {},
+      documentTransform: () => { throw new Error('boom') } }
+    const result = renderWithDiagnostics('a', { extensions: [failing] })
+    expect(result.html).toBe('<p>a</p>')
+    expect(result.diagnostics[0]?.message).toBe('The document transform host.broken failed: boom')
+    expect(() => render('a', { extensions: [failing], strictLosses: true })).toThrow(CarveRenderError)
   })
 })
