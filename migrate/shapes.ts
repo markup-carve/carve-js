@@ -355,9 +355,14 @@ function blockShape(node: Fields, old: Fields, state: MigrationState, path: stri
   }
 }
 
+// T-007: the head, body and foot groups carry 0.1 attributes too.
+function tableGroupAttrs(node: Fields, state: MigrationState): void {
+  for (const group of list(node['children'])) if (object(group)) attrs(group, state)
+}
+
 function tableShape(node: Fields, old: Fields, state: MigrationState): void {
   switch (node['type']) {
-    case 'table': migrateTable(node, old, state); figure(node, old); break
+    case 'table': migrateTable(node, old, state); tableGroupAttrs(node, state); figure(node, old); break
     case 'table_cell': migrateCell(node, old, state); break
     case 'table_row': migrateRow(node, old, state); break
     case 'figure': figureTarget(node); figure(node, old); break
