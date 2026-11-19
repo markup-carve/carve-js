@@ -10,6 +10,8 @@ import { insideQuotes, isBlankInQuotes, isGap, quoteDepth, removeLine } from './
 interface Span {
   first: number
   last: number
+  /** The 0-based column the definition starts at on its first line. */
+  column: number
 }
 
 /** The lines of every definition of the document, in source order. */
@@ -17,13 +19,13 @@ function definitionSpans(ctx: Context): Span[] {
   const spans: Span[] = []
   for (const child of ctx.doc.children ?? []) {
     if ((child.type === 'link_reference_definition' || child.type === 'abbreviation_def') && child.pos !== undefined) {
-      spans.push({ first: child.pos.startLine, last: child.pos.endLine })
+      spans.push({ first: child.pos.startLine, last: child.pos.endLine, column: child.pos.startColumn - 1 })
     }
   }
   const notes = ctx.doc.footnoteDefPos
   if (typeof notes === 'object' && notes !== null) {
-    for (const pos of Object.values(notes as Record<string, { startLine: number, endLine: number }>)) {
-      spans.push({ first: pos.startLine, last: pos.endLine })
+    for (const pos of Object.values(notes as Record<string, { startLine: number, endLine: number, startColumn: number }>)) {
+      spans.push({ first: pos.startLine, last: pos.endLine, column: pos.startColumn - 1 })
     }
   }
   spans.sort((a, b) => a.first - b.first)
@@ -64,7 +66,7 @@ function withoutPrefix(ctx: Context, span: Span, cut: number): string {
   let out = ''
   for (let line = span.first; line <= span.last; line++) {
     const text = lineText(ctx.lines, line)
-    out += text.slice(Math.min(cut, prefixLength(text))) + '\n'
+    out += text.slice(line === span.first ? cut : Math.min(cut, prefixLength(text))) + '\n'
   }
   return out
 }
@@ -133,8 +135,18 @@ function preserveEmptyItem(ctx: Context, id: string, span: Span, message: string
   return true
 }
 
+/** Cuts the definition of `span` and writes it at column 0 above the first line of the document. */
+function moveToTop(ctx: Context, id: string, span: Span, cut: number, message: string): void {
+  const at = lineStart(ctx.lines, span.first)
+  // An empty braced comment keeps the block 0.1 opened for the definition (C2-I-025).
+  const kept = top === 'kept' ? lineText(ctx.lines, span.first).slice(0, cut) + '{%%}\n' : ''
+  change(ctx, id, at, lineStart(ctx.lines, span.last + 1), kept, message)
+  change(ctx, id, 0, 0, withoutPrefix(ctx, span, cut) + '\n', message)
+}
+
 /** Cuts the definition of `span` and writes it at column 0 after the line `end`, set off by blank lines. */
 function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
+  if (top) { moveToTop(ctx, id, span, cut, message); return }
   change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), '', message)
   const after = lineText(ctx.lines, end + 1)
   const tail = end < ctx.lines.count && !isBlank(after) ? '\n' : ''
@@ -143,10 +155,16 @@ function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: numbe
   change(ctx, id, at, at, lead + withoutPrefix(ctx, span, cut) + tail, message)
 }
 
+/** What goes before the definition on its first line. A late form reads the column off the tree, which also counts a list marker. */
+function cutOf(text: string, span: Span): number {
+  const prefix = prefixLength(text)
+  return top !== false && span.column > prefix ? span.column : prefix
+}
+
 /** U-038, U-039: the definition moves to column 0, after the container it stood in. */
 function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const text = lineText(ctx.lines, span.first)
-  const cut = prefixLength(text)
+  const cut = cutOf(text, span)
   const depth = quoteDepth(text)
   const shape = insideQuotes(text).trimStart()
   if (shape.startsWith('[') && !shape.startsWith('[^') && shape.endsWith(']:')) return
@@ -162,7 +180,8 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const end = containerEnd(ctx, span, depth, cut, ends)
   ends.set(span.first, end)
   if (end === span.last) {
-    if (!preserveEmptyItem(ctx, id, span, message) && !preserveEmptyQuote(ctx, id, span, message)) {
+    if (top) moveToTop(ctx, id, span, cut, message)
+    else if (!preserveEmptyItem(ctx, id, span, message) && !preserveEmptyQuote(ctx, id, span, message)) {
       hoistInPlace(ctx, id, span, cut, message)
     }
   }
@@ -204,10 +223,31 @@ function droppedLinkDefinitions(ctx: Context): void {
   }
 }
 
+/**
+ * Set while a late variant runs: a moved definition goes above the document instead of after its
+ * container, and with `kept` an empty comment stays in its place.
+ */
+let top: false | 'moved' | 'kept' = false
+
 export function definitions(ctx: Context): void {
   const spans = definitionSpans(ctx)
   const ends = new Map<number, number>()
   for (let index = spans.length - 1; index >= 0; index--) hoist(ctx, spans[index]!, ends)
   droppedLinkDefinitions(ctx)
   duplicates(ctx, 'abbreviation_def', 'abbr', 'U-041')
+}
+
+/**
+ * The late variant of `definitions`: after its container a definition can land in a block 0.2 leaves
+ * open to the end, such as an unclosed fence; above the first line it stands in no block (C2-B-081).
+ */
+export function definitionsAtTop(ctx: Context): void {
+  top = 'moved'
+  try { definitions(ctx) } finally { top = false }
+}
+
+/** `definitionsAtTop`, leaving an empty braced comment where the definition stood. */
+export function definitionsKept(ctx: Context): void {
+  top = 'kept'
+  try { definitions(ctx) } finally { top = false }
 }

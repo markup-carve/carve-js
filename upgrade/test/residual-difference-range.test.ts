@@ -3,12 +3,12 @@ import { canWriteUpgrade, needsAttention, upgrade } from '../src/upgrade.ts'
 
 describe('residual HTML differences name their source', () => {
   it('names a map row and the source range when a rewrite does not preserve HTML', () => {
-    const source = '_x /*a*/{.q} b/{c} c_\n'
+    const source = '/**/ /**/\n ---*/\n'
     const result = upgrade(source)
     const mismatch = result.records.find((record) => record.entry === 'upgrade-mismatch')
     expect(result.check).toBe('mismatch')
-    expect(mismatch?.message).toContain('U-065')
-    expect(mismatch?.range).toEqual({ startOffset: 0, endOffset: source.length - 1 })
+    expect(mismatch?.message).toContain('U-068')
+    expect(mismatch?.range).toEqual({ startOffset: 0, endOffset: source.indexOf('\n') })
     expect(needsAttention(result)).toBe(true)
     expect(canWriteUpgrade(result)).toBe(false)
   })

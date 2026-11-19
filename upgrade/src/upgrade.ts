@@ -26,7 +26,7 @@ import { rescueDirectiveSocial } from './directive-social-rescue.ts'
 import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
 import { rescueEscape } from './escape-rescue.ts'
 import { rescueDashRun } from './dash-run-rescue.ts'
-import { RULES } from './rules/index.ts'
+import { LATE_VARIANTS, RULES } from './rules/index.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
 import { applyTabs, planTabs, sameHost } from './tabs.ts'
@@ -54,10 +54,10 @@ interface Rewritten {
  * One pass: every rule reads the 0.1 tree of the input, and the edits apply together. An edit
  * that collides with one of a lower entry id is left out and named in the report.
  */
-function rewrite(input: string): Rewritten {
-  const ctx: Context = makeContext(input)
+function rewrite(input: string, rules: readonly Rule[] = RULES, late = false): Rewritten {
+  const ctx: Context = makeContext(input, late)
   const failures: ReportRecord[] = []
-  for (const rule of RULES) runRule(ctx, rule, failures)
+  for (const rule of rules) runRule(ctx, rule, failures)
   const collected: Edit[] = []
   for (const finding of ctx.findings) {
     if (finding.edit !== null) collected.push(finding.edit)
@@ -392,7 +392,7 @@ function applyExtraHtml(input: string, done: Rewritten, old: string, next: strin
   const empty = done.records.filter((record) => (record.entry === 'U-258' || record.entry === 'U-396')
     && record.class === 'report' && record.range !== undefined)
     .map((record) => input.slice(record.range!.startOffset, record.range!.endOffset))
-  const runs = explainEmptyRuns(cited.html, empty)
+  const runs = explainEmptyRuns(cited.html, empty, next)
   const eof = explainDescriptionPlusFenceEof(input, done.output, runs.html, next)
   const tab = hasEntry(done.records, 'U-153') ? removeListMarkerTab(input, eof.html, next)
     : { html: eof.html, applied: [] }
@@ -514,6 +514,34 @@ function keepIncludeReview(rescue: ReportRecord, checked: readonly ReportRecord[
   for (const record of checked) if (record.entry === 'U-011') records.push({ ...record, class: 'report' })
 }
 
+/** The first late variant whose output clears the self-check. */
+function latePass(input: string, first: string): UpgradeResult | null {
+  const tried = new Set([first])
+  for (const rules of LATE_VARIANTS) {
+    const done = rewrite(input, rules, true)
+    if (tried.has(done.output)) continue
+    tried.add(done.output)
+    const mathClass = mathClassReport(done.context)
+    if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
+    const rewritten = done.records.map((record) => ({ ...record }))
+    let check = selfCheck(input, done)
+    const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
+    if (check === 'mismatch' && mismatch !== undefined) {
+      const rescued = rescueMismatch(input, done.output, mismatch, done.records)
+      if (rescued !== null && !tried.has(rescued.output)) {
+        tried.add(rescued.output)
+        done.records = [...recordsAfterRescue(input, rescued, rewritten), rescued.record]
+        done.output = rescued.output
+        check = selfCheck(input, done)
+      }
+    }
+    if (check !== 'mismatch') {
+      return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+    }
+  }
+  return null
+}
+
 function upgradeSource(input: string): UpgradeResult {
   const mapped = mappedRewrite(input)
   if (mapped !== null) return preservingMappedResult(input, mapped)
@@ -523,26 +551,32 @@ function upgradeSource(input: string): UpgradeResult {
     const check = selfCheck(input, done)
     return { output: input, changed: false, records: done.records, check, engine01: ENGINE_01_VERSION }
   }
+  const { done, check } = firstPass(input)
+  if (check === 'mismatch') {
+    const late = latePass(input, done.output)
+    if (late !== null) return late
+  }
+  return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+}
+
+/** The rules, then the first rescue whose spelling keeps the 0.1 HTML. */
+function firstPass(input: string): { done: Rewritten; check: UpgradeResult['check'] } {
   const done = rewrite(input)
   const mathClass = mathClassReport(done.context)
   if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
   const rewrittenRecords = done.records.map((record) => ({ ...record }))
-  let check = selfCheck(input, done)
-  if (check === 'mismatch') {
-    const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
-    if (mismatch !== undefined) {
-      const rescued = rescueMismatch(input, done.output, mismatch, done.records)
-      const checked = done.records
-      done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
-      if (rescued !== null) {
-        keepIncludeReview(rescued.record, checked, done.records)
-        done.records.push(rescued.record)
-        done.output = rescued.output
-      }
-      check = selfCheck(input, done)
-    }
+  const check = selfCheck(input, done)
+  const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
+  if (check !== 'mismatch' || mismatch === undefined) return { done, check }
+  const rescued = rescueMismatch(input, done.output, mismatch, done.records)
+  const checked = done.records
+  done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
+  if (rescued !== null) {
+    keepIncludeReview(rescued.record, checked, done.records)
+    done.records.push(rescued.record)
+    done.output = rescued.output
   }
-  return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+  return { done, check: selfCheck(input, done) }
 }
 
 /** A record of the text after `edits`, placed in the text before them. */

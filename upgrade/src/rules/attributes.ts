@@ -26,7 +26,8 @@ function detached(ctx: Context, line: number): void {
       removeLine(ctx, 'U-034', at, 'attribute line that reaches no block removed')
     return
   }
-  if (isGap(ctx, next) && !isAttributeGap(ctx, next)) return
+  // A line of no leaf block, a div opener among them, is taken by the late pass, which verifies it.
+  if (!ctx.late && isGap(ctx, next) && !isAttributeGap(ctx, next)) return
   for (let at = line + 1; at < next; at++)
     removeLine(ctx, 'U-031', at, 'blank line between the attribute line and its block removed')
 }
