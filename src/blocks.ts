@@ -188,7 +188,6 @@ function bodyLine(state: BlockState, matched: number, lineStart: number, end: nu
   const owned = matched === state.containers.depth
   if (!owned && isCommentCloserLine(state, lineStart, end)) {
     // C2-B-109, C2-B-137: the closer is tested before ownership; it closes the comment and no container.
-    state.cursor.pos = skipSpaces(state.src, lineStart, end)
     opaqueLine(state, lineStart, end, blank)
     return true
   }
@@ -348,9 +347,9 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
 }
 
 /** C2-B-109: a bare `%` run of at least the opener's length after spaces and tabs, with no quote mark before it. */
-function isCommentCloserLine(state: BlockState, lineStart: number, end: number): boolean {
+function isCommentCloserLine(state: BlockState, _lineStart: number, end: number): boolean {
   const leaf = state.leaf
-  return leaf.kind === COMMENT_BLOCK && isBareRun(state.src, skipSpaces(state.src, lineStart, end), end, PERCENT, leaf.fenceLength)
+  return leaf.kind === COMMENT_BLOCK && isBareRun(state.src, state.cursor.pos, end, PERCENT, leaf.fenceLength)
 }
 
 function isCloser(state: BlockState, lineStart: number, end: number): boolean {

@@ -53,6 +53,9 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-184#0': { entry: 'U-019', check: 'explained' },
   'U-360#0': { output: '{{ a.txt @code }}\n\n^ cap\n', entry: 'U-138', check: 'pass' },
   'U-361#0': { output: ':: t\n: d\n  %%%\n  %%%\n: d2\n', entry: 'U-129', check: 'pass' },
+  // C2-B-109 now closes a comment under partial quote prefixes. These four sources already preserve the old HTML.
+  'U-129#8': { check: 'pass' }, 'U-129#9': { check: 'pass' },
+  'U-129#10': { check: 'pass' }, 'U-129#11': { check: 'pass' },
   'U-363#0': { output: 'a {%%}’word\n', entry: 'U-190', check: 'pass' },
   'U-165#2': { check: 'pass' },
   'U-215#0': { check: 'pass' },
@@ -60,7 +63,6 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
 const NOT_IDEMPOTENT = new Set(['U-014#0', 'U-015#0', 'U-113#1', 'U-167#0',
-  'U-129#8', 'U-129#9', 'U-129#10', 'U-129#11',
   'U-228#0', 'U-228#1', 'U-228#2'])
 
 function entries(input: string): string[] {

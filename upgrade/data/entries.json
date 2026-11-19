@@ -1883,8 +1883,8 @@
     },
     {
       "id": "U-393",
-      "name": "<p>{~a d</p> C2-I-024 makes the line comment take the substitution arrow and closer, as 0.1 did. No source edit is neede",
-      "class": "none",
+      "name": "line comment in an inline frame",
+      "class": "report",
       "lint": []
     },
     {
@@ -2076,6 +2076,30 @@
     {
       "id": "U-425",
       "name": "Sample output is a span with the key `samp`, which a registered semantic span extension writes as `<samp>`; the key is an ordinary attribute of the core (C2-X-066). Rewrite only where the 0.1 host registered the `samp` extension.",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-426",
+      "name": "comment directly after an inline opener",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-427",
+      "name": "class-form tabs group and tab",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-428",
+      "name": "non-tab block in a tabs group",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-429",
+      "name": "case-only reference under migration",
       "class": "rewrite",
       "lint": []
     }

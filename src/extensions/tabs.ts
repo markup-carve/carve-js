@@ -97,7 +97,8 @@ function renderTab(tab: Node, at: number, selected: number, group: string, mode:
 function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, host: ExtensionRenderHost, mode: 'css' | 'aria'): string {
   if (node.type !== 'block_extension') return ''
   const tabs = node.slots?.['tabs'] ?? []
-  const group = host.nextId('tabs')
+  const suffixes = tabs.flatMap((_, at) => mode === 'aria' ? [`-${at}`, `-${at}-panel`] : [`-${at}`])
+  const group = host.nextId('tabs', suffixes)
   const selected = selectedTab(tabs)
   let controls = ''
   let panels = ''

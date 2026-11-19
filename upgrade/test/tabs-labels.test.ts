@@ -72,13 +72,20 @@ describe('0.1 tab label spellings', () => {
   })
 
   it.each([
-    ['a tabs class', '{.tabs}\n::::\n{.tab}\n::: [Install]\nRun it.\n:::\n::::\n'],
     ['a tab class', ':::: tabs\n{.tab}\n::: [Install]\nRun it.\n:::\n::::\n'],
     ['a block that is not a tab', ':::: tabs\n::: tab [A]\na\n:::\n\nstray\n::::\n'],
   ])('blocks %s, which the 0.2 tabs extension does not claim', (_name, source) => {
     const result = upgrade(source)
     expect(result.records).toContainEqual(expect.objectContaining({ entry: 'upgrade-mismatch', status: 'no mapped row' }))
     expect(canWriteUpgrade(result)).toBe(false)
+  })
+
+  it('U-427 rewrites the verified class-form tabs row', () => {
+    const source = '{.tabs}\n::::\n{.tab}\n::: [Install]\nRun it.\n:::\n::::\n'
+    const result = upgrade(source)
+    expect(result.output).toBe(':::: tabs\n::: tab "Install"\nRun it.\n:::\n::::\n')
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-427', class: 'rewrite' }))
+    expect(canWriteUpgrade(result)).toBe(true)
   })
 
   it('leaves a document without tabs alone', () => {

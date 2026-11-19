@@ -578,7 +578,7 @@ function rendererHost(r: Render, blockDepth: number): ExtensionRenderHost {
     escapeText,
     escapeAttribute,
     attributes: (node, options) => attributes(r, node, options ?? {}),
-    nextId: (prefix) => nextExtensionId(r, prefix),
+    nextId: (prefix, writtenSuffixes) => nextExtensionId(r, prefix, writtenSuffixes),
     labels: r.settings.labels,
     profile: r.settings.profile,
     mode: r.settings.mode,
@@ -599,11 +599,14 @@ function useId(used: Render['usedIds'], id: string): void {
 }
 
 /** C2-X-044: a generated id is neither an id in use nor the start of one followed by `-`. */
-function nextExtensionId(r: Render, prefix: string): string {
+function nextExtensionId(r: Render, prefix: string, writtenSuffixes?: readonly string[]): string {
   let candidate = ''
   do { candidate = `${prefix}-${++r.extensionIds}` }
-  while (r.usedIds.ids.has(candidate) || r.usedIds.prefixes.has(candidate))
+  while (writtenSuffixes === undefined
+    ? r.usedIds.ids.has(candidate) || r.usedIds.prefixes.has(candidate)
+    : writtenSuffixes.some((suffix) => r.usedIds.ids.has(`${candidate}${suffix}`)))
   useId(r.usedIds, candidate)
+  for (const suffix of writtenSuffixes ?? []) useId(r.usedIds, `${candidate}${suffix}`)
   return candidate
 }
 

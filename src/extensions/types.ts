@@ -53,7 +53,7 @@ export interface ExtensionRenderHost {
   escapeAttribute(value: string): string
   /** C2-X-033: writes authored attributes and the generated source line of a block element. */
   attributes(node: Node | null, options?: { block?: boolean; bare?: boolean }): string
-  nextId(prefix: string): string
+  nextId(prefix: string, writtenSuffixes?: readonly string[]): string
   labels: Readonly<Record<string, string>>
   profile: Profile
   mode: Mode

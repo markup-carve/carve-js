@@ -552,6 +552,8 @@ function withTabRecords(tabRecords: ReportRecord[], records: ReportRecord[]): Re
  * the rewritten source; the tabs hosts of both engines then confirm the original groups.
  */
 function upgradeCore(input: string): UpgradeResult {
+  const classTabs = mappedRewrite(input)
+  if (classTabs?.record.entry === 'U-427') return preservingMappedResult(input, classTabs)
   const plan = planTabs(input)
   if (plan.edits.length === 0 && plan.records.length === 0) return upgradeSource(input)
   const plain = (): UpgradeResult => {

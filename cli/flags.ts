@@ -15,9 +15,9 @@ export interface Flag {
   repeatable?: boolean
 }
 
-export const COMMANDS: readonly Command[] = ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import', 'lint']
-/** C2-T-003: the commands of the 0.1 command line that the reference engine keeps, and `diff`; `fix` is `lint --fix`. */
-const ENGINE_COMMANDS: readonly Command[] = ['flatten', 'diff']
+export const COMMANDS: readonly (Command | 'fix')[] = ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import', 'lint', 'flatten', 'fix']
+/** `diff` is the engine command beyond the pinned CLI catalog. */
+const ENGINE_COMMANDS: readonly Command[] = ['diff']
 
 // C2-T-003: the reference engine also imports Markdown, GFM, Djot and BBCode, and offers the upgrade and diff commands.
 const EXTRA_FROM = ['markdown', 'gfm', 'djot', 'bbcode']
@@ -136,7 +136,7 @@ function shortFlag(args: readonly string[], index: number, parsed: ParsedArgs): 
 }
 
 function commandAt(arg: string | undefined): Command | undefined {
-  return [...COMMANDS, ...ENGINE_COMMANDS].find((command) => command === arg)
+  return [...COMMANDS, ...ENGINE_COMMANDS].find((command): command is Command => command !== 'fix' && command === arg)
 }
 
 /** C2-T-016, C2-T-030, C2-T-033: the combinations a command refuses. */
@@ -219,6 +219,6 @@ function usageOf(flag: Flag): string {
 export function help(command: Command): string {
   const lines = [`Usage: carve ${command} [FLAG...] [FILE...]`, '', 'Use - or omit FILE to read standard input.', '', 'Flags:']
   for (const flag of FLAGS.filter((entry) => entry.commands.includes(command))) lines.push(`  --${flag.name}${usageOf(flag)}`)
-  lines.push('  --help', '  --version', '', `Commands: ${[...COMMANDS, ...ENGINE_COMMANDS, 'fix'].join(', ')}`)
+  lines.push('  --help', '  --version', '', `Commands: ${[...COMMANDS, ...ENGINE_COMMANDS].join(', ')}`)
   return `${lines.join('\n')}\n`
 }
