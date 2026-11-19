@@ -158,6 +158,15 @@
       ]
     },
     {
+      "name": "quote_prefix",
+      "type": "boolean",
+      "means": "the line before body_start holds a quote mark, so the line carries a prefix of a quote",
+      "clauses": [
+        "C2-B-025",
+        "C2-B-031"
+      ]
+    },
+    {
       "name": "shape",
       "type": "name",
       "means": "the name of the line shape of line-shapes.json that body has, read without the requires and at conditions of a shape, so a closer, frontmatter and a continuation row are not told apart from the shapes they share a first character with; text when no other shape matches, blank for an empty body",
@@ -511,11 +520,40 @@
         },
         {
           "when": {
-            "matches": [
+            "all": [
               {
-                "f": "body"
+                "matches": [
+                  {
+                    "f": "body"
+                  },
+                  "^(?<mark>>)(?: |$)"
+                ]
               },
-              "^(?<mark>>)(?: |$)"
+              {
+                "not": {
+                  "all": [
+                    {
+                      "f": "quote_prefix"
+                    },
+                    {
+                      "matches": [
+                        {
+                          "f": "prev.text"
+                        },
+                        "^[ \t]*> "
+                      ]
+                    },
+                    {
+                      "contains": [
+                        {
+                          "f": "ancestors"
+                        },
+                        "block_quote"
+                      ]
+                    }
+                  ]
+                }
+              }
             ]
           },
           "start": {

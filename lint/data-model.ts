@@ -21,6 +21,7 @@ export interface ModelLine {
   closes_container: boolean
   readonly ancestors: string[]
   readonly shape: string
+  readonly quote_prefix: boolean
   readonly lazy: boolean
   readonly open_colon: ColonContainer[]
   readonly prev: ModelLine | undefined
@@ -213,6 +214,7 @@ class LineRecord {
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
   get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
+  get quote_prefix(): boolean { return this.text.slice(0, this.body_start - this.start).includes('>') }
   get shape(): string { return (this.shapeCache ??= shapeOf(this.body)) }
   get lazy(): boolean { return (this.lazyCache ??= isLazy(this, this.context)) }
   get prev(): ModelLine | undefined { return this.model[this.index - 1] }

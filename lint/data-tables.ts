@@ -249,11 +249,40 @@ export const LINT_MODEL = {
         },
         {
           "when": {
-            "matches": [
+            "all": [
               {
-                "f": "body"
+                "matches": [
+                  {
+                    "f": "body"
+                  },
+                  "^(?<mark>>)(?: |$)"
+                ]
               },
-              "^(?<mark>>)(?: |$)"
+              {
+                "not": {
+                  "all": [
+                    {
+                      "f": "quote_prefix"
+                    },
+                    {
+                      "matches": [
+                        {
+                          "f": "prev.text"
+                        },
+                        "^[ \t]*> "
+                      ]
+                    },
+                    {
+                      "contains": [
+                        {
+                          "f": "ancestors"
+                        },
+                        "block_quote"
+                      ]
+                    }
+                  ]
+                }
+              }
             ]
           },
           "start": {
