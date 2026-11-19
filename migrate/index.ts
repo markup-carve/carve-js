@@ -93,6 +93,8 @@ function substitution(old: Fields, path: string, state: MigrationState): Fields[
     [{ type: 'text', value: string(old['old']) ?? '' }]
   const next = Array.isArray(old['new']) ? migrateList(old['new'], `${path}/new`, state) :
     [{ type: 'text', value: string(old['new']) ?? '' }]
+  // T-001: the split leaves no single node for the attributes, so their loss is reported.
+  if (object(old['attrs']) && Object.keys(old['attrs']).length > 0) loss(state, `${path}/attrs`, 'a substitution splits into delete and insert; its attributes are dropped')
   const fields = old['pos'] === undefined ? {} : { pos: old['pos'] }
   return [{ type: 'delete', children: previous, ...fields }, { type: 'insert', children: next, ...fields }]
 }

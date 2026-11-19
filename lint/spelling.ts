@@ -17,6 +17,12 @@ function contentLine(line: Line): { text: string, start: number } {
   return { text, start }
 }
 
+/** The text of the line behind its container prefixes: quote marks, list and description markers, indentation. */
+function lineText(line: Line): { text: string, start: number } {
+  if (line.content === undefined || line.content < line.start || line.content > line.end) return contentLine(line)
+  return { text: line.text.slice(line.content - line.start).trimEnd(), start: line.content }
+}
+
 function isRun(text: string, chars: string, minimum: number): boolean {
   if (text.length < minimum || !chars.includes(text[0] ?? '\0')) return false
   const char = text[0]
@@ -74,7 +80,7 @@ function deprecatedContinuation(line: Line, context: LintContext): void {
 }
 
 function thematicBreak(line: Line, context: LintContext): void {
-  const { text, start } = contentLine(line)
+  const { text, start } = lineText(line)
   if (!isRun(text, '-_', 3)) return
   const previous = prior(line, context)
   if (text[0] === '-' && previous !== undefined && previous.text.trim() !== '' && previous.paragraph) return
@@ -91,8 +97,25 @@ function setextHeading(line: Line, context: LintContext): void {
   }
 }
 
+/** A spaced run parses as nested list markers, so it reaches back from the line's text over its own marker. */
+function spacedText(line: Line): { text: string, start: number } {
+  if (line.content === undefined) return contentLine(line)
+  const own = lineText(line)
+  const marker = own.text[0]
+  let at = own.start - line.start
+  while (at > 0 && (line.text[at - 1] === ' ' || line.text[at - 1] === '\t' || line.text[at - 1] === marker)) at--
+  while (line.text[at] === ' ' || line.text[at] === '\t') at++
+  return { text: line.text.slice(at).trimEnd(), start: line.start + at }
+}
+
+/** A blank line, or one that holds only quote marks. */
+function blank(line: Line | undefined): boolean {
+  return line !== undefined && /^[\s>]*$/.test(line.text)
+}
+
 function spacedBreak(line: Line, context: LintContext): void {
-  if (isSpacedRun(trimmed(line).text)) reportLine('deprecated-spaced-thematic-break', line, context)
+  const { text, start } = spacedText(line)
+  if (isSpacedRun(text)) context.report('deprecated-spaced-thematic-break', start, start + text.length, line.path)
 }
 
 /** The characters that open an attribute block after its brace: a class, an id or a key. */
@@ -150,7 +173,7 @@ function bareHtml(line: Line, context: LintContext): void {
 }
 
 function emptyReference(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
+  const { text, start } = lineText(line)
   const match = /^\[([^\]\n]+)\]:[ \t]*$/.exec(text)
   if (match === null || match[1]!.trim() === '' || match[1] === '^' || !line.paragraph) return
   const footnote = match[1]!.startsWith('^')
@@ -159,7 +182,7 @@ function emptyReference(line: Line, context: LintContext): void {
 }
 
 function tableShaped(line: Line, context: LintContext): void {
-  const { text, start } = contentLine(line)
+  const { text, start } = lineText(line)
   if (text.startsWith('|') && !text.endsWith('|') && line.paragraph) {
     context.report('table-shaped-paragraph', start, start + text.length, line.path)
   }
@@ -209,7 +232,7 @@ function openerWithoutBlank(line: Line, context: LintContext): void {
   if (previous === undefined || !line.paragraph || previous.path !== line.path || previous.text.trim() === '') return
   const owner = context.nodeTypes.get(line.path)
   if (owner !== 'paragraph' && owner !== 'caption' && owner !== 'cell_paragraph') return
-  const { text, start } = trimmed(line)
+  const { text, start } = lineText(line)
   if (!startsBlock(text)) return
   if (text.startsWith('{') && !text.endsWith('}')) return
   if (text.startsWith('[') && hasAncestor(line.path, context, 'footnote')) return
@@ -222,7 +245,7 @@ function openerWithoutBlank(line: Line, context: LintContext): void {
 function listWithoutBlank(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || previous.path !== line.path || previous.text.trim() === '') return
-  const { text, start } = contentLine(line)
+  const { text, start } = lineText(line)
   const own = context.nodeTypes.get(line.path)
   const term = own === 'definition_term' || own === 'definition_description'
     || hasAncestor(line.path, context, 'definition_term') || hasAncestor(line.path, context, 'definition_description')
@@ -245,7 +268,7 @@ function isDefinitionLine(text: string): boolean {
 }
 
 function unattachedCaption(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
+  const { text, start } = lineText(line)
   if (!text.startsWith('^ ') || !line.paragraph) return
   if (hasAncestor(line.path, context, 'caption')) return
   const previous = prior(line, context)
@@ -255,13 +278,13 @@ function unattachedCaption(line: Line, context: LintContext): void {
 }
 
 function unattachedAttribute(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
+  const { text, start } = lineText(line)
   if (!line.paragraph || !text.startsWith('{') || !text.endsWith('}') || text.length < 3) return
   if (!attributeLead(text[1])) return
   if (context.state.attachedLines.has(line.number)) return
   const next = context.lines[line.number]
-  if (next !== undefined && next.text.trim() !== '' && next.paragraph === false) return
-  context.report('unattached-block-attribute', start, start + text.length, line.path, {}, next?.text.trim() === '' ? 1 : 0)
+  if (next !== undefined && !blank(next) && next.paragraph === false) return
+  context.report('unattached-block-attribute', start, start + text.length, line.path, {}, blank(next) ? 1 : 0)
 }
 
 function attributeLead(second: string | undefined): boolean {
@@ -269,11 +292,12 @@ function attributeLead(second: string | undefined): boolean {
 }
 
 function markdownDefinition(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
-  if (line.paragraph && !hasAncestor(line.path, context, 'definition_description') &&
-    text.startsWith(': ') && prior(line, context)?.text.trim() !== '') {
-    context.report('markdown-definition-paragraph', start, start + text.length, line.path)
-  }
+  const { text, start } = lineText(line)
+  const previous = prior(line, context)
+  // C2-B-074: a later line of its paragraph, below a line that is no `::` term.
+  if (!line.paragraph || previous === undefined || previous.path !== line.path || !text.startsWith(': ')) return
+  if (lineText(previous).text.startsWith(':: ')) return
+  context.report('markdown-definition-paragraph', start, start + text.length, line.path)
 }
 
 function emptyInclude(line: Line, context: LintContext): void {
@@ -295,7 +319,7 @@ function linkGap(line: Line, context: LintContext): void {
 }
 
 function djotPlus(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
+  const { text, start } = lineText(line)
   if (line.paragraph && text.startsWith('+ ') && text.length > 2) {
     context.report('djot-plus-bullet', start, start + text.length, line.path)
   }
@@ -316,7 +340,7 @@ function definitionInContainer(line: Line, context: LintContext): void {
 function foldedTerm(line: Line, context: LintContext): void {
   if (context.nodeTypes.get(line.path) !== 'definition_term') return
   if (firstLineOfPath(line.path, context) !== line.number) return
-  const { text, start } = contentLine(line)
+  const { text, start } = lineText(line)
   const marker = /^::?[ \t]+/.exec(text)?.[0]
   if (marker === undefined) return
   const body = text.slice(marker.length)
@@ -325,7 +349,7 @@ function foldedTerm(line: Line, context: LintContext): void {
 }
 
 function githubAlert(line: Line, context: LintContext): void {
-  const match = /^\s*>[ \t]*\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
+  const match = /^\s*(?:>[ \t]*)+\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
   if (match === null || !line.paragraph) return
   const at = match[0].indexOf('[!')
   context.report('github-alert-marker', line.start + at, line.end, line.path)
@@ -334,7 +358,8 @@ function githubAlert(line: Line, context: LintContext): void {
 function djotHeadingContinuation(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || line.text.trim() === '') return
-  if (previous.text.startsWith('# ') && !line.text.startsWith(' ')) {
+  const above = lineText(previous)
+  if (above.text.startsWith('# ') && lineText(line).start - line.start <= above.start - previous.start) {
     context.report('djot-heading-continuation', previous.start, line.end, line.path)
   }
 }
@@ -354,13 +379,14 @@ function regionAsText(line: Line, context: LintContext): void {
 
 function captionLooking(line: Line, context: LintContext): void {
   if (!line.paragraph) return
-  const { text, start } = contentLine(line)
+  const { text, start } = lineText(line)
   if (!/^(?:\*?\s*(?:Caption|Table|Tabelle|Figure|Image)(?:\s+\d+)?\s*:|:\s+\S)/i.test(text)) return
-  const below = [1, 2].some((offset) => context.lines[line.number - 1 + offset]?.text.trimStart().startsWith('|'))
-  const above = [-2, -1].some((offset) => {
-    const source = context.lines[line.number - 1 + offset]?.text ?? ''
-    return source.trimStart().startsWith('|') || source.includes('![')
-  })
+  const row = (offset: number): boolean => {
+    const near = context.lines[line.number - 1 + offset]
+    return near !== undefined && lineText(near).text.startsWith('|')
+  }
+  const below = [1, 2].some(row)
+  const above = [-2, -1].some((offset) => row(offset) || (context.lines[line.number - 1 + offset]?.text ?? '').includes('!['))
   if (below || above) context.report('caption-looking-paragraph', start, start + 1, line.path, {}, below ? 0 : 1)
 }
 
@@ -458,7 +484,7 @@ function colonFenceLength(line: Line, context: LintContext): void {
 }
 
 function rowWithoutPipe(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
+  const { text, start } = lineText(line)
   if (line.paragraph && text.startsWith('|') && text.includes('|') && !text.endsWith('|')) {
     context.report('table-row-without-closing-pipe', start, start + text.length, line.path)
   }
