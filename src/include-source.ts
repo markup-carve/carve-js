@@ -224,3 +224,16 @@ export function recordKinds(text: string, lines: FileLines, tsv: boolean): numbe
   }
   return kinds
 }
+
+/**
+ * C2-N-037 to C2-N-043: the text of region `name` of `text` as an include directive selects it: a code include gets
+ * its payload, one line feed after each line, and a Carve include gets the lines as they stand. Null where the
+ * directive would report `region_invalid`.
+ */
+export function includeRegion(text: string, name: string, code: boolean): string | null {
+  const lines = fileLines(text)
+  const range = regionRange(text, lines, name, code)
+  if (typeof range === 'string') return null
+  if (code) return payloadOf(text, lines, range, () => false)
+  return range.from === range.to ? '' : text.slice(lines.starts[range.from], lines.nexts[range.to - 1])
+}

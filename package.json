@@ -62,7 +62,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p upgrade/engine-0.1/tsconfig.json && npm ci --prefix import --ignore-scripts --silent && node cli/build.mjs && node public/build.mjs",
+    "build": "node scripts/generate-package-info.ts && tsc -p upgrade/engine-0.1/tsconfig.json && npm ci --prefix import --ignore-scripts --silent && node cli/build.mjs && node public/build.mjs",
     "build:browser": "node scripts/build-browser.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "node scripts/refuse-prerelease-publish.mjs",
