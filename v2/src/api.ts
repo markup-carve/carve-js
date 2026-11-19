@@ -424,16 +424,9 @@ function duplicateViewId(document: DocumentNode): string | null {
   return visit(document)
 }
 
-/** C2-X-053 to C2-X-055: transforms run in registration order on a copy, leaving the authored tree intact. */
-export function renderWithDocumentTransforms(
-  input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], options?: RenderOptions,
-): RenderOutput {
-  const settings = readOptions(options, 'render')
-  const authored = typeof input === 'string' || input instanceof Uint8Array ? input : structuredClone(input)
-  const parsed = inputStage(authored, settings, true)
-  const resolved = resolveStage(parsed, settings)
-  let view = structuredClone(resolved.document)
-  const sourceDiagnostics = parseDiagnostics(resolved, parsed)
+function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[]): {
+  view: DocumentNode, failures: Diagnostic[]
+} {
   const failures: Diagnostic[] = []
   for (const entry of transforms) {
     try {
@@ -448,6 +441,19 @@ export function renderWithDocumentTransforms(
         message: `The document transform ${entry.name} failed: ${detail}`, path: '' })
     }
   }
+  return { view, failures }
+}
+
+/** C2-X-053 to C2-X-055: transforms run in registration order on a copy, leaving the authored tree intact. */
+export function renderWithDocumentTransforms(
+  input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], options?: RenderOptions,
+): RenderOutput {
+  const settings = readOptions(options, 'render')
+  const authored = typeof input === 'string' || input instanceof Uint8Array ? input : structuredClone(input)
+  const parsed = inputStage(authored, settings, true)
+  const resolved = resolveStage(parsed, settings)
+  const sourceDiagnostics = parseDiagnostics(resolved, parsed)
+  const { view, failures } = applyDocumentTransforms(structuredClone(resolved.document), transforms)
   const rendered = renderWithDiagnostics(view, options)
   const diagnostics = [...sourceDiagnostics, ...failures, ...rendered.diagnostics]
   if (settings.strictLosses) for (const entry of diagnostics) {
