@@ -182,6 +182,15 @@ describe('headingNumbers', () => {
     expect(render(src, { extensions: [headingNumbers({ crossref: 'title' })] })).toContain('See <a href="#C">C</a>')
   })
 
+  it('leaves a reference with an explicit display mode other than title to the core renderer', () => {
+    const tree = parse('== C\n\nSee </#C>.\n')
+    const para = tree.children.find((n) => n.type === 'paragraph') as { children: { type: string, display?: string }[] }
+    const xref = para.children.find((n) => n.type === 'xref')!
+    xref.display = 'page'
+    const html = render(tree, { extensions: [headingNumbers()] })
+    expect(html).not.toContain('Section 1 - C')
+  })
+
   it('keeps the number out of a table of contents', () => {
     const html = render('= A\n', { extensions: [headingNumbers(), tableOfContents()], renderers: tocRenderers })
     expect(html).toContain('<li><a href="#A">A</a></li>')

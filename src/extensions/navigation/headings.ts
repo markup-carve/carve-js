@@ -111,6 +111,7 @@ export function headingNumbers(options: HeadingNumbersOptions = {}): ExtensionDe
       }, false)
       if (crossref !== 'title' && byId.size > 0) rewriteTree(view, (node) => {
         if (node.type !== 'xref' || node.namespace !== 'heading') return undefined
+        if (node.display !== undefined && node.display !== 'title') return undefined
         const target = byId.get(node.key)
         if (target === undefined) return undefined
         const children: Inline[] = crossref === 'number'
