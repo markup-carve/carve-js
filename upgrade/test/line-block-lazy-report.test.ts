@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
 describe('C2-B-123 C2-B-130, U-130: a lazy line in a parsed line block', () => {
-  it('cites the line block source range when 0.2 adds a break', () => {
+  it('keeps the 0.1 tag of the lazy line, which was the only difference (U-256)', () => {
     const source = ':: t\n: > - ::: |\n  >   {#i}\nb\n'
     const result = upgrade(source)
-    expect(result.check).toBe('mismatch')
-    expect(result.records.find((record) => record.entry === 'U-130')?.range).toEqual({ startOffset: 11, endOffset: 29 })
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe(':: t\n: > - ::: |\n  >   \\{#i}\nb\n')
   })
 
   it('does not cite the same spelling inside code', () => {

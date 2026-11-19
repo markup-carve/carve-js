@@ -10,8 +10,14 @@ describe('U-275: a brace around a 0.1 tag', () => {
   })
 
   it('does not escape code content or an attribute attached to a span', () => {
-    for (const source of ['`left {#q} right`\n', '[left]{#q} right\n', 'Text[^a]\\{.c}{#i}.\n']) {
+    for (const source of ['`left {#q} right`\n', '[left]{#q} right\n']) {
       expect(upgrade(source).output).toBe(source)
     }
+  })
+
+  it('escapes the brace before a 0.1 tag after an escaped attribute (U-256)', () => {
+    const result = upgrade('Text[^a]\\{.c}{#i}.\n')
+    expect(result.output).toBe('Text[^a]\\{.c}\\{#i}.\n')
+    expect(result.check).toBe('pass')
   })
 })

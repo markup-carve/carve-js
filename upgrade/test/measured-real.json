@@ -51,7 +51,7 @@
     "path": "resources/examples/edge-cases/0737-model-inline-frames-and-html-attributes.md",
     "line": 71,
     "input": "{{ d @lines:0 }}*a*\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-011"
     ]
