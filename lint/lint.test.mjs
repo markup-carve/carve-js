@@ -28,6 +28,22 @@ it('C2-B-160 and C2-B-161: only a column-zero first-line hyphen run opens frontm
   expect(lint('---\n').map((entry) => entry.code)).not.toContain('thematic-break-spelling')
 })
 
+it('C2-B-160: a hyphen run below a non-paragraph leaf is thematic break spelling', () => {
+  for (const source of [
+    '# H\n---\n',
+    '# H\n------\n',
+    '> # H\n> ---\n',
+    '::: note\n# H\n---\n:::\n',
+    '= H\n---\n',
+  ]) {
+    const codes = lint(source).map((entry) => entry.code)
+    expect(codes, source).toContain('thematic-break-spelling')
+    expect(codes, source).not.toContain('setext-heading-underline')
+  }
+  expect(lint('text\n---\n').map((entry) => entry.code)).toContain('setext-heading-underline')
+  expect(lint('text\n---\n').map((entry) => entry.code)).not.toContain('thematic-break-spelling')
+})
+
 it('C2-B-030: the right aligned ordered marker is reported at that marker', () => {
   const entries = lint(' 9. a\n10. b\n').filter((entry) => entry.code === 'ordered-marker-right-aligned')
   expect(entries).toHaveLength(1)

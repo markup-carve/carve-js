@@ -48,6 +48,11 @@ function prior(line: Line, context: LintContext): Line | undefined {
   return context.lines[line.number - 2]
 }
 
+function priorParagraph(line: Line, context: LintContext): boolean {
+  const previous = prior(line, context)
+  return previous !== undefined && previous.text.trim() !== '' && context.nodeTypes.get(previous.path) === 'paragraph'
+}
+
 function hasAncestor(path: string, context: LintContext, type: string): boolean {
   let current = path
   while (current !== '') {
@@ -82,17 +87,14 @@ function deprecatedContinuation(line: Line, context: LintContext): void {
 function thematicBreak(line: Line, context: LintContext): void {
   const { text, start } = lineText(line)
   if (!isRun(text, '-_', 3)) return
-  const previous = prior(line, context)
-  if (text[0] === '-' && previous !== undefined && previous.text.trim() !== '' && previous.paragraph) return
+  if (text[0] === '-' && priorParagraph(line, context)) return
   if (line.number === 1 && start === line.start && text === '---') return
   context.report('thematic-break-spelling', start, start + text.length, line.path, { raw: text })
 }
 
 function setextHeading(line: Line, context: LintContext): void {
   const { text, start } = contentLine(line)
-  const previous = prior(line, context)
-  if (previous !== undefined && previous.paragraph && previous.text.trim() !== ''
-    && (isRun(text, '=', 3) || isRun(text, '-', 3))) {
+  if (priorParagraph(line, context) && (isRun(text, '=', 3) || isRun(text, '-', 3))) {
     context.report('setext-heading-underline', start, start + text.length, line.path)
   }
 }
