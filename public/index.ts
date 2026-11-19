@@ -223,7 +223,8 @@ export function fix(source: string, options?: FixOptions): FixResult {
 
 /**
  * The edits that fix one finding `lint` reported for `source` (an editor quick fix), or null where its rule has no fix
- * or the fix would not hold. Ranges are UTF-8 byte offsets, as in the diagnostic.
+ * or the fix would not hold. Ranges are UTF-8 byte offsets, as in the diagnostic. Unlike `fix`, a finding whose range
+ * another rule reports with a different replacement still gets its edits, so an editor can offer each choice.
  */
 export function fixEdits(source: string, diagnostic: Diagnostic): FixEdit[] | null {
   if (typeof source !== 'string') throw new CarveOptionError('source', 'not a string')

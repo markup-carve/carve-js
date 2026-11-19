@@ -218,7 +218,9 @@ rule. Includes are not read: a fix rewrites only the source it is given, so `inc
 
 `fixEdits(source, diagnostic)` returns the edits for one finding of `lint(source)`: each has `startOffset` and
 `endOffset` (UTF-8 bytes, as in the diagnostic) and the replacement `text`. It returns null where the rule has no
-fix, or where the fix would not hold, so an editor offers a quick fix only where `carve lint --fix` would apply one.
+fix, or where the fix would not hold. Where two rules report one range with different replacements (`~x~` under
+`djot-subscript-tilde` and `deprecated-bare-strike`), `fix` leaves the range as written, while `fixEdits` gives each
+finding its own edits, so an editor can offer both choices.
 
 ```js
 import { fix, fixEdits, lint } from '@markup-carve/carve'

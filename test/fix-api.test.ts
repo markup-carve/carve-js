@@ -83,6 +83,14 @@ describe('fixEdits', () => {
     expect(fixEdits('**a**', outside)).toBeNull()
   })
 
+  it('offers each choice where fix leaves two rules on one range to the author', () => {
+    const source = 'a ~x~ b\n'
+    const options = { rules: { 'djot-subscript-tilde': 'on' } } as const
+    expect(fix(source, options).output).toBe(source)
+    const choices = lint(source, options).map((entry) => fixEdits(source, entry)).filter((edits) => edits !== null)
+    expect(choices.map((edits) => applyEdits(source, edits)).sort()).toEqual(['a {,x,} b\n', 'a {~x~} b\n'])
+  })
+
   it('refuses a source or diagnostic of the wrong type', () => {
     expect(refusedOption(() => fixEdits(1 as never, {} as never))).toBe('source')
     expect(refusedOption(() => fixEdits('a', null as never))).toBe('diagnostic')
