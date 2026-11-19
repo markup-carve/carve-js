@@ -101,7 +101,7 @@ describe('the pinned replay map rows', () => {
   )
 
   it('keeps an unmapped difference blocked with a machine readable status', () => {
-    const result = upgrade('a------- b-------- c---------- d----------- e-------------\n')
+    const result = upgrade('{:fr}\n{:fr}\n {lang=de}\nText\n')
     expect(result.check).toBe('mismatch')
     expect(result.records.find((record) => record.entry === 'upgrade-mismatch')?.status).toBe('no mapped row')
     expect(canWriteUpgrade(result)).toBe(false)

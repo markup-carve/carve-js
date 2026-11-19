@@ -259,8 +259,8 @@
     "path": "resources/examples/core.md",
     "line": 2950,
     "input": "a------- b-------- c---------- d----------- e-------------\n",
-    "check": "mismatch",
-    "entries": []
+    "check": "pass",
+    "entries": ["U-431"]
   },
   {
     "cause": "C11",
@@ -1435,9 +1435,9 @@
     "path": "resources/examples/edge-cases/0779-a-block-glued-to-a-split-combined-token-or-a-forced-span-s-own-delimiter.md",
     "line": 44,
     "input": "{*x *b*{t=a*}\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-143"
+      "U-430"
     ]
   },
   {

@@ -2,13 +2,13 @@
 // spec/0.2/trees, copied to data/ by pin-spec.ts. Every reader of the examples reads them from here.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { type IncludeAnswer, type IncludeRequest } from '../src/include-settings.ts'
+import { type IncludeAnswer, type IncludeError, type IncludeRequest } from '../src/include-settings.ts'
 import { type HeadingIds, type RenderOptions } from '../src/options.ts'
 
 export const DATA = join(import.meta.dirname, '../data')
 
 export type CorpusKind = 'render' | 'write' | 'lint' | 'include' | 'import'
-export type CorpusFile = { text: string } | { bytes: string }
+export type CorpusFile = { text: string } | { bytes: string } | { error: IncludeError }
 
 export interface CorpusExpected {
   html?: string
@@ -106,6 +106,7 @@ export function hexBytes(hex: string): Uint8Array {
 /** The content of a corpus file: its text, or its bytes. */
 export function fileContent(file: CorpusFile | string): string | Uint8Array {
   if (typeof file === 'string') return file
+  if ('error' in file) throw new Error(`the corpus file holds the resolver error ${file.error}`)
   return 'text' in file ? file.text : hexBytes(file.bytes)
 }
 
@@ -114,7 +115,9 @@ export function corpusResolver(files: Readonly<Record<string, CorpusFile | strin
   return (request: IncludeRequest): IncludeAnswer => {
     calls.push(request)
     const file = Object.hasOwn(files, request.path) ? files[request.path] : undefined
-    return file === undefined ? { error: 'not_found' } : { text: fileContent(file), id: request.path }
+    if (file === undefined) return { error: 'not_found' }
+    // C2-N-007: a corpus file may state the resolver's error cause instead of a text.
+    return typeof file === 'object' && 'error' in file ? { error: file.error } : { text: fileContent(file), id: request.path }
   }
 }
 

@@ -24,6 +24,8 @@ import { rescueTargeted } from './targeted-rescues.ts'
 import { rescueBacktick } from './backtick-rescue.ts'
 import { rescueDirectiveSocial } from './directive-social-rescue.ts'
 import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
+import { rescueEscape } from './escape-rescue.ts'
+import { rescueDashRun } from './dash-run-rescue.ts'
 import { RULES } from './rules/index.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
@@ -479,10 +481,15 @@ function recordsAfterRescue(input: string, rescued: { output: string; record: Re
 }
 
 /** The first rescue whose spelling keeps the 0.1 HTML, in the order of the rescues. */
-function rescueMismatch(input: string, output: string, mismatch: ReportRecord): { output: string; record: ReportRecord } | null {
+function rescueMismatch(input: string, output: string, mismatch: ReportRecord, records: readonly ReportRecord[]):
+  { output: string; record: ReportRecord } | null {
+  // U-430 and U-431 leave a line that only report rows cite to a person (carve#6163).
+  const onLine = records.filter((record) => record.line === mismatch.line || record.line === 0)
+  const reported = onLine.some((record) => record.class === 'report' || record.class === 'unverified explanation')
+    && !onLine.some((record) => record.class === 'rewrite' || record.class === 'escape')
   const rescues = [rescueFence, rescuePlus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
     rescueCombinedInline, rescueHeadingBraceTag, rescueTargeted, rescueMinor, rescueBacktick, rescueDirectiveSocial, rescueBraceOpenerTags,
-    rescueBracedBoldItalic]
+    rescueBracedBoldItalic, ...(reported ? [] : [rescueEscape, rescueDashRun])]
   for (const rescue of rescues) {
     const rescued = rescue(input, output, mismatch)
     if (rescued !== null) return rescued
@@ -524,7 +531,7 @@ function upgradeSource(input: string): UpgradeResult {
   if (check === 'mismatch') {
     const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
     if (mismatch !== undefined) {
-      const rescued = rescueMismatch(input, done.output, mismatch)
+      const rescued = rescueMismatch(input, done.output, mismatch, done.records)
       const checked = done.records
       done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
       if (rescued !== null) {

@@ -1,3 +1,5 @@
+import { makeContext } from './context.ts'
+
 /** The construct spans promised by the new report rows on their shortest source examples. */
 const MARKS: Record<string, [string, string]> = {
   'U-378': ['[^f]:', 'tail'], 'U-379': ['%% note', 'more'], 'U-380': ['[%% hidden]', '[%% hidden]'],
@@ -53,6 +55,51 @@ const CHOICES: readonly ReplayChoice[] = [
       pattern: /\{~[^\n]*~\}/u },
 ]
 
+const OPENER_COMMENT = /(?:\^|:[A-Za-z][\w-]*)?\[(%%[^\]\n]*\]?)/gu
+const LINE_COMMENT = /(?:^|[ \t]|\\ )(%%[^\n]*)/gmu
+
+const LITERAL = new Set(['code', 'code_block', 'raw_block', 'raw_inline', 'math', 'literal_inline', 'frontmatter'])
+
+/** The offsets of the input that 0.1 read as literal text, where `%%` is no comment. */
+function literalMask(input: string): Uint8Array {
+  const mask = new Uint8Array(input.length)
+  for (const { node } of makeContext(input).visits) {
+    if (LITERAL.has(node.type) && node.pos !== undefined) mask.fill(1, node.pos.startOffset, node.pos.endOffset)
+  }
+  return mask
+}
+
+/** The frame openers before `at` on its line that no closer before `at` ends. */
+function openFrames(line: string): number {
+  let open = 0
+  for (const char of line) {
+    if (char === '[' || char === '{') open++
+    else if ((char === ']' || char === '}') && open > 0) open--
+  }
+  return open
+}
+
+/**
+ * U-426: `%%` directly after a bracket opener is text in 0.2 (C2-I-023). U-393: a line comment
+ * inside an open frame takes the closer later on its line (C2-I-024).
+ */
+function commentFrameRange(input: string): ReplayRange | null {
+  const literal = literalMask(input)
+  for (const match of input.matchAll(OPENER_COMMENT)) {
+    const startOffset = match.index + match[0].length - match[1]!.length
+    if (literal[startOffset] === 1) continue
+    return { id: 'U-426', range: { startOffset, endOffset: match.index + match[0].length } }
+  }
+  for (const match of input.matchAll(LINE_COMMENT)) {
+    const startOffset = match.index + match[0].length - match[1]!.length
+    if (literal[startOffset] === 1) continue
+    const lineStart = input.lastIndexOf('\n', startOffset - 1) + 1
+    if (openFrames(input.slice(lineStart, startOffset)) === 0 || !/[\]}]/u.test(match[1]!)) continue
+    return { id: 'U-393', range: { startOffset, endOffset: match.index + match[0].length } }
+  }
+  return null
+}
+
 /** Finds a source construct when a longer document reaches one of the replay causes. */
 export function replayMapRange(input: string, old: string, next: string): ReplayRange | null {
   for (const choice of CHOICES) {
@@ -61,5 +108,5 @@ export function replayMapRange(input: string, old: string, next: string): Replay
     if (match?.index === undefined) continue
     return { id: choice.id, range: { startOffset: match.index, endOffset: match.index + match[0].length } }
   }
-  return null
+  return input.includes('%%') ? commentFrameRange(input) : null
 }
