@@ -3,7 +3,8 @@ import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
-import { columnOf } from '../src/layout-lines.ts'
+import { columnOf, readPrefix } from '../src/layout-lines.ts'
+import { advanceColumn } from '../src/source.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -424,6 +425,16 @@ function multilineTerm(node: Node, path: string, context: LintContext): void {
   }
 }
 
+function headingLineColumn(line: LintContext['lines'][number], quotes: number, context: LintContext): number {
+  const prefix = quotes === 0 ? { pos: line.start, column: 0, origin: 0 }
+    : readPrefix(context.source, line.start, line.end, quotes)
+  let column = prefix.column
+  for (let at = prefix.pos; context.source[at] === ' ' || context.source[at] === '\t'; at++) {
+    column = advanceColumn(column, context.source.charCodeAt(at))
+  }
+  return column - prefix.origin
+}
+
 function headingContinuation(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
   const first = context.lines[node.pos.startLine - 1]
@@ -432,11 +443,11 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   while (next < node.pos.endLine && context.lines[next]?.text.trimStart().startsWith('%%') === true) next++
   const second = next < node.pos.endLine ? context.lines[next] : undefined
   if (first === undefined || second === undefined) return
-  const marker = first.text.trimStart()
-  const column = first.text.indexOf(marker[0]!)
-  let indent = 0
-  while (second.text[indent] === ' ') indent++
-  if (indent > column) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
+  const marker = context.layouts.get(path)?.markerColumn
+  if (marker === undefined) return
+  const quotes = quoteDepth(path, context)
+  const indent = headingLineColumn(second, quotes, context)
+  if (indent > marker) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
 }
 
 /** C2-B-127: a bare `::: figure` in the body of a figure group, which opens a plain div. */
@@ -1034,6 +1045,14 @@ function listItemBodyColumn(node: Node, path: string, context: LintContext): voi
 }
 
 /** Each block of a list item, other than a paragraph, that starts past the item's content column. */
+function blockColumn(node: Node, path: string, context: LintContext): number | undefined {
+  const marker = context.layouts.get(path)?.markerColumn
+  // An attached attribute line starts the node before its block marker.
+  if (marker !== undefined && node.attrs === undefined) return marker
+  const start = node.pos === undefined ? undefined : context.chars[node.pos.startOffset]
+  return start === undefined ? undefined : columnOf(context.source, start, quoteDepth(path, context))
+}
+
 function overindentedBlocks(node: Node, path: string, context: LintContext,
   visit: (at: number, child: Node, start: number, end: number, past: number, content: number) => void): void {
   if (node.type !== 'list_item') return
@@ -1045,7 +1064,8 @@ function overindentedBlocks(node: Node, path: string, context: LintContext,
     const child = node.children[at]
     if (child === undefined || child.type === 'paragraph' || child.type === 'list' || child.pos === undefined) continue
     const line = context.lines[child.pos.startLine - 1]
-    const column = itemColumn(node, marker, child)
+    const childPath = `${path}/children/${at}`
+    const column = blockColumn(child, childPath, context)
     if (line === undefined || column === undefined || column <= content) continue
     visit(at, child, line.start + child.pos.startColumn - 1, line.end, column - content, content)
   }
