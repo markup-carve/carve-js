@@ -8,11 +8,12 @@ import { build } from 'esbuild'
 
 const shared = { bundle: true, format: 'esm', target: 'es2022', legalComments: 'none', external: ['parse5'] }
 
-await build({ ...shared, entryPoints: ['public/index.ts'], outfile: 'dist/index.js', platform: 'neutral' })
+// Build both entries together so the import entry reuses the exact engine modules loaded by the root entry.
+await build({ ...shared, entryPoints: { index: 'public/index.ts', import: 'public/formats.ts' },
+  outdir: 'dist', splitting: true, chunkNames: 'chunks/[name]-[hash]', platform: 'neutral',
+  external: ['parse5', 'micromark', 'micromark-extension-*', '@djot/djot'] })
 await build({ ...shared, entryPoints: ['public/node.ts'], outfile: 'dist/node.js', platform: 'node' })
 await build({ ...shared, entryPoints: ['public/extensions.ts'], outfile: 'dist/extensions.js', platform: 'neutral' })
-await build({ ...shared, entryPoints: ['public/formats.ts'], outfile: 'dist/import.js', platform: 'neutral',
-  external: ['parse5', 'micromark', 'micromark-extension-*', '@djot/djot'] })
 await build({ ...shared, entryPoints: ['public/export.ts'], outfile: 'dist/export.js', platform: 'neutral' })
 await build({ ...shared, entryPoints: ['public/upgrade.ts'], outfile: 'dist/upgrade.js', platform: 'neutral' })
 await build({ ...shared, entryPoints: ['public/prettier.ts'], outfile: 'dist/prettier.js', platform: 'neutral' })
