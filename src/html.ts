@@ -13,7 +13,7 @@ import { type Findings } from './diagnostics.ts'
 import {
   attributes, carriesAttributes, escapeAttribute, escapeCarrierText, escapeText, isDenied, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
-import { inlineHtml, isEmptyDroppedLink, mergedAttrs } from './html-inline.ts'
+import { inlineHtml, isEmptyDroppedLink, isSkippedBreak, mergedAttrs } from './html-inline.ts'
 import { CarveOptionError, type Settings } from './options.ts'
 import { attributesAct, includeSource } from './include.ts'
 import { includeMessage } from './expand.ts'
@@ -109,15 +109,18 @@ function isVisible(r: Render, node: Node): boolean {
 
 /**
  * C2-H-019: a paragraph whose content writes nothing once the profile has degraded it (C2-H-165), such as one of
- * refused links with no text. Its denied destinations are reported the first time it is met.
+ * refused links with no text. A break counts as written unless a comment line takes it (C2-H-069). Its denied
+ * destinations are reported the first time it is met.
  */
 function isSilenced(r: Render, node: ParagraphNode): boolean {
   if (r.silenced.has(node)) return true
   if (PROFILES.get(r.settings.profile) === undefined || node.caption !== undefined) return false
-  let silent = node.children.length === 0
-  for (const child of node.children) {
+  const children = node.children
+  let silent = children.length === 0
+  for (let at = 0; at < children.length; at++) {
+    const child = children[at]!
     if (child.type === 'comment' || (child.type === 'link' && isEmptyDroppedLink(r, child))) silent = true
-    else if (child.type !== 'soft_break' && child.type !== 'hard_break') return false
+    else if ((child.type !== 'soft_break' && child.type !== 'hard_break') || !isSkippedBreak(children, at, false)) return false
   }
   if (!silent) return false
   r.silenced.add(node)

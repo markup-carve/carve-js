@@ -33,6 +33,11 @@ describe('paragraph emptied by a refused link', () => {
     expect(render('> [](javascript:x)\n>\n> after\n', { profile: 'comment' })).toBe('<blockquote><p>after</p></blockquote>')
   })
 
+  it('C2-H-069: a break that no comment line takes is written, so the paragraph stays', () => {
+    expect(render('[](javascript:x)\\\n', { profile: 'comment' })).toBe('<p><br>\n</p>')
+    expect(render('[](javascript:x)\n{% c %}\n', { profile: 'comment' })).toBe('')
+  })
+
   it('a link with text keeps its paragraph', () => {
     expect(render('[a](javascript:x)\n', { profile: 'comment' })).toBe('<p>a</p>')
   })

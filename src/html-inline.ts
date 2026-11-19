@@ -49,7 +49,7 @@ function isCommentOnlyLine(nodes: readonly Inline[], from: number, step: number,
  * C2-H-069: a comment-only line takes one line break around it with it: the one behind it, or the one before it
  * when the content ends with the comment. Each line is read at most twice, from the break on either side.
  */
-function isSkippedBreak(nodes: readonly Inline[], at: number, nested: boolean): boolean {
+export function isSkippedBreak(nodes: readonly Inline[], at: number, nested: boolean): boolean {
   return isCommentOnlyLine(nodes, at - 1, -1, false, nested) || isCommentOnlyLine(nodes, at + 1, 1, true, nested)
 }
 
