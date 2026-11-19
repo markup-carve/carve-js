@@ -43,7 +43,5 @@ export function newMapCandidates(input: string): Candidate[] {
   if (abbreviation !== input) candidates.push({ id: 'U-376', output: abbreviation })
   const table = input.includes('aligns="') ? tableAlignment(input) : null
   if (table !== null) candidates.push({ id: 'U-377', output: table })
-  const deletion = input.replace(/\{[+-][^}\n]*%%[^}\n]*[+-]\}/gu, (span) => span.replace('%%', '\\%\\%'))
-  if (deletion !== input) candidates.push({ id: 'U-390', output: deletion })
   return candidates
 }

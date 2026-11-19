@@ -16,7 +16,7 @@ import { checkOptions } from './check.ts'
 
 export {
   CarveInputError, CarveRenderError, type LayoutResult, parse, type ParseResult, parseWithDiagnostics, parseWithLayout, render,
-  type RenderOutput, renderWithDiagnostics,
+  type RenderOutput, renderWithDiagnostics, renderWithDocumentTransforms, type DocumentTransform,
 } from '../src/api.ts'
 export {
   AST_VERSION, type Attrs, type BibliographyMetadata, type CitationLocator, type Envelope, type ExtensionDeclaration,

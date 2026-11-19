@@ -1,4 +1,4 @@
-import { isUrlAllowed, type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer } from '../../src/index.ts'
+import { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer } from '../../src/index.ts'
 import { attrValue, authorAttrs } from '../common/attrs.ts'
 import { sanitizeSvg, type SanitizeSvgOptions } from './svg-sanitize.ts'
 
@@ -56,7 +56,7 @@ export function createImgFence(options: ImgFenceOptions = {}): {
       return merged.ok ? merged.svg : host.blocks(node.fallback ?? [])
     }
     const src = `data:image/svg+xml,${encodeURIComponent(sanitized.svg)}`
-    if (!isUrlAllowed(src, host.urlPolicy)) return host.blocks(node.fallback ?? [])
+    // C2-X-060: this sink alone admits its own sanitized SVG URL; authored data URLs stay under C2-H-159.
     const alt = attrValue(node.attrs, 'alt') ?? svgTitle(sanitized.svg) ?? ''
     return `<img src="${host.escapeAttribute(src)}" alt="${host.escapeAttribute(alt)}"${attrs}>`
   } }

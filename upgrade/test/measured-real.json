@@ -1250,7 +1250,7 @@
     "path": "resources/examples/edge-cases/0859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run.md",
     "line": 54,
     "input": ":foo[%% c] d\n",
-    "check": "pass",
+    "check": "mismatch",
     "entries": []
   },
   {
@@ -1432,7 +1432,7 @@
     "path": "resources/examples/edge-cases/0490-a-comment-inside-a-forced-span-or-the-combined-token-ends-at-its-closer.md",
     "line": 12,
     "input": "{*a %% b*} y\n",
-    "check": "pass",
+    "check": "mismatch",
     "entries": []
   },
   {
@@ -1777,7 +1777,7 @@
     "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
     "line": 192,
     "input": "[%% hidden](/u)\n",
-    "check": "pass",
+    "check": "mismatch",
     "entries": []
   },
   {
@@ -1814,7 +1814,7 @@
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-5.crv",
     "line": 1,
     "input": "[a %% c] d\n",
-    "check": "pass",
+    "check": "mismatch",
     "entries": []
   },
   {

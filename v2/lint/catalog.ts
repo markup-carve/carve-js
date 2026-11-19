@@ -757,9 +757,8 @@ export const CATALOG = {
   ] },
   "ordered-list-kind-split": { severity: "warning", default: "on", messages: [
     [
-      "Nothing after this one-letter marker settles its style, so a lone i ",
-      "reads as roman and any other letter as alphabetic, and the list spli",
-      "ts after its first item.",
+      "This one-letter marker fixes its list style, so the next marker star",
+      "ts another list.",
     ].join(''),
   ], conditions: [
     "",

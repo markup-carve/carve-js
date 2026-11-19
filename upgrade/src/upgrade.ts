@@ -500,8 +500,8 @@ function upgradeCore(input: string): UpgradeResult {
   const mapped = mappedRewrite(input)
   if (mapped !== null) return preservingMappedResult(input, mapped)
   const manual = mappedReport(input)
-  if (manual !== null) {
-    const done: Rewritten = { output: input, records: [manual], edits: [], context: makeContext(input) }
+  if (manual.length > 0) {
+    const done: Rewritten = { output: input, records: manual, edits: [], context: makeContext(input) }
     const check = selfCheck(input, done)
     return { output: input, changed: false, records: done.records, check, engine01: ENGINE_01_VERSION }
   }

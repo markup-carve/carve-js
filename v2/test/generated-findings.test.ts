@@ -78,14 +78,13 @@ describe('generated parser findings', () => {
     expect(parsed.diagnostics.some((entry) => entry.message.includes('test.failure'))).toBe(true)
   })
 
-  it('C2-X-051: a claim preparation failure retains the core tabs node', () => {
+  it('C2-I-023: percent runs in a deep tabs body no longer abort its claim', () => {
     const body = readFileSync(join(import.meta.dirname, 'fixtures/plan-quote-depth.crv'), 'utf8')
     const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
     const options = { extensions: [tabExtension, tabsExtension] }
     const parsed = parseWithDiagnostics(source, options)
-    expect(parsed.document.children[0]?.type).toBe('div')
-    expect(parsed.diagnostics.some((entry) => entry.code === 'extension-transform-failed' &&
-      entry.message.includes('carve.tabs'))).toBe(true)
+    expect(parsed.document.children[0]?.type).toBe('block_extension')
+    expect(parsed.diagnostics.some((entry) => entry.code === 'extension-transform-failed')).toBe(false)
     expect(() => render(source, options)).not.toThrow()
   })
 

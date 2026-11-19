@@ -10,17 +10,26 @@ import { newMapRange, replayMapRange } from './new-map-ranges.ts'
 const REWRITE_IDS = new Set([
   'U-278', 'U-280', 'U-281',
   'U-284', 'U-285', 'U-286', 'U-290', 'U-300', 'U-304', 'U-305', 'U-340', 'U-365', 'U-366',
-  'U-367', 'U-368', 'U-369', 'U-375', 'U-376', 'U-377', 'U-390',
+  'U-367', 'U-368', 'U-369', 'U-375', 'U-376', 'U-377',
+  'U-399', 'U-400', 'U-401', 'U-402', 'U-405', 'U-406', 'U-407', 'U-412', 'U-413',
 ])
 const REPORT_IDS = new Set([
   'U-262', 'U-263', 'U-264', 'U-271', 'U-279', 'U-282', 'U-283', 'U-287', 'U-288', 'U-289',
   'U-249', 'U-291', 'U-292', 'U-293', 'U-301', 'U-302', 'U-303', 'U-341', 'U-362', 'U-364', 'U-370', 'U-371',
   'U-378', 'U-379', 'U-380', 'U-381', 'U-382', 'U-383', 'U-384', 'U-385', 'U-386', 'U-387',
-  'U-388', 'U-389', 'U-391', 'U-393', 'U-394', 'U-395',
+  'U-388', 'U-389', 'U-391', 'U-394', 'U-395',
+  'U-397', 'U-398', 'U-403', 'U-404', 'U-408', 'U-409', 'U-410', 'U-411',
+  'U-414', 'U-415', 'U-416', 'U-417', 'U-419',
+  'U-412', 'U-413',
 ])
 
 const BY_SOURCE = new Map(map.source.filter((row) => REWRITE_IDS.has(row.id)).map((row) => [row.from, row]))
-const REPORTS = new Map(map.source.filter((row) => REPORT_IDS.has(row.id)).map((row) => [row.from, row]))
+const REPORTS = new Map<string, typeof map.source>()
+for (const row of map.source.filter((item) => REPORT_IDS.has(item.id))) {
+  const list = REPORTS.get(row.from) ?? []
+  list.push(row)
+  REPORTS.set(row.from, list)
+}
 
 function rendersLikeOld(input: string, candidate: string): boolean {
   try { return compareHtmlExact(html01(input), html02(candidate, false)).equal } catch { return false }
@@ -44,12 +53,16 @@ export function mappedRewrite(input: string): { output: string; record: ReportRe
 }
 
 /** A kept difference remains visible even when a small example happens to render alike. */
-export function mappedReport(input: string): ReportRecord | null {
-  const row = REPORTS.get(input)
-  if (row === undefined) return null
-  const range = newMapRange(input, row.id)
-  return range === undefined ? recordOf(row.id, 1, row.meaning02)
-    : { ...recordOf(row.id, lineOf(readLines(input), range.startOffset), row.meaning02), range }
+export function mappedReport(input: string): ReportRecord[] {
+  return (REPORTS.get(input) ?? []).map((row) => {
+    const range = newMapRange(input, row.id) ?? (Number(row.id.slice(2)) >= 397
+      ? { startOffset: 0, endOffset: input.length } : undefined)
+    const record = range === undefined ? recordOf(row.id, 1, row.meaning02)
+      : { ...recordOf(row.id, lineOf(readLines(input), range.startOffset), row.meaning02), range }
+    // These host-only rewrites cannot pass the tool's default HTML replay without a host registration.
+    if (row.id === 'U-412' || row.id === 'U-413') record.class = 'unverified explanation'
+    return record
+  })
 }
 
 /** A residual HTML difference in a larger source can still cite its mapped construct. */

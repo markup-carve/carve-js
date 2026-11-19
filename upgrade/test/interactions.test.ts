@@ -75,13 +75,19 @@ const PAIRS: Pair[] = [
   },
   { entries: 'U-063 U-107', input: '| a | b |\n\n^ first\n^ second\n', output: '| a | b |\n^ first\n\n^ second\n' },
   { entries: 'U-023 U-065', input: '1. _a_\n 2. b\n', output: '1. {_a_}\n2. b\n' },
-  { entries: 'U-065', input: 'i) _one_\nj) two\n', output: 'i) {_one_}\nj) two\n' },
   { entries: 'U-026', input: '- a\n%%%\nx\n%%% y\n- b\n', output: '- a\n  %%%\n  x\n  %%% y\n- b\n' },
   { entries: 'U-057 U-066', input: '| ~a~ | b \\|\n', output: '| {~a~} | b \\| |\n' },
   { entries: 'U-045', input: 'Some text\n- - -\n# H\n', output: 'Some text\n***\n# H\n' }
 ]
 
 describe('entries that meet on one line', () => {
+  it('C2-B-042: an underline rewrite cannot preserve a list whose first marker now fixes roman style', () => {
+    const result = upgrade('i) _one_\nj) two\n')
+    expect(result.output).toBe('i) {_one_}\nj) two\n')
+    expect(result.check).toBe('mismatch')
+    expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
+  })
+
   for (const pair of PAIRS) {
     it(`${pair.entries}: ${JSON.stringify(pair.input)}`, () => {
       const result = upgrade(pair.input)

@@ -315,7 +315,8 @@ function renderersValue(value: unknown): Readonly<Record<string, ExtensionRender
   if (value === undefined) return {}
   if (!isPlainObject(value)) throw new CarveOptionError('renderers', 'not a map')
   for (const [name, entry] of Object.entries(value)) {
-    if (!isPlainObject(entry) || typeof entry['version'] !== 'string' || typeof entry['render'] !== 'function') {
+    if (!isPlainObject(entry) || typeof entry['version'] !== 'string' ||
+      (typeof entry['render'] !== 'function' && typeof entry['buildTime'] !== 'function')) {
       throw new CarveOptionError('renderers', `invalid renderer ${name}`)
     }
   }

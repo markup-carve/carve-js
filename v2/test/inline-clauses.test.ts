@@ -196,12 +196,12 @@ describe('comments', () => {
     expect(inline('a  %%')).toBe('"a" %%""')
   })
 
-  it('C2-I-024: a line comment takes the rest of its line, up to the closer of the innermost open bracket or braced opener', () => {
+  it('C2-I-024: a line comment takes every closer on its line', () => {
     expect(inline('*a %% b*', 'c* d')).toBe('strong["a" %%" b*" sb "c"] " d"')
     expect(inline('`a` %% `b', 'c`')).toBe('code"a" %%" `b" sb "c`"')
-    expect(inline('x {*a %% *}', '*}')).toBe('"x " strong["a" %%" "] sb "*}"')
+    expect(inline('x {*a %% *}', '*}')).toBe('"x " strong["a" %%" *}" sb]')
     expect(inline('x {*a %% b', '*}')).toBe('"x " strong["a" %%" b" sb]')
-    expect(inline('[a {_b %% c] d_} e')).toBe('"[a " u["b" %%" c] d"] " e"')
+    expect(inline('[a {_b %% c] d_} e')).toBe('"[a {_b" %%" c] d_} e"')
   })
 
   it('C2-I-025: a braced comment closes at the first `%}` and may cross lines', () => {

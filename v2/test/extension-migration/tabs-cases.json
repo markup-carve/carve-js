@@ -142,7 +142,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\"><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\" checked><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
     "tabsMode01": "aria"
   },
   {
@@ -176,7 +176,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\"><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\" checked><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
   },
   {
     "id": "TB-013",
@@ -208,7 +208,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Installation</p>\n    <p><code>npm i @markup-carve/carve</code></p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Usage</p>\n    <p><code>carveToHtml(src)</code></p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"Installation\"\n`npm i @markup-carve/carve`\n:::\n::: tab \"Usage\"\n`carveToHtml(src)`\n:::\n::::",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Installation</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Usage</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Installation\"><p><code>npm i @markup-carve/carve</code></p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Usage\"><p><code>carveToHtml(src)</code></p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">Installation</h3><p><code>npm i @markup-carve/carve</code></p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">Usage</h3><p><code>carveToHtml(src)</code></p></section></div>",
     "renderMode": "static"
   },
   {
@@ -301,7 +301,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\"><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\" checked><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
     "tabsMode01": "aria"
   },
   {
@@ -341,7 +341,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\"><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\" checked><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
     "tabsMode01": "aria"
   },
   {
@@ -358,7 +358,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\"><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\" checked><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
   },
   {
     "id": "TB-025",
@@ -605,7 +605,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">One</h3><p>first</p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">Two</h3><p>second</p></section></div>",
     "renderMode": "static",
     "roundtrip": true
   },
@@ -636,7 +636,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">First</h3><p>Content one.</p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">R&amp;D</h3><p>Content two.</p></section></div>",
     "renderMode": "static"
   },
   {
@@ -653,7 +653,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">First</h3><p>Content one.</p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">R&amp;D</h3><p>Content two.</p></section></div>",
     "renderMode": "static"
   },
   {
@@ -670,7 +670,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">First</h3><p>Content one.</p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">R&amp;D</h3><p>Content two.</p></section></div>",
     "renderMode": "static"
   },
   {
@@ -687,7 +687,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">First</h3><p>Content one.</p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">R&amp;D</h3><p>Content two.</p></section></div>",
     "renderMode": "static"
   },
   {
@@ -757,7 +757,7 @@
     "html02": "<div class=\"tabs\">\n  <div id=\"mytab\" class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n{#mytab}\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">One</h3><p>first</p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">Two</h3><p>second</p></section></div>",
     "renderMode": "static",
     "roundtrip": true
   },
@@ -775,7 +775,7 @@
     "html02": "<div class=\"tabs\">\n  <div id=\"mytab\" class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n{#mytab}\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">One</h3><p>first</p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">Two</h3><p>second</p></section></div>",
     "tabsMode01": "aria",
     "renderMode": "static",
     "roundtrip": true
@@ -795,7 +795,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <h3 data-carve-generated-id id=\"Head\">Head</h3>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"One\"\n### Head\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><h3 data-carve-generated-id id=\"Head\">Head</h3>\n<p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><section class=\"tabs-panel\"><h3 class=\"tabs-label\">One</h3><h3 data-carve-generated-id id=\"Head\">Head</h3>\n<p>first</p></section><section class=\"tabs-panel\"><h3 class=\"tabs-label\">Two</h3><p>second</p></section></div>",
     "renderMode": "static",
     "roundtrip": true
   },
@@ -1226,7 +1226,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\"><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\" checked><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
     "tabsMode01": "aria"
   },
   {
@@ -1243,7 +1243,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\"><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\" checked><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
   },
   {
     "id": "TB-078",

@@ -623,76 +623,13 @@ function openBulletItem(state: BlockState, end: number): boolean {
 }
 
 /** The style flags of an ordered marker of letters that starts at `pos`, added to `style`. */
-function letterFlags(state: BlockState, pos: number, delimiter: number, style: number, end: number): number {
+function letterFlags(state: BlockState, pos: number, delimiter: number, style: number): number {
   const first = state.src.charCodeAt(pos)
   const flags = first < LOWER_A ? style | FLAG_UPPER : style
   const single = delimiter - pos === 1
   const sibling = siblingStyle(state, flags, single, romanLetterValue(first) > 0)
   if (sibling !== 0) return flags | sibling
-  if (single && romanLetterValue(first) > 0) {
-    const settled = nextMarkerStyle(state, first, end)
-    if (settled !== 0) return flags | settled
-  }
   return flags | (single && first !== LOWER_I && first !== UPPER_I ? FLAG_ALPHA : FLAG_ROMAN)
-}
-
-/**
- * C2-B-042: the style that the next marker gives a one-roman-letter first marker, or 0. The next marker starts
- * the first later line of the container that is not blank and not indented past the marker, with fewer than
- * three blank lines before it. Comment-only lines are no lines for block structure (C2-B-137).
- */
-function nextMarkerStyle(state: BlockState, first: number, end: number): number {
-  const src = state.src
-  const cursor = state.cursor
-  const saved = { ...cursor }
-  const column = cursor.column - cursor.origin
-  const depth = state.containers.depth
-  let blanks = 0
-  let style = 0
-  for (let lineStart = src.indexOf('\n', end) + 1; lineStart > 0 && blanks < LIST_BOUNDARY_BLANKS;) {
-    const next = src.indexOf('\n', lineStart)
-    const lineEnd = trimCr(src, lineStart, next < 0 ? src.length : next)
-    const matched = matchContainers(state, lineStart, lineEnd)
-    const blank = cursor.pos >= lineEnd
-    if (matched < depth && !blank) break
-    if (blank) blanks = markerBlankCount(matched, depth, blanks)
-    else if (!isLineComment(src, cursor.pos, lineEnd)) {
-      const settled = styleAtMarkerLine(state, first, lineEnd, column)
-      if (settled !== null) { style = settled; break }
-      blanks = 0
-    }
-    lineStart = next + 1
-  }
-  Object.assign(cursor, saved)
-  return style
-}
-
-function markerBlankCount(matched: number, depth: number, blanks: number): number {
-  return matched < depth ? LIST_BOUNDARY_BLANKS : blanks + 1
-}
-
-function styleAtMarkerLine(state: BlockState, first: number, lineEnd: number, column: number): number | null {
-  const cursor = state.cursor
-  return cursor.column - cursor.origin <= column ? settledStyle(state.src, first, cursor.pos, lineEnd) : null
-}
-
-function trimCr(src: string, start: number, end: number): number {
-  return end > start && src.charCodeAt(end - 1) === CR ? end - 1 : end
-}
-
-/** Roman when the marker at `pos` is the numeral one above `first`, alphabetic when it is the next letter, else 0. */
-function settledStyle(src: string, first: number, pos: number, end: number): number {
-  const delimiter = orderedDelimiter(src, pos, end)
-  if (delimiter <= pos || orderedMarkerEnd(src, pos, delimiter, end) < 0) return 0
-  const code = src.charCodeAt(pos)
-  if ((code < LOWER_A) !== (first < LOWER_A) || code < UPPER_A) return 0
-  if (delimiter - pos === 1 && code === first + 1) return FLAG_ALPHA
-  return romanLetters(src, pos, delimiter) && romanValue(src, pos, delimiter) === romanLetterValue(first) + 1 ? FLAG_ROMAN : 0
-}
-
-function romanLetters(src: string, pos: number, end: number): boolean {
-  for (let p = pos; p < end; p++) if (romanLetterValue(src.charCodeAt(p)) === 0) return false
-  return true
 }
 
 /** The number of an ordered marker of letters of the style `style`. */
@@ -717,7 +654,7 @@ function openOrderedItem(state: BlockState, end: number): boolean {
   if (delimiter !== pos && first >= DIGIT_0 && first <= DIGIT_9) {
     start = decimalValue(src, pos, delimiter)
   } else if (delimiter !== pos) {
-    style = letterFlags(state, pos, delimiter, style, end)
+    style = letterFlags(state, pos, delimiter, style)
     start = letterStart(src, pos, delimiter, style)
   }
   const auto = start < 0

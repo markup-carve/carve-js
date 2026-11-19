@@ -100,17 +100,22 @@ function markerDelimiter(list: ListNode): string {
   return list.marker.delimiter ?? '.'
 }
 
-function sameOrderedKind(a: ListNode, b: ListNode): boolean {
+function sameOrderedKind(w: Writer, a: ListNode, b: ListNode): boolean {
   const first = markerStyle(a)
   const second = markerStyle(b)
   if (markerDelimiter(a) !== markerDelimiter(b)) return false
-  // C2-B-038, C2-B-039: a single letter is a sibling in a list of the other letter style.
-  return first === second || (first !== '1' && second !== '1' && isUpper(first) === isUpper(second))
+  if (first === second) return true
+  if (first === '1' || second === '1' || isUpper(first) !== isUpper(second)) return false
+  // C2-W-028: only a marker the first list can read needs a three-blank-line boundary.
+  const marker = listMarkers(w, b).markers[0] ?? ''
+  const letter = marker.slice(0, -1)
+  if (letter.length !== 1) return false
+  return first.toLowerCase() === 'a' || 'ivxlcdmIVXLCDM'.includes(letter)
 }
 
 /** C2-B-049, C2-B-053: whether the list `b` directly after the list `a` would continue it. */
-export function sameListKind(a: Node, b: Node): boolean {
+export function sameListKind(w: Writer, a: Node, b: Node): boolean {
   if (a.type === 'definition_list') return b.type === 'definition_list'
   if (a.type !== 'list' || b.type !== 'list' || a.marker.kind !== b.marker.kind) return false
-  return a.marker.kind === 'ordered' ? sameOrderedKind(a, b) : a.marker.char === b.marker.char
+  return a.marker.kind === 'ordered' ? sameOrderedKind(w, a, b) : a.marker.char === b.marker.char
 }

@@ -475,30 +475,6 @@ function bracesBeforeMarks(leaf: Leaf, escaped: Uint8Array): void {
 }
 
 /**
- * C2-I-023: at the start of the content of a bracket or a braced opener, `%%` opens a line comment too. Decided once
- * the brackets are, since an escaped `[` opens nothing and the `%` then needs no backslash.
- */
-function percentsBehindOpeners(leaf: Leaf, escaped: Uint8Array): void {
-  for (let at = leaf.codes.indexOf(37); at >= 0; at = leaf.codes.indexOf(37, at + 1)) {
-    if (leaf.inTitle || leaf.inLine || leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) continue
-    if (opensContentBefore(leaf, at - 1, escaped)) escaped[at] = 1
-  }
-}
-
-/** Whether the unit `at` ends a bracket or a braced opener, of the tree or of text the reader reads as one. */
-function opensContentBefore(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
-  const value = code(leaf, at)
-  if (leaf.kinds[at] === OPEN) {
-    return value === 91 || (code(leaf, at - 1) === 123 && leaf.kinds[at - 1] === OPEN && BRACED_MARKS.includes(String.fromCharCode(value)))
-  }
-  if (leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped)) return false
-  if (value === 91) return true
-  // A `{` of text before a mark of the tree is escaped for that mark, so it opens nothing.
-  return BRACED_MARKS.includes(String.fromCharCode(value)) && code(leaf, at - 1) === 123 && leaf.kinds[at - 1] === TEXT
-    && !isLiteral(leaf, at - 1, escaped)
-}
-
-/**
  * C2-B-133: behind a `%` of text, or behind a `{` that opens no braced comment (C2-I-025), `%%` stands after no
  * whitespace and is text.
  */
@@ -988,7 +964,6 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) bracesBeforeMarks(leaf, escaped)
   if (leaf.undecided === null) checkPairs(leaf, escaped)
-  if (leaf.undecided === null) percentsBehindOpeners(leaf, escaped)
   if (leaf.undecided === null) commentsBeforeClosers(leaf, escaped)
   return escaped
 }
