@@ -212,7 +212,7 @@ describe('writers', () => {
   it('refuses taken, reserved and malformed targets', () => {
     const writers = createWriterRegistry()
     const make = (target: unknown): Writer => ({ target, write: () => ({ output: '', diagnostics: [] }) }) as Writer
-    expect(RESERVED_WRITER_TARGETS).toEqual(['markdown', 'plain-text', 'ansi'])
+    expect(RESERVED_WRITER_TARGETS).toEqual(['markdown', 'plain', 'ansi'])
     for (const target of [...RESERVED_WRITER_TARGETS, 'html', 'carve', 'Upper', '', 1]) {
       optionError(() => writers.register(make(target)), 'writer')
     }

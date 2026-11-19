@@ -1,5 +1,5 @@
 // Builds `@markup-carve/carve`, `@markup-carve/carve/node`, `@markup-carve/carve/extensions` and
-// `@markup-carve/carve/import`: one ES module each, and their declarations. The import entry keeps its Markdown and
+// `@markup-carve/carve/import` and `@markup-carve/carve/export`: one ES module each, and their declarations. The import entry keeps its Markdown and
 // Djot libraries external, as package dependencies.
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -13,6 +13,7 @@ await build({ ...shared, entryPoints: ['public/node.ts'], outfile: 'dist/node.js
 await build({ ...shared, entryPoints: ['public/extensions.ts'], outfile: 'dist/extensions.js', platform: 'neutral' })
 await build({ ...shared, entryPoints: ['public/formats.ts'], outfile: 'dist/import.js', platform: 'neutral',
   external: ['parse5', 'micromark', 'micromark-extension-*', '@djot/djot'] })
+await build({ ...shared, entryPoints: ['public/export.ts'], outfile: 'dist/export.js', platform: 'neutral' })
 
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'public/tsconfig.build.json'], { stdio: 'inherit' })
 
