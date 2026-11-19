@@ -1,8 +1,12 @@
-// BBCode import (JavaScript only). No maintained BBCode-to-HTML library fits, so this module writes the HTML itself,
-// with the tag set of the 0.1 `bbcodeToCarve`, and the 0.2 HTML importer and the writer do the rest.
+// BBCode import (JavaScript only), with the tag set of the 0.1 `bbcodeToCarve`. `bbcode-tree.ts` builds the tree of the
+// items; for the inputs only parse5 reads as it does, this module writes the HTML and the 0.2 HTML importer reads it.
 import { ImportInputError, type ImportDiagnostic, type ImportResult, withoutHtmlRanges } from './kit.ts'
 import { importHtml } from './html.ts'
 import { readAttribution } from './bbcode-quote.ts'
+import {
+  BLOCK, codeLanguage, codeValue, INLINE, isTag, itemHasBlocks, PARAGRAPH_BREAK, plainText, type Item, type Tag,
+} from './bbcode-items.ts'
+import { importBbcodeItems, needsHtmlRoute } from './bbcode-tree.ts'
 
 /** The 0.1 limit: BBCode is bounded forum content, and a larger input is refused. */
 export const BBCODE_MAX_INPUT_LENGTH = 262144
@@ -14,13 +18,8 @@ export class BbcodeInputTooLargeError extends ImportInputError {
   }
 }
 
-interface Tag { kind: 'tag', name: string, value: string | undefined, children: Item[], start: number, end: number }
-type Item = string | Tag
-
-const BLOCK = new Set(['quote', 'code', 'list', 'hr', 'table', 'spoiler', 'center', 'left', 'right'])
 const VOID = new Set(['hr', '*'])
 const VERBATIM = new Set(['code', 'noparse', 'c', 'icode'])
-const INLINE: Record<string, string> = { b: 'strong', i: 'em', u: 'u', s: 'del', strike: 'del', sup: 'sup', sub: 'sub' }
 const PLAIN = new Set(['color', 'size', 'font'])
 const KNOWN = new Set([...BLOCK, ...VERBATIM, ...Object.keys(INLINE), ...PLAIN, 'url', 'email', 'img', 'youtube',
   'tr', 'td', 'th', '*'])
@@ -127,10 +126,6 @@ function lastIndexOf(stack: Tag[], name: string): number {
   return -1
 }
 
-function plainText(items: Item[]): string {
-  return items.map(item => typeof item === 'string' ? item : plainText(item.children)).join('')
-}
-
 function inlineHtml(items: Item[]): string {
   return items.map(item => typeof item === 'string' ? escapeHtml(item) : inlineTag(item)).join('')
 }
@@ -171,7 +166,7 @@ function blocksHtml(items: Item[]): string {
     const paragraphs: Item[][] = [[]]
     for (const item of run) {
       if (typeof item !== 'string') { paragraphs.at(-1)?.push(item); continue }
-      const parts = item.split(/\n[ \t]*\n\s*/u)
+      const parts = item.split(PARAGRAPH_BREAK)
       parts.forEach((part, index) => {
         if (index > 0) paragraphs.push([])
         paragraphs.at(-1)?.push(part)
@@ -212,9 +207,8 @@ function blockTag(tag: Tag): string {
 }
 
 function codeHtml(tag: Tag): string {
-  const code = plainText(tag.children).replace(/^\n/u, '')
-  // A leading `=` would make the fence a raw block (`[code= =html]`), so it is cut, as in 0.1.
-  const language = tag.value?.trim().toLowerCase().replace(/^=+/u, '').trimStart()
+  const code = codeValue(tag)
+  const language = codeLanguage(tag)
   return `<pre><code${language ? ` class="language-${escapeHtml(language)}"` : ''}>${escapeHtml(code)}</code></pre>`
 }
 
@@ -232,14 +226,8 @@ function listHtml(tag: Tag): string {
   return outside(tag.children, item => isTag(item, '*')) + list
 }
 
-/** A list item of one paragraph is written bare, as a tight list writes it (C2-M-033). */
 function itemHtml(items: Item[]): string {
-  const blank = items.some(item => typeof item === 'string' && /\n[ \t]*\n/u.test(item.trim()))
-  return blank || items.some(item => typeof item !== 'string' && BLOCK.has(item.name)) ? blocksHtml(items) : inlineHtml(items).trim()
-}
-
-function isTag(item: Item, ...names: string[]): item is Tag {
-  return typeof item !== 'string' && names.includes(item.name)
+  return itemHasBlocks(items) ? blocksHtml(items) : inlineHtml(items).trim()
 }
 
 /** Rows of `[tr]` with `[td]` and `[th]` cells; a first row of header cells only is the table head. */
@@ -258,17 +246,22 @@ function tableHtml(tag: Tag): string {
   return before + table
 }
 
+/** The items of `input`; exported for the measurements and the route tests. */
+export function readItems(input: string, diagnostics: ImportDiagnostic[] = []): Item[] {
+  return new BbcodeReader(input.replace(/\r\n?/gu, '\n'), diagnostics).read()
+}
+
 /** BBCode as the HTML this module writes for it; exported for the measurements. */
 export function bbcodeHtml(input: string, diagnostics: ImportDiagnostic[] = []): string {
-  return blocksHtml(new BbcodeReader(input.replace(/\r\n?/gu, '\n'), diagnostics).read())
+  return blocksHtml(readItems(input, diagnostics))
 }
 
 export function importBbcode(input: string): ImportResult {
   const length = new TextEncoder().encode(input).length
   if (length > BBCODE_MAX_INPUT_LENGTH) throw new BbcodeInputTooLargeError(length)
   const diagnostics: ImportDiagnostic[] = []
-  const html = bbcodeHtml(input, diagnostics)
+  const items = readItems(input, diagnostics)
   // This HTML is generated here; its byte positions do not locate the BBCode input.
-  const result = importHtml(html, false, {}, false)
+  const result = needsHtmlRoute(input, items) ? importHtml(blocksHtml(items), false, {}, false) : importBbcodeItems(items)
   return { ...result, diagnostics: [...diagnostics, ...withoutHtmlRanges(result.diagnostics)] }
 }

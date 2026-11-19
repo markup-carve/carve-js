@@ -63,6 +63,13 @@ function appendText(result: Inline[], child: Extract<Inline, { type: 'text' }>):
 }
 
 export function normalizeBreaks(children: Inline[], node: Html.ChildNode, context: HtmlContext): Inline[] {
+  const [result, changed] = collapseBreaks(children)
+  if (changed) report(context, node, 'import-whitespace-normalized', 'HTML whitespace around a line ending removed')
+  return result
+}
+
+/** `normalizeBreaks` without the report: the children, and whether whitespace was removed. */
+export function collapseBreaks(children: Inline[]): [Inline[], boolean] {
   const result: Inline[] = []
   let changed = false
   for (const child of children) {
@@ -71,8 +78,7 @@ export function normalizeBreaks(children: Inline[], node: Html.ChildNode, contex
     else if (child.type === 'text') changed = appendText(result, child) || changed
     else result.push(child)
   }
-  if (changed) report(context, node, 'import-whitespace-normalized', 'HTML whitespace around a line ending removed')
-  return result
+  return [result, changed]
 }
 
 function edgeSpace(code: number): boolean { return code === 32 || (code >= 9 && code <= 13 && code !== 11) }
@@ -113,6 +119,13 @@ function trimTrailing(children: Inline[]): boolean {
     trimmed = true
   }
   return trimmed
+}
+
+/** `trimInlineEdges` without the report. */
+export function trimEdges(children: Inline[]): Inline[] {
+  trimLeading(children)
+  trimTrailing(children)
+  return children
 }
 
 export function trimInlineEdges(children: Inline[], node: Html.ChildNode, context: HtmlContext): Inline[] {
