@@ -29,7 +29,7 @@ const FILES = [
 ]
 const MAX_JOBS = 4
 // Copied per worker so a mutant never reaches the checkout; the rest is shared read-only.
-const ENGINE_DIRS = ['src', 'test', 'data', 'scripts', 'cli', 'lint', 'migrate', 'public', 'extensions', 'proptest']
+const ENGINE_PATHS = ['src', 'test', 'data', 'scripts', 'cli', 'lint', 'migrate', 'public', 'extensions', 'proptest', 'tsconfig.json']
 const SHARED_DIRS = ['node_modules', 'import', 'upgrade', 'build', 'dist', 'spec']
 
 const TESTS = [
@@ -160,7 +160,7 @@ let next = 0
 async function worker(): Promise<void> {
   const copy = mkdtempSync(join(tmpdir(), 'carve-mutate-'))
   copies.push(copy)
-  for (const dir of ENGINE_DIRS) cpSync(join(root, dir), join(copy, dir), { recursive: true })
+  for (const dir of ENGINE_PATHS) cpSync(join(root, dir), join(copy, dir), { recursive: true })
   for (const dir of SHARED_DIRS) if (existsSync(join(root, dir))) symlinkSync(join(root, dir), join(copy, dir))
   while (next < mutations.length) {
     const mutation = mutations[next++]!

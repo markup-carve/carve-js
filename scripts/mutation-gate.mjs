@@ -14,7 +14,7 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const baselinePath = join(repo, 'data/mutation-baseline.json')
 const ignored = JSON.parse(readFileSync(join(repo, 'data/mutation-ignore.json'), 'utf8'))
 // Copied per workspace so a mutant never reaches the checkout; the rest is shared read-only.
-const ENGINE_DIRS = ['src', 'test', 'data', 'scripts', 'cli', 'lint', 'migrate', 'public', 'extensions', 'proptest']
+const ENGINE_PATHS = ['src', 'test', 'data', 'scripts', 'cli', 'lint', 'migrate', 'public', 'extensions', 'proptest', 'tsconfig.json']
 const SHARED_DIRS = ['node_modules', 'import', 'upgrade', 'build', 'dist', 'spec']
 const mutations = [
   { id: 'block-eof', file: 'blocks.ts', from: 'if (lineEnd < 0) lineEnd = length', to: 'if (lineEnd < 0) lineEnd = length - 1' },
@@ -48,7 +48,7 @@ async function run(cwd, argv, timeout = 240_000) {
 
 function workspace() {
   const root = mkdtempSync(join(tmpdir(), 'carve-mutation-'))
-  for (const dir of ENGINE_DIRS) cpSync(join(repo, dir), join(root, dir), { recursive: true })
+  for (const dir of ENGINE_PATHS) cpSync(join(repo, dir), join(root, dir), { recursive: true })
   for (const dir of SHARED_DIRS) if (existsSync(join(repo, dir))) symlinkSync(join(repo, dir), join(root, dir), 'dir')
   writeFileSync(join(root, 'package.json'), '{"type":"module"}\n')
   writeFileSync(join(root, 'vitest.config.mjs'),
