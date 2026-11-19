@@ -272,6 +272,10 @@ function cellValue(w: Writer, node: Node, value: string, flags: number): string 
 
 /** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash; C2-W-098: in a cell a pipe too. */
 function destination(value: string, pipes: boolean): string {
+  return /[()\\]/u.test(value) || (pipes && value.includes('|')) ? escapedDestination(value, pipes) : value
+}
+
+function escapedDestination(value: string, pipes: boolean): string {
   const unmatched = new Set<number>()
   const open: number[] = []
   for (let at = 0; at < value.length; at++) {

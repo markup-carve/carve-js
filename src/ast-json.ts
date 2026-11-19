@@ -114,6 +114,12 @@ function hasSpanMarks(table: Record<string, unknown>): boolean {
   )))
 }
 
+/** Item by item, skipping the holes of a sparse `a` as `every` did. */
+function equalItems(a: unknown[], b: unknown[], spanMarks: boolean): boolean {
+  for (let index = 0; index < a.length; index++) if (index in a && !equalValues(a[index], b[index], spanMarks)) return false
+  return true
+}
+
 function equalLists(a: unknown[], b: unknown[], spanMarks: boolean): boolean {
   // Parsed trees normally contain no adjacent text. Avoid two arrays per comparison in that case.
   if (a.length === b.length) {
@@ -124,11 +130,7 @@ function equalLists(a: unknown[], b: unknown[], spanMarks: boolean): boolean {
           (b[index - 1] as { type?: unknown } | null)?.type === 'text' &&
           (b[index] as { type?: unknown } | null)?.type === 'text') { adjacent = true; break }
     }
-    if (!adjacent) {
-      // `every` skipped the holes of a sparse list, so this loop does too.
-      for (let index = 0; index < a.length; index++) if (index in a && !equalValues(a[index], b[index], spanMarks)) return false
-      return true
-    }
+    if (!adjacent) return equalItems(a, b, spanMarks)
   }
   const left = coalesced(a)
   const right = coalesced(b)
