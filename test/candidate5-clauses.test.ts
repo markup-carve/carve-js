@@ -182,6 +182,15 @@ describe('lint of vertical alignment', () => {
     for (const src of ['|=< a|', '|=?v a|', '|>^ a|', '|< a|']) expect(codes(src), src).toContain('deprecated-cell-alignment')
     expect(codes('|{<} a|')).not.toContain('deprecated-cell-alignment')
   })
+
+  it('C2-B-171, C2-B-182: `deprecated-cell-alignment` on a run with a glued brace block, and no emphasis finding for it', () => {
+    for (const src of ['|=~{.x} Mid |', '| <~{.x} a |', '|=?v{#i} a |']) expect(codes(src), src).toEqual(['deprecated-cell-alignment'])
+    const [entry] = lint('|=~{.x} Mid |')
+    expect(entry?.message).toContain('"~{.x}"')
+    expect(entry?.message).toContain('write "{~ .x}"')
+    expect(codes('| a ~{.x} b |')).toEqual(['emphasis-marker-before-attributes'])
+    expect(codes('| ~{.x}{.y} a |')).not.toContain('deprecated-cell-alignment')
+  })
 })
 
 describe('the carve-js entries of the fifth fix round', () => {
