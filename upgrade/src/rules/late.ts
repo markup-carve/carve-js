@@ -72,6 +72,7 @@ const OPENING = new Set(['(', '[', '{', '=', ':', '“', '‘'])
 function opens02(src: string, at: number): boolean {
   if (src[at] === "'" && /[0-9]/u.test(src[at + 1] ?? '')) return false
   const before = src[at - 1]
+  if (before === '"' || before === "'") return opens02(src, at - 1)
   return before === undefined || /\s/u.test(before) || OPENING.has(before)
 }
 
