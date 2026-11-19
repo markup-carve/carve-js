@@ -9,6 +9,19 @@ function isPlainObject(value: unknown): value is Readonly<Record<string, unknown
   return prototype === Object.prototype || prototype === null
 }
 
+function checkExtensionNames(name: string, value: unknown): void {
+  if (!Array.isArray(value) || !value.every(item => item === 'wikilinks' || item === 'samp')) {
+    throw new CarveOptionError(name, 'expected a list of wikilinks or samp')
+  }
+}
+
+function checkLayout(name: string, value: unknown): void {
+  if (!isPlainObject(value) || !Array.isArray(value['nodes'])) throw new CarveOptionError(name, 'not a sidecar with a list of nodes')
+  for (const entry of value['nodes'] as unknown[]) {
+    if (!validLayoutEntry(entry)) throw new CarveOptionError(name, 'a node entry the writer cannot read')
+  }
+}
+
 function checkValue(name: string, kind: OptionKind, value: unknown): void {
   switch (kind) {
     case 'boolean':
@@ -24,18 +37,13 @@ function checkValue(name: string, kind: OptionKind, value: unknown): void {
       readOptions({ extensions: value }, 'parse')
       return
     case 'extension-names':
-      if (!Array.isArray(value) || !value.every(item => item === 'wikilinks' || item === 'samp')) {
-        throw new CarveOptionError(name, 'expected a list of wikilinks or samp')
-      }
+      checkExtensionNames(name, value)
       return
     case 'losses':
       readOptions({ [name]: value }, 'render')
       return
     case 'layout':
-      if (!isPlainObject(value) || !Array.isArray(value['nodes'])) throw new CarveOptionError(name, 'not a sidecar with a list of nodes')
-      for (const entry of value['nodes'] as unknown[]) {
-        if (!validLayoutEntry(entry)) throw new CarveOptionError(name, 'a node entry the writer cannot read')
-      }
+      checkLayout(name, value)
   }
 }
 

@@ -404,9 +404,11 @@ function admonition(node: Html.Element, context: HtmlContext): Block[] | undefin
   const kind = classes[1]
   if (classes[0] !== 'admonition' || !isKind(ADMONITION_KINDS, kind)) return undefined
   const parts = titled(node, context)
-  const generatedName = parts.title ? 'aria-labelledby' : 'aria-label'
-  const generatedValue = parts.title ? attr(node, generatedName) : context.labels[`admonition${kind[0]!.toUpperCase()}${kind.slice(1)}`]
-  const omit = attr(node, generatedName) === generatedValue ? [generatedName] : []
+  const label = context.labels[`admonition${kind[0]!.toUpperCase()}${kind.slice(1)}`]
+  const omit = [
+    ...(parts.title && attr(node, 'aria-labelledby') !== undefined ? ['aria-labelledby'] : []),
+    ...(attr(node, 'aria-label') === label ? ['aria-label'] : []),
+  ]
   const mapped = withoutKeys(withoutClasses(attrs(context, node), ['admonition', kind]), omit)
   return [{ type: 'admonition', kind, ...(parts.title ? { title: parts.title } : {}),
     ...(parts.groupLabel !== undefined ? { groupLabel: parts.groupLabel } : {}),
