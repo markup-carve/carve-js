@@ -10,10 +10,10 @@ const seed = 1794696020
 const bounds = {
   full: { lines: 4, inline: 5, treeLines: 3, treeTokens: 4, mutants: 100000,
     fuzz: 20000, writerLines: 3, writerTokens: 4, writerContents: 50000, writerDocuments: 5000,
-    stressSizes: '1000,10000,100000', proptest: 100000000, minutes: 1, benchRounds: 20 },
+    stressSizes: '1000,10000,100000', inlineStressSizes: '1000,10000,100000', proptest: 100000000, importProptest: 100000000, minutes: 1, benchRounds: 20 },
   smoke: { lines: 2, inline: 2, treeLines: 2, treeTokens: 2, mutants: 1000,
     fuzz: 300, writerLines: 2, writerTokens: 2, writerContents: 200, writerDocuments: 50,
-    stressSizes: '10,100,1000', proptest: 30, minutes: 0, benchRounds: 1 },
+    stressSizes: '100,1000,10000', inlineStressSizes: '300,3000,30000', proptest: 30, importProptest: 3, minutes: 0, benchRounds: 1 },
 }[mode]
 
 function run(command, args, cwd = '.') {
@@ -36,19 +36,22 @@ switch (gate) {
       cwd: 'carve', stdio: 'inherit', env: { ...process.env, AST_FUZZ_COUNT: String(bounds.mutants) },
     })
     if (result.error) throw result.error
-    node('scripts/check-ast-crosscheck.ts', '_AST_CROSSCHECK_FINDINGS.json.gz')
+    node('scripts/check-ast-crosscheck.ts', '_AST_CROSSCHECK_FINDINGS.json.gz', bounds.mutants)
     break
   }
   case 'enumerate': npm('enumerate', String(bounds.lines)); break
   case 'enumerate-inline': npm('enumerate-inline', String(bounds.inline)); break
   case 'stress-inline':
-    npm('stress-inline', '--sizes', bounds.stressSizes, ...(smoke && process.env.CARVE_ENGINE_SMOKE_STRESS_LIMIT ? ['--limit', process.env.CARVE_ENGINE_SMOKE_STRESS_LIMIT] : []))
+    npm('stress-inline', '--sizes', bounds.inlineStressSizes, ...(smoke && process.env.CARVE_ENGINE_SMOKE_STRESS_LIMIT ? ['--limit', process.env.CARVE_ENGINE_SMOKE_STRESS_LIMIT] : []))
     if (!smoke) npm('test:stress')
     break
   case 'conformance':
-    npm('test:lint'); npm('build'); npm('conformance')
-    run('npx', ['vitest', 'run', 'test/corpus.test.ts'], '.',)
-    npm('differential-migrate'); npm('test:migrate')
+    if (!smoke) { npm('test:lint'); npm('build') }
+    npm('conformance', ...(smoke ? ['--sample', '20'] : []))
+    if (!smoke) {
+      run('npx', ['vitest', 'run', 'test/corpus.test.ts'])
+      npm('differential-migrate'); npm('test:migrate')
+    }
     break
   case 'enumerate-tree':
     npm('enumerate-tree', 'lines', String(bounds.treeLines))
@@ -62,14 +65,15 @@ switch (gate) {
     break
   case 'writer-gates-tokens': npm('writer-gates', 'tokens', String(bounds.writerTokens)); break
   case 'stress-tree':
-    node('scripts/stress-tree.ts', '--sizes', bounds.stressSizes, ...(smoke ? ['--only', 'inline'] : []))
-    node('scripts/stress-format.ts', '--sizes', bounds.stressSizes)
+    node('scripts/stress-tree.ts', '--sizes', bounds.stressSizes, ...(smoke ? ['--only', 'paragraphs'] : []))
+    node('scripts/stress-format.ts', '--sizes', bounds.stressSizes, ...(smoke ? ['--only', 'escaped stars'] : []))
     break
   case 'benchmark': npm('bench', '--files', smoke ? 'test/fixtures/bench-commonmark-core.crv' : 'test/fixtures/bench-commonmark-core.crv,docs/api.md,docs/engine.md', '--rounds', String(bounds.benchRounds)); break
   case 'proptest':
-    npm('test:proptest')
+    if (!smoke) npm('test:proptest')
     for (const target of ['parse', 'render', 'format', 'diagnostics', 'extensions', 'decode', 'cli', 'lint', 'migrate', 'import']) {
-      node('proptest/run.ts', '--target', target, '--seed', seed, '--count', bounds.proptest, '--minutes', bounds.minutes, '--max-bytes', 4096)
+      if (smoke && target === 'cli') continue
+      node('proptest/run.ts', '--target', target, '--seed', seed, '--count', target === 'import' ? bounds.importProptest : bounds.proptest, '--minutes', bounds.minutes, '--max-bytes', 4096)
     }
     break
   default: throw new Error(`unknown gate: ${gate}`)

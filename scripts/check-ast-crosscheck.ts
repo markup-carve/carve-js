@@ -93,6 +93,8 @@ function explained(finding: Failure & { classification?: string }): string | nul
 
 const path = process.argv[2]
 if (path === undefined) throw new Error('pass the findings file')
+const expectedMutants = Number(process.argv[3] ?? '100000')
+if (!Number.isSafeInteger(expectedMutants) || expectedMutants < 1) throw new Error('invalid expected mutant count')
 const report = JSON.parse(gunzipSync(readFileSync(path)).toString('utf8')) as Report
 const all = [...report.producedFailures, ...report.findings]
 const counts = new Map<string, number>()
@@ -101,7 +103,7 @@ for (const finding of all) {
   counts.set(kind, (counts.get(kind) ?? 0) + 1)
 }
 process.stdout.write(`${JSON.stringify({ ...report.summary, explained: Object.fromEntries(counts) })}\n`)
-if (report.summary.mutants !== 100000 || report.summary.producedFailures !== report.producedFailures.length
+if (report.summary.mutants !== expectedMutants || report.summary.producedFailures !== report.producedFailures.length
   || report.summary.disagreements !== report.findings.length || counts.has('unexplained')) {
   process.exitCode = 1
 }
