@@ -317,6 +317,16 @@ describe('the group together', () => {
     expect(output).toContain('<div class="code-group"')
     expect(output).toContain('<div class="math display">\\[x\\]</div>')
   })
+
+  it('a code group keeps a panel whose code has callouts, and its selection', () => {
+    const all = withExtensions(codeGroup(), codeCallouts())
+    const source = '::: code-group\n```js\na\n```\n\n{selected}\n```sh\nb <1>\n```\n:::\n'
+    const output = renderWithDocumentTransforms(source, all.transforms ?? [], { extensions: all.extensions, renderers: all.renderers }).html
+    expect(output).toContain('id="codegroup-1-tab-2" class="code-group-radio" checked>')
+    expect(output).toContain('<div class="code-group-panel" role="group" aria-label="sh"><pre><code class="language-sh">' +
+      'b <b class="callout" data-callout="1">1</b>\n</code></pre></div>')
+    expect(output).not.toContain('selected')
+  })
 })
 
 describe('docs/fenced-renderers.md', () => {

@@ -17,7 +17,8 @@ export interface CodeGroupOptions {
   highlighter?: (code: string, language: string | undefined) => string
 }
 
-interface Panel { block: CodeBlockNode, label: string, selected: boolean }
+/** `node` is what the panel renders: the code block, or a node a document transform put in its place. */
+interface Panel { block: CodeBlockNode, node: Block, label: string, selected: boolean }
 
 function transform(claim: ExtensionClaim): BlockExtensionNode | null {
   if (claim.form !== 'div') return null
@@ -28,27 +29,36 @@ function transform(claim: ExtensionClaim): BlockExtensionNode | null {
     fallback: structuredClone(claim.body) }
 }
 
+/** The code block of a panel; a transform such as codeCallouts may have replaced it by a node with it as fallback. */
+function codeOf(node: Node): CodeBlockNode | null {
+  if (node.type === 'code_block') return node
+  const code = node.type === 'block_extension' && node.fallback.length === 1 ? node.fallback[0] : undefined
+  return code?.type === 'code_block' ? { ...code, ...(node.attrs === undefined ? {} : { attrs: node.attrs }) } : null
+}
+
 function panelsOf(node: BlockExtensionNode | InlineExtensionNode, host: ExtensionRenderHost): Panel[] {
-  const blocks = (node.slots?.['panels'] ?? []).filter((child): child is CodeBlockNode => child.type === 'code_block')
-  const panels = blocks.map((block, at) => {
+  const panels: Panel[] = []
+  for (const child of node.slots?.['panels'] ?? []) {
+    const block = codeOf(child)
+    if (block === null) continue
     const title = block.title === undefined ? '' : host.plainText(block.title).trim()
-    const label = block.groupLabel?.trim() || title || block.syntax || `Code ${at + 1}`
-    return { block, label, selected: false }
-  })
-  const marked = blocks.findIndex((block) => block.attrs?.keyValues?.some(([key]) => key === 'selected') === true)
+    const label = block.groupLabel?.trim() || title || block.syntax || `Code ${panels.length + 1}`
+    panels.push({ block, node: child as Block, label, selected: false })
+  }
+  const marked = panels.findIndex((panel) => panel.block.attrs?.keyValues?.some(([key]) => key === 'selected') === true)
   const selected = panels[marked < 0 ? 0 : marked]
   if (selected !== undefined) selected.selected = true
   return panels
 }
 
-function withoutSelected(block: CodeBlockNode): CodeBlockNode {
-  const keyValues = block.attrs?.keyValues
-  if (keyValues === undefined || !keyValues.some(([key]) => key === 'selected')) return block
+function withoutSelected(node: Block): Block {
+  const keyValues = node.attrs?.keyValues
+  if (keyValues === undefined || !keyValues.some(([key]) => key === 'selected')) return node
   const rest = keyValues.filter(([key]) => key !== 'selected')
-  const attrs: Attrs = { ...block.attrs }
+  const attrs: Attrs = { ...node.attrs }
   if (rest.length === 0) delete attrs.keyValues
   else attrs.keyValues = rest
-  return { ...block, attrs }
+  return { ...node, attrs }
 }
 
 function authored(attrs: Attrs | undefined, name: string): boolean {
@@ -79,7 +89,7 @@ export function codeGroup(options: CodeGroupOptions = {}): ExtensionBundle {
     if (options.highlighter !== undefined) {
       return options.highlighter(panel.block.value.replace(/\n+$/, ''), panel.block.syntax)
     }
-    return host.blocks([withoutSelected(panel.block)] as Block[])
+    return host.blocks([withoutSelected(panel.node)])
   }
   const attr = (host: ExtensionRenderHost, value: string): string => host.escapeAttribute(value)
 
