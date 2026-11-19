@@ -78,6 +78,12 @@ describe('BBCode', () => {
     expect(result.source).toBe('\\*stars* \\/it/ [b]open [/i] [b]x[/b]\n')
   })
 
+  it('keeps text a list or table holds outside its items and cells', () => {
+    expect(source('[list]intro[*]a[/list]', 'bbcode')).toBe('intro\n\n- a\n')
+    expect(source('[list]only text[/list]', 'bbcode')).toBe('only text\n')
+    expect(source('[table]t[tr]r[td]d[/td][/tr][/table]', 'bbcode')).toBe('t\n\nr\n\n| d |\n')
+  })
+
   it('reports an unknown tag once and keeps its content', () => {
     const result = importDocument('[foo]x[/foo]', { from: 'bbcode' })
     expect([result.source, result.diagnostics.map(entry => entry.code)]).toEqual(['x\n', ['import-unsupported']])

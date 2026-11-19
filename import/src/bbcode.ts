@@ -215,12 +215,18 @@ function codeHtml(tag: Tag): string {
   return `<pre><code${language ? ` class="language-${escapeHtml(language)}"` : ''}>${escapeHtml(code)}</code></pre>`
 }
 
+/** Content of a list or table outside its items, rows or cells, written before it so no text is lost. */
+function outside(children: Item[], kept: (item: Item) => boolean): string {
+  return blocksHtml(children.filter(item => !kept(item)))
+}
+
 function listHtml(tag: Tag): string {
   const items = tag.children.filter(item => isTag(item, '*'))
   const ordered = tag.value !== undefined && tag.value !== ''
   const type = ordered && /^[aAiI]$/u.test(tag.value ?? '') ? ` type="${tag.value}"` : ''
   const body = items.map(item => `<li>${itemHtml(item.children)}</li>`).join('')
-  return ordered ? `<ol${type}>${body}</ol>` : `<ul>${body}</ul>`
+  const list = body === '' ? '' : ordered ? `<ol${type}>${body}</ol>` : `<ul>${body}</ul>`
+  return outside(tag.children, item => isTag(item, '*')) + list
 }
 
 /** A list item of one paragraph is written bare, as a tight list writes it (C2-M-033). */
@@ -235,13 +241,18 @@ function isTag(item: Item, ...names: string[]): item is Tag {
 
 /** Rows of `[tr]` with `[td]` and `[th]` cells; a first row of header cells only is the table head. */
 function tableHtml(tag: Tag): string {
-  const rows = tag.children.filter(row => isTag(row, 'tr')).map(row => row.children.filter(cell => isTag(cell, 'td', 'th')))
+  const rowTags = tag.children.filter(row => isTag(row, 'tr'))
+  const before = outside(tag.children, item => isTag(item, 'tr')) +
+    rowTags.map(row => outside(row.children, item => isTag(item, 'td', 'th'))).join('')
+  const rows = rowTags.map(row => row.children.filter(cell => isTag(cell, 'td', 'th')))
   const rowHtml = (cells: Tag[]): string =>
     `<tr>${cells.map(cell => `<${cell.name}>${inlineHtml(cell.children).trim()}</${cell.name}>`).join('')}</tr>`
   const first = rows[0]
   const head = first !== undefined && first.length > 0 && first.every(cell => cell.name === 'th')
   const body = (head ? rows.slice(1) : rows).map(rowHtml).join('')
-  return `<table>${head && first ? `<thead>${rowHtml(first)}</thead>` : ''}${body ? `<tbody>${body}</tbody>` : ''}</table>`
+  const table = rows.some(cells => cells.length > 0)
+    ? `<table>${head && first ? `<thead>${rowHtml(first)}</thead>` : ''}${body ? `<tbody>${body}</tbody>` : ''}</table>` : ''
+  return before + table
 }
 
 /** BBCode as the HTML this module writes for it; exported for the measurements. */
