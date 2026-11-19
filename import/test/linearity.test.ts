@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render } from '../../src/index.ts'
 import { importDocument } from '../src/index.ts'
+import { LINEARITY_LIMIT, linearityExcess } from '../../test/support/linearity.ts'
 
 /** Four shapes of a `roundtrip` render, each holding `n` repeats. */
 const SHAPES: readonly [string, (n: number) => string][] = [
@@ -12,22 +13,11 @@ const SHAPES: readonly [string, (n: number) => string][] = [
   ['tables with aligned cells', n => `|= a |={>} b |\n${Array.from({ length: n }, (_, i) => `| ${i} |{^} x |\n`).join('')}`],
 ]
 
-function best(html: string): number {
-  let fastest = Number.POSITIVE_INFINITY
-  for (let round = 0; round < 5; round++) {
-    const start = performance.now()
-    importDocument(html, { from: 'html' })
-    fastest = Math.min(fastest, performance.now() - start)
-  }
-  return fastest
-}
-
 describe('C2-H-182 import time grows linearly with the input', () => {
-  it.each(SHAPES)('C2-H-182 doubling a render of %s at most triples the import time', (_name, shape) => {
-    const small = render(shape(1000), { roundtrip: true })
+  it.each(SHAPES)('C2-H-182 importing a render of %s eight times the size takes about eight times the work', (_name, shape) => {
+    const small = render(shape(250), { roundtrip: true })
     const large = render(shape(2000), { roundtrip: true })
-    best(small)
-    const ratio = best(large) / best(small)
-    expect(ratio).toBeLessThan(3)
+    const excess = linearityExcess(() => importDocument(small, { from: 'html' }), () => importDocument(large, { from: 'html' }), 8)
+    expect(excess).toBeLessThan(LINEARITY_LIMIT)
   })
 })

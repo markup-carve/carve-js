@@ -11,6 +11,7 @@ import { type DocumentNode, pointerKey, pointerToken } from '../src/ast.ts'
 import { documentOf } from './support/tree.ts'
 import { referenceForm } from './support/writer-checks.ts'
 import { growthRatio } from './support/growth.ts'
+import { LINEARITY_LIMIT, linearityExcess } from './support/linearity.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
 function refusal(json: unknown): string | null {
@@ -249,7 +250,7 @@ it('C2-B-024: lazy line-block comments grow with source length', () => {
 })
 
 it('C2-H-201: capped cross-references grow with their count', () => {
-  const sizes = [2000, 32000]
+  const sizes = [4000, 32000]
   const trees = sizes.map((n) => {
     const tree = parse(`{#h}\n# ${'T'.repeat(n)}\n\n${'</#h> '.repeat(n)}\n`)
     tree.srcByteLength = 0
@@ -259,8 +260,7 @@ it('C2-H-201: capped cross-references grow with their count', () => {
     const result = renderWithDiagnostics(trees[index]!)
     expect(result.diagnostics.map((entry) => entry.code)).toContain('derived-text-budget')
   }
-  const { ratio, times } = growthRatio(() => render(0), () => render(1))
-  expect(ratio, times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(48)
+  expect(linearityExcess(() => render(0), () => render(1), 8)).toBeLessThan(LINEARITY_LIMIT)
 })
 
 for (const [name, shape] of [
