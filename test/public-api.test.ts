@@ -111,6 +111,8 @@ describe('the public 0.2 entry', () => {
     expect(result.document.children[0]?.type).toBe('heading')
     expect(importDocument('<!-- c --><p>a</p>', { from: 'html', rawHtml: true }).document.children.length).toBe(2)
     optionError(() => importDocument('<p>a</p>', { from: 'markdown' } as never), 'from')
+    expect((refusal(() => importDocument('# a', { from: 'gfm' } as never)) as Error).message).toContain('@markup-carve/carve/import')
+    expect((refusal(() => importDocument('a', { from: 'rtf' } as never)) as Error).message).toContain('unknown value "rtf"')
     optionError(() => importDocument('<p>a</p>', undefined as never), 'from')
     optionError(() => importDocument('<p>a</p>', { from: 'html', raw: true } as never), 'raw')
     optionError(() => importDocument('<p>a</p>', { from: 'html', strictLosses: 'yes' } as never), 'strictLosses')

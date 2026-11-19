@@ -7,6 +7,9 @@ import { checkOptions } from './check.ts'
 
 export { ImportInputError, type ImportDiagnostic, type ImportResult } from '../import/src/kit.ts'
 
+// The formats of the `/import` entry that this entry refuses with a pointer to it.
+const OTHER_FORMATS = ['markdown', 'gfm', 'djot', 'bbcode'] as const
+
 /** The options of `importDocument` (C2-M-001, C2-M-066, C2-M-082). */
 export interface ImportOptions {
   /** The input format. */
@@ -28,7 +31,11 @@ export interface ImportOptions {
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   if (options === undefined) throw new CarveOptionError('from', 'required')
   checkOptions(options, { from: 'string', rawHtml: 'boolean', strictLosses: 'boolean', allowLosses: 'losses', maxLosses: 'losses' })
-  if (options.from !== 'html') throw new CarveOptionError('from', `unknown value ${JSON.stringify(options.from)}`)
+  if (options.from !== 'html') {
+    const routed = (OTHER_FORMATS as readonly unknown[]).includes(options.from)
+    throw new CarveOptionError('from', routed ? `${JSON.stringify(options.from)} is read by @markup-carve/carve/import`
+      : `unknown value ${JSON.stringify(options.from)}`)
+  }
   if (typeof input !== 'string') throw new ImportInputError('the input is not text', 'html')
   return runImport('html', options, () => importHtml(input, options.rawHtml === true))
 }

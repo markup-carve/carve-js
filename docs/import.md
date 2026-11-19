@@ -19,7 +19,8 @@ const { document, source, diagnostics } = importDocument('# Hello *world*\n', { 
 
 The result holds `document` (the validated tree), `source` (the writer's Carve text) and `diagnostics`. An input
 the importer cannot read throws `ImportInputError`; an unknown option throws `CarveOptionError`. The core entry
-keeps its own `importDocument`, which reads HTML only (C2-T-005).
+keeps its own `importDocument`, which reads HTML only (C2-T-005): it refuses `markdown`, `gfm`, `djot` and `bbcode`
+with a `CarveOptionError` that names this entry.
 
 On the command line:
 
