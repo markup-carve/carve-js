@@ -54,8 +54,8 @@ interface Rewritten {
  * One pass: every rule reads the 0.1 tree of the input, and the edits apply together. An edit
  * that collides with one of a lower entry id is left out and named in the report.
  */
-function rewrite(input: string, rules: readonly Rule[] = RULES): Rewritten {
-  const ctx: Context = makeContext(input)
+function rewrite(input: string, rules: readonly Rule[] = RULES, late = false): Rewritten {
+  const ctx: Context = makeContext(input, late)
   const failures: ReportRecord[] = []
   for (const rule of rules) runRule(ctx, rule, failures)
   const collected: Edit[] = []
@@ -518,7 +518,7 @@ function keepIncludeReview(rescue: ReportRecord, checked: readonly ReportRecord[
 function latePass(input: string, first: string): UpgradeResult | null {
   const tried = new Set([first])
   for (const rules of LATE_VARIANTS) {
-    const done = rewrite(input, rules)
+    const done = rewrite(input, rules, true)
     if (tried.has(done.output)) continue
     tried.add(done.output)
     const mathClass = mathClassReport(done.context)

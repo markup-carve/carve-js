@@ -29,6 +29,8 @@ export interface Context {
   visits: Visit[]
   blocks: BlockMap
   findings: Finding[]
+  /** Set on the late passes, which run only when the first pass leaves a difference. */
+  late: boolean
 }
 
 export type Rule = (ctx: Context) => void
@@ -83,11 +85,11 @@ function visitAll(doc: Node01): Visit[] {
   return visits
 }
 
-export function makeContext(src: string): Context {
+export function makeContext(src: string, late = false): Context {
   const doc = parse01(src)
   const lines = readLines(src)
   const visits = visitAll(doc)
-  return { src, lines, doc, visits, blocks: mapBlocks(visits, lines.count), findings: [] }
+  return { src, lines, doc, visits, blocks: mapBlocks(visits, lines.count), findings: [], late }
 }
 
 /** Collects the change of `start` to `end` into `text` for the entry `id`. */

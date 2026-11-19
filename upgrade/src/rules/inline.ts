@@ -78,6 +78,17 @@ function attributeStart(src: string, end: number): number {
   return end
 }
 
+/** The last unescaped `{` of `start` to `end` that no `}` closes there, or -1: 0.2 reads it before the closer. */
+function unbalancedBrace(src: string, start: number, end: number): number {
+  const open: number[] = []
+  for (let at = start; at < end; at++) {
+    if (src[at] === '\\') { at++; continue }
+    if (src[at] === '{') open.push(at)
+    else if (src[at] === '}') open.pop()
+  }
+  return open.at(-1) ?? -1
+}
+
 function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
   if (node.pos === undefined) return
   const { startOffset: start } = node.pos
@@ -89,6 +100,8 @@ function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
   // C2-B-171: a brace block glued to a cell's pipe is the attribute block of the cell, so a space goes between.
   change(ctx, bare.entry, start, start, ctx.src[start - 1] === '|' ? ' {' : '{', `bare ${bare.name} put in braces`)
   change(ctx, bare.entry, end, end, '}', `bare ${bare.name} put in braces`)
+  const open = ctx.late ? unbalancedBrace(ctx.src, start + 1, end - 1) : -1
+  if (open >= 0) change(ctx, bare.entry, open, open, '\\', `brace escaped so the braced ${bare.name} closes`)
   if (bare.entry !== 'U-065') return
   const source = ctx.src.slice(start, end)
   if (!/^_[A-Za-z_][A-Za-z0-9_-]*=[^\s{}=]+_$/u.test(source)) return
@@ -98,7 +111,8 @@ function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
 
 /** U-068: 0.1 read `/*` as one token of strong around emphasis; 0.2 nests as written (C2-I-052). */
 function boldItalic(ctx: Context, node: Node01): void {
-  const { startOffset: start, endOffset: end } = node.pos!
+  const { startOffset: start } = node.pos!
+  const end = ctx.late && node.attrs !== undefined ? attributeStart(ctx.src, node.pos!.endOffset) : node.pos!.endOffset
   if (node.boldItalic !== true || !ctx.src.startsWith('/*', start) || !ctx.src.startsWith('*/', end - 2)) return
   change(ctx, 'U-068', start, start + 2, '*/', 'emphasis outside strong respelled as strong outside emphasis')
   change(ctx, 'U-068', end - 2, end, '/*', 'emphasis outside strong respelled as strong outside emphasis')
