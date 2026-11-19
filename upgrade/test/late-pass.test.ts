@@ -9,6 +9,7 @@ const cases: [string, string, string, string][] = [
   ['C2-B-081 U-038', '> > [r]: /u\ntail\n\n[r][]\n', '[r]: /u\n\n> >\ntail\n\n[r][]\n', 'U-038'],
   ['C2-B-081 U-038', '> [r]: /url\n> [^f]: note\n\nSee [r][] [^f].\n',
     '[^f]: note\n\n[r]: /url\n\n> {%%}\n> {%%}\n\nSee [r][] [^f].\n', 'U-038'],
+  ['C2-B-081 U-039', 'See [^a].\n\n1. > [^a]: note body\n', '[^a]: note body\n\nSee [^a].\n\n1. > {%%}\n', 'U-039'],
   ['C2-I-119 U-065', '_x /*a*/{q} b/{c_} c_\n', '{_x */a/*{q} b/\\{c_}} c_\n', 'U-065'],
   ['C2-I-052 U-068', '{/a /*b*/{.k} c/}\n', '{/a */b/*{.k} c/}\n', 'U-068'],
   ['C2-B-169 U-258', '+ c` |\n| a `b |\n', '+ c` |`\n| a `b` |\n', 'U-258'],

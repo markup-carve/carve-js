@@ -10,6 +10,8 @@ import { insideQuotes, isBlankInQuotes, isGap, quoteDepth, removeLine } from './
 interface Span {
   first: number
   last: number
+  /** The 0-based column the definition starts at on its first line. */
+  column: number
 }
 
 /** The lines of every definition of the document, in source order. */
@@ -17,13 +19,13 @@ function definitionSpans(ctx: Context): Span[] {
   const spans: Span[] = []
   for (const child of ctx.doc.children ?? []) {
     if ((child.type === 'link_reference_definition' || child.type === 'abbreviation_def') && child.pos !== undefined) {
-      spans.push({ first: child.pos.startLine, last: child.pos.endLine })
+      spans.push({ first: child.pos.startLine, last: child.pos.endLine, column: child.pos.startColumn - 1 })
     }
   }
   const notes = ctx.doc.footnoteDefPos
   if (typeof notes === 'object' && notes !== null) {
-    for (const pos of Object.values(notes as Record<string, { startLine: number, endLine: number }>)) {
-      spans.push({ first: pos.startLine, last: pos.endLine })
+    for (const pos of Object.values(notes as Record<string, { startLine: number, endLine: number, startColumn: number }>)) {
+      spans.push({ first: pos.startLine, last: pos.endLine, column: pos.startColumn - 1 })
     }
   }
   spans.sort((a, b) => a.first - b.first)
@@ -64,7 +66,7 @@ function withoutPrefix(ctx: Context, span: Span, cut: number): string {
   let out = ''
   for (let line = span.first; line <= span.last; line++) {
     const text = lineText(ctx.lines, line)
-    out += text.slice(Math.min(cut, prefixLength(text))) + '\n'
+    out += text.slice(line === span.first ? cut : Math.min(cut, prefixLength(text))) + '\n'
   }
   return out
 }
@@ -153,10 +155,16 @@ function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: numbe
   change(ctx, id, at, at, lead + withoutPrefix(ctx, span, cut) + tail, message)
 }
 
+/** What goes before the definition on its first line. A late form reads the column off the tree, which also counts a list marker. */
+function cutOf(text: string, span: Span): number {
+  const prefix = prefixLength(text)
+  return top !== false && span.column > prefix ? span.column : prefix
+}
+
 /** U-038, U-039: the definition moves to column 0, after the container it stood in. */
 function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const text = lineText(ctx.lines, span.first)
-  const cut = prefixLength(text)
+  const cut = cutOf(text, span)
   const depth = quoteDepth(text)
   const shape = insideQuotes(text).trimStart()
   if (shape.startsWith('[') && !shape.startsWith('[^') && shape.endsWith(']:')) return
