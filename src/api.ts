@@ -184,6 +184,20 @@ function resolveStage(parsed: ParsedTree, settings: Settings): ResolvedTree {
  * back, so the resolved tree is the same afterwards and the stage can run more than once.
  */
 function renderStage(resolved: ResolvedTree): { html: string, losses: Findings } {
+  const rendered = renderProfiled(resolved)
+  const allowed = resolved.settings.allowLosses
+  if (allowed.size === 0) return rendered
+  // C2-H-204: an allowed code is left out of the record and counts for neither strictLosses nor maxLosses.
+  const losses: Findings = { entries: [], nodes: [] }
+  rendered.losses.entries.forEach((entry, index) => {
+    if (allowed.has(entry.code)) return
+    losses.entries.push(entry)
+    losses.nodes.push(rendered.losses.nodes[index]!)
+  })
+  return { html: rendered.html, losses }
+}
+
+function renderProfiled(resolved: ResolvedTree): { html: string, losses: Findings } {
   const { document, settings } = resolved
   const losses: Findings = { entries: [...resolved.losses.entries], nodes: [...resolved.losses.nodes] }
   const rule = profileRule(settings)
@@ -340,6 +354,32 @@ function capIncludeDiagnostics(diagnostics: Diagnostic[], max: number): { diagno
   return { diagnostics: retained, suppressedDiagnostics }
 }
 
+/**
+ * C2-H-204, C2-H-205: drops the allowed render losses, keeps the first `maxLosses` of the others and counts the rest.
+ * Entries of the parse and lint channels are not counted.
+ */
+export function capLosses(diagnostics: Diagnostic[], settings: Pick<Settings, 'allowLosses' | 'maxLosses'>): {
+  diagnostics: Diagnostic[], suppressedDiagnostics: number
+} {
+  const retained: Diagnostic[] = []
+  let suppressedDiagnostics = 0
+  let kept = 0
+  for (const entry of diagnostics) {
+    if (entry.channel !== 'render-loss') retained.push(entry)
+    else if (settings.allowLosses.has(entry.code)) continue
+    else if (kept++ >= settings.maxLosses) suppressedDiagnostics++
+    else retained.push(entry)
+  }
+  return { diagnostics: retained, suppressedDiagnostics }
+}
+
+/** The include cap of C2-T-024, then the loss settings of C2-H-204 and C2-H-205. */
+function capDiagnostics(diagnostics: Diagnostic[], settings: Settings): { diagnostics: Diagnostic[], suppressedDiagnostics: number } {
+  const included = capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100)
+  const losses = capLosses(included.diagnostics, settings)
+  return { diagnostics: losses.diagnostics, suppressedDiagnostics: included.suppressedDiagnostics + losses.suppressedDiagnostics }
+}
+
 /** The resolved tree of `src` with its diagnostics. Positions are on unless `positions` is false (C2-A-138). */
 export function parseWithDiagnostics(src: string | Uint8Array, options?: ParseOptions): ParseResult {
   const settings = readOptions(options, 'parse')
@@ -393,7 +433,7 @@ export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode,
     if (entry.channel === 'render-loss') entry.severity = 'error'
   }
   return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html,
-    ...capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100) }
+    ...capDiagnostics(diagnostics, settings) }
 }
 
 /** C2-X-053: one host transform of a copy of the resolved document view. */
@@ -465,8 +505,9 @@ export function renderWithDocumentTransforms(
   if (settings.strictLosses) for (const entry of diagnostics) {
     if (entry.channel === 'render-loss') entry.severity = 'error'
   }
-  const capped = capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100)
-  return { html: settings.strictLosses && diagnostics.some((entry) => entry.channel === 'render-loss') ? '' : rendered.html,
+  const capped = capDiagnostics(diagnostics, settings)
+  const lost = diagnostics.some((entry) => entry.channel === 'render-loss' && !settings.allowLosses.has(entry.code))
+  return { html: settings.strictLosses && lost ? '' : rendered.html,
     diagnostics: capped.diagnostics, suppressedDiagnostics: capped.suppressedDiagnostics + rendered.suppressedDiagnostics }
 }
 

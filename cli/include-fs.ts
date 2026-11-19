@@ -52,7 +52,8 @@ function errorCode(error: unknown): string {
  * The bytes of the open file, at most a little past the size cap: a file past it is refused by the expansion with
  * `include-budget` (C2-N-065) and is never read into memory whole.
  */
-function readCapped(fd: number): Uint8Array {
+function readCapped(fd: number, cap: number): Uint8Array | null {
+  if (cap < INCLUDE_BYTES && fstatSync(fd).size > cap) return null
   const limit = INCLUDE_BYTES + 4
   const buffer = new Uint8Array(limit)
   let length = 0
@@ -75,7 +76,7 @@ function sequenceLength(lead: number): number {
  * C2-N-013: reads the file that the containment test passed. After the open, the path is canonicalized and tested
  * again, and the open file must be the file found there, so a link swapped between test and open is never read.
  */
-function readTested(root: string, wanted: string, target: string): IncludeAnswer {
+function readTested(root: string, wanted: string, target: string, cap: number): IncludeAnswer {
   let fd: number
   try {
     // A FIFO opened without O_NONBLOCK would block until a writer comes.
@@ -90,7 +91,8 @@ function readTested(root: string, wanted: string, target: string): IncludeAnswer
     if (!inside(root, again)) return { error: 'outside_root' }
     const there = statSync(again)
     if (there.dev !== opened.dev || there.ino !== opened.ino || !opened.isFile()) return { error: 'unreadable' }
-    return { text: readCapped(fd), id: idOf(root, again) }
+    const text = readCapped(fd, cap)
+    return text === null ? { error: 'unreadable' } : { text, id: idOf(root, again) }
   } catch {
     return { error: 'unreadable' }
   } finally {
@@ -103,19 +105,29 @@ export interface ResolverHooks {
   afterTest?: () => void
 }
 
+/** The options of `fileSystemResolver`. */
+export interface FileResolverOptions {
+  /** A file larger than this many bytes is `unreadable`. It may lower the size cap of C2-N-065, not raise it. */
+  maxFileBytes?: number
+  /** Off: an absolute path is `outside_root` even inside the root. On by default, as C2-N-012 allows it. */
+  allowAbsolute?: boolean
+}
+
 /**
  * C2-N-012 to C2-N-014: reads below `root`, an absolute path whose canonical form the caller has taken. The test of
  * containment comes before any test of existence, so a cause never tells whether a file outside the root exists.
  */
-export function fileResolver(root: string, hooks: ResolverHooks = {}): IncludeResolver {
+export function fileResolver(root: string, hooks: ResolverHooks = {}, options: FileResolverOptions = {}): IncludeResolver {
+  const cap = Math.min(options.maxFileBytes ?? INCLUDE_BYTES, INCLUDE_BYTES)
   return (request: IncludeRequest): IncludeAnswer => {
     if (hasScheme(request.path)) return { error: 'outside_root' }
+    if (options.allowAbsolute === false && isAbsolute(request.path)) return { error: 'outside_root' }
     const base = request.from === undefined ? root : dirname(join(root, request.from))
     const wanted = resolve(base, request.path)
     const target = canonical(wanted)
     if (!inside(root, target)) return { error: 'outside_root' }
     hooks.afterTest?.()
-    return readTested(root, wanted, target)
+    return readTested(root, wanted, target, cap)
   }
 }
 

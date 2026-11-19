@@ -10,7 +10,11 @@ import { CarveTreeError, validateTree as validateTreeImpl } from '../src/ast-val
 import { migrateTree as migrateTreeImpl, type MigrateOptions, type MigrationResult } from '../migrate/index.ts'
 import { type DocumentNode } from '../src/ast.ts'
 import { type ExtensionDefinition } from '../src/extensions/types.ts'
-import { CarveOptionError } from '../src/options.ts'
+import { CarveOptionError, type HeadingIds, readOptions } from '../src/options.ts'
+import { slugify } from '../src/slug.ts'
+import { includeRegion as includeRegionImpl, type RegionResult } from '../src/include-source.ts'
+import { type ApplyPatchOptions, applyPatch as applyPatchImpl, diffTree as diffTreeImpl, type PatchOperation, sourceFingerprint as
+  sourceFingerprintImpl, treeFingerprint as treeFingerprintImpl } from '../src/tree-patch.ts'
 import { type LayoutEntry, write as writeImpl, writeWithDiagnostics as writeWithDiagnosticsImpl, type WriteOutput } from '../src/write.ts'
 import { checkOptions } from './check.ts'
 
@@ -30,16 +34,19 @@ export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from '.
 export { CarveLayoutError, validateLayout } from '../src/layout-validate.ts'
 export {
   CarveOptionError, type HeadingIds, type Mode, type ParseOptions, type Profile, type RenderOptions, type Social, type SocialRequest,
-  type UrlPolicy,
+  type SoftBreak, type UrlPolicy,
 } from '../src/options.ts'
-export { stringOffsetOfByte, utf8Length } from '../src/positions.ts'
+export { positionOf, stringOffsetOfByte, utf8Length } from '../src/positions.ts'
+export { NODE_TYPES, SPEC_VERSION, VERSION } from '../src/package-info.ts'
+export { type RegionResult } from '../src/include-source.ts'
+export { type ApplyPatchOptions, CarvePatchError, type PatchOperation } from '../src/tree-patch.ts'
 export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } from '../src/format.ts'
 export { CarveWriteError, type LayoutEntry, type WriteOutput } from '../src/write.ts'
 export { type Diagnostic } from '../src/diagnostics.ts'
 export {
   type IncludeAnswer, type IncludeConfig, type IncludeError, type IncludeRequest, type IncludeResolver,
 } from '../src/include-settings.ts'
-export { type IncludeDependency, includeDependencies } from '../src/include-dependencies.ts'
+export { type IncludeDependency, includeDependencies, type IncludeDependencyOptions } from '../src/include-dependencies.ts'
 export { lint, type LintOptions } from '../lint/lint.ts'
 export { isUrlAllowed, urlScheme } from '../src/html-attributes.ts'
 export { DEFAULT_DENIED_SCHEMES } from '../src/option-tables.ts'
@@ -121,4 +128,69 @@ export function migrateTree(json: unknown, options?: MigrateOptions): MigrationR
     if (error instanceof CarveTreeError || !(error instanceof Error)) throw error
     throw new CarveTreeError('', error.message)
   }
+}
+
+/** The options of `headingId`. */
+export interface HeadingIdOptions {
+  /** The value of the `headingIds` option (C2-H-022); `keep-case` unless given. */
+  headingIds?: HeadingIds
+}
+
+/**
+ * The id the `headingIds` option generates for a heading with the plain text `text` (C2-H-022, C2-H-143 to C2-H-148),
+ * or null under `off`. Each call stands alone: the suffixes `-2`, `-3` that a document gives a repeated id (C2-H-024)
+ * and the ids it already holds are not applied.
+ */
+export function headingId(text: string, options?: HeadingIdOptions): string | null {
+  checkOptions(options, { headingIds: 'string' })
+  if (typeof text !== 'string') throw new CarveOptionError('text', 'not a string')
+  const mode = readOptions({ headingIds: options?.headingIds }, 'parse').headingIds
+  return mode === 'off' ? null : slugify(text, mode)
+}
+
+/** The options of `includeRegion`. */
+export interface IncludeRegionOptions {
+  /** Selects as a code include does (`@code`): the markers are those of C2-N-039, and the text is the payload. */
+  code?: boolean
+}
+
+/**
+ * The region `name` of the file text `text`, as an include directive with `@region:name` selects it (C2-N-037 to
+ * C2-N-043): its text and its first and last line, from 1. Where the directive reports `region_invalid`, `ok` is false
+ * and `reason` says why.
+ */
+export function includeRegion(text: string, name: string, options?: IncludeRegionOptions): RegionResult {
+  checkOptions(options, { code: 'boolean' })
+  if (typeof text !== 'string') throw new CarveOptionError('text', 'not a string')
+  if (typeof name !== 'string') throw new CarveOptionError('name', 'not a string')
+  return includeRegionImpl(text, name, options?.code === true)
+}
+
+/** The JSON Patch (RFC 6902) that turns the encoded tree `a` into the encoded tree `b` (`encodeTree`). */
+export function diffTree(a: DocumentNode, b: DocumentNode): PatchOperation[] {
+  validateTreeImpl(a)
+  validateTreeImpl(b)
+  return diffTreeImpl(a, b)
+}
+
+/**
+ * Applies a JSON Patch to the encoded tree and returns the decoded result. Refuses with one `CarvePatchError` (`path`,
+ * `reason`) when `fingerprint` is not that of `document`, an operation fails, or the result does not decode.
+ */
+export function applyPatch(document: DocumentNode, patch: readonly PatchOperation[], options?: ApplyPatchOptions): DocumentNode {
+  checkOptions(options, { fingerprint: 'string', extensions: 'extensions' })
+  validateTreeImpl(document, undefined, undefined, options?.extensions ?? [])
+  return applyPatchImpl(document, patch, options)
+}
+
+/** The fingerprint of a source, text or UTF-8 bytes: `sha256:` and the hex hash of its bytes. */
+export function sourceFingerprint(source: string | Uint8Array): string {
+  if (typeof source !== 'string' && !(source instanceof Uint8Array)) throw new CarveOptionError('source', 'not text or bytes')
+  return sourceFingerprintImpl(source)
+}
+
+/** The fingerprint of a tree: the source fingerprint of `encodeTree(document)`. */
+export function treeFingerprint(document: DocumentNode): string {
+  validateTreeImpl(document)
+  return treeFingerprintImpl(document)
 }

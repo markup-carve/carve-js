@@ -406,6 +406,8 @@ function inlineExtension(node: InlineExtensionNode, r: Render): string {
   return tag === '' ? fallback : `<span${tag}>${fallback}</span>`
 }
 
+const SOFT_BREAKS = { newline: '\n', space: ' ', br: '<br>\n' } as const
+
 const WRITERS: NodeHandlers<string, Render> = {
   text: (node, r) => escapeTextNode(r, node.value),
   span,
@@ -426,7 +428,8 @@ const WRITERS: NodeHandlers<string, Render> = {
   non_breaking_space: () => '&nbsp;',
   // C2-H-045.
   hard_break: () => '<br>\n',
-  soft_break: () => '\n',
+  // C2-H-203.
+  soft_break: (_node, r) => SOFT_BREAKS[r.settings.softBreak],
   // C2-H-078.
   smart_punctuation: (node, r) => escapeText(r.settings.smartTypography ? quoteGlyph(node, r) : node.source),
   abbreviation,

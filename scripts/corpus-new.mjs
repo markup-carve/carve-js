@@ -30,7 +30,17 @@ function optionsOf(entry) {
   if (options.renderers !== undefined) options.renderers = Object.fromEntries(Object.entries(options.renderers).map(([name, value]) =>
     [name, value === 'standard' ? name === 'carve.tabs' ? engine.tabsRenderer : imgFenceRenderers[name] : value]))
   if (entry.files !== undefined) options.includes = { resolver: corpusResolver(entry.files), ...options.includes }
+  if (options.codeBlockRenderer !== undefined) options.codeBlockRenderer = codeBlockFunction(options.codeBlockRenderer)
   return options
+}
+
+// conformance/README.md: the harness spelling of codeBlockRenderer (C2-H-206).
+function codeBlockFunction({ syntax, result }) {
+  return (node, defaultHtml) => {
+    if (syntax !== undefined && node.syntax !== syntax) return undefined
+    if (typeof result !== 'string') return result === null ? undefined : result
+    return result.replace(/\{default\}|\{syntax\}/g, (field) => field === '{default}' ? defaultHtml : node.syntax ?? '')
+  }
 }
 
 function documentTransforms(entry) {
@@ -191,10 +201,16 @@ function run(entry) {
     const result = engine.migrateTree(entry.tree, options)
     return [...treeFields(result.document, expected), ...diagnosticFields(result.diagnostics, expected)]
   }
+  if (kind === 'position') {
+    const result = engine.positionOf(input, entry.offset)
+    return [...(expected.line !== undefined && result.line !== expected.line ? ['line'] : []),
+      ...(expected.column !== undefined && result.column !== expected.column ? ['column'] : [])]
+  }
   if (kind === 'import') {
     const result = importDocument(entry.html, { from: 'html', ...options })
     const carve = expected.carve !== undefined && result.source !== expected.carve ? ['carve'] : []
-    return [...childrenFields(result.document, expected), ...carve,
+    const suppressed = expected.suppressed !== undefined && result.suppressedDiagnostics !== expected.suppressed ? ['suppressed'] : []
+    return [...childrenFields(result.document, expected), ...carve, ...suppressed,
       ...diagnosticFields(result.diagnostics, expected, entry.html)]
   }
   if (kind === 'layout') {

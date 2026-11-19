@@ -3,10 +3,13 @@
 /** C2-H-137: the options, and the stage that reads each. */
 export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
   ["alignTables", "format"],
+  ["allowLosses", "render"],
+  ["codeBlockRenderer", "render"],
   ["extensions", "parse"],
   ["headingIds", "resolution"],
   ["includes", "parse"],
   ["labels", "render"],
+  ["maxLosses", "render"],
   ["mode", "render"],
   ["normalize", "format"],
   ["platforms", "lint"],
@@ -18,6 +21,7 @@ export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
   ["sections", "render"],
   ["smartTypography", "render"],
   ["social", "render"],
+  ["softBreak", "render"],
   ["sourceLines", "render"],
   ["strictLosses", "render"],
   ["symbols", "render"],
@@ -27,10 +31,13 @@ export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
 /** C2-H-137: the declared type of each option, checked before anything else is read of it. */
 export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
   ["alignTables", "boolean"],
+  ["allowLosses", "list"],
+  ["codeBlockRenderer", "structure"],
   ["extensions", "list"],
   ["headingIds", "enum"],
   ["includes", "structure"],
   ["labels", "map"],
+  ["maxLosses", "count"],
   ["mode", "enum"],
   ["normalize", "boolean"],
   ["platforms", "list"],
@@ -42,6 +49,7 @@ export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
   ["sections", "boolean"],
   ["smartTypography", "boolean"],
   ["social", "structure"],
+  ["softBreak", "enum"],
   ["sourceLines", "boolean"],
   ["strictLosses", "boolean"],
   ["symbols", "map"],
@@ -49,18 +57,20 @@ export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
 ])
 
 /** The options whose default is null, which take null as that default. */
-export const NULL_DEFAULTS: readonly string[] = ["includes","social"]
+export const NULL_DEFAULTS: readonly string[] = ["codeBlockRenderer","includes","social"]
 
 export const ENUM_VALUES: ReadonlyMap<string, readonly string[]> = new Map([
   ["headingIds", ["off","keep-case","lower","ascii","ascii-lower","ascii-strict","ascii-strict-lower"]],
   ["mode", ["interactive","static"]],
   ["profile", ["full","article","comment","minimal"]],
+  ["softBreak", ["newline","space","br"]],
 ])
 
 export const ENUM_DEFAULTS: ReadonlyMap<string, string> = new Map([
   ["headingIds", "keep-case"],
   ["mode", "interactive"],
   ["profile", "full"],
+  ["softBreak", "newline"],
 ])
 
 export const BOOLEAN_DEFAULTS: ReadonlyMap<string, boolean> = new Map([
@@ -73,6 +83,19 @@ export const BOOLEAN_DEFAULTS: ReadonlyMap<string, boolean> = new Map([
   ["sourceLines", false],
   ["strictLosses", false],
 ])
+
+export const COUNT_DEFAULTS: ReadonlyMap<string, number> = new Map([
+  ["maxLosses", 100],
+])
+
+/** C2-H-204: the codes of the render-loss channel, the values `allowLosses` takes. */
+export const RENDER_LOSS_CODES: readonly string[] = [
+  "carrier-attribute-dropped", "derived-text-budget", "destination-denied", "extension-fallback-rendered", "extension-renderer-failed",
+  "extension-transform-failed", "field-unspellable", "import-attribute-dropped", "import-carrier-ignored", "import-destination-denied",
+  "import-element-dropped", "import-element-mapped", "import-structure-repaired", "import-whitespace-normalized",
+  "include-expanded-roundtrip", "include-unresolved", "profile-construct-degraded", "raw-format-dropped", "structure-unspellable",
+  "writer-refused",
+]
 
 /** C2-H-125: the English strings the engine writes itself. */
 export const DEFAULT_LABELS: Readonly<Record<string, string>> = {

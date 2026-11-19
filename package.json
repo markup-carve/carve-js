@@ -19,7 +19,8 @@
     "markup",
     "parser",
     "markdown",
-    "djot"
+    "djot",
+    "prettier-plugin"
   ],
   "main": "./dist/index.js",
   "types": "./dist/types/public/index.d.ts",
@@ -49,6 +50,14 @@
       "types": "./dist/types/public/export.d.ts",
       "import": "./dist/export.js"
     },
+    "./prettier": {
+      "types": "./dist/types/public/prettier.d.ts",
+      "import": "./dist/prettier.js"
+    },
+    "./upgrade": {
+      "types": "./dist/types/public/upgrade.d.ts",
+      "import": "./dist/upgrade.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -62,7 +71,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p upgrade/engine-0.1/tsconfig.json && npm ci --prefix import --ignore-scripts --silent && node cli/build.mjs && node public/build.mjs",
+    "build": "node scripts/generate-package-info.ts && tsc -p upgrade/engine-0.1/tsconfig.json && npm ci --prefix import --ignore-scripts --silent && node cli/build.mjs && node public/build.mjs",
     "build:browser": "node scripts/build-browser.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "node scripts/refuse-prerelease-publish.mjs",
@@ -108,6 +117,7 @@
     "marked": "^18.2.0",
     "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-gfm": "^3.1.0",
+    "prettier": "^3.9.6",
     "typescript": "^5.7.2",
     "typescript-5-9": "npm:typescript@^5.9.3",
     "typescript-eslint": "^8.70.1",

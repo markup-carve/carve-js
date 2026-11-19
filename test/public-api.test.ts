@@ -34,13 +34,14 @@ function optionError(run: () => unknown, option: string): void {
 describe('the public 0.2 entry', () => {
   it('exports exactly the public values', () => {
     expect(Object.keys(api).sort()).toEqual([
-      'AST_VERSION', 'CarveInputError', 'CarveLayoutError', 'CarveOptionError', 'CarveRenderError', 'CarveTreeError',
-      'CarveWriteError', 'DEFAULT_DENIED_SCHEMES', 'ImportInputError', 'LAYOUT_VERSION', 'MAX_TREE_DEPTH',
-      'RESERVED_WRITER_TARGETS', 'createWriterRegistry', 'decodeTree', 'encodeEnvelope', 'encodeTree', 'format',
-      'formatWithDiagnostics', 'importDocument', 'includeDependencies', 'isUrlAllowed', 'lint', 'migrateTree', 'parse',
-      'parseWithDiagnostics', 'parseWithLayout', 'render', 'renderWithDiagnostics', 'renderWithDocumentTransforms', 'stringOffsetOfByte', 'tabsExtensions',
-      'tabsRenderer', 'urlScheme', 'utf8Length', 'validateLayout', 'validateTree', 'write', 'writeDocument',
-      'writeWithDiagnostics',
+      'AST_VERSION', 'CarveInputError', 'CarveLayoutError', 'CarveOptionError', 'CarvePatchError', 'CarveRenderError', 'CarveTreeError',
+      'CarveWriteError', 'DEFAULT_DENIED_SCHEMES', 'ImportInputError', 'LAYOUT_VERSION', 'MAX_TREE_DEPTH', 'NODE_TYPES',
+      'RESERVED_WRITER_TARGETS', 'SPEC_VERSION', 'VERSION', 'applyPatch', 'createWriterRegistry', 'decodeTree', 'diffTree',
+      'encodeEnvelope', 'encodeTree', 'format', 'formatWithDiagnostics', 'headingId', 'importDocument', 'includeDependencies',
+      'includeRegion', 'isUrlAllowed', 'lint', 'migrateTree', 'parse', 'parseWithDiagnostics', 'parseWithLayout', 'positionOf',
+      'render', 'renderWithDiagnostics', 'renderWithDocumentTransforms', 'sourceFingerprint', 'stringOffsetOfByte',
+      'tabsExtensions', 'tabsRenderer', 'treeFingerprint', 'urlScheme', 'utf8Length', 'validateLayout', 'validateTree', 'write',
+      'writeDocument', 'writeWithDiagnostics',
     ].sort())
   })
 

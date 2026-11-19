@@ -11,6 +11,8 @@ import {
 } from '@markup-carve/carve'
 import { fileSystemResolver } from '@markup-carve/carve/node'
 import { BBCODE_MAX_INPUT_LENGTH, BbcodeInputTooLargeError, importDocument as importFormat } from '@markup-carve/carve/import'
+import * as prettierPlugin from '@markup-carve/carve/prettier'
+import { upgrade } from '@markup-carve/carve/upgrade'
 
 function check(ok: boolean, what: string): void {
   if (!ok) throw new Error(what)
@@ -74,4 +76,11 @@ refuses(() => validateLayout({}), CarveLayoutError, 'CarveLayoutError')
 refuses(() => importDocument(1 as never, { from: 'html' }), ImportInputError, 'ImportInputError')
 check(typeof CarveWriteError === 'function', 'CarveWriteError')
 check(typeof fileSystemResolver('.') === 'function', 'fileSystemResolver')
-check(Object.keys(carve).length === 39, `the 0.2 entry exports ${Object.keys(carve).length} values`)
+check(Object.keys(carve).length === 50, `the 0.2 entry exports ${Object.keys(carve).length} values`)
+check(carve.VERSION.length > 0 && carve.SPEC_VERSION.version === '0.2' && carve.NODE_TYPES.inline.includes('text'), 'constants')
+const before = parse('a')
+const after = parse('b')
+check(carve.diffTree(carve.applyPatch(before, carve.diffTree(before, after)), after).length === 0, 'diffTree, applyPatch')
+check(carve.positionOf('a\nb', 2).line === 2 && carve.headingId('A b') === 'A-b', 'positionOf, headingId')
+check(upgrade('_a_\n', { edits: true }).edits !== undefined, 'upgrade entry')
+check(prettierPlugin.parsers.carve.astFormat === 'carve-source', 'prettier entry')

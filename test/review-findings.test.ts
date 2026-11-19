@@ -652,6 +652,7 @@ describe('every option is checked against its declared type first', () => {
     alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', normalize: true, platforms: ['github'],
     profile: 'minimal', rawHtml: true, renderers: {}, roundtrip: true, rules: { r: 'on' }, sections: false, smartTypography: false,
     social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
+    allowLosses: ['raw-format-dropped'], maxLosses: 5, softBreak: 'br', codeBlockRenderer: () => undefined,
   }
   // Values of the right type that this engine does not offer, or that no stage of it reads.
   const UNOFFERED: Readonly<Record<string, unknown>> = {}
@@ -662,6 +663,8 @@ describe('every option is checked against its declared type first', () => {
   /** Which samples are of the declared type of an option. */
   function ofType(row: OptionRow, sample: string): boolean {
     if (row.type === 'boolean') return sample === 'a boolean'
+    if (row.type === 'count') return sample === 'a number'
+    if (row.name === 'codeBlockRenderer') return sample === 'a function'
     if (row.type === 'list') return sample === 'a list'
     if (row.type === 'map') return sample === 'a map'
     if (row.type === 'structure') return sample === 'a map' || (row.name === 'includes' && (sample === 'a string' || sample === 'a function'))
@@ -683,8 +686,8 @@ describe('every option is checked against its declared type first', () => {
   const typeRefusal = (message: string): boolean =>
     message.startsWith('option ') && !/unknown option|not an option of|not offered/.test(message) && message !== 'accepted'
 
-  it('C2-H-137: the option list is the 20 of the data file', () => {
-    expect(rows).toHaveLength(20)
+  it('C2-H-137: the option list is the 24 of the data file', () => {
+    expect(rows).toHaveLength(24)
     expect(Object.keys(VALID).sort()).toEqual(rows.map((row) => row.name).sort())
   })
 
@@ -698,7 +701,7 @@ describe('every option is checked against its declared type first', () => {
         const message = outcome(row, value)
         expect(typeRefusal(message), `${row.name} given ${sample}: ${message}`).toBe(true)
       }
-      const nullable = row.name === 'includes' || row.name === 'social'
+      const nullable = row.name === 'includes' || row.name === 'social' || row.name === 'codeBlockRenderer'
       const atNull = outcome(row, null)
       if (nullable) expect(atNull).toBe('accepted')
       else expect(typeRefusal(atNull), `${row.name} given null: ${atNull}`).toBe(true)

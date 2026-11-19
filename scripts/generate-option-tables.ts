@@ -1,8 +1,14 @@
-// Writes src/option-tables.ts from data/options.json.
+// Writes src/option-tables.ts from data/options.json and the render-loss codes of data/lint-rules.json.
 //   node scripts/generate-option-tables.ts
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { wrapJson } from './wrap-literal.ts'
+
+interface RuleRow {
+  id: string
+  channel: string
+  status: string
+}
 
 interface OptionRow {
   name: string
@@ -19,6 +25,9 @@ export function generateOptionTables(json: string): string {
   const enums = rows.filter((option) => option.type === 'enum')
   const booleans = rows.filter((option) => option.type === 'boolean')
   const nullable = rows.filter((option) => option.default === null).map((option) => option.name)
+  const counts = rows.filter((option) => option.type === 'count')
+  const rules = (JSON.parse(readFileSync(join(import.meta.dirname, '../data/lint-rules.json'), 'utf8')) as { rules: RuleRow[] }).rules
+  const losses = rules.filter((rule) => rule.channel === 'render-loss' && rule.status !== 'obsolete' && rule.status !== 'void')
   const lines = [
     '// Generated from data/options.json by scripts/generate-option-tables.ts. Do not edit.',
     '',
@@ -46,6 +55,13 @@ export function generateOptionTables(json: string): string {
     'export const BOOLEAN_DEFAULTS: ReadonlyMap<string, boolean> = new Map([',
     ...booleans.map((option) => `  [${JSON.stringify(option.name)}, ${JSON.stringify(option.default)}],`),
     '])',
+    '',
+    'export const COUNT_DEFAULTS: ReadonlyMap<string, number> = new Map([',
+    ...counts.map((option) => `  [${JSON.stringify(option.name)}, ${JSON.stringify(option.default)}],`),
+    '])',
+    '',
+    '/** C2-H-204: the codes of the render-loss channel, the values `allowLosses` takes. */',
+    ...wrapJson('export const RENDER_LOSS_CODES: readonly string[] = ', losses.map((rule) => rule.id)),
     '',
     '/** C2-H-125: the English strings the engine writes itself. */',
     `export const DEFAULT_LABELS: Readonly<Record<string, string>> = ${JSON.stringify(row('labels').default, null, 2)}`,

@@ -3,6 +3,7 @@
 // one walk over the finished tree.
 import { type Node, type NodeSlots, type Position, titleOf } from './ast.ts'
 import { BYTE_ORDER_MARK, LF } from './chars.ts'
+import { CarveOptionError } from './options.ts'
 
 const ASCII_END = 0x80
 const TWO_BYTES_END = 0x800
@@ -168,4 +169,54 @@ function placeNode(cursor: Cursor, node: Node): void {
 /** Replaces the string offsets the tree builder stored in every `pos` by the six integers of C2-A-140. */
 export function finishPositions(root: Node, src: string): void {
   placeNode({ src, table: lineTable(src), line: 0, offset: 0, bytes: 0, column: 1 }, root)
+}
+
+/** The second byte range a lead byte allows, and the length of its sequence (WHATWG UTF-8 decode). */
+function leadRule(lead: number): [number, number, number] | null {
+  if (lead >= 0xc2 && lead <= 0xdf) return [0x80, 0xbf, 2]
+  if (lead === 0xe0) return [0xa0, 0xbf, 3]
+  if (lead === 0xed) return [0x80, 0x9f, 3]
+  if (lead >= 0xe1 && lead <= 0xef) return [0x80, 0xbf, 3]
+  if (lead === 0xf0) return [0x90, 0xbf, 4]
+  if (lead >= 0xf1 && lead <= 0xf3) return [0x80, 0xbf, 4]
+  if (lead === 0xf4) return [0x80, 0x8f, 4]
+  return null
+}
+
+/** The byte length of the code point at `at`, or of the ill-formed sequence one U+FFFD replaces there (C2-B-218). */
+function unitLength(bytes: Uint8Array, at: number): number {
+  const lead = bytes[at]!
+  if (lead < ASCII_END) return 1
+  const rule = leadRule(lead)
+  if (rule === null) return 1
+  let length = 1
+  for (let low = rule[0], high = rule[1]; length < rule[2]; length++, low = 0x80, high = 0xbf) {
+    const next = bytes[at + length]
+    if (next === undefined || next < low || next > high) break
+  }
+  return length
+}
+
+/**
+ * C2-T-041: the line and column of C2-T-019 for a range that starts at the UTF-8 byte offset `offset` of `source`.
+ * An offset outside the source or inside one code point, or one replaced ill-formed sequence, is refused.
+ */
+export function positionOf(source: string | Uint8Array, offset: number): { line: number, column: number } {
+  if (typeof source !== 'string' && !(source instanceof Uint8Array)) throw new CarveOptionError('source', 'not text or bytes')
+  const bytes = typeof source === 'string' ? new TextEncoder().encode(source) : source
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > bytes.length) {
+    throw new CarveOptionError('offset', `${String(offset)} is no offset into ${bytes.length} bytes`)
+  }
+  let line = 1
+  let column = 1
+  let at = 0
+  while (at < offset) {
+    if (bytes[at] === LF) {
+      line++
+      column = 1
+    } else column++
+    at += unitLength(bytes, at)
+  }
+  if (at !== offset) throw new CarveOptionError('offset', `${offset} is inside the bytes of one code point`)
+  return { line, column }
 }

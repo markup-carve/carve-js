@@ -52,7 +52,7 @@ export {
   CarveOptionError, type HeadingIds, type Mode, type Options, type ParseOptions, type Profile, type RenderOptions,
   type Social, type SocialRequest, type UrlPolicy,
 } from './options.ts'
-export { stringOffsetOfByte, utf8Length } from './positions.ts'
+export { positionOf, stringOffsetOfByte, utf8Length } from './positions.ts'
 export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } from './format.ts'
 export { CarveWriteError, type LayoutEntry, write, type WriteOptions, type WriteOutput, writeWithDiagnostics } from './write.ts'
 export { displayWidth } from './width.ts'

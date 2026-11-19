@@ -8,6 +8,8 @@ the same package; [Migrating from 0.1](#migrating-from-01) maps each 0.1 call to
 |---|---|---|
 | `@markup-carve/carve` | browsers, Node, Deno, bundlers (Vite, webpack, Astro, Obsidian) | every call below |
 | `@markup-carve/carve/node` | Node | `fileSystemResolver`, the include resolver that reads files |
+| `@markup-carve/carve/upgrade` | browsers, Node, bundlers | `upgrade`, the 0.1 to 0.2 source upgrade; it carries the 0.1 reader |
+| `@markup-carve/carve/prettier` | Prettier 3 | the Prettier plugin for `.crv` files |
 
 Both entries are ES modules with TypeScript declarations. The only runtime dependency is `parse5`, which the
 HTML importer uses.
@@ -26,8 +28,14 @@ HTML importer uses.
 | `write` | a tree, `{ layout, alignTables, extensions, check }` | canonical source | `CarveOptionError`, `CarveTreeError`, `CarveWriteError` |
 | `writeWithDiagnostics` | as `write` | `{ source, diagnostics }` | `CarveOptionError`, `CarveTreeError` |
 | `lint` | source, `{ rules, platforms, includes, extensions }` | diagnostics | `CarveOptionError` |
-| `importDocument` | HTML, `{ from: 'html', rawHtml, strictLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
-| `includeDependencies` | a tree | its include dependencies | |
+| `importDocument` | HTML, `{ from: 'html', rawHtml, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
+| `includeDependencies` | a tree, `{ ranges }` | its include dependencies; with `ranges`, each directive's byte range | |
+| `includeRegion` | file text, a region name, `{ code }` | `{ ok, text, start, end }` or `{ ok: false, reason }` | `CarveOptionError` |
+| `positionOf` | source, a UTF-8 byte offset | `{ line, column }` as the command line counts them (C2-T-041) | `CarveOptionError` |
+| `headingId` | the plain text of a heading, `{ headingIds }` | the id the option generates, or null under `off` | `CarveOptionError` |
+| `diffTree` | two trees | a JSON Patch (RFC 6902) over `encodeTree` | `CarveTreeError` |
+| `applyPatch` | a tree, a patch, `{ fingerprint, extensions }` | the patched tree | `CarveOptionError`, `CarveTreeError`, `CarvePatchError` |
+| `sourceFingerprint`, `treeFingerprint` | source, or a tree | `sha256:` and a hex hash | `CarveOptionError`, `CarveTreeError` |
 | `encodeTree`, `encodeEnvelope` | a tree | JSON text | |
 | `decodeTree` | JSON text, `{ extensions, source }` | the tree | `CarveOptionError`, `CarveTreeError` |
 | `validateTree` | a value, `{ extensions }` | nothing | `CarveOptionError`, `CarveTreeError` |
@@ -38,7 +46,9 @@ HTML importer uses.
 Helpers: `isUrlAllowed` and `urlScheme` test a URL against a URL policy (for an extension renderer that writes
 a link), `DEFAULT_DENIED_SCHEMES` is the default deny list, `utf8Length` and `stringOffsetOfByte` turn the byte
 ranges of diagnostics and positions into string offsets. `AST_VERSION`, `LAYOUT_VERSION` and `MAX_TREE_DEPTH` are
-the contract constants. The node types (`DocumentNode`, `Block`, `Inline` and one interface per node) and the option
+the contract constants. `VERSION` is the package version, `SPEC_VERSION` is `{ version: '0.2', commit }` with the
+commit of the specification the engine pins, and `NODE_TYPES` holds the `block` and `inline` node type lists of the
+pinned tree schema; the build writes all three. The node types (`DocumentNode`, `Block`, `Inline` and one interface per node) and the option
 types are exported as types.
 
 ```ts
@@ -56,13 +66,29 @@ if (result.diagnostics[0]?.channel !== 'render-loss') throw new Error('no loss r
 
 ## Options and errors
 
+### Soft breaks and losses
+
+`softBreak` writes a soft break as a line break (`newline`, the default), one space (`space`), or `<br>` and a line
+break (`br`), for output such as chat that shows no source line break (C2-H-203). `allowLosses` lists render-loss
+codes the host accepts: they are left out of the diagnostics and never fail a `strictLosses` render (C2-H-204).
+`maxLosses` keeps the first losses, 100 by default, and counts the rest in `suppressedDiagnostics` (C2-H-205).
+`importDocument` reads `allowLosses` and `maxLosses` too.
+
+```ts
+import { render, renderWithDiagnostics } from '@markup-carve/carve'
+
+if (render('a\nb', { softBreak: 'br' }) !== '<p>a<br>\nb</p>') throw new Error('softBreak')
+const result = renderWithDiagnostics('[a](javascript:x)', { allowLosses: ['destination-denied'], strictLosses: true })
+if (result.diagnostics.length !== 0 || result.html === '') throw new Error('allowLosses')
+```
+
 ### Host code block renderer
 
 `render` and `renderWithDiagnostics` accept an optional `codeBlockRenderer(node, defaultHtml)` callback.
 It runs for every ordinary code block, including blocks inside containers and expanded includes. `node` supplies
 the language in `syntax`, the source in `value`, and any `title`, `groupLabel` and `attrs`. Return HTML to replace
 the block, or return `undefined` to use `defaultHtml`, which has already escaped the source and applied the normal
-attributes. The callback is trusted host code: its returned HTML is inserted unchanged. This is useful for a
+attributes. Any other result throws `CarveOptionError` naming `codeBlockRenderer`. The callback is trusted host code: its returned HTML is inserted unchanged. This is useful for a
 syntax highlighter that emits a placeholder for languages it supports.
 
 ```ts
@@ -122,8 +148,74 @@ const tree = parse('{{ chapter.crv }}', { includes: { resolver, file: 'main.crv'
 if (includeDependencies(tree)[0]?.file !== 'chapter.crv') throw new Error('no dependency')
 ```
 
-On Node, `fileSystemResolver(root)` from `@markup-carve/carve/node` reads files below `root`, as the command
-line does.
+On Node, `fileSystemResolver(root, options)` from `@markup-carve/carve/node` reads files below `root`, as the
+command line does. `maxFileBytes` makes a larger file `unreadable` (it can lower the 8 MiB cap, not raise it), and
+`allowAbsolute: false` refuses an absolute include path with `outside_root`; by default an absolute path is read
+when it lies inside the root (C2-N-012).
+
+`includeRegion(text, name, { code })` gives the region an `@region:name` directive selects, for an editor that jumps
+to it: the text, and its first and last line from 1. Where the directive would report `include-region-invalid`, the
+result is `{ ok: false, reason }`. `includeDependencies(tree, { ranges: true })` adds the UTF-8 byte range of each
+directive in its including file, where the tree has positions.
+
+## Headings and positions
+
+`headingId(text, { headingIds })` is the id that the `headingIds` option generates for a heading whose plain text is
+`text`. Each call stands alone: it knows no other heading, so it never adds the `-2` suffix of a repeated id and never
+avoids an authored one (C2-H-024). `positionOf(source, offset)` turns a UTF-8 byte offset into the line and column
+the command line writes (C2-T-041); an offset inside a character is refused.
+
+```ts
+import { headingId, positionOf } from '@markup-carve/carve'
+
+if (headingId('Hello World', { headingIds: 'lower' }) !== 'hello-world') throw new Error('headingId')
+const place = positionOf('ä\nb', 3)
+if (place.line !== 2 || place.column !== 1) throw new Error('positionOf')
+```
+
+## Tree diff and patch
+
+`diffTree(a, b)` returns the JSON Patch (RFC 6902) that turns `encodeTree(a)` into `encodeTree(b)`. Its paths are
+RFC 6901 pointers, as the `path` of a diagnostic is. `applyPatch(tree, patch, { fingerprint })` applies a patch and
+decodes the result. It throws one `CarvePatchError`, with `path` and `reason`, when `fingerprint` is not
+`treeFingerprint(tree)`, an operation fails (the path points into the patch), or the result is no tree (the path
+points into the result). `sourceFingerprint` hashes a source the same way, so a host can bind a patch to the text it
+came from. There is no reversible patch and no three-way merge. `carve diff [--json] a.crv b.crv` writes the patch
+between two files, compared without positions.
+
+```ts
+import { applyPatch, diffTree, parse, treeFingerprint } from '@markup-carve/carve'
+
+const before = parse('Some /old/ text.', { positions: false })
+const after = parse('Some *new* text.', { positions: false })
+const patch = diffTree(before, after)
+const patched = applyPatch(before, patch, { fingerprint: treeFingerprint(before) })
+if (diffTree(patched, after).length !== 0) throw new Error('patch')
+```
+
+## Upgrade
+
+`upgrade(source, { edits })` from `@markup-carve/carve/upgrade` rewrites Carve 0.1 source into 0.2, as
+`carve upgrade` does, and returns `output`, `changed`, `records` (the upgrade rows that applied), `check` and
+`engine01`. With `edits: true` it also returns the changes from the input to the output, each with its UTF-8 byte
+range, its replacement and its upgrade row, so an editor can offer them one at a time.
+
+```js
+import { upgrade } from '@markup-carve/carve/upgrade'
+
+const result = upgrade('Some _it_ text.\n', { edits: true })
+if (result.output !== 'Some {_it_} text.\n' || result.edits?.[0]?.entry !== 'U-065') throw new Error('upgrade')
+```
+
+## Prettier
+
+`@markup-carve/carve/prettier` is a Prettier 3 plugin. It claims `.crv` files and prints them with `format`, so its
+output is that of `carve fmt`; `carveAlignTables` and `carveNormalize` are the `alignTables` and `normalize` options.
+Prettier itself turns line endings into line feeds before the plugin runs.
+
+```json
+{ "plugins": ["@markup-carve/carve/prettier"], "carveAlignTables": true }
+```
 
 ## Writers
 
@@ -171,7 +263,7 @@ if (!html.includes('Install')) throw new Error(html)
 ## Migrating from 0.1
 
 Each value the 0.1 package root exports, and what replaces it in 0.2. A row marked gone has no 0.2 call; the note
-says what to use instead. Of the 172 values, 95 map to a 0.2 call and 77 are gone.
+says what to use instead. Of the 172 values, 108 map to a 0.2 call and 64 are gone.
 
 | 0.1 call | 0.2 call | Note |
 |---|---|---|
@@ -210,8 +302,12 @@ says what to use instead. Of the 172 values, 95 map to a 0.2 call and 77 are gon
 | `fencedRender`, `mermaid`, `d2`, `graphviz`, `wavedrom`, `abc`, `plantuml`, `vegaLite`, `chart`, `presets`, `mathBlock`, `codeGroup`, `codeCallouts` | same names from `@markup-carve/carve/extensions` | provisional; each returns `{ extensions, renderers }`, see [fenced renderers](fenced-renderers.md) |
 | `parseWithProvenance`, `astNodePaths`, `readNodeIdentity`, `toNodeIdentity`, `readAnnotationRanges`, `toAnnotationRanges`, `readProvenance`, `toProvenance`, `toAuthoredProvenance`, `AstSidecarError` | gone | 0.2 has one sidecar, the source layout; a diagnostic names its node by an RFC 6901 `path` |
 | `createEditorSession`, `EditorChangeError`, `tryRenderHtmlStreaming` | gone | no incremental session in 0.2; parse again |
-| `diffAst`, `formatChanges`, `mergeAst`, `applyAstPatch`, `applyReversibleAstPatch`, `createAstPatch`, `createReversibleAstPatch`, `AstPatchError` | gone | AST diff, merge and patch are not part of 0.2 |
-| `carveToCarvePatch`, `applySourcePatch`, `createSourcePatch`, `sourceFingerprint` | gone | source patches are not part of 0.2 |
+| `diffAst`, `createAstPatch` | `diffTree` | a JSON Patch over the encoded tree |
+| `applyAstPatch` | `applyPatch` | with `fingerprint` to bind the patch to its tree |
+| `AstPatchError` | `CarvePatchError` | one error with `path` and `reason` |
+| `sourceFingerprint` | `sourceFingerprint`, `treeFingerprint` | `sha256:` and a hex hash |
+| `formatChanges`, `mergeAst`, `applyReversibleAstPatch`, `createReversibleAstPatch` | gone | no reversible patch and no three-way merge in 0.2; a host keeps the old tree to undo |
+| `carveToCarvePatch`, `applySourcePatch`, `createSourcePatch` | gone | source patches are not part of 0.2; `upgrade` gives source edits for the upgrade |
 | `carveToPreservationReport`, `assessTablePreservation`, `PreservationError` | gone | not part of 0.2 |
 | `checkPortability`, `normalizeHtml` | gone | Djot portability checks are not part of 0.2 |
 | `markdownToCarve`, `migrateMarkdown` | `importDocument(markdown, { from: 'gfm' })` of `@markup-carve/carve/import` | `from: 'markdown'` reads CommonMark without the GFM extensions; see [import.md](import.md) |
@@ -219,12 +315,21 @@ says what to use instead. Of the 172 values, 95 map to a 0.2 call and 77 are gon
 | `bbcodeToCarve`, `migrateBbcode` | `importDocument(bbcode, { from: 'bbcode' })` of `@markup-carve/carve/import` | JavaScript only |
 | `BbcodeInputTooLargeError`, `BBCODE_MAX_INPUT_LENGTH` | the same names of `@markup-carve/carve/import` | the error is an `ImportInputError` |
 | `renderCarveWithConversionReport`, `djotMigrationWarnings`, `formatMigrationWarnings`, `applyMigrationFixes`, `BbcodeSentinelSpaceExhaustedError` | gone | the importers return `diagnostics`; the BBCode reader needs no sentinel characters |
-| `migrateCaseOnlyReferences`, `stampCarve`, `buildMarker`, `stripTrailingMarker`, `readStamp`, `needsReview`, `compareSpecVersions`, `SPEC_VERSION` | gone | 0.1 to 0.2 source upgrades run in `carve upgrade` |
+| `SPEC_VERSION` | `SPEC_VERSION` | `{ version: '0.2', commit }` |
+| `migrateCaseOnlyReferences` | `upgrade` (`./upgrade`) | the source upgrade covers it |
+| `stampCarve`, `buildMarker`, `stripTrailingMarker`, `readStamp`, `needsReview`, `compareSpecVersions` | gone | 0.2 source carries no version stamp; `SPEC_VERSION` names what the engine reads |
 | `formatLintWarnings`, `KNOWN_LINT_PLATFORMS` | gone | a diagnostic is plain data; the one platform is `github` |
-| `inspectColonFences`, `decisionTrace`, `decisionTraceJsonLines` | gone | 0.1 debugging helpers |
-| `expandsForTarget`, `findDirectiveSites`, `selectIncludeRegion`, `isDirectiveShape`, `parseDirective`, `headingReference` | gone | include internals; `includeDependencies` lists what a tree includes |
-| `canonicalType`, `CANONICAL_BLOCK_TYPES`, `CANONICAL_INLINE_TYPES`, `FOLDED_NODE_TYPES`, `CORE_AST_VOCABULARY`, `CANONICAL_ADMONITION_KINDS`, `GENERATED_CONTENT_KINDS`, `SMART_PUNCTUATION_GLYPHS`, `formatProfileViolation`, `RenderDepthError`, `LIB_VERSION` | gone | the node types are the `Block` and `Inline` unions; read the version from `package.json` |
+| `inspectColonFences`, `decisionTrace`, `decisionTraceJsonLines` | gone | 0.1 debugging helpers; 0.2 has one parser path and no trace to show |
+| `selectIncludeRegion` | `includeRegion` | returns the text and the lines |
+| `findDirectiveSites` | `includeDependencies(tree, { ranges: true })` | the byte range of each directive |
+| `headingReference` | `headingId` | the id without document dedup |
+| `expandsForTarget`, `isDirectiveShape`, `parseDirective` | gone | include internals; a directive is an `include` node of the tree |
+| `CANONICAL_BLOCK_TYPES`, `CANONICAL_INLINE_TYPES` | `NODE_TYPES` | `block` and `inline`, from the pinned schema |
+| `LIB_VERSION` | `VERSION` | |
+| `canonicalType`, `FOLDED_NODE_TYPES`, `CORE_AST_VOCABULARY` | gone | 0.2 has no folded or aliased types; the `Block` and `Inline` unions are the vocabulary |
+| `CANONICAL_ADMONITION_KINDS`, `GENERATED_CONTENT_KINDS`, `SMART_PUNCTUATION_GLYPHS` | gone | fixed tables of the specification data, not of the API |
+| `formatProfileViolation`, `RenderDepthError` | gone | a profile loss is a diagnostic; a too deep tree is a `CarveTreeError` |
 | `glossary`, `headingNumbers`, `index`, `citations`, `imgFence`, `sanitizeSvg`, `autolink`, `externalLinks`, `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingLevelShift` | gone | 0.1 extensions; a host registers its own through the provisional `extensions` and `renderers` options |
-| `fileSystemResolver` (`./node`) | `fileSystemResolver` (`./node`) | takes the root directory |
-| `DEFAULT_MAX_FILE_BYTES` (`./node`) | the `bytes` field of the `includes` option | may be lowered, not raised |
-| `./prettier` | gone | no 0.2 Prettier plugin yet |
+| `fileSystemResolver` (`./node`) | `fileSystemResolver` (`./node`) | takes the root directory and `{ maxFileBytes, allowAbsolute }` |
+| `DEFAULT_MAX_FILE_BYTES` (`./node`) | the `maxFileBytes` option of `fileSystemResolver`, the `bytes` field of the `includes` option | may be lowered, not raised |
+| `./prettier` | `./prettier` | a plugin on `format` |

@@ -8,11 +8,17 @@ export { ImportInputError, type ImportDiagnostic, type ImportResult } from './ki
 export type { Format } from './kit.ts'
 
 /** The options of an import. `rawHtml` keeps comments and raw elements of HTML as raw nodes (C2-M-065, C2-M-066). */
-export interface ImportOptions { from: Format, rawHtml?: boolean, strictLosses?: boolean }
+export interface ImportOptions {
+  from: Format
+  rawHtml?: boolean
+  strictLosses?: boolean
+  allowLosses?: readonly string[]
+  maxLosses?: number
+}
 
 /** Parse a foreign document to a Carve 0.2 tree and write its canonical source. */
 export function importDocument(input: string, options: ImportOptions): ImportResult {
-  return runImport(options.from, options.strictLosses === true, () => importByFormat(input, options))
+  return runImport(options.from, options, () => importByFormat(input, options))
 }
 
 function importByFormat(input: string, options: ImportOptions): ImportResult {
