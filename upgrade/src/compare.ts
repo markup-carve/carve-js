@@ -185,7 +185,8 @@ function onlyItems(tokens: Token[]): Set<number> {
       return
     }
     const top = stack[stack.length - 1]
-    if (token.name === 'li' && top !== undefined) {
+    // The note list of the endnotes section is not a list of the document (C2-B-062 does not reach it).
+    if (token.name === 'li' && top !== undefined && stack[stack.length - 2]?.name !== 'section') {
       top.items++
       if (top.items === 1) firstItem.set(top.open, index)
     }

@@ -10,6 +10,8 @@ const cases: [string, string, string, string][] = [
   ['C2-B-081 U-038', '> [r]: /url\n> [^f]: note\n\nSee [r][] [^f].\n',
     '[^f]: note\n\n[r]: /url\n\n> {%%}\n> {%%}\n\nSee [r][] [^f].\n', 'U-038'],
   ['C2-B-081 U-039', 'See [^a].\n\n1. > [^a]: note body\n', '[^a]: note body\n\nSee [^a].\n\n1. > {%%}\n', 'U-039'],
+  ['C2-B-081 U-039', '[^f]: a\n\n  [^g]: b\n\n      [^h]: c\n\n    TAIL\n\nx[^f] [^g] [^h]\n',
+    '[^f]: a\n\n[^g]: b\n\n\n  TAIL\n\n[^h]: c\n\nx[^f] [^g] [^h]\n', 'U-039'],
   ['C2-I-119 U-065', '_x /*a*/{q} b/{c_} c_\n', '{_x */a/*{q} b/\\{c_}} c_\n', 'U-065'],
   ['C2-I-052 U-068', '{/a /*b*/{.k} c/}\n', '{/a */b/*{.k} c/}\n', 'U-068'],
   ['C2-I-011 U-068', '/a /*x*/ b/\n/**/ /**/\n', '/a \\/*x*/ b\\/\n{*{/\\*\\/ \\/\\*/}*}\n', 'U-068'],
@@ -49,5 +51,14 @@ describe('the late pass', () => {
     const result = upgrade('{_a %% b_} y\n')
     expect(result.output).toBe('{_a{% b %}_} y\n')
     expect(result.records.map((record) => record.entry)).toEqual(['U-401'])
+  })
+})
+
+describe('U-021 and the endnotes list', () => {
+  it('C2-B-062 drops the wrapper of the sole document item, not of the sole note', () => {
+    const result = upgrade('- a\n   [^f]: t\n\n    more\ntail\n\nx[^f]\n')
+    expect(result.output).toBe('- a\n\n    more\ntail\n\n[^f]: t\n\nx[^f]\n')
+    expect(result.check).toBe('explained')
+    expect(result.records.map((record) => record.entry)).toEqual(expect.arrayContaining(['U-021', 'U-038']))
   })
 })
