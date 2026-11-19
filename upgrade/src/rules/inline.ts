@@ -28,13 +28,25 @@ function canCloseRun(visit: Visit, late: boolean): boolean {
     && ancestor(visit, 'table') === null && ancestor(visit, 'figure') === null
 }
 
+function canReportRun(visit: Visit, late: boolean): boolean {
+  if (late) return canCloseRun(visit, late)
+  return OPEN_RUNS.includes(visit.node.type) && visit.node.pos !== undefined && ancestor(visit, 'line_block') === null
+    && ancestor(visit, 'table') === null && ancestor(visit, 'figure') === null
+}
+
+/** Where the backticks of a run start, after a literal or math sigil. */
+function runStart(src: string, start: number): number {
+  let at = start
+  if (src[at] === '!' || src[at] === '$') at++
+  if (src[start] === '$' && src[at] === '$') at++
+  return at
+}
+
 function unclosedRun(ctx: Context, visit: Visit): void {
   const node = visit.node
-  if (!canCloseRun(visit, ctx.late)) return
+  if (!canReportRun(visit, ctx.late)) return
   const { startOffset: start, endOffset: end, startLine } = node.pos!
-  let at = start
-  if (ctx.src[at] === '!' || ctx.src[at] === '$') at++
-  if (ctx.src[start] === '$' && ctx.src[at] === '$') at++
+  const at = runStart(ctx.src, start)
   if (ctx.src[at] !== '`') return
   let width = 0
   while (ctx.src[at + width] === '`') width++
@@ -42,7 +54,9 @@ function unclosedRun(ctx: Context, visit: Visit): void {
   const mark = '`'.repeat(width)
   if (hasClosingRun(ctx.src, openerEnd, end, width)) return
   if (ctx.findings.some((finding) => finding.edit !== null && start <= finding.offset && finding.offset <= end)) return
+  // An empty run is only reported, so a quote can hold it too.
   if (end > openerEnd) {
+    if (!canCloseRun(visit, ctx.late)) return
     // C2-I-016: a value that starts or ends with a backtick is padded with one space on each side.
     const pad = ctx.src[end - 1] === '`'
     const from = pad ? openerEnd : end
@@ -116,8 +130,35 @@ function boldItalic(ctx: Context, node: Node01): void {
   const { startOffset: start } = node.pos!
   const end = ctx.late && node.attrs !== undefined ? attributeStart(ctx.src, node.pos!.endOffset) : node.pos!.endOffset
   if (node.boldItalic !== true || !ctx.src.startsWith('/*', start) || !ctx.src.startsWith('*/', end - 2)) return
+  if (bracedBoldItalic) { bracedSpans(ctx, node, start, end); return }
   change(ctx, 'U-068', start, start + 2, '*/', 'emphasis outside strong respelled as strong outside emphasis')
   change(ctx, 'U-068', end - 2, end, '/*', 'emphasis outside strong respelled as strong outside emphasis')
+}
+
+/** Set while `inlineBraced` runs. */
+let bracedBoldItalic = false
+
+const textOnly = (node: Node01): boolean => (node.children ?? []).every((child) => child.type === 'text'
+  || child.type === 'soft_break' || (child.type === 'emphasis' && textOnly(child)))
+
+/**
+ * U-068 as explicit braced spans, the spelling of `rescueBracedBoldItalic`, for a span inside a larger
+ * document. C2-I-011: text content gets its punctuation escaped, so 0.2 pairs no delimiter in it.
+ */
+function bracedSpans(ctx: Context, node: Node01, start: number, end: number): void {
+  const message = 'emphasis outside strong written as explicit braced spans so its content stays text'
+  change(ctx, 'U-068', start, start + 2, '{*{/', message)
+  change(ctx, 'U-068', end - 2, end, '/}*}', message)
+  if (!textOnly(node)) return
+  for (let at = start + 2; at < end - 2; at++) {
+    if (/[!-/:-@[-`{-~]/u.test(ctx.src[at]!)) change(ctx, 'U-068', at, at, '\\', message)
+  }
+}
+
+/** The late form of `inline` that writes bold italic as braced spans. */
+export function inlineBraced(ctx: Context): void {
+  bracedBoldItalic = true
+  try { inline(ctx) } finally { bracedBoldItalic = false }
 }
 
 function deletionTagName(ctx: Context, node: Node01): void {

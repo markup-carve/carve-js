@@ -100,6 +100,12 @@ function languageCandidates(output: string): Candidate[] {
     at = output.indexOf(':', at + 1)
   }
   if (combined !== output) found.push({ id: 'U-192', output: combined })
+  // A run of attribute lines: the shorthand lines go when 0.1 took a later `lang` line.
+  const lines = output.split('\n')
+  const shorthand = /^ *\{:[\w-]+\} *$/u
+  const kept = lines.filter((line, index) => !shorthand.test(line)
+    || !lines.slice(index + 1).some((later) => /^ *\{[^}]*\blang=/u.test(later)))
+  if (kept.length !== lines.length) found.push({ id: 'U-192', output: kept.join('\n') })
   return found
 }
 

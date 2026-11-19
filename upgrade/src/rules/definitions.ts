@@ -93,6 +93,7 @@ function hoistInPlace(ctx: Context, id: string, span: Span, cut: number, message
     if (text !== '') change(ctx, id, lineStart(ctx.lines, line), lineStart(ctx.lines, line) + text.length, '', message)
   }
   for (let line = span.first; line <= span.last; line++) {
+    if (innerLines.has(line)) continue
     const start = lineStart(ctx.lines, line)
     const length = Math.min(cut, prefixLength(lineText(ctx.lines, line)))
     if (length > 0) change(ctx, id, start, start + length, '', message)
@@ -177,15 +178,18 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   }
   if (cut === 0) return
   const id = entryOf(ctx, span, depth)
-  const end = containerEnd(ctx, span, depth, cut, ends)
+  const end = Math.max(containerEnd(ctx, span, depth, cut, ends), enclosing.get(span)?.last ?? 0)
   ends.set(span.first, end)
-  if (end === span.last) {
-    if (top) moveToTop(ctx, id, span, cut, message)
-    else if (!preserveEmptyItem(ctx, id, span, message) && !preserveEmptyQuote(ctx, id, span, message)) {
-      hoistInPlace(ctx, id, span, cut, message)
-    }
-  }
+  if (end === span.last) hoistLast(ctx, id, span, cut, message)
   else moveAfter(ctx, id, span, cut, end, message)
+}
+
+/** The definition is the last thing in its container. */
+function hoistLast(ctx: Context, id: string, span: Span, cut: number, message: string): void {
+  if (top) moveToTop(ctx, id, span, cut, message)
+  else if (!preserveEmptyItem(ctx, id, span, message) && !preserveEmptyQuote(ctx, id, span, message)) {
+    hoistInPlace(ctx, id, span, cut, message)
+  }
 }
 
 /** U-040, U-041: 0.1 took the last definition of a key, so every earlier one is removed. */
@@ -223,17 +227,69 @@ function droppedLinkDefinitions(ctx: Context): void {
   }
 }
 
+/** Set while `definitionsNested` runs. */
+let nested = false
+/** The definition whose lines hold a span, read off the 0.1 positions; and every line of such an inner span. */
+const enclosing = new Map<Span, Span>()
+const innerLines = new Set<number>()
+
+function markNested(spans: Span[]): void {
+  for (const span of spans) {
+    const outer = spans.find((other) => other !== span && other.first < span.first && other.last >= span.last)
+    if (outer === undefined) continue
+    enclosing.set(span, outer)
+    for (let line = span.first; line <= span.last; line++) innerLines.add(line)
+  }
+}
+
+/**
+ * C2-B-081: a definition that 0.1 read inside the body of another definition moves out after that whole
+ * body, so the body lines below it stay with the definition that owned them in 0.1.
+ */
+export function definitionsNested(ctx: Context): void {
+  nested = true
+  try { definitions(ctx) } finally {
+    nested = false
+    enclosing.clear()
+    innerLines.clear()
+  }
+}
+
 /**
  * Set while a late variant runs: a moved definition goes above the document instead of after its
  * container, and with `kept` an empty comment stays in its place.
  */
 let top: false | 'moved' | 'kept' = false
 
+/**
+ * U-042: 0.1 and 0.2 both keep the first definition of a note key. A later one in a container left no
+ * block in 0.1, but 0.2 reads it as text there, so the late passes remove it; quote marks before it stay.
+ */
+function droppedNoteDefinitions(ctx: Context): void {
+  const keys = ctx.doc.footnoteDefs
+  if (typeof keys !== 'object' || keys === null) return
+  const notes = ctx.doc.footnoteDefPos as Record<string, { startLine: number }> | undefined
+  const kept = new Set(Object.values(notes ?? {}).map((pos) => pos.startLine))
+  for (let line = 1; line <= ctx.lines.count; line++) {
+    const text = lineText(ctx.lines, line)
+    const marks = quotePrefix(text, quoteDepth(text)).trimEnd()
+    const label = /^\[\^([^\]]+)\]: /u.exec(insideQuotes(text).trimStart())?.[1]
+    if (label === undefined || kept.has(line) || !isGap(ctx, line) || !(label in keys) || prefixLength(text) === 0) continue
+    const start = lineStart(ctx.lines, line)
+    if (marks === '') removeLine(ctx, 'U-042', line, 'a later definition of the note key, which 0.1 dropped, is removed')
+    else change(ctx, 'U-042', start, start + text.length, marks, 'a later definition of the note key, which 0.1 dropped, is removed')
+  }
+}
+
 export function definitions(ctx: Context): void {
   const spans = definitionSpans(ctx)
+  enclosing.clear()
+  innerLines.clear()
+  if (nested) markNested(spans)
   const ends = new Map<number, number>()
   for (let index = spans.length - 1; index >= 0; index--) hoist(ctx, spans[index]!, ends)
   droppedLinkDefinitions(ctx)
+  if (ctx.late) droppedNoteDefinitions(ctx)
   duplicates(ctx, 'abbreviation_def', 'abbr', 'U-041')
 }
 
