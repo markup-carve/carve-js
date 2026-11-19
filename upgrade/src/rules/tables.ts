@@ -44,7 +44,8 @@ function headerCell(ctx: Context, id: string, cell: Node01, align: unknown, mess
   const start = cell.pos!.startOffset
   if (ctx.src[start - 1] !== '|' || ctx.src[start] === '=') return
   const mark = typeof align === 'string' && ALIGN_MARKS[align] !== undefined ? `{${ALIGN_MARKS[align]}}` : ''
-  const space = ctx.src[start] === ' ' ? '' : ' '
+  // C2-B-171: the brace block of a cell prefix is glued to the header mark, so the late pass writes `|={>}`.
+  const space = ctx.src[start] === ' ' || (ctx.late && ctx.src[start] === '{') ? '' : ' '
   change(ctx, id, start, start, `=${mark}${space}`, message)
 }
 
