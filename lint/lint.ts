@@ -9,6 +9,7 @@ import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 import { append } from '../src/append.ts'
+import { DATA_RULE_IDS, dataRulesOn, runDataRules } from './data-rules.ts'
 
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
@@ -113,8 +114,9 @@ function runNodeRules(node: Node, path: string, context: LintContext): void {
 
 function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
   const byType = new Map<Node['type'], Rule[]>()
+  const data = dataRulesOn()
   for (const rule of NODE_RULES) {
-    if (!active(rule.id, options)) continue
+    if (!active(rule.id, options) || data && DATA_RULE_IDS.has(rule.id)) continue
     for (const type of rule.nodes ?? []) {
       const rules = byType.get(type)
       if (rules === undefined) byType.set(type, [rule])
@@ -354,11 +356,13 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
   visit(parsed.document, '', context, controls)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
-  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options))
+  const data = dataRulesOn()
+  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !(data && DATA_RULE_IDS.has(rule.id)))
   for (const line of scanLines) {
     if (line.opaque) continue
     for (const rule of activeLineRules) rule.checkLine?.(line, context)
   }
+  if (data) runDataRules(parsed.document, { ...context, lines: scanLines }, (id) => active(id, options))
   const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
   return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
 }

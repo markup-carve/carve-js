@@ -8,6 +8,7 @@ import { generateOptionTables } from '../scripts/generate-option-tables.ts'
 import { generateTreeTables } from '../scripts/generate-tree-tables.ts'
 import { generateUnicodeTables } from '../scripts/generate-unicode-tables.ts'
 import { generateCatalog } from '../lint/generate-catalog.ts'
+import { generateDataTables } from '../lint/generate-data-tables.ts'
 
 const root = join(import.meta.dirname, '..')
 const read = (path: string): string => readFileSync(join(root, path), 'utf8')
@@ -30,6 +31,10 @@ it('C2-I-127: src/unicode-tables.ts is what scripts/generate-unicode-tables.ts w
 
 it('C2-W-106 lint/catalog.ts is generated from the specification table', () => {
   expect(read('lint/catalog.ts')).toBe(generateCatalog(read('data/lint-rules.json')))
+})
+
+it('lint/data-tables.ts is generated from data/lint-model.json', () => {
+  expect(read('lint/data-tables.ts')).toBe(generateDataTables(read('data/lint-model.json')))
 })
 
 const specData = join(process.env['CARVE_SPEC_DIR'] ?? join(root, 'spec'), 'spec/0.2/data')
