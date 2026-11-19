@@ -1,6 +1,6 @@
-// Builds `@markup-carve/carve`, `@markup-carve/carve/node`, `@markup-carve/carve/extensions` and
-// `@markup-carve/carve/import` and `@markup-carve/carve/export`: one ES module each, and their declarations. The import entry keeps its Markdown and
-// Djot libraries external, as package dependencies.
+// Builds `@markup-carve/carve`, `@markup-carve/carve/node`, `@markup-carve/carve/extensions`, `@markup-carve/carve/import`
+// and `@markup-carve/carve/export`: one ES module each, and their declarations. The import entry keeps its Markdown
+// and Djot libraries external, as package dependencies.
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
