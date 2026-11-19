@@ -25,6 +25,7 @@ import { rescueBacktick } from './backtick-rescue.ts'
 import { RULES } from './rules/index.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
+import { applyTabs, planTabs, sameHost } from './tabs.ts'
 
 export interface UpgradeResult {
   /** The Carve 0.2 source. */
@@ -496,7 +497,7 @@ function preservingMappedResult(input: string, mapped: { output: string; record:
     check: 'pass', engine01: ENGINE_01_VERSION }
 }
 
-function upgradeCore(input: string): UpgradeResult {
+function upgradeSource(input: string): UpgradeResult {
   const mapped = mappedRewrite(input)
   if (mapped !== null) return preservingMappedResult(input, mapped)
   const manual = mappedReport(input)
@@ -523,6 +524,57 @@ function upgradeCore(input: string): UpgradeResult {
     }
   }
   return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+}
+
+/** A record of the text after `edits`, placed in the text before them. */
+function beforeEdits(input: string, edits: Edit[], record: ReportRecord): ReportRecord {
+  const output = applyEdits(input, edits)
+  const at = record.line === 0 ? 0 : offsetBefore(edits, lineStart(readLines(output), record.line))
+  const moved = { ...record, line: record.line === 0 ? 0 : lineOf(readLines(input), at) }
+  if (record.range === undefined) return moved
+  return { ...moved, range: { startOffset: offsetBefore(edits, record.range.startOffset),
+    endOffset: offsetBefore(edits, record.range.endOffset) } }
+}
+
+function unmappedTabs(records: ReportRecord[]): boolean {
+  return records.some((record) => record.class === 'mismatch')
+}
+
+/** The tabs pass places its own records, so an exact catalog report of the same row is left out. */
+function withTabRecords(tabRecords: ReportRecord[], records: ReportRecord[]): ReportRecord[] {
+  const own = new Set(tabRecords.map((record) => record.entry))
+  return [...tabRecords, ...records.filter((record) => !own.has(record.entry))]
+}
+
+/**
+ * U-412, U-413: the tab openers are rewritten first, so the default-render check reads the 0.1 meaning of
+ * the rewritten source; the tabs hosts of both engines then confirm the original groups.
+ */
+function upgradeCore(input: string): UpgradeResult {
+  const plan = planTabs(input)
+  if (plan.edits.length === 0 && plan.records.length === 0) return upgradeSource(input)
+  const plain = (): UpgradeResult => {
+    const result = upgradeSource(input)
+    const kept = plan.edits.length === 0 ? plan.records : planTabs(input, false).records
+    return { ...result, records: withTabRecords(kept, result.records),
+      check: unmappedTabs(kept) ? 'mismatch' : result.check }
+  }
+  if (plan.edits.length === 0) return plain()
+  const result = upgradeSource(applyTabs(input, plan))
+  if (!sameHost(input, result.output)) return plain()
+  if (result.check === 'mismatch') {
+    const fallback = plain()
+    if (fallback.check !== 'mismatch') return fallback
+  }
+  const records = withTabRecords([...plan.rewrites, ...plan.records],
+    result.records.map((record) => beforeEdits(input, plan.edits, record)))
+  const check = result.check === 'mismatch' || unmappedTabs(plan.records) ? 'mismatch' : 'explained'
+  if (check === 'explained') {
+    const entries = [...new Set(plan.rewrites.map((record) => record.entry))].join(', ')
+    records.push({ entry: 'upgrade-difference', class: 'summary', line: 0,
+      message: `the tabs groups match under the tabs hosts of both engines after ${entries}` })
+  }
+  return { ...result, records, changed: result.output !== input, check }
 }
 
 function normalizationPreservesHtml(input: string, normalized: string, output: string, restored: string,

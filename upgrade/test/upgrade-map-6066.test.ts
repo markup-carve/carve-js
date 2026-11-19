@@ -26,11 +26,12 @@ describe('the pinned replay map rows', () => {
   })
 
   it.each(rows.filter((row) => ['U-412', 'U-413'].includes(row.id)))
-  ('$id names the host rewrite without bypassing the default HTML check', (row) => {
+  ('$id rewrites the tab label, confirmed under the tabs hosts of both engines', (row) => {
     const result = upgrade(row.from)
-    expect(result.output).toBe(row.from)
-    expect(result.records).toContainEqual(expect.objectContaining({ entry: row.id, class: 'unverified explanation' }))
-    expect(needsAttention(result)).toBe(true)
+    expect(result.output).toBe(row.to)
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: row.id, class: 'rewrite' }))
+    expect(result.check).toBe('explained')
+    expect(canWriteUpgrade(result)).toBe(true)
   })
 
   it('compares HTML attribute names without case and preserves their values', () => {
