@@ -49,6 +49,10 @@
       "types": "./dist/types/public/export.d.ts",
       "import": "./dist/export.js"
     },
+    "./upgrade": {
+      "types": "./dist/types/public/upgrade.d.ts",
+      "import": "./dist/upgrade.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

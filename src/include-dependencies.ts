@@ -2,12 +2,16 @@
 import { type DocumentNode, forEachSlot, type Node } from './ast.ts'
 import { append } from './append.ts'
 
-/** One include node: its path as written, the id of its including file (absent for the top level), and its file if read. */
+/**
+ * One include node: its path as written, the id of its including file (absent for the top level), its file if read, and
+ * where the tree has positions the UTF-8 byte range of the directive in its including file.
+ */
 export interface IncludeDependency {
   path: string
   from?: string
   file?: string
   read: boolean
+  range?: { startOffset: number, endOffset: number }
 }
 
 /** C2-N-083: the include nodes of `document` in tree order, each with its including file (C2-N-053). */
@@ -21,6 +25,7 @@ export function includeDependencies(document: DocumentNode): IncludeDependency[]
       const entry: IncludeDependency = { path: node.path, read: node.file !== undefined }
       if (from !== undefined) entry.from = from
       if (node.file !== undefined) entry.file = node.file
+      if (node.pos !== undefined) entry.range = { startOffset: node.pos.startOffset, endOffset: node.pos.endOffset }
       found.push(entry)
       inner = node.file
     }
