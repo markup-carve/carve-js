@@ -883,13 +883,14 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
 
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
-  check = options?.check !== false): { output: WriteOutput, stats: WriterStats } {
+  check = options?.check !== false, linkKeys?: ReadonlySet<string>): { output: WriteOutput, stats: WriterStats } {
   const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), samples: new Map(), parses: 0, work: [] }
   const run: WriterRun = { path, check, stats }
   const layout = options?.layout
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
-  w.linkKeys = new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
+  w.linkKeys = linkKeys ??
+    new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
   const source = writeDocument(w, run, document)
@@ -909,6 +910,17 @@ export function writeTree(document: DocumentNode, options: WriteOptions | undefi
 export function writeWithDiagnostics(document: DocumentNode, options?: WriteOptions): WriteOutput {
   validateTree(document, undefined, undefined, options?.extensions)
   return writeTree(document, options)
+}
+
+/**
+ * `write` of a tree as if the link reference definitions with the keys `linkKeys` followed it, without writing them:
+ * the tree is written with those keys defined.
+ */
+export function writeWithLinkKeys(document: DocumentNode, linkKeys: ReadonlySet<string>): string {
+  validateTree(document)
+  const result = writeTreeWithStats(document, undefined, 'plan', true, linkKeys).output
+  if (writerHasLoss(result.diagnostics)) throw new CarveWriteError(result.diagnostics)
+  return result.source
 }
 
 /** The canonical Carve source of a tree (C2-W-001). */

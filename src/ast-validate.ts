@@ -185,6 +185,41 @@ const ENUMS = new Map<string, readonly string[]>([
   ['citation_definition.namespace', ['citation']],
 ])
 const STAGES = ['includeExpansion', 'referenceResolution', 'tableAlignment']
+const STRING_SET: ReadonlySet<string> = new Set(STRINGS)
+const INTEGER_SET: ReadonlySet<string> = new Set(INTEGERS)
+const BOOLEAN_SET: ReadonlySet<string> = new Set(BOOLEANS)
+const BLOCKS_CORE = BLOCKS.filter((type) => type !== 'block_extension')
+const INLINES_CORE = INLINES.filter((type) => type !== 'inline_extension')
+// The enum values by field, then by node type or `*`, so a check builds no key.
+const ENUMS_BY_FIELD = new Map<string, Map<string, readonly string[]>>()
+for (const [key, values] of ENUMS) {
+  const dot = key.indexOf('.')
+  const field = key.slice(dot + 1)
+  const types = ENUMS_BY_FIELD.get(field) ?? new Map<string, readonly string[]>()
+  types.set(key.slice(0, dot), values)
+  ENUMS_BY_FIELD.set(field, types)
+}
+const ALLOWED_SETS = new WeakMap<readonly string[], ReadonlySet<string>>()
+
+function allows(allowed: readonly string[], type: string): boolean {
+  let set = ALLOWED_SETS.get(allowed)
+  if (set === undefined) {
+    set = new Set(allowed)
+    ALLOWED_SETS.set(allowed, set)
+  }
+  return set.has(type)
+}
+
+const RULE_FIELDS = new WeakMap<Rule, ReadonlySet<string>>()
+
+function ruleFields(rule: Rule): ReadonlySet<string> {
+  let fields = RULE_FIELDS.get(rule)
+  if (fields === undefined) {
+    fields = new Set([...COMMON, ...rule[1], ...rule[2]])
+    RULE_FIELDS.set(rule, fields)
+  }
+  return fields
+}
 // C2-N-017: an include holds children once it is expanded, and none before.
 const OPTIONAL_CONTENT = new Map<string, Content>([['include', DOCUMENT_CHILDREN]])
 const ORDERED_STYLES = ['1', 'a', 'A', 'i', 'I']
@@ -315,14 +350,19 @@ function checkPosition(value: Value, path: string, walk?: Walk): void {
   }
 }
 
+const POSITION_MINIMUMS = POSITION_FIELDS.map((name) => name.endsWith('Offset') ? 0 : 1)
+const POSITION_NAMES: ReadonlySet<string> = new Set([...POSITION_FIELDS, 'file'])
+
 function checkPositionFields(value: Fields, path: string): void {
-  for (const name of POSITION_FIELDS) {
-    if (!Number.isInteger(value[name])) fail(`${path}/${name}`, 'not an integer')
-    const minimum = name.endsWith('Offset') ? 0 : 1
-    if ((value[name] as number) < minimum) fail(`${path}/${name}`, `below ${minimum}`)
+  for (let at = 0; at < POSITION_FIELDS.length; at++) {
+    const name = POSITION_FIELDS[at]!
+    const field = value[name]
+    if (!Number.isInteger(field)) fail(`${path}/${name}`, 'not an integer')
+    const minimum = POSITION_MINIMUMS[at]!
+    if ((field as number) < minimum) fail(`${path}/${name}`, `below ${minimum}`)
   }
   for (const name of Object.keys(value)) {
-    if (!POSITION_FIELDS.includes(name) && name !== 'file') fail(`${path}/${name}`, 'unknown field of pos')
+    if (!POSITION_NAMES.has(name)) fail(`${path}/${name}`, 'unknown field of pos')
   }
 }
 
@@ -463,7 +503,8 @@ function checkHeaderIds(value: Value, path: string): void {
 }
 
 function checkEnum(type: string, name: string, value: Value, path: string): void {
-  const values = ENUMS.get(`${type}.${name}`) ?? ENUMS.get(`*.${name}`)
+  const types = ENUMS_BY_FIELD.get(name)
+  const values = types === undefined ? undefined : types.get(type) ?? types.get('*')
   if (values !== undefined && !values.includes(value as string)) fail(path, `unknown value ${JSON.stringify(value)}`)
 }
 
@@ -479,9 +520,9 @@ function checkScalar(type: string, name: string, value: Value, path: string): bo
     return true
   }
   if (name === 'width') return isWidth(value) || fail(path, 'not a fraction above 0 and at most 1')
-  if (BOOLEANS.includes(name)) return typeof value === 'boolean' || fail(path, 'not a boolean')
-  if (INTEGERS.includes(name)) return checkCount(name, value, path)
-  if ((name === 'source' && type !== 'smart_punctuation') || (!STRINGS.includes(name) && name !== 'dir')) return false
+  if (BOOLEAN_SET.has(name)) return typeof value === 'boolean' || fail(path, 'not a boolean')
+  if (INTEGER_SET.has(name)) return checkCount(name, value, path)
+  if ((name === 'source' && type !== 'smart_punctuation') || (!STRING_SET.has(name) && name !== 'dir')) return false
   requireString(value, path)
   checkEnum(type, name, value, path)
   return true
@@ -535,10 +576,10 @@ function declaredNames(value: unknown): [string, { version: string, required: bo
 interface Walk {
   depth: number
   fallbacks: number
-  qualified?: number
-  coreFallback?: boolean
+  qualified?: number | undefined
+  coreFallback?: boolean | undefined
   tree: TreeFacts
-  parent?: { name: string, slot: string }
+  parent?: { name: string, slot: string } | undefined
   /** C2-A-171: the open blocks and the inline levels of the current inline content above the node, within its file. */
   blocks?: number
   inlines?: number
@@ -573,7 +614,8 @@ export function beyondParserLevels([blocks, inlines]: readonly [number, number])
 function levels(walk: Walk, type: string, path: string): Walk {
   const [blocks, inlines] = nodeLevels(type, walk.blocks ?? 0, walk.inlines ?? 0)
   if (beyondParserLevels([blocks, inlines])) fail(path, 'the tree is nested deeper than a parser can produce')
-  return { ...walk, blocks, inlines }
+  return { depth: walk.depth, fallbacks: walk.fallbacks, qualified: walk.qualified, coreFallback: walk.coreFallback,
+    tree: walk.tree, parent: walk.parent, blocks, inlines }
 }
 
 type FieldCheck = (value: Value, path: string, walk: Walk, node: Fields) => void
@@ -881,9 +923,8 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['fallback', (value, path, walk, node) => {
     const qualified = typeof node['name'] === 'string' && node['name'].includes('.')
     const inner: Walk = { ...walk, coreFallback: walk.coreFallback || qualified }
-    const role = node['type'] === 'block_extension' ? BLOCKS : INLINES
-    const allowed = qualified
-      ? role.filter((type) => type !== 'block_extension' && type !== 'inline_extension') : role
+    const block = node['type'] === 'block_extension'
+    const allowed = qualified ? block ? BLOCKS_CORE : INLINES_CORE : block ? BLOCKS : INLINES
     checkList(value, path, allowed, inner)
   }],
   ['columns', nodeList(['table_column'])],
@@ -904,12 +945,15 @@ function allowedTypes(content: Content): readonly string[] {
 
 function checkList(value: Value, path: string, content: Content, walk: Walk, parent?: Walk['parent']): void {
   const allowed = allowedTypes(content)
-  const inner: Walk = { depth: walk.depth + 1, fallbacks: walk.fallbacks,
-    ...(walk.qualified === undefined ? {} : { qualified: walk.qualified }), tree: walk.tree,
-    blocks: walk.blocks ?? 0,
-    inlines: walk.inlines ?? 0, ...(walk.coreFallback === undefined ? {} : { coreFallback: walk.coreFallback }),
-    ...(parent === undefined ? {} : { parent }) }
-  requireArray(value, path).forEach((child, index) => checkNode(child, `${path}/${index}`, allowed, inner))
+  // One shape for every walk keeps the checks monomorphic; an absent field reads as undefined either way.
+  const inner: Walk = { depth: walk.depth + 1, fallbacks: walk.fallbacks, qualified: walk.qualified,
+    coreFallback: walk.coreFallback, tree: walk.tree, parent, blocks: walk.blocks ?? 0, inlines: walk.inlines ?? 0 }
+  const children = requireArray(value, path)
+  for (let index = 0; index < children.length; index++) {
+    const child = children[index]
+    if (child === undefined && !(index in children)) continue
+    checkNode(child, `${path}/${index}`, allowed, inner)
+  }
 }
 
 /** C2-A-136, C2-A-184: the one node a paragraph role names, with only soft breaks and comments beside it. */
@@ -1149,10 +1193,9 @@ function checkSpanCounts(table: Fields, path: string): void {
 
 /** C2-A-028, C2-A-167: nodes are closed. C2-A-139: a field that is absent is left out; it is never null. */
 function checkField(node: Fields, type: string, rule: Rule, name: string, path: string, walk: Walk): void {
-  const [, required, optional] = rule
   const value = node[name]
   const at = `${path}/${name}`
-  if (!COMMON.includes(name) && !required.includes(name) && !optional.includes(name)) fail(at, `not a field of ${type}`)
+  if (!ruleFields(rule).has(name)) fail(at, `not a field of ${type}`)
   if (value === null || value === undefined) fail(at, 'a field without a value')
   if (name === 'attrs') checkAttrs(value, at, type === 'span')
   else if (!checkScalar(type, name, value, at)) FIELD_CHECKS.get(name)?.(value, at, walk, node)
@@ -1196,7 +1239,7 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
   // C2-A-018, C2-A-050: no other core type, the three retired ones included.
   if (rule === undefined) fail(path, `unknown node type ${type}`)
   // C2-A-051, C2-A-052: a type that exists only in its container is refused anywhere else.
-  if (!allowed.includes(type)) fail(path, `${type} does not stand here`)
+  if (!allows(allowed, type)) fail(path, `${type} does not stand here`)
   if (walk.coreFallback && (type === 'inline_extension' || type === 'block_extension')) {
     fail(path, 'qualified fallback contains an extension node')
   }
@@ -1358,6 +1401,40 @@ export function validateTree(
   checkNodeBounds(document, '', { depth: 0, fallbacks: 0, tree })
   checkReferences(document, tree)
   if (annotations !== undefined) checkAnnotations(annotations, tree)
+}
+
+/**
+ * `validateTree` of many documents that each hold their `children` under the same root `declarations` and nothing
+ * else: the declarations are checked once, and the facts of the walk are built once per registry.
+ */
+export function fragmentValidator(declarations: NonNullable<DocumentNode['extensions']>):
+  (children: DocumentNode['children'], extensions: readonly ExtensionDefinition[]) => void {
+  const full = (children: DocumentNode['children'], extensions: readonly ExtensionDefinition[]): void => {
+    validateTree({ type: 'document', astVersion: AST_VERSION, extensions: declarations, children }, undefined, undefined, extensions)
+  }
+  try {
+    full([], [])
+  } catch {
+    return full
+  }
+  const declared = new Map(declaredNames(declarations))
+  const registries = new WeakMap<readonly ExtensionDefinition[], ReadonlyMap<string, ExtensionDefinition>>()
+  const content = RULES.get('document')![0]
+  return (children, extensions) => {
+    let registry = registries.get(extensions)
+    if (registry === undefined) {
+      registry = new Map(extensions.map((entry) => [entry.name, entry]))
+      registries.set(extensions, registry)
+    }
+    const tree: TreeFacts = { resourceReferences: 0, metadataFields: 0, annotationIds: new Map(), references: [],
+      declarations: declared, registry, headerIds: new Set(), headerReferences: [], sourcePositions: undefined }
+    const walk: Walk = { depth: 0, fallbacks: 0, tree }
+    checkList(children, '/children', content, walk)
+    children.forEach((child, index) => {
+      if (child.type === 'frontmatter' && index > 0) fail(`/children/${index}`, 'frontmatter is not the first child')
+    })
+    checkReferences({ type: 'document', children }, tree)
+  }
 }
 
 /** C2-A-207, C2-A-214: each endpoint names a node and a byte offset of its annotation text between two characters. */

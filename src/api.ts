@@ -1,6 +1,6 @@
 // The public interface of the 0.2 engine: `parse` gives the tree of contract 2.0, `render` gives HTML.
 // Both are compositions of three stages: parse (source to tree), resolve (tree to resolved tree) and render.
-import { type DocumentNode, forEachSlot } from './ast.ts'
+import { cloneTree, type DocumentNode, forEachSlot, sameTree } from './ast.ts'
 import { buildSource, type ParseFacts, type ParsedTree } from './ast-blocks.ts'
 import { expandTree, reportNoResolver } from './expand.ts'
 import { type LayoutTrace } from './ast-inline.ts'
@@ -154,14 +154,14 @@ function parseInput(source: SourceText, settings: Settings, positions: boolean, 
 }
 
 /** The parse stage of a render: source is parsed, and a supplied tree is validated first. */
-function inputStage(input: string | Uint8Array | DocumentNode, settings: Settings, diagnostics = false): ParsedTree {
+function inputStage(input: string | Uint8Array | DocumentNode, settings: Settings, diagnostics = false, validated = false): ParsedTree {
   if (typeof input === 'string' || input instanceof Uint8Array) {
     const source = sourceText(input)
     checkLength(source.text, settings)
     // C2-H-016: only the source lines need positions.
     return parseInput(source, settings, settings.sourceLines || diagnostics)
   }
-  validateTree(input, undefined, undefined, settings.extensions)
+  if (!validated) validateTree(input, undefined, undefined, settings.extensions)
   return { document: input, facts: null }
 }
 
@@ -430,8 +430,8 @@ export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode,
   return plainRender(input, settings)
 }
 
-function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings): RenderOutput {
-  const parsed = inputStage(input, settings, true)
+function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings, validated = false): RenderOutput {
+  const parsed = inputStage(input, settings, true, validated)
   const resolved = resolveStage(parsed, settings)
   const rendered = renderStage(resolved)
   const diagnostics = [...parseDiagnostics(resolved, parsed), ...locateFindings(resolved.document, rendered.losses)]
@@ -469,28 +469,47 @@ function addedDuplicate(before: ReadonlyMap<string, number>, after: ReadonlyMap<
   return undefined
 }
 
+/** Whether a transform gave back its input as it was; a tree too deep to compare counts as changed. */
+function unchanged(next: DocumentNode, view: DocumentNode): boolean {
+  try {
+    return sameTree(next, view)
+  } catch (error) {
+    if (error instanceof RangeError) return false
+    throw error
+  }
+}
+
 function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[], extensions: Settings['extensions']): {
-  view: DocumentNode, failures: Diagnostic[]
+  view: DocumentNode, failures: Diagnostic[], validated: boolean
 } {
   const failures: Diagnostic[] = []
   // A duplicate the source already holds is reported by the parse; only one a transform adds fails it.
   let counts = viewIdCounts(view)
+  let validated = false
   for (const entry of transforms) {
     try {
-      const next = entry.transform(structuredClone(view))
+      const next = entry.transform(cloneTree(view))
+      // A view the transform left as it was is checked once; its ids are those of its input.
+      if (unchanged(next, view)) {
+        if (!validated) validateTree(next, undefined, undefined, extensions)
+        validated = true
+        view = next
+        continue
+      }
       validateTree(next, undefined, undefined, extensions)
       const after = viewIdCounts(next)
       const added = addedDuplicate(counts, after)
       if (added !== undefined) throw new Error(`duplicate authored id ${added}`)
       counts = after
       view = next
+      validated = true
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       failures.push({ code: 'extension-transform-failed', severity: 'warning', channel: 'render-loss',
         message: `The document transform ${entry.name} failed: ${detail}`, path: '' })
     }
   }
-  return { view, failures }
+  return { view, failures, validated }
 }
 
 /** C2-X-053: the document transforms of the registered extensions, in registration order. */
@@ -513,12 +532,12 @@ export function renderWithDocumentTransforms(
 function transformedRender(
   input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], settings: Settings, positions = true,
 ): RenderOutput {
-  const authored = typeof input === 'string' || input instanceof Uint8Array ? input : structuredClone(input)
+  const authored = typeof input === 'string' || input instanceof Uint8Array ? input : cloneTree(input)
   const parsed = inputStage(authored, settings, positions)
   const resolved = resolveStage(parsed, settings)
   const sourceDiagnostics = parseDiagnostics(resolved, parsed)
-  const { view, failures } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
-  const rendered = plainRender(view, settings)
+  const { view, failures, validated } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
+  const rendered = plainRender(view, settings, validated)
   const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
   ])))
