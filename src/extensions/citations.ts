@@ -1,5 +1,5 @@
 // Citations: `:cite[key]` resolved against the entries of a `bibliography` or `references` directive (C2-X-058) and
-// an optional CSL-JSON pool, with a generated list of the cited entries.
+// an optional CSL-JSON pool, with a generated list of the entries.
 import { type Block, type BlockExtensionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode,
   type DocumentNode, type Inline, type InlineExtensionNode, type ListNode, type Node } from '../ast.ts'
 import { plainText } from '../ast-text.ts'
@@ -96,7 +96,7 @@ function cslEntry(csl: CslEntry): Entry {
 }
 
 /** The entries of one description list: each run of terms takes the description that follows it. */
-function listEntries(list: DefinitionListNode, entries: Map<string, Entry>): void {
+function listEntries(list: DefinitionListNode, entries: Map<string, Entry>, keys: string[]): void {
   let terms: string[] = []
   let facts: Omit<Entry, 'blocks'> = {}
   let open = false
@@ -109,7 +109,10 @@ function listEntries(list: DefinitionListNode, entries: Map<string, Entry>): voi
     } else if (item.type === 'definition_description') {
       open = true
       // The last entry of a duplicate key wins, as in 0.1.
-      for (const key of terms) if (key !== '') entries.set(key, { blocks: item.children, ...facts })
+      for (const key of terms) if (key !== '') {
+        entries.set(key, { blocks: item.children, ...facts })
+        keys.push(key)
+      }
     }
   }
 }
@@ -126,17 +129,22 @@ function authorYear(term: DefinitionTermNode): Omit<Entry, 'blocks'> {
 }
 
 /** C2-X-058: each term of a description list in the directive is a key, and its description the entry. */
-function collectEntries(view: DocumentNode, pool: readonly CslEntry[]): Map<string, Entry> {
+function collectEntries(view: DocumentNode, pool: readonly CslEntry[]): {
+  entries: Map<string, Entry>, directives: Map<DirectiveNode, string[]>
+} {
   const entries = new Map<string, Entry>()
+  const directives = new Map<DirectiveNode, string[]>()
   walkView(view, (node) => {
     if (!isReferences(node)) return undefined
-    for (const list of node.children) if (list.type === 'definition_list') listEntries(list, entries)
+    const keys: string[] = []
+    for (const list of node.children) if (list.type === 'definition_list') listEntries(list, entries, keys)
+    directives.set(node, keys)
     return false
   })
   for (const csl of pool) {
     if (csl !== null && typeof csl === 'object' && typeof csl.id === 'string' && !entries.has(csl.id)) entries.set(csl.id, cslEntry(csl))
   }
-  return entries
+  return { entries, directives }
 }
 
 interface Use { node: InlineExtensionNode, keys: string[] }
@@ -192,9 +200,9 @@ function listItem(entry: Entry, id: string, uses: readonly string[]): ListNode['
 }
 
 function referenceList(order: readonly string[], entries: Map<string, Entry>, refIds: Map<string, string>,
-  useIds: Map<string, string[]>, mode: CitationsOptions['mode']): ListNode {
+  useIds: Map<string, string[]>, mode: CitationsOptions['mode'], sourceOrder = false): ListNode {
   const keys = [...order]
-  if (mode === 'author-date') keys.sort((a, b) => compare(entries.get(a)?.author ?? a, entries.get(b)?.author ?? b))
+  if (mode === 'author-date' && !sourceOrder) keys.sort((a, b) => compare(entries.get(a)?.author ?? a, entries.get(b)?.author ?? b))
   const items = keys.map((key) => listItem(entries.get(key) ?? { blocks: [] }, refIds.get(key) ?? key, useIds.get(key) ?? []))
   const marker: ListNode['marker'] = mode === 'author-date'
     ? { kind: 'bullet', char: '-' } : { kind: 'ordered', style: '1', delimiter: '.' }
@@ -217,12 +225,19 @@ function withoutEntries(node: DirectiveNode): DirectiveNode {
 function citationsTransform(view: DocumentNode, options: CitationsOptions): DocumentNode {
   const mode = options.mode ?? 'numbered'
   const backlinked = options.bibliography !== undefined
-  const entries = collectEntries(view, options.bibliography ?? [])
+  const { entries, directives } = collectEntries(view, options.bibliography ?? [])
   const taken = viewIds(view)
   const numbers = new Map<string, number>()
   const order: string[] = []
   const refIds = new Map<string, string>()
   const useIds = new Map<string, string[]>()
+  const sourceKeys = new Set<string>()
+  for (const keys of directives.values()) for (const key of keys) {
+    sourceKeys.add(key)
+    if (numbers.has(key)) continue
+    numbers.set(key, numbers.size + 1)
+    refIds.set(key, freshId(`ref-${key}`, taken))
+  }
   for (const { node, keys } of citationUses(view)) {
     // A citation with an undefined key keeps its text, as in 0.1: it is no use and takes no number.
     if (!keys.every((key) => entries.has(key))) continue
@@ -245,19 +260,19 @@ function citationsTransform(view: DocumentNode, options: CitationsOptions): Docu
     })
     node.props = { ...node.props, refs }
   }
-  let placed = order.length === 0
+  let placed = false
   let claimed = false
   walkView(view, (node) => {
     if (!isReferences(node)) return undefined
     const body = withoutEntries(node)
-    if (!placed) {
-      body.children.push(referenceList(order, entries, refIds, useIds, mode))
-      placed = true
-    }
+    const keys = directives.get(node) ?? []
+    const listKeys = placed ? keys : [...keys, ...order.filter((key) => !sourceKeys.has(key))]
+    body.children.push(referenceList(listKeys, entries, refIds, useIds, mode, true))
+    placed = true
     claimed = true
     return claimDirective(REFERENCES, node, [body])
   })
-  if (!placed) {
+  if (!placed && order.length > 0) {
     // No directive places the list: it goes at the end of the document, as in 0.1.
     const list = referenceList(order, entries, refIds, useIds, mode)
     view.children.push({ type: 'block_extension', name: REFERENCES, version: '1', children: [], slots: { body: [list] },
