@@ -196,16 +196,19 @@ describe('headingId', () => {
 describe('includeRegion', () => {
   const text = 'a\n%% #region k\nb\n%% #region inner\nc\n%% #endregion inner\n%% #endregion k\nd\n'
 
-  it('selects the region as the include directive does', () => {
-    expect(includeRegion(text, 'k')).toBe('b\n%% #region inner\nc\n%% #endregion inner\n')
+  it('selects the region as the include directive does, with its lines', () => {
+    expect(includeRegion(text, 'k')).toEqual({ ok: true, text: 'b\n%% #region inner\nc\n%% #endregion inner\n', start: 3, end: 6 })
     const html = render('{{ f.crv @region:k }}\n', { includes: () => ({ text, id: 'f.crv' }) })
-    expect(html).toBe(render(includeRegion(text, 'k')!))
-    expect(includeRegion('x\n// #region r\ny\n// #endregion\n', 'r', { code: true })).toBe('y\n')
+    const selected = includeRegion(text, 'k')
+    expect(selected.ok && html === render(selected.text)).toBe(true)
+    expect(includeRegion('x\n// #region r\ny\n// #endregion\n', 'r', { code: true })).toEqual({ ok: true, text: 'y\n', start: 3, end: 3 })
+    expect(includeRegion('Intro.\n\n%% #region setup\nIn\n%% #endregion\n', 'setup')).toMatchObject({ start: 4, end: 4 })
+    expect(includeRegion('%% #region e\n%% #endregion\n', 'e')).toEqual({ ok: true, text: '', start: 2, end: 1 })
   })
 
-  it('gives null where the directive reports region_invalid', () => {
-    expect(includeRegion(text, 'missing')).toBeNull()
-    expect(includeRegion('// #region r\ny\n', 'r', { code: true })).toBeNull()
+  it('gives the reason where the directive reports region_invalid', () => {
+    expect(includeRegion(text, 'missing')).toEqual({ ok: false, reason: 'is not opened in the file' })
+    expect(includeRegion('// #region r\ny\n', 'r', { code: true })).toMatchObject({ ok: false })
   })
 })
 

@@ -25,7 +25,9 @@ const diagnostics = lint('See [x][nope].')
 
 The root entry runs in browsers, Node, Deno and bundlers. `@markup-carve/carve/node` adds
 `fileSystemResolver`, the include resolver that reads files. `@markup-carve/carve/import` imports Markdown, GFM,
-Djot, BBCode and HTML ([guide](docs/import.md)); the core entry imports HTML. A classic-script build is published as
+Djot, BBCode and HTML ([guide](docs/import.md)); the core entry imports HTML. `@markup-carve/carve/upgrade` is the
+0.1 to 0.2 source upgrade as a call, and `@markup-carve/carve/prettier` is a Prettier plugin that formats `.crv`
+files as `carve fmt` does. A classic-script build is published as
 `dist/carve.iife.min.js` (the `unpkg` and `jsdelivr` target) and exposes the same API as a `carve` global.
 
 `@markup-carve/carve/extensions` holds the provisional standard extensions, registered by the host:
@@ -46,9 +48,11 @@ npx carve import --from markdown README.md
 npx carve upgrade --check legacy.crv
 npx carve fix --write notes.crv
 npx carve flatten book.crv > book-all.crv
+npx carve diff old.crv new.crv
 ```
 
-`carve upgrade` rewrites a Carve 0.1 document into 0.2 so that it renders the same. `carve fix` rewrites Markdown and Djot habits such as `**b**` to their Carve spelling, and `carve flatten` writes a document with its includes expanded in place ([engine commands](docs/cli.md)).
+`carve upgrade` rewrites a Carve 0.1 document into 0.2 so that it renders the same. `carve fix` rewrites Markdown and Djot habits such as `**b**` to their Carve spelling, and `carve flatten` writes a document with its includes expanded in place ([engine commands](docs/cli.md)). `carve diff` writes the JSON Patch between
+the trees of two files.
 
 ## Documentation
 

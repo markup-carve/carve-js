@@ -12,7 +12,7 @@ import { type DocumentNode } from '../src/ast.ts'
 import { type ExtensionDefinition } from '../src/extensions/types.ts'
 import { CarveOptionError, type HeadingIds, readOptions } from '../src/options.ts'
 import { slugify } from '../src/slug.ts'
-import { includeRegion as includeRegionImpl } from '../src/include-source.ts'
+import { includeRegion as includeRegionImpl, type RegionResult } from '../src/include-source.ts'
 import { type ApplyPatchOptions, applyPatch as applyPatchImpl, diffTree as diffTreeImpl, type PatchOperation, sourceFingerprint as
   sourceFingerprintImpl, treeFingerprint as treeFingerprintImpl } from '../src/tree-patch.ts'
 import { type LayoutEntry, write as writeImpl, writeWithDiagnostics as writeWithDiagnosticsImpl, type WriteOutput } from '../src/write.ts'
@@ -38,6 +38,7 @@ export {
 } from '../src/options.ts'
 export { positionOf, stringOffsetOfByte, utf8Length } from '../src/positions.ts'
 export { NODE_TYPES, SPEC_VERSION, VERSION } from '../src/package-info.ts'
+export { type RegionResult } from '../src/include-source.ts'
 export { type ApplyPatchOptions, CarvePatchError, type PatchOperation } from '../src/tree-patch.ts'
 export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } from '../src/format.ts'
 export { CarveWriteError, type LayoutEntry, type WriteOutput } from '../src/write.ts'
@@ -155,9 +156,10 @@ export interface IncludeRegionOptions {
 
 /**
  * The region `name` of the file text `text`, as an include directive with `@region:name` selects it (C2-N-037 to
- * C2-N-043), or null where the directive would report `region_invalid`.
+ * C2-N-043): its text and its first and last line, from 1. Where the directive reports `region_invalid`, `ok` is false
+ * and `reason` says why.
  */
-export function includeRegion(text: string, name: string, options?: IncludeRegionOptions): string | null {
+export function includeRegion(text: string, name: string, options?: IncludeRegionOptions): RegionResult {
   checkOptions(options, { code: 'boolean' })
   if (typeof text !== 'string') throw new CarveOptionError('text', 'not a string')
   if (typeof name !== 'string') throw new CarveOptionError('name', 'not a string')
