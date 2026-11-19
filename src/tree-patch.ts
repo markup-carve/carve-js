@@ -142,7 +142,9 @@ function parsePointer(pointer: unknown, at: string): string[] {
   return pointer.slice(1).split('/').map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'))
 }
 
-function child(container: Json, key: string, at: string, adding: boolean): { container: Json[] | { [key: string]: Json }, key: string | number } {
+type Slot = { container: Json[] | { [key: string]: Json }, key: string | number }
+
+function child(container: Json, key: string, at: string, adding: boolean): Slot {
   if (Array.isArray(container)) {
     if (adding && key === '-') return { container, key: container.length }
     if (!/^(0|[1-9][0-9]*)$/.test(key)) throw new CarvePatchError(at, `${key} is no index`)
@@ -182,6 +184,18 @@ function remove(root: Json, parts: readonly string[], at: string): Json {
   return root
 }
 
+function transfer(root: Json, entry: Record<string, unknown>, path: readonly string[], at: string): Json {
+  const from = parsePointer(entry['from'], `${at}/from`)
+  const moved = structuredClone(walk(root, from, `${at}/from`))
+  if (entry['op'] === 'move') {
+    if (path.length > from.length && from.every((part, i) => path[i] === part)) {
+      throw new CarvePatchError(`${at}/path`, 'a value cannot move into itself')
+    }
+    root = remove(root, from, `${at}/from`)
+  }
+  return insert(root, path, moved, `${at}/path`, false)
+}
+
 function applyOperation(root: Json, operation: unknown, index: number): Json {
   const at = `/${index}`
   if (!isObject(operation as Json)) throw new CarvePatchError(at, 'not an operation')
@@ -200,17 +214,7 @@ function applyOperation(root: Json, operation: unknown, index: number): Json {
       if (!same(walk(root, path, `${at}/path`), value)) throw new CarvePatchError(`${at}/value`, 'the test failed')
       return root
     case 'move':
-    case 'copy': {
-      const from = parsePointer(entry['from'], `${at}/from`)
-      const moved = structuredClone(walk(root, from, `${at}/from`))
-      if (entry['op'] === 'move') {
-        if (path.length > from.length && from.every((part, i) => path[i] === part)) {
-          throw new CarvePatchError(`${at}/path`, 'a value cannot move into itself')
-        }
-        root = remove(root, from, `${at}/from`)
-      }
-      return insert(root, path, moved, `${at}/path`, false)
-    }
+    case 'copy': return transfer(root, entry, path, at)
     default: throw new CarvePatchError(`${at}/op`, `unknown operation ${JSON.stringify(entry['op'])}`)
   }
 }

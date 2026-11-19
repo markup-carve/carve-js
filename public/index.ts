@@ -33,8 +33,8 @@ export { type MigrateOptions, type MigrationResult } from '../migrate/index.ts'
 export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from '../src/layout.ts'
 export { CarveLayoutError, validateLayout } from '../src/layout-validate.ts'
 export {
-  CarveOptionError, type HeadingIds, type Mode, type ParseOptions, type Profile, type RenderOptions, type Social, type SocialRequest, type SoftBreak,
-  type UrlPolicy,
+  CarveOptionError, type HeadingIds, type Mode, type ParseOptions, type Profile, type RenderOptions, type Social, type SocialRequest,
+  type SoftBreak, type UrlPolicy,
 } from '../src/options.ts'
 export { positionOf, stringOffsetOfByte, utf8Length } from '../src/positions.ts'
 export { NODE_TYPES, SPEC_VERSION, VERSION } from '../src/package-info.ts'
@@ -45,7 +45,7 @@ export { type Diagnostic } from '../src/diagnostics.ts'
 export {
   type IncludeAnswer, type IncludeConfig, type IncludeError, type IncludeRequest, type IncludeResolver,
 } from '../src/include-settings.ts'
-export { type IncludeDependency, includeDependencies } from '../src/include-dependencies.ts'
+export { type IncludeDependency, includeDependencies, type IncludeDependencyOptions } from '../src/include-dependencies.ts'
 export { lint, type LintOptions } from '../lint/lint.ts'
 export { isUrlAllowed, urlScheme } from '../src/html-attributes.ts'
 export { DEFAULT_DENIED_SCHEMES } from '../src/option-tables.ts'

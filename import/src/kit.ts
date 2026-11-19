@@ -27,27 +27,29 @@ export class ImportInputError extends Error {
   constructor(message: string, foreignType: string) { super(message); this.name = 'ImportInputError'; this.foreignType = foreignType }
 }
 
+/** C2-H-204, C2-H-205, C2-M-082: leaves out allowed losses, keeps the first `maxLosses` and marks them under `strictLosses`. */
+function applyLossSettings(result: ImportResult, settings: LossSettings): ImportResult {
+  const allowed = new Set(settings.allowLosses ?? [])
+  const max = settings.maxLosses ?? 100
+  const kept: ImportDiagnostic[] = []
+  let losses = 0
+  let suppressed = 0
+  for (const entry of result.diagnostics) {
+    if (entry.channel !== 'render-loss') kept.push(entry)
+    else if (allowed.has(entry.code)) continue
+    else if (losses++ >= max) suppressed++
+    else kept.push(settings.strictLosses === true ? { ...entry, severity: 'error' } : entry)
+  }
+  return { ...result, diagnostics: kept, suppressedDiagnostics: suppressed }
+}
+
 /**
  * C2-M-006, C2-M-082: runs one import; a refusal becomes `ImportInputError` and `strictLosses` makes each loss an error.
  * C2-H-204, C2-H-205: allowed codes are left out, and losses past `maxLosses` are counted, not kept.
  */
 export function runImport(format: Format, settings: LossSettings, run: () => ImportResult): ImportResult {
   try {
-    const result = run()
-    const allowed = new Set(settings.allowLosses ?? [])
-    const max = settings.maxLosses ?? 100
-    const kept: ImportDiagnostic[] = []
-    let suppressed = 0
-    for (const entry of result.diagnostics) {
-      if (entry.channel !== 'render-loss') kept.push(entry)
-      else if (allowed.has(entry.code)) continue
-      else if (kept.filter((other) => other.channel === 'render-loss').length >= max) suppressed++
-      else {
-        if (settings.strictLosses === true) entry.severity = 'error'
-        kept.push(entry)
-      }
-    }
-    return { ...result, diagnostics: kept, suppressedDiagnostics: suppressed }
+    return applyLossSettings(run(), settings)
   } catch (error) {
     if (error instanceof ImportInputError) throw error
     if (error instanceof RangeError && error.message.includes('stack')) {

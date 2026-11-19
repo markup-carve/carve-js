@@ -1,7 +1,7 @@
-// The 19 options of C2-H-137. An option this engine does not offer is refused, not ignored.
+// The 24 options of C2-H-137. An option this engine does not offer is refused, not ignored.
 import {
-  BOOLEAN_DEFAULTS, COUNT_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS, OPTION_TYPES,
-  RENDER_LOSS_CODES,
+  BOOLEAN_DEFAULTS, COUNT_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS,
+  OPTION_TYPES, RENDER_LOSS_CODES,
 } from './option-tables.ts'
 import { type ExtensionDefinition, type ExtensionRenderer } from './extensions/types.ts'
 import { includeSettings, type IncludeSettings } from './include-settings.ts'

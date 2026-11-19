@@ -19,7 +19,8 @@
     "markup",
     "parser",
     "markdown",
-    "djot"
+    "djot",
+    "prettier-plugin"
   ],
   "main": "./dist/index.js",
   "types": "./dist/types/public/index.d.ts",
@@ -48,6 +49,10 @@
     "./export": {
       "types": "./dist/types/public/export.d.ts",
       "import": "./dist/export.js"
+    },
+    "./prettier": {
+      "types": "./dist/types/public/prettier.d.ts",
+      "import": "./dist/prettier.js"
     },
     "./upgrade": {
       "types": "./dist/types/public/upgrade.d.ts",
@@ -112,6 +117,7 @@
     "marked": "^18.2.0",
     "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-gfm": "^3.1.0",
+    "prettier": "^3.9.6",
     "typescript": "^5.7.2",
     "typescript-5-9": "npm:typescript@^5.9.3",
     "typescript-eslint": "^8.70.1",

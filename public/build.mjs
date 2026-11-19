@@ -15,6 +15,7 @@ await build({ ...shared, entryPoints: ['public/formats.ts'], outfile: 'dist/impo
   external: ['parse5', 'micromark', 'micromark-extension-*', '@djot/djot'] })
 await build({ ...shared, entryPoints: ['public/export.ts'], outfile: 'dist/export.js', platform: 'neutral' })
 await build({ ...shared, entryPoints: ['public/upgrade.ts'], outfile: 'dist/upgrade.js', platform: 'neutral' })
+await build({ ...shared, entryPoints: ['public/prettier.ts'], outfile: 'dist/prettier.js', platform: 'neutral' })
 
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'public/tsconfig.build.json'], { stdio: 'inherit' })
 

@@ -33,7 +33,9 @@ function commonLines(a: readonly string[], b: readonly string[]): [number, numbe
   return []
 }
 
-function backtrack(trace: Int32Array[], n: number, m: number, offset: number, a: readonly string[], b: readonly string[]): [number, number][] {
+function backtrack(
+  trace: Int32Array[], n: number, m: number, offset: number, a: readonly string[], b: readonly string[],
+): [number, number][] {
   const kept: [number, number][] = []
   let x = n
   let y = m
@@ -64,6 +66,18 @@ function entryFor(records: readonly ReportRecord[], first: number, last: number)
   return before?.entry ?? placed[0]?.entry ?? 'upgrade'
 }
 
+/** The change from `removed` to `added` at byte `offset`, narrowed to the characters that differ. */
+function narrowed(removed: string, added: string, offset: number, entry: string): UpgradeEdit {
+  let head = 0
+  while (head < removed.length && head < added.length && removed[head] === added[head]) head++
+  let tail = 0
+  while (tail < removed.length - head && tail < added.length - head
+    && removed[removed.length - 1 - tail] === added[added.length - 1 - tail]) tail++
+  const startOffset = offset + bytes(removed.slice(0, head))
+  return { range: { startOffset, endOffset: startOffset + bytes(removed.slice(head, removed.length - tail)) },
+    text: added.slice(head, added.length - tail), entry }
+}
+
 /** The edits from `input` to `output`, in source order and not overlapping; applied together they give `output`. */
 export function upgradeEdits(input: string, output: string, records: readonly ReportRecord[]): UpgradeEdit[] {
   if (input === output) return []
@@ -76,20 +90,8 @@ export function upgradeEdits(input: string, output: string, records: readonly Re
   let offset = 0
   for (const [nextX, nextY] of kept) {
     if (nextX > x || nextY > y) {
-      let removed = a.slice(x, nextX).join('')
-      let added = b.slice(y, nextY).join('')
-      // Narrow the change to the characters that differ.
-      let head = 0
-      while (head < removed.length && head < added.length && removed[head] === added[head]) head++
-      let tail = 0
-      while (tail < removed.length - head && tail < added.length - head
-        && removed[removed.length - 1 - tail] === added[added.length - 1 - tail]) tail++
-      const start = offset + bytes(removed.slice(0, head))
-      const text = added.slice(head, added.length - tail)
-      removed = removed.slice(head, removed.length - tail)
-      added = text
-      edits.push({ range: { startOffset: start, endOffset: start + bytes(removed) }, text: added,
-        entry: entryFor(records, x + 1, Math.max(x + 1, nextX)) })
+      const entry = entryFor(records, x + 1, Math.max(x + 1, nextX))
+      edits.push(narrowed(a.slice(x, nextX).join(''), b.slice(y, nextY).join(''), offset, entry))
       for (let at = x; at < nextX; at++) offset += bytes(a[at]!)
     }
     if (nextX < a.length) offset += bytes(a[nextX]!)

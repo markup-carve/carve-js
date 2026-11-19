@@ -9,5 +9,5 @@
     "outDir": "../dist/types"
   },
   "include": [],
-  "files": ["index.ts", "node.ts", "extensions.ts", "formats.ts", "export.ts", "upgrade.ts"]
+  "files": ["index.ts", "node.ts", "extensions.ts", "formats.ts", "export.ts", "upgrade.ts", "prettier.ts"]
 }

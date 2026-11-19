@@ -19,7 +19,7 @@ import { flatten } from './flatten.ts'
 import { migrateCaseOnlyReferences } from '../build/engine-0.1/index.js'
 import includeTable from '../data/includes.json' with { type: 'json' }
 import { EXPORT_LOSS_CODES, exportTo, type ExportOptions, type ExportTarget } from '../src/export/index.ts'
-import { diffTree } from '../src/tree-patch.ts'
+import { diffTree, type PatchOperation } from '../src/tree-patch.ts'
 import { type IncludeAnswer, type IncludeConfig, type IncludeRequest } from '../src/include-settings.ts'
 
 /** C2-T-040: the failure categories and their status. */
@@ -562,12 +562,13 @@ function diffFiles(args: ParsedArgs): number {
   if (args.files.length !== 2) throw new UsageError('diff takes two files')
   const [before, after] = args.files.map((path) => parse(strictText(path, readBytes(path)), { positions: false }))
   const patch = diffTree(before!, after!)
-  if (args.values['json'] === true) process.stdout.write(`${JSON.stringify(patch, null, 2)}\n`)
-  else for (const operation of patch) {
-    const value = 'value' in operation ? ` ${JSON.stringify(operation.value)}` : 'from' in operation ? ` from ${operation.from}` : ''
-    process.stdout.write(`${operation.op} ${operation.path === '' ? '/' : operation.path}${value}\n`)
-  }
+  process.stdout.write(args.values['json'] === true ? `${JSON.stringify(patch, null, 2)}\n` : patch.map(operationLine).join(''))
   return patch.length === 0 ? 0 : 1
+}
+
+function operationLine(operation: PatchOperation): string {
+  const value = 'value' in operation ? ` ${JSON.stringify(operation.value)}` : 'from' in operation ? ` from ${operation.from}` : ''
+  return `${operation.op} ${operation.path === '' ? '/' : operation.path}${value}\n`
 }
 
 /** C2-T-011, C2-T-017: the files in order; a failure of status 2 stops the run, one of status 1 ends its file. */
