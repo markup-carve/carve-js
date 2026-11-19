@@ -39,7 +39,9 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci --ignore-scripts
+      # AST cross-check needs only the pinned spec dependencies; the engine reader is dependency-free.
+      - if: matrix.gate != 'ast-schema-crosscheck'
+        run: npm ci --ignore-scripts
       - if: matrix.gate == 'proptest'
         run: npm ci --prefix import --ignore-scripts
       - if: matrix.gate == 'ast-schema-crosscheck'
