@@ -9,7 +9,7 @@ const CASES = [
   { id: 'thematic-break-spelling', trigger: '___', near: '***' },
   { id: 'setext-heading-underline', trigger: 'A\n---', near: 'A' },
   { id: 'deprecated-spaced-thematic-break', trigger: '* * *', near: '***' },
-  { id: 'block-marker-as-text', trigger: 'a\n~~~js', near: 'a\n```js' },
+  { id: 'block-marker-as-text', trigger: '~~~js', near: '```js' },
   { id: 'html-comment-renders-as-text', trigger: '<!-- x -->', near: '%% x' },
   { id: 'bare-html-tag', trigger: '<b>x</b>', near: '[x](/b)' },
   { id: 'empty-reference-definition', trigger: '[a]:', near: '[a]: /u' },

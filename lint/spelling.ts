@@ -135,8 +135,9 @@ function tildeFence(line: Line, context: LintContext): void {
     : contentLine(line)
   const { text, start } = candidate
   const report = (what: string): void => context.report('block-marker-as-text', start, start + text.length, line.path, { what })
-  if (text.startsWith('~~~')) return report('a tilde fence')
-  if (/^:{3,}\S/.test(text) && firstLineOfPath(line.path, context) === line.number) return report('a colon fence')
+  const firstText = firstLineOfPath(line.path, context) === line.number
+  if (text.startsWith('~~~') && firstText) return report('a tilde fence')
+  if (/^:{3,}\S/.test(text) && firstText) return report('a colon fence')
   // C2-B-090: a brace run that opened a braced inline form is no attribute line that failed.
   if (text.startsWith('{') && opensAttributes(text.charCodeAt(1)) && !isAttributeLine(text, 0, text.length)
     && !context.state.spanStarts.has(start)) {
@@ -362,7 +363,8 @@ function definitionInContainer(line: Line, context: LintContext): void {
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
   if (hasAncestor(line.path, context, 'footnote')) return
-  if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) !== line.number) return
+  if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) !== line.number
+    && line.text[0] !== ' ' && line.text[0] !== '\t') return
   if (line.text[0] !== ' ' && line.text[0] !== '\t' && line.path.split('/').length <= 3) return
   context.report('definition-in-container', start, start + close + 2, line.path)
 }
