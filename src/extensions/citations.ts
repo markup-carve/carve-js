@@ -144,6 +144,20 @@ function collectEntries(view: DocumentNode, pool: readonly CslEntry[]): {
   for (const csl of pool) {
     if (csl !== null && typeof csl === 'object' && typeof csl.id === 'string' && !entries.has(csl.id)) entries.set(csl.id, cslEntry(csl))
   }
+  // A duplicate key resolves to its last definition and has one list item, as in the 0.1 catalog.
+  const last = new Map<string, DirectiveNode>()
+  for (const [node, keys] of directives) for (const key of keys) last.set(key, node)
+  for (const [node, keys] of directives) {
+    const seen = new Set<string>()
+    const kept: string[] = []
+    for (let at = keys.length - 1; at >= 0; at--) {
+      const key = keys[at] ?? ''
+      if (last.get(key) !== node || seen.has(key)) continue
+      seen.add(key)
+      kept.push(key)
+    }
+    directives.set(node, kept.reverse())
+  }
   return { entries, directives }
 }
 
@@ -200,12 +214,12 @@ function listItem(entry: Entry, id: string, uses: readonly string[]): ListNode['
 }
 
 function referenceList(order: readonly string[], entries: Map<string, Entry>, refIds: Map<string, string>,
-  useIds: Map<string, string[]>, mode: CitationsOptions['mode'], sourceOrder = false): ListNode {
+  useIds: Map<string, string[]>, mode: CitationsOptions['mode'], sourceOrder = false, start = 1): ListNode {
   const keys = [...order]
   if (mode === 'author-date' && !sourceOrder) keys.sort((a, b) => compare(entries.get(a)?.author ?? a, entries.get(b)?.author ?? b))
   const items = keys.map((key) => listItem(entries.get(key) ?? { blocks: [] }, refIds.get(key) ?? key, useIds.get(key) ?? []))
   const marker: ListNode['marker'] = mode === 'author-date'
-    ? { kind: 'bullet', char: '-' } : { kind: 'ordered', style: '1', delimiter: '.' }
+    ? { kind: 'bullet', char: '-' } : { kind: 'ordered', style: '1', delimiter: '.', ...(start === 1 ? {} : { start }) }
   return { type: 'list', marker, spacing: 'tight', attrs: { classes: ['references'] }, children: items }
 }
 
@@ -267,7 +281,7 @@ function citationsTransform(view: DocumentNode, options: CitationsOptions): Docu
     const body = withoutEntries(node)
     const keys = directives.get(node) ?? []
     const listKeys = placed ? keys : [...keys, ...order.filter((key) => !sourceKeys.has(key))]
-    body.children.push(referenceList(listKeys, entries, refIds, useIds, mode, true))
+    body.children.push(referenceList(listKeys, entries, refIds, useIds, mode, true, numbers.get(listKeys[0] ?? '') ?? 1))
     placed = true
     claimed = true
     return claimDirective(REFERENCES, node, [body])

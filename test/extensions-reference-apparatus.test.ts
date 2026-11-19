@@ -201,6 +201,22 @@ describe('citations', () => {
     expect(out.match(/<ul class="references">/gu)).toHaveLength(2)
   })
 
+  it('keeps last-definition-wins with one id for a duplicate key', () => {
+    const source = 'See :cite[a].\n\n::: references\n:: a\n: Old.\n\n:: b\n: Other.\n\n:: a\n: New.\n:::\n'
+    const out = html(source, citations())
+    expect(out.match(/id="ref-a"/gu)).toHaveLength(1)
+    expect(out).toContain('<li id="ref-a">New.</li>')
+    expect(out).not.toContain('Old.')
+    expect(out.indexOf('id="ref-b"')).toBeLessThan(out.indexOf('id="ref-a"'))
+  })
+
+  it('starts a later numbered references list at its citation number', () => {
+    const source = 'See :cite[b].\n\n::: references\n:: a\n: First.\n:::\n\n::: references\n:: b\n: Second.\n:::\n'
+    const out = html(source, citations())
+    expect(out).toContain('<a href="#ref-b" data-cite-key="b">2</a>')
+    expect(out).toContain('<ol start="2" class="references">')
+  })
+
   it('writes an undefined key as its text and gives it no number', () => {
     const out = html(`:cite[nope] :cite[doe; nope] :cite[doe]\n\n${REFS}`, citations())
     expect(out).toContain('<p>nope doe; nope [<a href="#ref-doe" data-cite-key="doe">1</a>]</p>')
