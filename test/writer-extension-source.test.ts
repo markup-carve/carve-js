@@ -26,3 +26,13 @@ it('C2-X-023: an inline source body that reads back as other content still repor
   const result = writeWithDiagnostics(decodeTree(JSON.stringify(tree)))
   expect(result.diagnostics.length).toBeGreaterThan(0)
 })
+
+it('C2-X-023, C2-A-193: an inline source form beside source metadata is written without a loss', () => {
+  const tree = parse(':wiki[Page]', { extensions: [wikiExtension], positions: false })
+  const document = decodeTree(JSON.stringify({ ...tree, astVersion: '2.0',
+    extensions: [...tree.extensions ?? [], { name: 'carve.source', version: '1', required: false, slots: [] }],
+    children: [{ ...tree.children[0], data: { 'carve.source': {
+      format: 'docx', locator: { part: 'word/document.xml' }, importer: { name: 'pandoc-carve', version: '2.0' } } } }] }))
+  const result = writeWithDiagnostics(document)
+  expect([result.source, result.diagnostics]).toEqual([':wiki[Page]\n', []])
+})

@@ -583,8 +583,9 @@ function withoutStandardData(node: Node): Node {
 /** C2-W-002, C2-A-193: the writer disregards standard data namespaces in its readback check. */
 function writerEqual(expected: Node, actual: Node): boolean {
   if (treesEqual(expected, actual) || sourceCoreEquivalent(expected, actual)) return true
-  if (treesEqual(withoutStandardData(expected), actual)) return true
-  const cores = withCoreInlines(expected)
+  const plain = withoutStandardData(expected)
+  if (treesEqual(plain, actual)) return true
+  const cores = withCoreInlines(plain)
   return cores !== undefined && treesEqual(cores, actual)
 }
 
