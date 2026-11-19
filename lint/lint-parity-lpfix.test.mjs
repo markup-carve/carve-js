@@ -25,6 +25,7 @@ const cases = [
   [5158, 'list-item-block-overindented', '* $$x$$\n   %% #region r', []],
   [5172, 'github-alert-marker', '> [^f]: > [!NOTE]', [[10, 17]]],
   [5172, 'github-alert-marker', '>   [^n]: > [!NOTE]', [[12, 19]]],
+  [5172, 'github-alert-marker', '> prose > [!NOTE]', []],
   [5171, 'unattached-caption', '[^f]: %%x\n^ Caption', [[10, 19]]],
   [5165, 'description-separator-below-content-column', '\t:: more\n> ::', []],
   [5164, 'description-separator-below-content-column', ':: term\n: :: t\n: %%', []],

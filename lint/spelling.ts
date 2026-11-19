@@ -381,7 +381,7 @@ function foldedTerm(line: Line, context: LintContext): void {
 }
 
 function githubAlert(line: Line, context: LintContext): void {
-  const match = /^\s*>[ \t]*(?:.*?>[ \t]*)?\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
+  const match = /^\s*(?:>[ \t]*)+(?:\[[^\]\n]+\]:[ \t]*>[ \t]*)?\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
   if (match === null || !line.paragraph) return
   const at = match[0].lastIndexOf('[!')
   context.report('github-alert-marker', line.start + at, line.end, line.path)
