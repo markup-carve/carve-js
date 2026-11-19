@@ -9,7 +9,7 @@ import { rescueFence } from './fence-rescue.ts'
 import { rescueDescription } from './description-rescue.ts'
 import { rescueEmptyDefinitionItem } from './definition-rescue.ts'
 import { rescueCombinedInline } from './combined-inline-rescue.ts'
-import { rescueHeadingBraceTag } from './heading-brace-rescue.ts'
+import { rescueBraceOpenerTags, rescueHeadingBraceTag } from './heading-brace-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
 import { addShortTableColumns, addTaskPresentation, applyHtmlTransformations, dropEmptyClasses, explainEmptyRuns,
@@ -22,6 +22,8 @@ import { removeTrailingLineBlockSpaces } from './html-line-block.ts'
 import { rescueMinor } from './minor-rescues.ts'
 import { rescueTargeted } from './targeted-rescues.ts'
 import { rescueBacktick } from './backtick-rescue.ts'
+import { rescueDirectiveSocial } from './directive-social-rescue.ts'
+import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
 import { RULES } from './rules/index.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
@@ -479,7 +481,8 @@ function recordsAfterRescue(input: string, rescued: { output: string; record: Re
 /** The first rescue whose spelling keeps the 0.1 HTML, in the order of the rescues. */
 function rescueMismatch(input: string, output: string, mismatch: ReportRecord): { output: string; record: ReportRecord } | null {
   const rescues = [rescueFence, rescuePlus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
-    rescueCombinedInline, rescueHeadingBraceTag, rescueTargeted, rescueMinor, rescueBacktick]
+    rescueCombinedInline, rescueHeadingBraceTag, rescueTargeted, rescueMinor, rescueBacktick, rescueDirectiveSocial, rescueBraceOpenerTags,
+    rescueBracedBoldItalic]
   for (const rescue of rescues) {
     const rescued = rescue(input, output, mismatch)
     if (rescued !== null) return rescued
@@ -496,6 +499,12 @@ function preservingMappedResult(input: string, mapped: { output: string; record:
   if (mathClass !== null && !hasEntry(records, 'U-249')) records.push(mathClass)
   return { output: mapped.output, changed: mapped.output !== input, records: [mapped.record, ...records],
     check: 'pass', engine01: ENGINE_01_VERSION }
+}
+
+/** U-290 keeps the directive unexpanded, so the U-011 review of the failed check stays. */
+function keepIncludeReview(rescue: ReportRecord, checked: readonly ReportRecord[], records: ReportRecord[]): void {
+  if (rescue.entry !== 'U-290' || hasEntry(records, 'U-011')) return
+  for (const record of checked) if (record.entry === 'U-011') records.push({ ...record, class: 'report' })
 }
 
 function upgradeSource(input: string): UpgradeResult {
@@ -516,8 +525,10 @@ function upgradeSource(input: string): UpgradeResult {
     const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
     if (mismatch !== undefined) {
       const rescued = rescueMismatch(input, done.output, mismatch)
+      const checked = done.records
       done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
       if (rescued !== null) {
+        keepIncludeReview(rescued.record, checked, done.records)
         done.records.push(rescued.record)
         done.output = rescued.output
       }

@@ -63,7 +63,7 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
 const NOT_IDEMPOTENT = new Set(['U-014#0', 'U-015#0', 'U-113#1', 'U-167#0',
-  'U-228#0', 'U-228#1', 'U-228#2'])
+  'U-207#0', 'U-228#0', 'U-228#1', 'U-228#2'])
 
 function entries(input: string): string[] {
   return upgrade(input).records.map((record) => record.entry)

@@ -1,4 +1,4 @@
-import { compareHtml } from './compare.ts'
+import { compareHtml, compareHtmlExact } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
 
@@ -23,6 +23,26 @@ function escapedMalformed(output: string, expected: string): string | null {
     at = output.indexOf('{%~{#', at + 1)
   }
   return null
+}
+
+function tagCount(source: string): number {
+  return (html02(source, false).match(/class="tag"/gu) ?? []).length
+}
+
+/** Escapes each `{#` opener whose escape brings a 0.2 tag back, then requires the complete 0.1 HTML. */
+function escapedOpeners(output: string, expected: string): string | null {
+  let current = output
+  let count = tagCount(current)
+  for (let at = current.indexOf('{#'); at >= 0; at = current.indexOf('{#', at + 1)) {
+    if (current[at - 1] === '\\') continue
+    const candidate = current.slice(0, at) + '\\' + current.slice(at)
+    const next = tagCount(candidate)
+    if (next <= count) continue
+    current = candidate
+    count = next
+    at++
+  }
+  return current !== output && compareHtmlExact(expected, html02(current, false)).equal ? current : null
 }
 
 /** C2-I-119, C2-I-090: keep a tag visible inside a failed brace attribute. */
@@ -53,4 +73,12 @@ export function rescueHeadingBraceTag(input: string, output: string, mismatch: R
       'the failed inline brace opener was escaped so the tag keeps its 0.1 boundary') }
   }
   return null
+}
+
+/** U-256 for any failed brace attribute, tried after every other rescue. */
+export function rescueBraceOpenerTags(input: string, output: string, mismatch: ReportRecord): Rescue | null {
+  if (!output.includes('{#')) return null
+  const openers = escapedOpeners(output, html01(input))
+  return openers === null ? null : { output: openers, record: recordOf('U-256', mismatch.line,
+    'the failed brace openers were escaped so the tags keep their 0.1 boundaries') }
 }
