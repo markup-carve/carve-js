@@ -2,7 +2,7 @@
 import {
   type AdmonitionNode, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
   type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
-  forEachSlot,
+  forEachSlot, isBreak,
   type FigureGroupNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
   type ListItemNode,
   type ImageNode, type ListNode, type Marker, type Node, type NodeOfType, type ParagraphNode, type RawBlockNode, type TableBodyNode,
@@ -104,7 +104,8 @@ function visibleBlocks(r: Render, list: readonly Node[]): readonly Node[] {
 /** A block that writes something. C2-H-019: a paragraph that holds only comments writes nothing. */
 function isVisible(r: Render, node: Node): boolean {
   if (INVISIBLE.includes(node.type)) return false
-  return node.type !== 'paragraph' || !(onlyComments(node.children) || isSilenced(r, node))
+  if (node.type === 'paragraph' && isSilenced(r, node)) return false
+  return node.type !== 'paragraph' || !onlyComments(node.children)
 }
 
 /**
@@ -119,8 +120,9 @@ function isSilenced(r: Render, node: ParagraphNode): boolean {
   let silent = children.length === 0
   for (let at = 0; at < children.length; at++) {
     const child = children[at]!
-    if (child.type === 'comment' || (child.type === 'link' && isEmptyDroppedLink(r, child))) silent = true
-    else if ((child.type !== 'soft_break' && child.type !== 'hard_break') || !isSkippedBreak(children, at, false)) return false
+    // A paragraph of comments alone is left to `onlyComments`.
+    if (child.type === 'link' && isEmptyDroppedLink(r, child)) silent = true
+    else if (child.type !== 'comment' && (!isBreak(child) || !isSkippedBreak(children, at, false))) return false
   }
   if (!silent) return false
   r.silenced.add(node)
