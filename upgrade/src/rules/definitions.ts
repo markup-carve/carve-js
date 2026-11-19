@@ -135,7 +135,10 @@ function preserveEmptyItem(ctx: Context, id: string, span: Span, message: string
 
 /** Cuts the definition of `span` and writes it at column 0 above the first line of the document. */
 function moveToTop(ctx: Context, id: string, span: Span, cut: number, message: string): void {
-  change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), '', message)
+  const at = lineStart(ctx.lines, span.first)
+  // An empty braced comment keeps the block 0.1 opened for the definition (C2-I-025).
+  const kept = top === 'kept' ? lineText(ctx.lines, span.first).slice(0, cut) + '{%%}\n' : ''
+  change(ctx, id, at, lineStart(ctx.lines, span.last + 1), kept, message)
   change(ctx, id, 0, 0, withoutPrefix(ctx, span, cut) + '\n', message)
 }
 
@@ -212,8 +215,11 @@ function droppedLinkDefinitions(ctx: Context): void {
   }
 }
 
-/** Set while `definitionsAtTop` runs: a moved definition goes above the document instead of after its container. */
-let top = false
+/**
+ * Set while a late variant runs: a moved definition goes above the document instead of after its
+ * container, and with `kept` an empty comment stays in its place.
+ */
+let top: false | 'moved' | 'kept' = false
 
 export function definitions(ctx: Context): void {
   const spans = definitionSpans(ctx)
@@ -228,6 +234,12 @@ export function definitions(ctx: Context): void {
  * open to the end, such as an unclosed fence; above the first line it stands in no block (C2-B-081).
  */
 export function definitionsAtTop(ctx: Context): void {
-  top = true
+  top = 'moved'
+  try { definitions(ctx) } finally { top = false }
+}
+
+/** `definitionsAtTop`, leaving an empty braced comment where the definition stood. */
+export function definitionsKept(ctx: Context): void {
+  top = 'kept'
   try { definitions(ctx) } finally { top = false }
 }

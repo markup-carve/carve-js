@@ -523,7 +523,18 @@ function latePass(input: string, first: string): UpgradeResult | null {
     tried.add(done.output)
     const mathClass = mathClassReport(done.context)
     if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
-    const check = selfCheck(input, done)
+    const rewritten = done.records.map((record) => ({ ...record }))
+    let check = selfCheck(input, done)
+    const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
+    if (check === 'mismatch' && mismatch !== undefined) {
+      const rescued = rescueMismatch(input, done.output, mismatch, done.records)
+      if (rescued !== null && !tried.has(rescued.output)) {
+        tried.add(rescued.output)
+        done.records = [...recordsAfterRescue(input, rescued, rewritten), rescued.record]
+        done.output = rescued.output
+        check = selfCheck(input, done)
+      }
+    }
     if (check !== 'mismatch') {
       return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
     }
