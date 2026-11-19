@@ -134,7 +134,9 @@ function tildeFence(line: Line, context: LintContext): void {
   const report = (what: string): void => context.report('block-marker-as-text', start, start + text.length, line.path, { what })
   if (text.startsWith('~~~')) return report('a tilde fence')
   if (/^:{3,}\S/.test(text)) return report('a colon fence')
-  if (text.startsWith('{') && opensAttributes(text.charCodeAt(1)) && !isAttributeLine(text, 0, text.length)) {
+  // C2-B-090: a brace run that opened a braced inline form is no attribute line that failed.
+  if (text.startsWith('{') && opensAttributes(text.charCodeAt(1)) && !isAttributeLine(text, 0, text.length)
+    && !context.state.spanStarts.has(start)) {
     report('an attribute line')
   }
 }

@@ -134,6 +134,13 @@ function visitChildren(node: Node, path: string, context: LintContext, controls:
   }, SOURCE_ORDER)
 }
 
+function markSpanStarts(children: readonly Node[], context: LintContext): void {
+  for (const child of children) {
+    const at = child.type === 'text' || child.pos === undefined ? undefined : context.chars[child.pos.startOffset]
+    if (at !== undefined) context.state.spanStarts.add(at)
+  }
+}
+
 function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
   context.nodeTypes.set(path, node.type)
   if (node.type === 'footnote') context.state.footnoteKeys.set(path, node.key)
@@ -142,6 +149,7 @@ function visit(node: Node, path: string, context: LintContext, controls: Control
     context.state.idOwners.set(node.attrs.id, node.type)
   }
   if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
+  if (node.type === 'paragraph') markSpanStarts(node.children, context)
   if (node.type === 'heading' && node.generatedId !== undefined) {
     context.state.ids.add(node.generatedId)
     context.state.idOwners.set(node.generatedId, node.type)
@@ -295,6 +303,7 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, referenceUrls: new Set(), ids: new Set(),
       idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
+      spanStarts: new Set(),
       usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [], unresolvedReferences: [],
       footnoteDefinitions: [] },
     report(id, start, end, path, values = {}, index = 0) {
