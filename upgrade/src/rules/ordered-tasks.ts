@@ -32,3 +32,20 @@ export function orderedTasks(ctx: Context): void {
     change(ctx, 'U-120', at, at, '\\', 'ordered task box escaped to keep its 0.1 text')
   }
 }
+
+const BULLETS = '-*+'
+
+/** U-434, C2-B-046: 0.1 read a box after a run of spaces behind a bullet; 0.2 reads it only directly after one space. */
+export function taskBoxSpacing(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const { node } = visit
+    if (node.type !== 'list_item' || typeof node.checked !== 'boolean' || node.pos === undefined) continue
+    if (visit.parent?.node.type !== 'list' || visit.parent.node.ordered === true) continue
+    const marker = node.pos.startOffset
+    if (!BULLETS.includes(ctx.src[marker] ?? '')) continue
+    let at = marker + 1
+    while (ctx.src[at] === ' ') at++
+    if (at - marker < 3 || boxAt(ctx, at, node.pos.startLine) === null) continue
+    change(ctx, 'U-434', marker + 2, at, '', 'spaces between the bullet and the task box reduced to one')
+  }
+}

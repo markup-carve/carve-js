@@ -40,9 +40,20 @@ function rowsOf(table: Node01): Node01[] {
 }
 
 /** Makes `cell` a header cell with the alignment `align`, by the mark after its pipe (C2-B-171). */
+const ALIGN_STYLES: Record<string, string> = { '<': 'left', '>': 'right', '~': 'center' }
+
+/** Set by the late variant that writes the alignment of a counted head cell as its own style (C2-B-213, C2-H-162). */
+let headStyles = false
+
 function headerCell(ctx: Context, id: string, cell: Node01, align: unknown, message: string): void {
   const start = cell.pos!.startOffset
   if (ctx.src[start - 1] !== '|' || ctx.src[start] === '=') return
+  const styled = headStyles && id === 'U-058' && ctx.src[start] === '{' && ctx.src[start + 2] === '}'
+    ? ALIGN_STYLES[ctx.src[start + 1]!] : undefined
+  if (styled !== undefined) {
+    change(ctx, id, start, start + 3, `={style="text-align: ${styled};"}`, message)
+    return
+  }
   const mark = typeof align === 'string' && ALIGN_MARKS[align] !== undefined ? `{${ALIGN_MARKS[align]}}` : ''
   // C2-B-171: the brace block of a cell prefix is glued to the header mark, so the late pass writes `|={>}`.
   const space = ctx.src[start] === ' ' || (ctx.late && ctx.src[start] === '{') ? '' : ' '
@@ -171,6 +182,12 @@ function otherRowKeys(table: Node01): boolean {
 function headerRows(ctx: Context, table: Node01): void {
   const count = Number.parseInt(keyValue(table, 'header-rows') ?? '', 10)
   if (!(count > 0) || table.sourceFormat !== undefined || otherRowKeys(table)) return
+  const rows = rowsOf(table)
+  // C2-B-174, C2-H-010, C2-H-056: a span from the body into the head has no spelling, so U-060 reports it.
+  if (count < rows.length && cellsOf(rows[count]!).some((cell) => cell.span === 'rowspan')) {
+    note(ctx, 'U-060', rows[count - 1]!.pos!.startLine, 'a row span from the body into the counted head does not form in 0.2')
+    return
+  }
   const message = 'header-rows removed, the counted rows written with header cells'
   const lines = attributeLinesAbove(ctx, table.pos!.startLine)
   if (!lines.some((line) => removeAttribute(ctx, 'U-058', line, (token) => token.startsWith('header-rows='), message))) return
@@ -250,6 +267,12 @@ function visitNode(ctx: Context, visit: Visit): void {
 
 export function tables(ctx: Context): void {
   for (const visit of ctx.visits) visitNode(ctx, visit)
+}
+
+/** The late form of `tables` that keeps a counted head cell's alignment on that cell alone. */
+export function tablesHeadStyles(ctx: Context): void {
+  headStyles = true
+  try { tables(ctx) } finally { headStyles = false }
 }
 
 /** U-011: 0.2.0 expands no include (C2-H-133), so every directive is reported. */

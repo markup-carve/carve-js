@@ -2126,6 +2126,30 @@
       "name": "comment line that ended a 0.1 block",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-434",
+      "name": "task box after more than one space behind a bullet",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-435",
+      "name": "block 0.1 read after a description, indented past its mark",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-436",
+      "name": "line 0.1 read into a list item left of its column",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-437",
+      "name": "paragraph 0.1 started below list item text, outside the item",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

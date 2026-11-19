@@ -46,6 +46,27 @@ export function addTaskPresentation(old: string, next: string): Result {
   return { html: source.join(''), applied: changed ? ['U-133'] : [] }
 }
 
+const LABEL = / aria-label="([^"]*)"/u
+
+/** C2-H-032: the 0.2 box label also takes the text of the item's later paragraph and heading children. */
+export function followTaskLabels(old: string, next: string): Result {
+  const source = htmlTokens(old)
+  const target = htmlTokens(next)
+  let changed = false
+  for (let at = 0; at < Math.min(source.length, target.length); at++) {
+    const before = source[at]!
+    const after = target[at]!
+    if (!before.startsWith('<input ') || !before.includes('type="checkbox"')) continue
+    const left = LABEL.exec(before)?.[1]
+    const right = LABEL.exec(after)?.[1]
+    if (left === undefined || right === undefined || !right.startsWith(`${left} `)) continue
+    if (before.replace(LABEL, '') !== after.replace(LABEL, '')) continue
+    source[at] = after
+    changed = true
+  }
+  return { html: source.join(''), applied: changed ? ['U-133'] : [] }
+}
+
 function isLiOpen(token: string): boolean { return token === '<li>' || token.startsWith('<li ') }
 
 function noteContent(token: string, seen: boolean[]): void {

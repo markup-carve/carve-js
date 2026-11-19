@@ -12,7 +12,7 @@ import { rescueCombinedInline } from './combined-inline-rescue.ts'
 import { rescueBraceOpenerTags, rescueHeadingBraceTag } from './heading-brace-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
-import { addShortTableColumns, addTaskPresentation, applyHtmlTransformations, dropEmptyClasses, explainEmptyRuns,
+import { addShortTableColumns, addTaskPresentation, followTaskLabels, applyHtmlTransformations, dropEmptyClasses, explainEmptyRuns,
   hasTaskPresentationDifference,
   moveTrailingSigilHyphen,
   wrapLaterItemParagraphs } from './html-transform.ts'
@@ -326,8 +326,9 @@ function applyCitedStep(old: string, next: string, records: ReportRecord[]): Ret
     transformed.applied.push(...labels.applied)
     if (hasEntry(records, 'U-133')) {
       const task = addTaskPresentation(transformed.html, next)
-      transformed.html = task.html
-      transformed.applied.push(...task.applied)
+      const label = followTaskLabels(task.html, next)
+      transformed.html = label.html
+      transformed.applied.push(...task.applied, ...label.applied)
     }
   }
   const catalog = applyHtmlTransformations(transformed.html, next,

@@ -1,6 +1,7 @@
+import { ancestor, isInside, quotesOf } from '../blocks.ts'
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
-import { isBlank, lineStart, lineText } from '../source.ts'
+import { indentOf, isBlank, lineStart, lineText } from '../source.ts'
 import { quotePrefix } from './blank-lines.ts'
 import { insideQuotes, quoteDepth } from './lines.ts'
 
@@ -60,9 +61,10 @@ function earlyComment(src: string, start: number, end: number, visit: Visit): { 
   if (src.charCodeAt(start + 2) === 0x25 && lineStart) return null
   const atLineEnd = end >= src.length || src[end] === '\n' || src[end] === '\r'
   if (atLineEnd && (lead < start || lineStart)) return null
-  const text = src.slice(start + 2, end)
-  // A code or math span in the text is read before the braced comment can close.
-  if (/%\}|\n|`|\$/u.test(text)) return null
+  const raw = src.slice(start + 2, end)
+  if (/%\}|\n|\\/u.test(raw)) return null
+  // A code or math span in the text is read before the braced comment can close, so its opener is escaped.
+  const text = raw.replace(/[`$]/gu, '\\$&')
   // 0.1 dropped the spaces before the comment; a braced comment keeps its neighbors, so they go too.
   return { from: lineStart ? start : lead, text }
 }
@@ -181,5 +183,109 @@ export function explicitInline(ctx: Context): void {
       if (edit !== null && edit.end > from && edit.start < to) ctx.findings.splice(at, 1)
     }
     for (const edit of planned) change(ctx, edit.entry, edit.start, edit.end, edit.text, EXPLICIT_MESSAGE)
+  }
+}
+
+function columnOf(ctx: Context, visit: Visit): number {
+  const { startLine, startOffset } = visit.node.pos!
+  return startOffset - lineStart(ctx.lines, startLine)
+}
+
+/** The outermost description list that holds `above` and not `below`. */
+function leftList(above: Visit, below: Visit): Visit | null {
+  let found: Visit | null = null
+  for (let at = ancestor(above, 'definition_list'); at !== null; at = ancestor(at, 'definition_list')) {
+    if (!isInside(below, at)) found = at
+  }
+  return found
+}
+
+/** The outermost block of `below` that starts on `line` and does not hold `above`. */
+function movedBlock(below: Visit, above: Visit, line: number): Visit {
+  let block = below
+  while (block.parent !== null && block.parent.node.pos?.startLine === line && !isInside(above, block.parent)
+    && block.parent.node.type !== 'definition_list') block = block.parent
+  return block
+}
+
+/**
+ * U-435, C2-B-067, C2-B-076: a block indented past a description mark stays in the description in 0.2.
+ * Where 0.1 ended the description above it, the block moves to the column of the list that holds it.
+ */
+export function descriptionColumns(ctx: Context): void {
+  for (let line = 2; line <= ctx.lines.count; line++) {
+    const above = ctx.blocks.leaf[line - 1]
+    const below = ctx.blocks.leaf[line]
+    if (above == null || below == null || below === above || below.node.pos!.startLine !== line) continue
+    if (quotesOf(above).length > 0) continue
+    const left = leftList(above, below)
+    if (left === null) continue
+    const owner = below.parent?.node.type === 'definition_list' ? below.parent : left
+    const shift = indentOf(lineText(ctx.lines, line)) - columnOf(ctx, owner)
+    if (shift <= 0) continue
+    const block = movedBlock(below, above, line)
+    const last = block.node.pos!.endLine
+    const moved: number[] = []
+    for (let at = line; at <= last; at++) {
+      const text = lineText(ctx.lines, at)
+      if (isBlank(text)) continue
+      if (!text.startsWith(' '.repeat(shift))) { moved.length = 0; break }
+      moved.push(at)
+    }
+    for (const at of moved) {
+      const start = lineStart(ctx.lines, at)
+      change(ctx, 'U-435', start, start + shift, '', 'block moved out of the description that 0.1 ended above it')
+    }
+    if (moved.length > 0) line = last
+  }
+}
+
+/** The column of the first block of `item` that starts on a line below its marker, or null. */
+function bodyColumn(ctx: Context, item: Visit): number | null {
+  const marker = item.node.pos!.startLine
+  for (const child of (item.node.children ?? []) as Node01[]) {
+    if (child.pos === undefined) continue
+    if (child.pos.startLine > marker) return child.pos.startOffset - lineStart(ctx.lines, child.pos.startLine)
+  }
+  return null
+}
+
+/**
+ * U-436, C2-B-012, C2-B-025: only an open paragraph takes lazy lines in 0.2. A line that 0.1 read into a
+ * list item left of the item's column is indented to that column, so the item owns it without one.
+ */
+export function itemColumns(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    if (visit.node.type !== 'list_item' || visit.node.pos === undefined || quotesOf(visit).length > 0) continue
+    const column = bodyColumn(ctx, visit)
+    if (column === null || column === 0) continue
+    const { startLine, endLine } = visit.node.pos
+    for (let line = startLine + 1; line <= endLine; line++) {
+      const text = lineText(ctx.lines, line)
+      const indent = indentOf(text)
+      if (isBlank(text) || indent >= column || text.slice(0, indent).includes('\t')) continue
+      if (ctx.blocks.leaf[line] == null || !isInside(ctx.blocks.leaf[line]!, visit)) continue
+      const at = lineStart(ctx.lines, line)
+      change(ctx, 'U-436', at, at, ' '.repeat(column - indent), 'line that 0.1 read into the list item indented to its column')
+    }
+  }
+}
+
+/**
+ * U-437, C2-B-012, C2-B-024: a paragraph that 0.1 started directly below the text of a list item, outside
+ * that item, is a lazy line of the item in 0.2, so a blank line goes above it.
+ */
+export function itemParagraphBreaks(ctx: Context): void {
+  for (let line = 2; line <= ctx.lines.count; line++) {
+    const above = ctx.blocks.leaf[line - 1]
+    const below = ctx.blocks.leaf[line]
+    if (above == null || below == null || above === below || below.node.pos!.startLine !== line) continue
+    if (above.node.type !== 'paragraph' || below.node.type !== 'paragraph') continue
+    const item = ancestor(above, 'list_item')
+    if (item === null || isInside(below, item)) continue
+    const shared = quotesOf(above).filter((quote) => isInside(below, quote)).length
+    const text = lineText(ctx.lines, line)
+    const at = lineStart(ctx.lines, line)
+    change(ctx, 'U-437', at, at, quotePrefix(text, shared) + '\n', 'blank line put between the list item text and the paragraph below it')
   }
 }
