@@ -91,6 +91,9 @@ jobs:
         run: npm run check-public-types
       - run: npm run test:cli
 
+      - name: Git dependency archive builds
+        run: npm run test:archive
+
   test:
     name: tests (${{ matrix.node-version }}, shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
