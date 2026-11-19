@@ -147,8 +147,9 @@ function citationUses(view: DocumentNode): Use[] {
   const notes: Use[] = []
   const visit = (into: Use[]) => (node: Node): false | undefined => {
     if (isReferences(node)) return false
-    if (node.type === 'footnote' && into === body) {
-      walkView({ type: 'document', astVersion: '2.0', children: [node] }, visit(notes))
+    if ((node.type === 'footnote' || node.type === 'inline_footnote') && into === body) {
+      const note: Node = node.type === 'footnote' ? node : { type: 'paragraph', children: [node] }
+      walkView({ type: 'document', astVersion: '2.0', children: [note as Block] }, visit(notes))
       return false
     }
     if (node.type !== 'inline_extension' || node.name !== CITE) return undefined

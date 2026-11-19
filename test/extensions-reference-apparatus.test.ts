@@ -157,6 +157,12 @@ describe('index', () => {
     expect(render('A :index[x].', { extensions: index().extensions })).toBe('<p>A .</p>')
   })
 
+  it('charges a long back-link label to the cap', () => {
+    const markers = Array.from({ length: 3000 }, () => ':index[x]').join(' ')
+    const out = html(`${markers}\n\n::: index\n:::\n`, index({ backrefLabel: 'L'.repeat(500) }))
+    expect(new TextEncoder().encode(out).length).toBeLessThan(1_500_000)
+  })
+
   it('caps the output of repeated index directives', () => {
     const markers = Array.from({ length: 2000 }, (_, at) => `:index[term${at}]`).join(' ')
     const out = html(`${markers}\n\n${'::: index\n:::\n\n'.repeat(20)}`, index())
@@ -204,6 +210,11 @@ describe('citations', () => {
   it('numbers citations in notes after the body', () => {
     const out = html(`A :cite[roe].[^n] B :cite[doe].\n\n[^n]: :cite[roe] again.\n\n${REFS}`, citations())
     expect(out).toContain('B [<a href="#ref-doe" data-cite-key="doe">2</a>]')
+  })
+
+  it('numbers citations in inline notes after the body', () => {
+    const out = html(`A^[see :cite[roe]] B :cite[doe].\n\n${REFS}`, citations())
+    expect(out).toContain('B [<a href="#ref-doe" data-cite-key="doe">1</a>]')
   })
 
   it('resolves from a CSL-JSON pool with back-links, the document entry first', () => {

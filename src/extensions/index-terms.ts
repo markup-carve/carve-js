@@ -59,14 +59,14 @@ function backref(id: string, label: string, m: number, total: number): Inline {
 
 /** One line of the index: the term and a back-link per use, drawn from the budget until it runs out. */
 function indexLine(entry: Entry, backrefLabel: string, budget: { left: number }): Inline[] {
-  const term = plainText(entry.display)
+  const label = `${backrefLabel} ${plainText(entry.display)}`
   const line: Inline[] = [...structuredClone(entry.display), { type: 'text', value: ' ' }]
   for (const [at, id] of entry.ids.entries()) {
-    budget.left -= utf8Length(id) + utf8Length(term) + 80
+    budget.left -= utf8Length(id) + utf8Length(label) + 80
     if (budget.left < 0) break
     if (at > 0) line.push({ type: 'text', value: ' ' })
     // The back-link is named by what it visibly says, the term and its number among several.
-    line.push(backref(id, `${backrefLabel} ${term}`, at + 1, entry.ids.length))
+    line.push(backref(id, label, at + 1, entry.ids.length))
   }
   return line
 }
