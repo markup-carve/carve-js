@@ -13,6 +13,8 @@ import { type ExtensionDefinition } from '../src/extensions/types.ts'
 import { CarveOptionError, type HeadingIds, readOptions } from '../src/options.ts'
 import { slugify } from '../src/slug.ts'
 import { includeRegion as includeRegionImpl } from '../src/include-source.ts'
+import { type ApplyPatchOptions, applyPatch as applyPatchImpl, diffTree as diffTreeImpl, type PatchOperation, sourceFingerprint as
+  sourceFingerprintImpl, treeFingerprint as treeFingerprintImpl } from '../src/tree-patch.ts'
 import { type LayoutEntry, write as writeImpl, writeWithDiagnostics as writeWithDiagnosticsImpl, type WriteOutput } from '../src/write.ts'
 import { checkOptions } from './check.ts'
 
@@ -36,6 +38,7 @@ export {
 } from '../src/options.ts'
 export { positionOf, stringOffsetOfByte, utf8Length } from '../src/positions.ts'
 export { NODE_TYPES, SPEC_VERSION, VERSION } from '../src/package-info.ts'
+export { type ApplyPatchOptions, CarvePatchError, type PatchOperation } from '../src/tree-patch.ts'
 export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } from '../src/format.ts'
 export { CarveWriteError, type LayoutEntry, type WriteOutput } from '../src/write.ts'
 export { type Diagnostic } from '../src/diagnostics.ts'
@@ -159,4 +162,33 @@ export function includeRegion(text: string, name: string, options?: IncludeRegio
   if (typeof text !== 'string') throw new CarveOptionError('text', 'not a string')
   if (typeof name !== 'string') throw new CarveOptionError('name', 'not a string')
   return includeRegionImpl(text, name, options?.code === true)
+}
+
+/** The JSON Patch (RFC 6902) that turns the encoded tree `a` into the encoded tree `b` (`encodeTree`). */
+export function diffTree(a: DocumentNode, b: DocumentNode): PatchOperation[] {
+  validateTreeImpl(a)
+  validateTreeImpl(b)
+  return diffTreeImpl(a, b)
+}
+
+/**
+ * Applies a JSON Patch to the encoded tree and returns the decoded result. Refuses with one `CarvePatchError` (`path`,
+ * `reason`) when `fingerprint` is not that of `document`, an operation fails, or the result does not decode.
+ */
+export function applyPatch(document: DocumentNode, patch: readonly PatchOperation[], options?: ApplyPatchOptions): DocumentNode {
+  checkOptions(options, { fingerprint: 'string', extensions: 'extensions' })
+  validateTreeImpl(document, undefined, undefined, options?.extensions ?? [])
+  return applyPatchImpl(document, patch, options)
+}
+
+/** The fingerprint of a source, text or UTF-8 bytes: `sha256:` and the hex hash of its bytes. */
+export function sourceFingerprint(source: string | Uint8Array): string {
+  if (typeof source !== 'string' && !(source instanceof Uint8Array)) throw new CarveOptionError('source', 'not text or bytes')
+  return sourceFingerprintImpl(source)
+}
+
+/** The fingerprint of a tree: the source fingerprint of `encodeTree(document)`. */
+export function treeFingerprint(document: DocumentNode): string {
+  validateTreeImpl(document)
+  return treeFingerprintImpl(document)
 }
