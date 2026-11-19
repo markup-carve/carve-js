@@ -10,6 +10,7 @@ import { CarveOptionError, checkType } from '../src/options.ts'
 import { type DocumentNode, pointerKey, pointerToken } from '../src/ast.ts'
 import { documentOf } from './support/tree.ts'
 import { referenceForm } from './support/writer-checks.ts'
+import { growthRatio } from './support/growth.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
 function refusal(json: unknown): string | null {
@@ -243,63 +244,34 @@ const LINEAR_BUDGET_MS = 3000
 
 it('C2-B-024: lazy line-block comments grow with source length', () => {
   const shape = (n: number): string => `- ::: |\n  a\n${'%% c\nb\n'.repeat(n)}`
-  parse(shape(8000))
-  const fastest = (n: number): number => {
-    let best = Infinity
-    for (let run = 0; run < 4; run++) {
-      const started = performance.now()
-      parse(shape(n))
-      best = Math.min(best, performance.now() - started)
-    }
-    return best
-  }
-  const times = [2000, 4000, 8000].map(fastest)
-  const details = times.map((time) => time.toFixed(1)).join(', ')
-  expect(times[2]! / Math.max(times[0]!, 0.5), details).toBeLessThan(7)
-  expect(times[2]! / Math.max(times[1]!, 0.5), details).toBeLessThan(3.5)
+  const { ratio, times } = growthRatio(() => { parse(shape(500)) }, () => { parse(shape(8000)) })
+  expect(ratio, times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(48)
 })
 
 it('C2-H-201: capped cross-references grow with their count', () => {
-  const sizes = [2000, 4000, 8000]
+  const sizes = [2000, 32000]
   const trees = sizes.map((n) => {
     const tree = parse(`{#h}\n# ${'T'.repeat(n)}\n\n${'</#h> '.repeat(n)}\n`)
     tree.srcByteLength = 0
     return tree
   })
-  // Four times as many references should take about four times as long. A
-  // quadratic walk takes sixteen times as long, so 10 leaves a margin for CI.
-  // Interleave sizes so a temporary slowdown cannot bias one side alone.
-  for (const tree of trees) renderWithDiagnostics(tree)
-  const times = trees.map(() => Infinity)
-  for (let run = 0; run < 7; run++) {
-    for (let index = 0; index < trees.length; index++) {
-      const started = performance.now()
-      const result = renderWithDiagnostics(trees[index]!)
-      expect(result.diagnostics.map((entry) => entry.code)).toContain('derived-text-budget')
-      times[index] = Math.min(times[index]!, performance.now() - started)
-    }
+  const render = (index: number): void => {
+    const result = renderWithDiagnostics(trees[index]!)
+    expect(result.diagnostics.map((entry) => entry.code)).toContain('derived-text-budget')
   }
-  expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(10)
+  const { ratio, times } = growthRatio(() => render(0), () => render(1))
+  expect(ratio, times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(48)
 })
 
-it('C2-W-010: line comment closers grow with source length', () => {
-  for (const shape of [(n: number): string => 'x\n%% ]\n'.repeat(n),
-    (n: number): string => '[x %% ]\n'.repeat(n)]) {
-    formatWithDiagnostics(shape(4000))
-    const times = [1000, 2000, 4000].map((n) => {
-      let best = Infinity
-      for (let run = 0; run < 3; run++) {
-        const started = performance.now()
-        formatWithDiagnostics(shape(n))
-        best = Math.min(best, performance.now() - started)
-      }
-      return best
-    })
-    const details = times.map((time) => time.toFixed(1)).join(', ')
-    expect(times[2]! / Math.max(times[0]!, 0.5), details).toBeLessThan(7)
-    expect(times[2]! / Math.max(times[1]!, 0.5), details).toBeLessThan(3.5)
-  }
-})
+for (const [name, shape] of [
+  ['line comments', (n: number): string => 'x\n%% ]\n'.repeat(n)],
+  ['inline comments', (n: number): string => '[x %% ]\n'.repeat(n)],
+] as const) {
+  it(`C2-W-010: ${name} closers grow with source length`, () => {
+    const { ratio, times } = growthRatio(() => { formatWithDiagnostics(shape(125)) }, () => { formatWithDiagnostics(shape(2000)) })
+    expect(ratio, times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(48)
+  })
+}
 
 type Nested = { type: string, value?: string, children: Nested[], [key: string]: unknown }
 
