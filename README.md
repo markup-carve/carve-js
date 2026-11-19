@@ -60,6 +60,7 @@ the trees of two files.
 - [Fenced renderers: diagrams, math, code groups and callouts](docs/fenced-renderers.md)
 - [Standard extensions: blocks and inline](docs/extensions-blocks-inline.md)
 - [Exports: Markdown, plain text and ANSI](docs/export.md) (`@markup-carve/carve/export`)
+- [Extensions: glossary, index, citations](docs/extensions-reference.md)
 - [Engine notes: conformance, byte input, includes, command line](docs/engine.md)
 - [Importing Markdown, Djot, BBCode and HTML](docs/import.md)
 - [Engine commands and flags: flatten, fix, upgrade --migrate, --output, --strict, --ignore](docs/cli.md)

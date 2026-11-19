@@ -13,7 +13,5 @@ export const wikiExtension: ExtensionDefinition = {
   props: {}, slots: {}, children: 'none', transform: (claim) => inlineTextClaim('carve.wiki', claim),
 }
 
-export const citeExtension: ExtensionDefinition = {
-  name: 'carve.cite', version: '1', matcher: { form: 'inline', name: 'cite' },
-  props: {}, slots: {}, children: 'none', transform: (claim) => inlineTextClaim('carve.cite', claim),
-}
+/** C2-X-058: one implementation, with the citations extension. */
+export { citeExtension } from './citations.ts'
