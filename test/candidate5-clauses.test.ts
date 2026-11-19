@@ -189,6 +189,7 @@ describe('lint of vertical alignment', () => {
     expect(entry?.message).toContain('"~{.x}"')
     expect(entry?.message).toContain('write "{~ .x}"')
     expect(codes('| a ~{.x} b |')).toEqual(['emphasis-marker-before-attributes'])
+    expect(codes('| ~{.x} a ~{.y} b |')).toEqual(['deprecated-cell-alignment', 'emphasis-marker-before-attributes'])
     expect(codes('| ~{.x}{.y} a |')).not.toContain('deprecated-cell-alignment')
   })
 })

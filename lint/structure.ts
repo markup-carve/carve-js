@@ -777,7 +777,10 @@ function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): vo
     const end = source.indexOf('}', at + 2)
     if (end < 0) continue
     // C2-B-182: an alignment run that opens a cell is reported by deprecated-cell-alignment.
-    if (at <= 1 && opensCell(context, range[0]) && oldAlignmentRun(source)?.prefix.length === end + 1) break
+    if (at <= 1 && opensCell(context, range[0]) && oldAlignmentRun(source)?.prefix.length === end + 1) {
+      at = end
+      continue
+    }
     context.report('emphasis-marker-before-attributes', range[0] + at, range[0] + end + 1,
       path, { ch }, 0)
     at = end
