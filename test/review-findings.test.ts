@@ -266,18 +266,20 @@ it('C2-H-201: capped cross-references grow with their count', () => {
     tree.srcByteLength = 0
     return tree
   })
-  renderWithDiagnostics(trees[2]!)
-  const times = trees.map((tree) => {
-    let best = Infinity
-    for (let run = 0; run < 3; run++) {
+  // Four times as many references should take about four times as long. A
+  // quadratic walk takes sixteen times as long, so 10 leaves a margin for CI.
+  // Interleave sizes so a temporary slowdown cannot bias one side alone.
+  for (const tree of trees) renderWithDiagnostics(tree)
+  const times = trees.map(() => Infinity)
+  for (let run = 0; run < 7; run++) {
+    for (let index = 0; index < trees.length; index++) {
       const started = performance.now()
-      const result = renderWithDiagnostics(tree)
+      const result = renderWithDiagnostics(trees[index]!)
       expect(result.diagnostics.map((entry) => entry.code)).toContain('derived-text-budget')
-      best = Math.min(best, performance.now() - started)
+      times[index] = Math.min(times[index]!, performance.now() - started)
     }
-    return best
-  })
-  expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(5.5)
+  }
+  expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(10)
 })
 
 it('C2-W-010: line comment closers grow with source length', () => {
