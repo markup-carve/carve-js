@@ -556,12 +556,18 @@ function endsWithCr(line: string): boolean {
   return at >= 0 && line.charCodeAt(at) === 13
 }
 
+function countCrEnds(lines: readonly string[]): number {
+  let count = 0
+  for (const line of lines) if (endsWithCr(line)) count++
+  return count
+}
+
 /** The reason the plan of a group has no decision, or null. */
 function planReason(w: Writer, group: readonly Node[], plan: Plan, reported: number): string | null {
   if (plan.undecided !== null) return plan.undecided
   if (w.losses.entries.length !== reported) return 'loss'
   // C2-W-016, C2-B-010: a CR that only spaces and tabs follow on its line, in a block value as in an inline, joins the line end.
-  if (w.lines.filter(endsWithCr).length > plan.lost.length) return 'control'
+  if (plan.lost.length < w.lines.length && countCrEnds(w.lines) > plan.lost.length) return 'control'
   return uncovered(group, plan) ? 'coverage' : null
 }
 
@@ -591,7 +597,8 @@ function writerEqual(expected: Node, actual: Node): boolean {
 
 /** C2-W-002: whether the written group reads back as its blocks. */
 function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
-  const parsed = parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`).children
+  // Equality disregards positions (C2-A-161), so the readback builds none.
+  const parsed = parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.linkKeys, false).children
   return parsed.length === group.length && parsed.every((node, at) => writerEqual(group[at]!, node))
 }
 

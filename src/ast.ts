@@ -235,6 +235,10 @@ function isNode(value: unknown): value is Node {
 
 function visitSlot(node: Node, path: string, visit: SlotVisitor,
   declarations: readonly ExtensionDeclaration[]): void {
+  if (!path.includes('.')) {
+    visitValue((node as unknown as Record<string, unknown>)[path], path, visit)
+    return
+  }
   if (path === 'slots.*' && (node.type === 'block_extension' || node.type === 'inline_extension')) {
     visitExtensionSlots(node, visit, declarations)
     return

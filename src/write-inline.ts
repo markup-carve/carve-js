@@ -75,10 +75,17 @@ function alwaysEscaped(value: string, at: number, flags: number, cursor: BraceQu
     ((flags & IN_BRACKET) !== 0 && (code === 91 || code === 93))
 }
 
+/** Whether a character of `value` can take a backslash by `alwaysEscaped`. */
+function mayAlwaysEscape(value: string, flags: number): boolean {
+  return value.includes('\\') || ((flags & IN_CELL) !== 0 && value.includes('|')) ||
+    ((flags & IN_BRACKET) !== 0 && (value.includes('[') || value.includes(']')))
+}
+
 /** The offsets of `node` that take a backslash: those asked for and those of C2-W-097, C2-W-098. */
 export function escapeOffsets(w: Writer, node: TextNode, flags: number): number[] {
   const value = node.value
   const escapes = w.escapes.get(node) ?? []
+  if (escapes.length === 0 && !mayAlwaysEscape(value, flags)) return []
   const out: number[] = []
   let next = 0
   const cursor: BraceQuoteCursor = { at: 0, brace: false, quote: 0 }
@@ -265,6 +272,10 @@ function cellValue(w: Writer, node: Node, value: string, flags: number): string 
 
 /** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash; C2-W-098: in a cell a pipe too. */
 function destination(value: string, pipes: boolean): string {
+  return /[()\\]/u.test(value) || (pipes && value.includes('|')) ? escapedDestination(value, pipes) : value
+}
+
+function escapedDestination(value: string, pipes: boolean): string {
   const unmatched = new Set<number>()
   const open: number[] = []
   for (let at = 0; at < value.length; at++) {
