@@ -16,11 +16,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gate: [extension-migration, ast-schema-crosscheck, enumerate, enumerate-inline, stress-inline, conformance, enumerate-tree, fuzz-tree, writer-gates, writer-gates-tokens, stress-tree, benchmark, proptest]
+        gate: [extension-migration+conformance, ast-schema-crosscheck, enumerate+enumerate-inline+enumerate-tree, stress-inline+stress-tree, fuzz-tree+benchmark, writer-gates+writer-gates-tokens, proptest]
     steps:
       - uses: actions/checkout@v7
       - name: Pinned specification commit
-        if: matrix.gate == 'ast-schema-crosscheck' || matrix.gate == 'conformance'
+        if: matrix.gate == 'ast-schema-crosscheck'
         id: pin
         run: echo "commit=$(node -p "require('./data/spec-pin.json').commit")" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
@@ -29,12 +29,6 @@ jobs:
           repository: markup-carve/carve
           ref: ${{ steps.pin.outputs.commit }}
           path: carve
-      - uses: actions/checkout@v7
-        if: matrix.gate == 'conformance'
-        with:
-          repository: markup-carve/carve
-          ref: ${{ steps.pin.outputs.commit }}
-          path: carve-spec
       - uses: actions/setup-node@v7
         with:
           node-version: 26
@@ -48,6 +42,9 @@ jobs:
         run: npm ci --allow-git=all
         working-directory: carve
       - name: Run bounded gate
-        env:
-          CARVE_SPEC_DIR: carve-spec
-        run: node scripts/engine-gate.mjs smoke ${{ matrix.gate }}
+        shell: bash
+        run: |
+          IFS='+' read -ra gates <<< '${{ matrix.gate }}'
+          for gate in "${gates[@]}"; do
+            node scripts/engine-gate.mjs smoke "$gate"
+          done
