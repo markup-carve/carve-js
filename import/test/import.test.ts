@@ -9,7 +9,7 @@ interface Fixture { name: string, html: string }
 const fixtures = JSON.parse(readFileSync(join(import.meta.dirname, '../fixtures/html-shapes.json'), 'utf8')) as Fixture[]
 const expectedHtmlSource: Record<string, string> = {
   'nested inline formatting': '*one /two `three`/*\n',
-  'table groups and spans': '{footer-rows=1}\n|= Head |\n| A | B |\n| C |\n| Foot |\n',
+  'table groups and spans': '{footer-rows=1}\n|= Head |= < |\n| A | B |\n| ^ | C |\n| Foot | < |\n',
   'definition list': ':: Term\n: Definition\n',
   'figure caption': '![Bars](chart.png)\n^ A chart\n',
   details: ':::\nMore\n\nHidden content\n:::\n',

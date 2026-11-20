@@ -5,6 +5,7 @@ import { type LintContext, type Rule } from './types.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
 import { columnOf, readPrefix } from '../src/layout-lines.ts'
 import { advanceColumn } from '../src/source.ts'
+import { escaped, isWord, pairedMarks } from '../src/pair-marks.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -40,55 +41,6 @@ function reportAttribute(id: Rule['id'], node: Node, path: string, context: Lint
   else reportNode(id, node, path, context, values)
 }
 
-function isWord(ch: string | undefined): boolean {
-  return ch !== undefined && /[\p{L}\p{N}]/u.test(ch)
-}
-
-// 0.1 read U+FEFF as content, which String.prototype.trim would strip.
-const EDGE_SPACE = /^[\p{Zs}\t\n\r\f\v]|[\p{Zs}\t\n\r\f\v]$/u
-
-/** Whether the character at `at` stands behind an odd run of backslashes, so 0.1 read it as text. */
-function escaped(text: string, at: number): boolean {
-  let slashes = 0
-  while (text[at - 1 - slashes] === '\\') slashes++
-  return slashes % 2 === 1
-}
-
-function nextCloser(text: string, mark: string, from: number): number {
-  let end = text.indexOf(mark, from)
-  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end))) {
-    end = text.indexOf(mark, end + mark.length)
-  }
-  return end
-}
-
-function validDjotPair(text: string, mark: string, start: number, end: number): boolean {
-  return text[start - 1] !== '{' && text[end + mark.length] !== '}'
-    && text[start - 1] !== mark && text[start + 1] !== mark
-}
-
-function validPair(text: string, mark: string, id: Rule['id'], start: number, end: number): boolean {
-  const inside = text.slice(start + mark.length, end)
-  if (escaped(text, start) || inside === '' || EDGE_SPACE.test(inside)) return false
-  if (inside[0] === mark[0] || inside.at(-1) === mark[0]) return false
-  if (mark === '**' && inside.includes('*')) return false
-  if (id === 'djot-subscript-tilde' || id === 'djot-superscript-caret') return validDjotPair(text, mark, start, end)
-  if (id === 'markdown-strong-double-star' || id === 'markdown-strikethrough-double-tilde') return true
-  return !isWord(text[start - 1]) && !isWord(text[end + mark.length])
-}
-
-function paired(text: string, mark: string, id: Rule['id'], visit: (start: number, end: number) => void): void {
-  let at = 0
-  while (at < text.length) {
-    const start = text.indexOf(mark, at)
-    if (start < 0) return
-    const end = nextCloser(text, mark, start + mark.length + 1)
-    if (end < 0) return
-    if (validPair(text, mark, id, start, end)) visit(start, end + mark.length)
-    at = end + mark.length
-  }
-}
-
 function textPair(mark: string, id: Rule['id']): (node: Node, path: string, context: LintContext) => void {
   return (node, path, context) => checkTextPair(node, path, context, mark, id)
 }
@@ -101,7 +53,7 @@ function checkTextPair(node: Node, path: string, context: LintContext, mark: str
   const flush = (): void => {
     if (first === undefined) return
     const begin = first
-    paired(context.source.slice(begin, last), mark, id, (start, end) => context.report(id, begin + start, begin + end, path))
+    pairedMarks(context.source.slice(begin, last), mark, id, (start, end) => context.report(id, begin + start, begin + end, path))
     first = undefined
   }
   for (const child of node.children) {
