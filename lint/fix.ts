@@ -81,6 +81,24 @@ export interface FixResult {
 interface Candidate {
   rule: string
   plan: Plan
+  line: number
+}
+
+function lineStarts(bytes: Uint8Array): number[] {
+  const starts = [0]
+  for (let at = 0; at < bytes.length; at++) if (bytes[at] === 0x0a) starts.push(at + 1)
+  return starts
+}
+
+function lineAt(starts: readonly number[], offset: number): number {
+  let low = 0
+  let high = starts.length
+  while (low + 1 < high) {
+    const middle = (low + high) >>> 1
+    if (starts[middle]! <= offset) low = middle
+    else high = middle
+  }
+  return low + 1
 }
 
 function sameEdits(left: Plan, right: Plan): boolean {
@@ -96,13 +114,14 @@ function overlaps(edit: Edit, taken: readonly Edit[]): boolean {
 /** Two rules that report one range with different replacements leave it to the author. */
 function candidates(bytes: Uint8Array, entries: readonly Diagnostic[]): Candidate[] {
   const byRange = new Map<string, Candidate[]>()
+  const starts = lineStarts(bytes)
   for (const entry of entries) {
     const fixer = FIXES.get(entry.code as RuleId)
     if (fixer === undefined || entry.channel !== 'lint' || entry.file !== undefined || entry.range === undefined) continue
     const plan = fixer(bytes, entry.range.startOffset, entry.range.endOffset)
     if (plan === null) continue
     const key = `${entry.range.startOffset}:${entry.range.endOffset}`
-    byRange.set(key, [...(byRange.get(key) ?? []), { rule: entry.code, plan }])
+    byRange.set(key, [...(byRange.get(key) ?? []), { rule: entry.code, plan, line: lineAt(starts, entry.range.startOffset) }])
   }
   const result: Candidate[] = []
   for (const group of byRange.values()) {
@@ -244,29 +263,84 @@ export function fixOptions(options: LintOptions): LintOptions {
 
 const MAX_PASSES = 10
 
+function sites(entries: readonly Diagnostic[], bytes: Uint8Array): Map<string, number> {
+  const result = new Map<string, number>()
+  const starts = lineStarts(bytes)
+  for (const entry of entries) {
+    if (entry.range === undefined) continue
+    const key = `${entry.code}:${lineAt(starts, entry.range.startOffset)}`
+    result.set(key, (result.get(key) ?? 0) + 1)
+  }
+  return result
+}
+
+function runPasses(source: string, settings: LintOptions, excluded: ReadonlySet<number>): FixResult {
+  const applied = new Map<string, number>()
+  let bytes: Uint8Array = encoder.encode(source)
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const findings = lint(decoder.decode(bytes), settings)
+    const found = candidates(bytes, findings).filter((candidate) => !excluded.has(candidate.line))
+    const chosen = quiet(bytes, verified(bytes, select(found)), findings, settings, true)
+    if (chosen.length === 0) break
+    bytes = apply(bytes, chosen)
+    for (const candidate of chosen) applied.set(candidate.rule, (applied.get(candidate.rule) ?? 0) + 1)
+  }
+  return { output: decoder.decode(bytes), applied }
+}
+
+function addedLines(
+  after: readonly Diagnostic[], output: string, baseline: Map<string, number>, originalSites: Map<string, number>,
+): number[] | null {
+  const badCodes = new Set([...counts(after)].filter(([code, count]) => count > (baseline.get(code) ?? 0)).map(([code]) => code))
+  if (badCodes.size === 0) return null
+  const bytes = encoder.encode(output)
+  const afterSites = sites(after, bytes)
+  const starts = lineStarts(bytes)
+  const lines = new Set<number>()
+  for (const entry of after) {
+    if (!badCodes.has(entry.code) || entry.range === undefined) continue
+    const line = lineAt(starts, entry.range.startOffset)
+    const key = `${entry.code}:${line}`
+    if ((afterSites.get(key) ?? 0) > (originalSites.get(key) ?? 0)) lines.add(line)
+  }
+  return [...lines]
+}
+
+function excludeCause(lines: readonly number[], excluded: Set<number>, candidateLines: readonly number[]): boolean {
+  let grew = false
+  for (const line of lines) if (!excluded.has(line)) {
+    excluded.add(line)
+    grew = true
+  }
+  if (grew) return true
+  // A fix on an earlier line can change how the line with the finding is parsed.
+  for (const line of lines) {
+    const prior = candidateLines.filter((candidate) => candidate < line && !excluded.has(candidate)).at(-1)
+    if (prior !== undefined) {
+      excluded.add(prior)
+      grew = true
+    }
+  }
+  return grew
+}
+
 /** The source with every fix applied that verifies, pass after pass until a pass changes nothing. */
 export function fixSource(source: string, options: LintOptions): FixResult {
   const settings: LintOptions = { ...fixOptions(options) }
   delete settings.includes
-  const applied = new Map<string, number>()
-  let bytes: Uint8Array = encoder.encode(source)
-  let changed = false
-  const baseline = counts(lint(source, settings))
-  for (let pass = 0; pass < MAX_PASSES; pass++) {
-    const text = decoder.decode(bytes)
-    const findings = lint(text, settings)
-    const chosen = quiet(bytes, verified(bytes, select(candidates(bytes, findings))), findings, settings, true)
-    if (chosen.length === 0) break
-    bytes = apply(bytes, chosen)
-    changed = true
-    for (const candidate of chosen) applied.set(candidate.rule, (applied.get(candidate.rule) ?? 0) + 1)
+  const original = lint(source, settings)
+  const sourceBytes = encoder.encode(source)
+  const baseline = counts(original)
+  const originalSites = sites(original, sourceBytes)
+  const excluded = new Set<number>()
+  const candidateLines = [...new Set(candidates(sourceBytes, original).map((candidate) => candidate.line))]
+  for (let attempt = 0; attempt <= source.split('\n').length; attempt++) {
+    const result = runPasses(source, settings, excluded)
+    const badLines = addedLines(lint(result.output, settings), result.output, baseline, originalSites)
+    if (badLines === null) return result
+    if (!excludeCause(badLines, excluded, candidateLines)) break
   }
-  if (changed) {
-    for (const [code, count] of counts(lint(decoder.decode(bytes), settings))) {
-      if (count > (baseline.get(code) ?? 0)) return { output: source, applied: new Map() }
-    }
-  }
-  return { output: changed ? decoder.decode(bytes) : source, applied }
+  return { output: source, applied: new Map() }
 }
 
 /** The rules a fix rewrites. */

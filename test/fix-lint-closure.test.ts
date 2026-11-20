@@ -48,4 +48,13 @@ describe('fix output is lint closed', () => {
     expect(counts(output)).toEqual(new Map())
     expect(fix(output).output).toBe(output)
   })
+
+  it('keeps independent fixes when one line cannot be made lint clean', () => {
+    const source = '~~_x_~~\n**~x~**\n\n**z**\n'
+    const output = fix(source).output
+    expect(output).toContain('*z*\n')
+    expect(output).toContain('**~x~**\n')
+    const before = counts(source)
+    for (const [rule, count] of counts(output)) expect(count).toBeLessThanOrEqual(before.get(rule) ?? 0)
+  })
 })
