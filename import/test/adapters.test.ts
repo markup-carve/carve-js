@@ -170,3 +170,11 @@ describe('the pass is linear', () => {
     expect(imported).toContain('[^2000]: Note 2000.')
   })
 })
+
+describe('the pass is linear in the references of one note', () => {
+  it('C2-M-104: 20,000 references to one note import', () => {
+    const refs = Array.from({ length: 20000 }, (_, at) => `<a href="#note"${at === 0 ? ' id="ref"' : ''}>x</a>`).join('')
+    const imported = source(`<p>${refs}</p><div id="note"><p><a href="#ref">1</a> Note.</p></div>`)
+    expect(imported.match(/\[\^1\](?!:)/g)).toHaveLength(20000)
+  })
+})

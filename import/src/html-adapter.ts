@@ -269,14 +269,19 @@ function references(walk: Walk, anchors: Html.Element[], targets: Map<string, Ht
     const mutual = own !== '' && hrefsIn(walk, byHref, block, `#${own}`).length > 0
     if (mutual || isMarkedReference(anchor)) candidates.set(anchor, { ref: anchor, block, fragment })
   }
+  // The first candidate among the anchors of a block that name an identity, once per block and identity.
+  const firstCandidate = new Map<Html.Element, Map<string, Candidate | undefined>>()
   const inverseOf = (candidate: Candidate): Candidate | undefined => {
     const own = identity(candidate.ref)
     if (own === '') return undefined
-    for (const at of hrefsIn(walk, byHref, candidate.block, `#${own}`)) {
-      const inverse = candidates.get(walk.order[at]!)
-      if (inverse !== undefined) return walk.contains(inverse.block, candidate.ref) ? inverse : undefined
+    const known = firstCandidate.get(candidate.block) ?? new Map<string, Candidate | undefined>()
+    firstCandidate.set(candidate.block, known)
+    if (!known.has(own)) {
+      const at = hrefsIn(walk, byHref, candidate.block, `#${own}`).find(position => candidates.has(walk.order[position]!))
+      known.set(own, at === undefined ? undefined : candidates.get(walk.order[at]!))
     }
-    return undefined
+    const inverse = known.get(own)
+    return inverse !== undefined && walk.contains(inverse.block, candidate.ref) ? inverse : undefined
   }
   return [...candidates.values()].filter(candidate => {
     const inverse = inverseOf(candidate)
@@ -310,10 +315,12 @@ function attachRemaining(walk: Walk, notes: Note[], anchors: Html.Element[]): vo
   }
   const byFragment = new Map<string, Note>()
   for (const note of notes) for (const fragment of note.fragments) if (!byFragment.has(fragment)) byFragment.set(fragment, note)
+  const bound = new Set(notes.flatMap(note => note.refs))
   for (const anchor of anchors) {
     const note = byFragment.get(hrefFragment(anchor)!)
-    if (note === undefined || note.refs.includes(anchor) || insideNote(anchor)) continue
+    if (note === undefined || bound.has(anchor) || insideNote(anchor)) continue
     note.refs.push(anchor)
+    bound.add(anchor)
   }
 }
 
