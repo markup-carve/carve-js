@@ -66,6 +66,16 @@ function isReferences(node: Node): node is DirectiveNode {
   return node.type === 'directive' && (node.kind === 'references' || node.kind === 'bibliography')
 }
 
+/** A document without a citation or a placement directive cannot gain a bibliography. */
+function hasCitationWork(view: DocumentNode): boolean {
+  let found = false
+  walkView(view, (node) => {
+    if (isReferences(node) || (node.type === 'inline_extension' && node.name === CITE)) found = true
+    return found ? false : undefined
+  })
+  return found
+}
+
 function formatName(name: CslName): string {
   if (name === null || typeof name !== 'object') return ''
   if (typeof name.literal === 'string' && name.literal !== '') return name.literal
@@ -338,6 +348,6 @@ export function citations(options: CitationsOptions = {}): ExtensionBundle {
   return {
     extensions: [citeExtension, referencesExtension],
     renderers: { [CITE]: { version: '1', render, buildTime: render }, [REFERENCES]: referencesRenderer },
-    transforms: [{ name: 'citations', transform: (view) => citationsTransform(view, options) }],
+    transforms: [{ name: 'citations', appliesTo: hasCitationWork, transform: (view) => citationsTransform(view, options) }],
   }
 }

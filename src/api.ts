@@ -19,6 +19,7 @@ import { applyExtensions, declareExtensions } from './extensions/claims.ts'
 import { base64, mapPositions, type SourceText, sourceText } from './byte-source.ts'
 import { append } from './append.ts'
 import { emptyMemo, readAttributeBlock } from './attributes.ts'
+import { denseListHtml } from './fast-dense-list.ts'
 
 export { type ParsedTree } from './ast-blocks.ts'
 
@@ -446,6 +447,8 @@ function plainRender(input: string | Uint8Array | DocumentNode, settings: Settin
 export interface DocumentTransform {
   name: string
   transform: (view: DocumentNode) => DocumentNode
+  /** A conservative check; false means this transform cannot change the view. */
+  appliesTo?: (view: DocumentNode) => boolean
 }
 
 /** C2-X-055: how often each authored id occurs in one render view. */
@@ -479,15 +482,21 @@ function unchanged(next: DocumentNode, view: DocumentNode): boolean {
   }
 }
 
+function applies(entry: DocumentTransform, view: DocumentNode): boolean {
+  return entry.appliesTo === undefined || entry.appliesTo(view)
+}
+
 function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[], extensions: Settings['extensions']): {
-  view: DocumentNode, failures: Diagnostic[], validated: boolean
+  view: DocumentNode, failures: Diagnostic[], validated: boolean, changed: boolean
 } {
   const failures: Diagnostic[] = []
   // A duplicate the source already holds is reported by the parse; only one a transform adds fails it.
-  let counts = viewIdCounts(view)
+  let counts: Map<string, number> | undefined
   let validated = false
+  let changed = false
   for (const entry of transforms) {
     try {
+      if (!applies(entry, view)) continue
       const next = entry.transform(cloneTree(view))
       // A view the transform left as it was is checked once; its ids are those of its input.
       if (unchanged(next, view)) {
@@ -498,18 +507,19 @@ function applyDocumentTransforms(view: DocumentNode, transforms: readonly Docume
       }
       validateTree(next, undefined, undefined, extensions)
       const after = viewIdCounts(next)
-      const added = addedDuplicate(counts, after)
+      const added = addedDuplicate(counts ?? viewIdCounts(view), after)
       if (added !== undefined) throw new Error(`duplicate authored id ${added}`)
       counts = after
       view = next
       validated = true
+      changed = true
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       failures.push({ code: 'extension-transform-failed', severity: 'warning', channel: 'render-loss',
         message: `The document transform ${entry.name} failed: ${detail}`, path: '' })
     }
   }
-  return { view, failures, validated }
+  return { view, failures, validated, changed }
 }
 
 /** C2-X-053: the document transforms of the registered extensions, in registration order. */
@@ -529,6 +539,21 @@ export function renderWithDocumentTransforms(
   return transformedRender(input, [...registeredTransforms(settings), ...transforms], settings)
 }
 
+/** Reuse the resolved view when no transform changed it and its output has no positional loss. */
+function unchangedViewRender(resolved: ResolvedTree, sourceDiagnostics: Diagnostic[], failures: Diagnostic[],
+  settings: Settings): RenderOutput | undefined {
+  const rendered = renderStage(resolved)
+  // A loss needs the second resolution's positions, which may differ from the source tree's positions.
+  if (rendered.losses.entries.length > 0) return undefined
+  const diagnostics = [...sourceDiagnostics, ...failures]
+  if (settings.strictLosses) for (const entry of diagnostics) {
+    if (entry.channel === 'render-loss') entry.severity = 'error'
+  }
+  const capped = capDiagnostics(diagnostics, settings)
+  const lost = diagnostics.some((entry) => entry.channel === 'render-loss' && !settings.allowLosses.has(entry.code))
+  return { html: settings.strictLosses && lost ? '' : rendered.html, ...capped }
+}
+
 function transformedRender(
   input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], settings: Settings, positions = true,
 ): RenderOutput {
@@ -536,7 +561,11 @@ function transformedRender(
   const parsed = inputStage(authored, settings, positions)
   const resolved = resolveStage(parsed, settings)
   const sourceDiagnostics = parseDiagnostics(resolved, parsed)
-  const { view, failures, validated } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
+  const { view, failures, validated, changed } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
+  if (!changed) {
+    const direct = unchangedViewRender(resolved, sourceDiagnostics, failures, settings)
+    if (direct !== undefined) return direct
+  }
   const rendered = plainRender(view, settings, validated)
   const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
@@ -560,6 +589,11 @@ function transformedRender(
  */
 export function render(input: string | Uint8Array | DocumentNode, options?: RenderOptions): string {
   const settings = readOptions(options, 'render')
+  // Stateless tight lists can be written directly without constructing a tree.
+  if (typeof input === 'string' && options === undefined) {
+    const html = denseListHtml(input)
+    if (html !== undefined) return html
+  }
   const registered = registeredTransforms(settings)
   if (registered.length > 0) {
     const output = transformedRender(input, registered, settings, false)

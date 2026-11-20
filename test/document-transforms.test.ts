@@ -3,6 +3,20 @@ import { CarveRenderError, parse, render, renderWithDiagnostics, renderWithDocum
 import { type ExtensionDefinition } from '../src/extensions/types.ts'
 
 describe('C2-X-053 to C2-X-055: document transforms', () => {
+  it('skips an inapplicable transform and still runs a later applicable one', () => {
+    let skipped = 0
+    const result = renderWithDocumentTransforms('hello', [
+      { name: 'absent', appliesTo: () => false, transform: (view) => { skipped++; return view } },
+      { name: 'present', appliesTo: () => true, transform: (view) => {
+        const paragraph = view.children[0]
+        if (paragraph?.type === 'paragraph') paragraph.children.push({ type: 'text', value: '!' })
+        return view
+      } },
+    ])
+    expect(skipped).toBe(0)
+    expect(result.html).toBe('<p>hello!</p>')
+  })
+
   it('runs transforms in order on a copy of the resolved view', () => {
     const authored = parse('hello')
     const result = renderWithDocumentTransforms(authored, [
