@@ -53,6 +53,8 @@ export interface Writer {
   lost: Set<Node>
   /** C2-W-136: the keys of `attrs` of a node that were reported and not written; the reparse check does not ask for them. */
   lostKeys: Map<Node, string[]>
+  /** What `lose` and `loseKey` added, in order (a key, or null for the node), so a refused round takes it back. */
+  lossLog: [Node, string | null][]
   /** The longest colon run among the fenced containers below a node (C2-W-039). */
   colonRuns: Map<Node, number>
   /** Whether emphasis (1) and strong (2) occur below a node (C2-W-070). */
@@ -94,7 +96,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     lines: [], lead: null, bareDotLead: false, escapes: new Map(), forms: new Map(), starts: new Map(),
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
-    lostKeys: new Map(), colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(), parsed: null,
+    lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
+    parsed: null,
     prewrittenAttributes: null, plan: null, parses: 0, parseCache: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(), work: { chars: 0, limit: Infinity },
   }
@@ -154,6 +157,7 @@ export function loseKey(w: Writer, node: Node, index: number, key: string): void
   const keys = w.lostKeys.get(node) ?? []
   if (keys.includes(key)) return
   w.lostKeys.set(node, [...keys, key])
+  w.lossLog.push([node, key])
   const message = `Carve source cannot spell the key ${key} in the attrs of a ${node.type} node beside the table fields that write it`
   const entry: Diagnostic = { code: 'field-unspellable', severity: 'warning', channel: 'render-loss', message }
   addFinding(w.losses, node, entry)
@@ -164,6 +168,7 @@ export function loseKey(w: Writer, node: Node, index: number, key: string): void
 export function lose(w: Writer, node: Node, field: string | null): void {
   if (w.lost.has(node)) return
   w.lost.add(node)
+  w.lossLog.push([node, null])
   const message = field === null
     ? `Carve source cannot spell a ${node.type} node here`
     : `Carve source cannot spell the field ${field} of a ${node.type} node here`
@@ -173,5 +178,31 @@ export function lose(w: Writer, node: Node, field: string | null): void {
   if (field !== null && Object.hasOwn(node, field)) {
     w.losses.steps ??= new Map()
     w.losses.steps.set(entry, `/${field}`)
+  }
+}
+
+/** A point in the losses of `w` that `rollBackLosses` returns to. */
+export interface LossMark {
+  entries: number
+  log: number
+}
+
+export function markLosses(w: Writer): LossMark {
+  return { entries: w.losses.entries.length, log: w.lossLog.length }
+}
+
+/** Takes back every loss reported after `mark`, without copying the losses of the whole document. */
+export function rollBackLosses(w: Writer, mark: LossMark): void {
+  w.losses.entries.length = mark.entries
+  w.losses.nodes.length = mark.entries
+  while (w.lossLog.length > mark.log) {
+    const [node, key] = w.lossLog.pop()!
+    if (key === null) {
+      w.lost.delete(node)
+      continue
+    }
+    const keys = w.lostKeys.get(node)!.slice(0, -1)
+    if (keys.length === 0) w.lostKeys.delete(node)
+    else w.lostKeys.set(node, keys)
   }
 }

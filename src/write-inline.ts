@@ -79,11 +79,20 @@ function mayAlwaysEscape(value: string, flags: number): boolean {
   return value.includes('\\') || ((flags & IN_CELL) !== 0 && value.includes('|'))
 }
 
+/** The asked offsets the scan below reaches: it stops at a repeated offset, as `escaped` does, and at the end of the value. */
+function askedPrefix(escapes: readonly number[], length: number): readonly number[] {
+  for (let index = 0; index < escapes.length; index++) {
+    const at = escapes[index]!
+    if (at >= length || (index > 0 && at <= escapes[index - 1]!)) return escapes.slice(0, index)
+  }
+  return escapes
+}
+
 /** The offsets of `node` that take a backslash: those asked for and those of C2-W-097, C2-W-098. */
-export function escapeOffsets(w: Writer, node: TextNode, flags: number): number[] {
+export function escapeOffsets(w: Writer, node: TextNode, flags: number): readonly number[] {
   const value = node.value
   const escapes = w.escapes.get(node) ?? []
-  if (escapes.length === 0 && !mayAlwaysEscape(value, flags)) return []
+  if (!mayAlwaysEscape(value, flags)) return askedPrefix(escapes, value.length)
   const out: number[] = []
   let next = 0
   const cursor: BraceQuoteCursor = { at: 0, brace: false, quote: 0 }
