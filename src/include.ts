@@ -397,7 +397,8 @@ function includeOption(name: string, value: string | string[] | number | true, s
   return `@${name}:${isBareValue(text) ? text : quoted(text)}`
 }
 
-const OPTION_ORDER: readonly string[] = [...INCLUDE_OPTIONS.keys()]
+// C2-W-058: the current 0.2 writer rank, ahead of this engine's shared spec pin.
+const OPTION_ORDER: readonly string[] = ['code', 'lines', 'region', 'rows', 'cols', 'shift']
 
 /**
  * C2-W-058, C2-A-181: the field of `node` that its spelling `source` does not read back: a typed option outside its

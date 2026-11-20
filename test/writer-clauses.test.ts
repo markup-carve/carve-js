@@ -637,7 +637,7 @@ describe('canonical forms: blocks', () => {
 
   it('C2-W-058: an include directive has one space inside the braces and between its parts', () => {
     expect(format('{{   a.crv#sec@shift:1@lines:1-2   }}')).toBe('{{ a.crv #sec @lines:1-2 @shift:1 }}\n')
-    expect(format('{{ a.crv @code:js @shift:1 @cols:1-2 @rows:1-2 @region:r @lines:1-2 }}')).toBe('{{ a.crv @lines:1-2 @region:r @rows:1-2 @cols:1-2 @shift:1 @code:js }}\n')
+    expect(format('{{ a.crv @code:js @shift:1 @cols:1-2 @rows:1-2 @region:r @lines:1-2 }}')).toBe('{{ a.crv @code:js @lines:1-2 @region:r @rows:1-2 @cols:1-2 @shift:1 }}\n')
   })
 
   it('C2-W-058: a path is bare where the bare form holds it and quoted otherwise', () => {

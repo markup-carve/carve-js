@@ -1,7 +1,7 @@
 {
   "name": "i01c-code-marker-html-comment",
   "description": "A code include recognizes a `<!-- #region -->` marker.",
-  "verdict": "unchanged",
+  "verdict": "changed",
   "clauses": [
     "C2-N-037",
     "C2-N-038",
@@ -16,7 +16,7 @@
   "resolver": "virtual",
   "expected": {
     "html": "<pre><code class=\"language-html\">&lt;p&gt;Hi&lt;/p&gt;\n</code></pre>",
-    "fmt": "{{ a.html @region:demo @code:html }}\n",
+    "fmt": "{{ a.html @code:html @region:demo }}\n",
     "warnings": [],
     "dependencies": [
       {

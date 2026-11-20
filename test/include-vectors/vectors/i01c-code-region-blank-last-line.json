@@ -1,7 +1,7 @@
 {
   "name": "i01c-code-region-blank-last-line",
   "description": "Regions ending in a blank line, holding one blank line, or empty keep distinct spans.",
-  "verdict": "unchanged",
+  "verdict": "changed",
   "clauses": [
     "C2-N-037",
     "C2-N-038",
@@ -16,7 +16,7 @@
   "resolver": "virtual",
   "expected": {
     "html": "<pre><code>x\n\n</code></pre>\n<pre><code>\n</code></pre>\n<pre><code></code></pre>",
-    "fmt": "{{ r.js @region:a @code }}\n\n{{ r.js @region:b @code }}\n\n{{ r.js @region:c @code }}\n",
+    "fmt": "{{ r.js @code @region:a }}\n\n{{ r.js @code @region:b }}\n\n{{ r.js @code @region:c }}\n",
     "warnings": [],
     "dependencies": [
       {

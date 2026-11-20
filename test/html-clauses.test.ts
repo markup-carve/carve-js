@@ -202,7 +202,7 @@ describe('comments, frontmatter and definitions', () => {
   check([
     ['C2-H-069: a comment renders nothing in every form, and the whitespace around a braced comment stays', 'a {% c %} b %% d\n\n%%%\nx\n%%%\n\n> %% e', '<p>a  b</p>\n<blockquote>\n\n</blockquote>'],
     ['C2-H-070, C2-H-071: frontmatter and the definitions render nothing', '---\na: b\n---\n\n[r]: /u\n*[A]: b\n[^unused]: c\n\nx', '<p>x</p>'],
-    ['C2-H-133: an include directive renders as a paragraph that holds the directive as text', '{{  a.crv #s @code:js @lines:1-2 }}', '<p>{{ a.crv #s @lines:1-2 @code:js }}</p>'],
+    ['C2-H-133: an include directive renders as a paragraph that holds the directive as text', '{{  a.crv #s @code:js @lines:1-2 }}', '<p>{{ a.crv #s @code:js @lines:1-2 }}</p>'],
     ['C2-H-133, C2-H-034: an unexpanded include that is the first block of a tight item is written bare', '- {{ a.crv }}\n- b', '<ul>\n  <li>{{ a.crv }}</li>\n  <li>b</li>\n</ul>'],
     ['C2-H-133, C2-H-007: in a loose item it stands on the line of li, as a paragraph does', '- {{ a.crv }}\n\n- b', '<ul>\n  <li><p>{{ a.crv }}</p></li>\n  <li><p>b</p></li>\n</ul>'],
     ['C2-H-133, C2-H-040: the one block of a description is written bare', ':: t\n: {{ a.crv }}', '<dl>\n  <dt>t</dt>\n  <dd>{{ a.crv }}</dd>\n</dl>'],

@@ -10,7 +10,7 @@
   "resolver": "virtual",
   "expected": {
     "html": "<pre><code>ab\ncd\n</code></pre>\n<pre><code>ab\n</code></pre>",
-    "fmt": "{{ b.txt @code }}\n\n{{ b.txt @lines:1-1 @code }}\n",
+    "fmt": "{{ b.txt @code }}\n\n{{ b.txt @code @lines:1-1 }}\n",
     "warnings": [],
     "dependencies": [
       {
