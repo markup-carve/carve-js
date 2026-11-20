@@ -11,6 +11,9 @@ describe('lint rulings of 20 November', () => {
     expect(ranges('>a\n', 'blockquote-marker-without-space')).toEqual([[0, 2]])
     expect(ranges('>a  \n', 'blockquote-marker-without-space')).toEqual([[0, 2]])
     expect(ranges('---\ntitle: x\n>a  \n---\n', 'blockquote-marker-without-space')).toEqual([[13, 15]])
+    // A no-break space is no space or tab, so it stays in the range (byte offsets).
+    expect(ranges('>a\u00a0\n', 'blockquote-marker-without-space')).toEqual([[0, 4]])
+    expect(ranges('---\n>a\u00a0\n---\n', 'blockquote-marker-without-space')).toEqual([[4, 8]])
   })
 
   it('carve#6192: block-opener-overindented is the whole opening mark', () => {
@@ -20,6 +23,7 @@ describe('lint rulings of 20 November', () => {
     expect(ranges('   ***\n', 'block-opener-overindented')).toEqual([[3, 6]])
     expect(ranges('   > q\n', 'block-opener-overindented')).toEqual([[3, 4]])
     expect(ranges('   | a |\n', 'block-opener-overindented')).toEqual([[3, 4]])
+    expect(ranges('   {.x}\n   :::: foo\n   x\n   ::::\n', 'block-opener-overindented')).toEqual([[11, 15]])
   })
 
   it('carve#6193: an include directive line is no block opener for list-item-block-overindented', () => {

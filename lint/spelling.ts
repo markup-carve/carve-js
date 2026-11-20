@@ -218,7 +218,7 @@ function tableShaped(line: Line, context: LintContext): void {
 }
 
 function quoteWithoutSpace(line: Line, context: LintContext): void {
-  const text = line.text.trimEnd()
+  const text = line.text.replace(/[ \t]+$/u, '')
   if (!line.paragraph || !text.startsWith('>') || text.length < 2 || text[1] === ' ') return
   context.report('blockquote-marker-without-space', line.start, line.start + text.length, line.path, { text: text.slice(1) })
 }
