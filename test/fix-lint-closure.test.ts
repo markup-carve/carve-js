@@ -65,4 +65,11 @@ describe('fix output is lint closed', () => {
     const before = counts(source)
     for (const [rule, count] of counts(output)) expect(count).toBeLessThanOrEqual(before.get(rule) ?? 0)
   })
+
+  it('reconsiders a withheld fix after a neighboring replacement changes its context', () => {
+    const source = '~~x~~\n**~x~**\n~x~\n'
+    const output = fix(source).output
+    expect(output).toContain('{~x~}\n')
+    expect(fix(output).output).toBe(output)
+  })
 })

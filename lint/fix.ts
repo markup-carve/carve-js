@@ -338,8 +338,7 @@ function excludeCause(sites: readonly Site[], excluded: Set<string>, chosen: rea
   return grew
 }
 
-/** The source with every fix applied that verifies, pass after pass until a pass changes nothing. */
-export function fixSource(source: string, options: LintOptions): FixResult {
+function fixClosedPass(source: string, options: LintOptions): FixResult {
   const settings: LintOptions = { ...fixOptions(options) }
   delete settings.includes
   const original = lint(source, settings)
@@ -355,6 +354,19 @@ export function fixSource(source: string, options: LintOptions): FixResult {
     if (!excludeCause(bad, excluded, result.chosen)) break
   }
   return { output: source, applied: new Map() }
+}
+
+/** The source with every fix applied that verifies, pass after pass until a pass changes nothing. */
+export function fixSource(source: string, options: LintOptions): FixResult {
+  const applied = new Map<string, number>()
+  let output = source
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const result = fixClosedPass(output, options)
+    if (result.output === output) break
+    output = result.output
+    for (const [rule, count] of result.applied) applied.set(rule, (applied.get(rule) ?? 0) + count)
+  }
+  return { output, applied }
 }
 
 /** The rules a fix rewrites. */
