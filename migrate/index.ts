@@ -200,16 +200,18 @@ function stubs(state: MigrationState): ExtensionDefinition[] {
     .map((entry) => ({ name: entry.name, version: entry.version, props: {}, slots: {} }))
 }
 
-export function migrateTree(json: unknown, options: MigrateOptions = {}): MigrationResult {
-  let input: unknown = json
-  if (typeof json === 'string') {
-    try {
-      input = JSON.parse(json)
-    } catch (error) {
-      if (error instanceof SyntaxError) throw new CarveTreeError('', error.message)
-      throw error
-    }
+function migrationInput(json: unknown): unknown {
+  if (typeof json !== 'string') return json
+  try {
+    return JSON.parse(json)
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new CarveTreeError('', error.message)
+    throw error
   }
+}
+
+export function migrateTree(json: unknown, options: MigrateOptions = {}): MigrationResult {
+  const input = migrationInput(json)
   const envelope = object(input) && input['type'] === undefined ? input : undefined
   const value = envelope === undefined ? input : envelope['document']
   const old = record(value)
