@@ -72,4 +72,11 @@ describe('fix output is lint closed', () => {
     expect(output).toContain('{~x~}\n')
     expect(fix(output).output).toBe(output)
   })
+
+  it('keeps an independent fix before a blocked collision', () => {
+    const source = '**z**\n~~_x_~~\n**~x~**\n'
+    const output = fix(source).output
+    expect(output).toBe('*z*\n~~_x_~~\n**~x~**\n')
+    expect(fix(output).output).toBe(output)
+  })
 })

@@ -326,16 +326,15 @@ function addedSites(
 }
 
 function excludeCause(sites: readonly Site[], excluded: Set<string>, chosen: readonly Candidate[]): boolean {
-  let grew = false
   for (const site of sites) {
     const eligible = chosen.filter((candidate) => !excluded.has(candidate.key) &&
       (candidate.line < site.line || (candidate.line === site.line && candidate.column <= site.column)))
     const cause = eligible.sort((a, b) => b.line - a.line || b.column - a.column)[0]
     if (cause === undefined) continue
     excluded.add(cause.key)
-    grew = true
+    return true
   }
-  return grew
+  return false
 }
 
 function fixClosedPass(source: string, options: LintOptions): FixResult {
