@@ -296,40 +296,47 @@ function counts(entries: readonly Diagnostic[]): Map<string, number> {
   return result
 }
 
+function evaluated(bytes: Uint8Array, plans: readonly Candidate[], before: Map<string, number>, settings: LintOptions):
+  { excess: number, commentShaped: boolean, findings: Diagnostic[] } {
+  const findings = lint(decoder.decode(apply(bytes, plans)), settings)
+  let excess = 0
+  let commentShaped = false
+  for (const [code, count] of counts(findings)) {
+    const increase = count - (before.get(code) ?? 0)
+    if (increase > 0) {
+      excess += increase
+      if (code === 'comment-shaped-emphasis') commentShaped = true
+    }
+  }
+  return { excess, commentShaped, findings }
+}
+
 /** Keep the fix pass from introducing a lint finding at a meeting of independent edits. */
 function quiet(
-  bytes: Uint8Array, chosen: Candidate[], original: readonly Diagnostic[], settings: LintOptions, allowTransient = false,
+  bytes: Uint8Array, chosen: Candidate[], original: readonly Diagnostic[], settings: LintOptions,
 ): { chosen: Candidate[], findings: Diagnostic[] } | null {
   if (chosen.length === 0) return null
   const before = counts(original)
-  const evaluate = (plans: readonly Candidate[]): { excess: number, findings: Diagnostic[] } => {
-    const findings = lint(decoder.decode(apply(bytes, plans)), settings)
-    let excess = 0
-    for (const [code, count] of counts(findings)) {
-      const increase = count - (before.get(code) ?? 0)
-      if (increase > 0) excess += increase
-    }
-    return { excess, findings }
-  }
   let current = chosen
-  let result = evaluate(current)
+  let result = evaluated(bytes, current, before, settings)
   if (result.excess === 0) return { chosen: current, findings: result.findings }
+  // Bracing an inline delimiter can resolve a comment-shaped span, not a block or line finding.
+  if (!result.commentShaped) return { chosen: current, findings: result.findings }
   // Try the inner delimiter class first. One batch covers many repeated collisions without a lint and parse per span.
   for (const node of ['emphasis', 'strong'] as const) {
     const trial = current.map((candidate) => candidate.plan.node === node ? braced(candidate) ?? candidate : candidate)
     if (trial.every((candidate, index) => candidate === current[index])) continue
     if (verified(bytes, trial).length !== trial.length) continue
-    const next = evaluate(trial)
+    const next = evaluated(bytes, trial, before, settings)
     if (next.excess < result.excess) {
       current = trial
       result = next
     }
     if (result.excess === 0) return { chosen: current, findings: result.findings }
+    if (!result.commentShaped) break
   }
   // A later pass can resolve a warning exposed by an earlier replacement.
-  if (allowTransient) return { chosen: current, findings: result.findings }
-  // A replacement without a quiet, parse-equivalent spelling stays for the author.
-  return null
+  return { chosen: current, findings: result.findings }
 }
 
 /** The options of the lint run that finds what to fix: every fixable rule is on unless `rules` turns it off. */
@@ -362,7 +369,7 @@ function runPasses(source: string, settings: LintOptions, excluded: ReadonlySet<
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const found = candidates(bytes, findings).filter((candidate) => !excluded.has(candidate.key))
     if (found.length === 0) break
-    const batch = quiet(bytes, verified(bytes, select(found)), findings, settings, true)
+    const batch = quiet(bytes, verified(bytes, select(found)), findings, settings)
     if (batch === null) break
     bytes = apply(bytes, batch.chosen)
     findings = batch.findings
