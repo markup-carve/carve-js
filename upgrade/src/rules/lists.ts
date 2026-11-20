@@ -74,13 +74,44 @@ function quotesOfLine(text: string): number {
 }
 
 /** U-016: in a quote the `+` line becomes a marked blank line and the block takes the marks. */
+/** The `>` marks at the start of `text`. */
+function quoteMarks(text: string): number {
+  let count = 0
+  for (let rest = text.trimStart(); rest.startsWith('>'); rest = rest.slice(1).trimStart()) count++
+  return count
+}
+
+/** The offset in `text` after its first `count` quote marks. */
+function afterMarks(text: string, count: number): number {
+  let at = 0
+  for (let seen = 0; seen < count; seen++) at = text.indexOf('>', at) + 1
+  return at
+}
+
 function plusInQuote(ctx: Context, quote: Visit, child: Node01, line: number): void {
   const message = '+ line replaced by a quoted blank line, the block given the quote mark'
-  const marks = '>'.repeat(quotesOf(quote).length + 1)
-  change(ctx, 'U-016', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), marks, message)
+  const depth = quotesOf(quote).length + 1
+  const marks = '>'.repeat(depth)
+  // A quote inside a body keeps the body's indent on the lines it is given.
+  const column = depth === 1 ? quote.node.pos!.startColumn - 1 : 0
+  const indentAt = (at: number): number => Math.min(column, indentOf(lineText(ctx.lines, at)))
+  change(ctx, 'U-016', lineStart(ctx.lines, line) + indentAt(line), lineEnd(ctx.lines, line), marks, message)
   for (let at = child.pos!.startLine; at <= child.pos!.endLine; at++) {
+    const text = lineText(ctx.lines, at)
+    // The marks of a quote that is the attached block are its own, not the host's.
+    const have = Math.max(0, quoteMarks(text) - (child.type === 'block_quote' ? 1 : 0))
     const start = lineStart(ctx.lines, at)
-    change(ctx, 'U-016', start, start, isBlank(lineText(ctx.lines, at)) ? marks : marks + ' ', message)
+    if (have >= depth) {
+      // The block starts right after the marks, or 0.2 reads it as a later block of an item there.
+      if (at !== child.pos!.startLine || have > depth) continue
+      const after = afterMarks(text, depth)
+      const spaces = indentOf(text.slice(after))
+      if (spaces > 1) change(ctx, 'U-016', start + after + 1, start + after + spaces, '', message)
+      continue
+    }
+    const added = '>'.repeat(depth - have)
+    const from = start + (have === 0 ? indentAt(at) : 0)
+    change(ctx, 'U-016', from, from, isBlank(text) ? added : added + ' ', message)
   }
 }
 
@@ -116,7 +147,11 @@ function plusLines(ctx: Context, visit: Visit, used: Set<number>): void {
 function leavesHost(ctx: Context, host: Visit, line: number): boolean {
   if (line >= ctx.lines.count || isBlank(lineText(ctx.lines, line + 1))) return false
   const next = ctx.blocks.leaf[line + 1]
-  if (next === null || next === undefined) return true
+  if (next === null || next === undefined) {
+    // An item of the host whose first block starts below its marker line holds no leaf there.
+    return !ctx.visits.some((visit) => visit.node.type === 'list_item' && visit.node.pos?.startLine === line + 1
+      && isInside(visit, host))
+  }
   // A marker at an open list's column ends the paragraph by itself (C2-B-015).
   const item = ancestor(next, 'list_item')
   return !isInside(next, host) && (item === null || item.node.pos!.startLine !== line + 1)

@@ -4,7 +4,7 @@ import { foldLabel } from '../../../src/ast-attributes.ts'
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01, probe02 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
-import { isGap, trimmedEnd } from './lines.ts'
+import { insideQuotes, isGap, trimmedEnd } from './lines.ts'
 import { headingTexts, plainText } from './references.ts'
 
 const EQUALS = 0x3d
@@ -262,7 +262,7 @@ function flagRuns(ctx: Context, node: Node01): void {
   if (typeof value !== 'string' || !value.includes('--')) return
   const end = node.pos!.endOffset
   const start = end - value.length
-  if (start < 0 || ctx.src.slice(start, end) !== value) return
+  if (start < 0 || ctx.src.slice(start, end) !== value || onDirectiveLine(ctx, node)) return
   for (let at = 0; at < value.length;) {
     let run = at
     while (run < value.length && value.charCodeAt(run) === HYPHEN) run++
@@ -278,6 +278,12 @@ function flagRuns(ctx: Context, node: Node01): void {
     }
     at = run > at ? run : at + 1
   }
+}
+
+/** U-011: 0.2 writes a line that reads as an include directive as typed, so its hyphens need no escape. */
+function onDirectiveLine(ctx: Context, node: Node01): boolean {
+  const text = insideQuotes(lineText(ctx.lines, node.pos!.startLine)).trim()
+  return text.startsWith('{{') && text.endsWith('}}')
 }
 
 /**
