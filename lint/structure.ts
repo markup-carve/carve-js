@@ -1330,11 +1330,8 @@ function unresolvedReference(node: Node, path: string, context: LintContext): vo
   context.state.unresolvedReferences.push({ node, path })
 }
 
-function unusedReference(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'link_reference_definition') context.state.referenceDefinitions.push({ node, path })
-  else if ((node.type === 'link' || node.type === 'image') && node.key !== undefined) {
-    context.state.usedReferences.add(node.key)
-  }
+function unusedReference(node: Node, _path: string, context: LintContext): void {
+  if ((node.type === 'link' || node.type === 'image') && node.key !== undefined) context.state.usedReferences.add(node.key)
 }
 
 function unresolvedFootnote(node: Node, path: string, context: LintContext): void {
@@ -1406,7 +1403,8 @@ function reportUnresolvedReference(item: { node: Node, path: string }, context: 
 }
 
 function reportUnusedReferences(context: LintContext): void {
-  if (context.options.rules?.['unused-link-reference-definition'] === 'off') return
+  // The rule runs by hand only where its node rule is registered: not when it is off, nor when it runs from data.
+  if (!(context.nodeRules.get('link_reference_definition') ?? []).some((rule) => rule.id === 'unused-link-reference-definition')) return
   for (const item of context.state.referenceDefinitions) {
     if (item.node.type === 'link_reference_definition' && !context.state.usedReferences.has(item.node.key)) {
       reportNode('unused-link-reference-definition', item.node, item.path, context)

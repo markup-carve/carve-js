@@ -560,9 +560,9 @@ export class DataWalk {
   }
 }
 
-/** The model; a block record is made only where `runsFor` gives runs for its type and its parent's type. */
+/** The model; a block record is made only where `runsFor` gives runs for its type and its parent's type, or a lookup needs it. */
 export function buildModel<T>(walked: readonly Walked[], context: LintContext,
-  runsFor: (type: string, parent: string) => readonly T[]): LineModel<T> {
+  runsFor: (type: string, parent: string) => readonly T[], needed: ReadonlySet<string> = new Set()): LineModel<T> {
   const { source, lines } = context
   const found = leaves(walked, lines.length, context.chars)
   // C2-B-010: the empty rest after the last line terminator is no line.
@@ -575,7 +575,7 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   for (const item of walked) {
     if (item.path === '' || item.node.pos === undefined) continue
     const blockRuns = runsFor(blockType(item.node), context.nodeTypes.get(item.parent) ?? 'document')
-    if (blockRuns.length === 0) continue
+    if (blockRuns.length === 0 && !needed.has(blockType(item.node))) continue
     const start = context.chars[item.node.pos.startOffset] ?? 0
     const line = model[(context.offsetLines[start] ?? 1) - 1]
     if (line === undefined) continue
