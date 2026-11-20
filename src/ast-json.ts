@@ -55,12 +55,12 @@ export function decodeTree(json: string, source?: string, extensions: readonly E
   const document = envelope === null ? value : envelope['document']
   // A path inside the envelope starts at its document.
   try {
-    if (annotations === undefined) validateTree(document, envelope ?? undefined, source, extensions)
-    else validateTreeWithAnnotations(document, annotations, envelope ?? undefined, source, extensions)
+    validateTree(document, envelope ?? undefined, source, extensions)
   } catch (error) {
     if (envelope !== null && error instanceof CarveTreeError) throw new CarveTreeError(`/document${error.path}`, error.reason)
     throw error
   }
+  if (annotations !== undefined) validateTreeWithAnnotations(document, annotations, envelope ?? undefined, source, extensions)
   Object.defineProperty(document, JSON_SOURCE_LENGTH, { value: utf8Length(json) })
   return document
 }

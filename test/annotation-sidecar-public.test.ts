@@ -20,6 +20,12 @@ describe('public annotation sidecar reader option', () => {
     const duplicate = { ranges: [...range.ranges, range.ranges[0]!] }
     expect(() => validateTree(tree, { annotations: duplicate })).toThrow('/ranges/1/id')
     expect(() => decodeTree(JSON.stringify(tree), { annotations: duplicate })).toThrow('/ranges/1/id')
+    try {
+      decodeTree(JSON.stringify({ astVersion: '2.0', document: tree }), { annotations: duplicate })
+      throw new Error('expected refusal')
+    } catch (error) {
+      expect(error).toMatchObject({ path: '/ranges/1/id' })
+    }
   })
 
   it('checks sidecar shape and UTF-8 byte boundaries', () => {
