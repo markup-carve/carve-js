@@ -931,32 +931,27 @@ function suppressesBelow(comment: CommentNode, lines: readonly string[] | null):
   return below !== undefined && !BLANK_IN_CONTAINERS.test(below)
 }
 
-/**
- * C2-W-144: the blank lines below a next-line control comment are left out where the tree reads back the same and
- * no comment comes to suppress a line it did not suppress in `original`, the source of the tree.
- */
-function keepControlsAbove(w: Writer, document: DocumentNode, source: string, original: string | null): string {
-  if (!source.includes('carve-lint-disable-next-line')) return source
+/** Whether `candidate` reads back as `tree` and gives no control comment a line it did not suppress (`live`). */
+function sameControls(w: Writer, candidate: string, tree: readonly Node[], live: readonly boolean[]): boolean {
+  const parsed = parseWritten(w, candidate).children
+  if (parsed.length !== tree.length || !parsed.every((node, index) => treesEqual(node, tree[index]!))) return false
+  const lines = candidate.split('\n')
+  const controls = controlComments(parsed)
+  return controls.length === live.length &&
+    controls.every((comment, index) => live[index] === true || !suppressesBelow(comment, lines))
+}
+
+/** C2-W-144: leaves out the blank lines below each control comment of `live` that suppressed a line of the source. */
+function dropBlanksBelow(w: Writer, source: string, tree: readonly Node[], live: readonly boolean[]): string {
   const lines = source.split('\n')
-  const candidates = blanksBelowControls(lines)
-  if (candidates.length === 0) return source
-  const authored = original?.split('\n') ?? null
-  const live = controlComments(document.children).map((comment) => suppressesBelow(comment, authored))
-  let budget = CONTROL_CHECK_BUDGET * source.length
-  const tree = parseWritten(w, source).children
-  // The written comments that suppressed a line of the source; a blank run below any other line is no candidate.
   const below = new Set(controlComments(tree).flatMap((comment, index) =>
     live[index] === true && comment.pos !== undefined ? [comment.pos.endLine] : []))
-  const spans = candidates.filter(([from]) => below.has(from))
+  const spans = blanksBelowControls(lines).filter(([from]) => below.has(from))
   if (spans.length === 0) return source
+  let budget = CONTROL_CHECK_BUDGET * source.length
   const holds = (candidate: string): boolean => {
     budget -= candidate.length
-    const parsed = parseWritten(w, candidate).children
-    if (parsed.length !== tree.length || !parsed.every((node, index) => treesEqual(node, tree[index]!))) return false
-    const candidateLines = candidate.split('\n')
-    const controls = controlComments(parsed)
-    return controls.length === live.length &&
-      controls.every((comment, index) => live[index] === true || !suppressesBelow(comment, candidateLines))
+    return sameControls(w, candidate, tree, live)
   }
   const without = (kept: readonly [number, number][]): string => {
     const dropped = new Set<number>()
@@ -971,6 +966,31 @@ function keepControlsAbove(w: Writer, document: DocumentNode, source: string, or
     if (holds(without([...taken, span]))) taken.push(span)
   }
   return without(taken)
+}
+
+/** C2-W-144: a blank line below each control comment that suppressed nothing in the source and would now. */
+function restoreBlanksBelow(w: Writer, written: string, tree: readonly Node[], live: readonly boolean[]): string {
+  if (live.every((entry) => entry)) return written
+  const lines = written.split('\n')
+  const at = new Set(controlComments(parseWritten(w, written).children).flatMap((comment, index) =>
+    live[index] !== true && comment.pos !== undefined && suppressesBelow(comment, lines) ? [comment.pos.endLine] : []))
+  if (at.size === 0) return written
+  // The blank line keeps the quote marks of the comment line, so that it stays inside the quote.
+  const candidate = lines.flatMap((line, index) => at.has(index) ? [/^(?:[ \t]*>)*/.exec(lines[index - 1]!)![0], line] : [line])
+    .join('\n')
+  return sameControls(w, candidate, tree, live) ? candidate : written
+}
+
+/**
+ * C2-W-144: a control comment that suppressed a line of `original`, the source of the tree, is written directly above
+ * the next line, and one that suppressed nothing keeps a blank line below it, where the tree reads back the same.
+ */
+function keepControlsAbove(w: Writer, document: DocumentNode, source: string, original: string | null): string {
+  if (!source.includes('carve-lint-disable-next-line')) return source
+  const authored = original?.split('\n') ?? null
+  const live = controlComments(document.children).map((comment) => suppressesBelow(comment, authored))
+  const tree = parseWritten(w, source).children
+  return restoreBlanksBelow(w, dropBlanksBelow(w, source, tree, live), tree, live)
 }
 
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */

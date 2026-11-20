@@ -32,6 +32,8 @@ describe('C2-W-144: a next-line control comment keeps its line', () => {
   it('keeps the blank line below a comment that suppresses nothing in the source', () => {
     expect(format(`x\n\n${CONTROL}\n\n## See [a]()\n`)).toBe(`x\n\n${CONTROL}\n\n== See [a]()\n`)
     expect(format(`- a\n\n${CONTROL}\n\n- b\n`)).toBe(`- a\n\n  ${CONTROL}\n\n- b\n`)
+    // C2-W-114 writes no blank line between two descriptions; this one stays, or the comment would suppress `: [a]()`.
+    expect(format(`:: t\n: d\n\n${CONTROL}\n\n: [a]()\n`)).toBe(`:: t\n: d\n\n  ${CONTROL}\n\n: [a]()\n`)
   })
 
   it('writes a supplied tree with the comment directly above the next block', () => {
