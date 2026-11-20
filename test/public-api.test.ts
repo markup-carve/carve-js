@@ -161,6 +161,9 @@ describe('the public 0.2 entry', () => {
     expect(migrated.document.children.map((node) => node.type)).toEqual(['paragraph'])
     expect(migrated.document.astVersion).toBe(AST_VERSION)
     expect(refusal(() => migrateTree({ type: 'doc' }))).toBeInstanceOf(CarveTreeError)
+    const malformed = refusal(() => migrateTree('{bad'))
+    expect(malformed).toBeInstanceOf(CarveTreeError)
+    expect((malformed as CarveTreeError).message).toMatch(/^\/: /)
     optionError(() => migrateTree({}, { strict: true } as never), 'strict')
   })
 
