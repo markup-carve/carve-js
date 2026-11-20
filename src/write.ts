@@ -9,7 +9,7 @@ import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { addSpanMarks } from './write-spans.ts'
-import { type Asked, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
+import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -615,9 +615,23 @@ function withoutStandardData(node: Node): Node {
   return copy
 }
 
+/** Whether `withoutStandardData` or `withCoreInlines` can change `tree`: a data record or an inline extension in it. */
+function holdsRewrites(tree: Node): boolean {
+  const pending: object[] = [tree]
+  for (let value = pending.pop(); value !== undefined; value = pending.pop()) {
+    if (!Array.isArray(value)) {
+      const record = value as Record<string, unknown>
+      if (record['type'] === 'inline_extension' || isRecord(record['data'])) return true
+    }
+    for (const item of Object.values(value) as unknown[]) if (typeof item === 'object' && item !== null) pending.push(item)
+  }
+  return false
+}
+
 /** C2-W-002, C2-A-193: the writer disregards standard data namespaces in its readback check. */
 function writerEqual(expected: Node, actual: Node): boolean {
   if (treesEqual(expected, actual) || sourceCoreEquivalent(expected, actual)) return true
+  if (!holdsRewrites(expected)) return false
   const plain = withoutStandardData(expected)
   if (treesEqual(plain, actual)) return true
   const cores = withCoreInlines(plain)
@@ -674,6 +688,18 @@ function settledPlan(w: Writer, run: WriterRun, group: readonly Node[], first: b
 interface GroupPairs {
   late: boolean
   settled: boolean
+  /** For EARLY_FINAL, the escapes right after the early ones: while they stand, the test after the write finds nothing. */
+  final: Map<TextNode, number[]> | null
+}
+
+function sameEscapes(escapes: ReadonlyMap<TextNode, readonly number[]>, final: ReadonlyMap<TextNode, readonly number[]>): boolean {
+  if (escapes.size !== final.size) return false
+  for (const [node, offsets] of escapes) {
+    const kept = final.get(node)
+    if (kept === undefined || kept.length !== offsets.length) return false
+    for (let at = 0; at < offsets.length; at++) if (kept[at] !== offsets[at]) return false
+  }
+  return true
 }
 
 function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boolean, pairs: GroupPairs): boolean {
@@ -690,7 +716,7 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   const checked = run.check && plan.lost.length === 0 && w.lines.length > 0
   // The pair test reads its own spelling back, also where the run checks nothing, as the repair it replaces does.
   const placed = pairs.late && plan.lost.length === 0 && w.lines.length > 0 && run.path === 'plan'
-    ? placeLatePairs(w, group, first) : REFUSED
+    ? testLatePairs(w, group, first, pairs) : REFUSED
   if (placed === PLACED) {
     // C2-W-089: the plan alone did not decide a group that needed a pair round and its parse.
     run.stats.repaired++
@@ -710,6 +736,11 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
 const REFUSED = 0
 const PLACED = 1
 const NONE_ASKED = 2
+
+/** `placeLatePairs`, where the early escapes still stand as they were proven final, asks nothing. */
+function testLatePairs(w: Writer, group: readonly Node[], first: boolean, pairs: GroupPairs): number {
+  return pairs.final !== null && sameEscapes(w.escapes, pairs.final) ? NONE_ASKED : placeLatePairs(w, group, first)
+}
 
 /**
  * C2-W-146: the pair escapes of a planned group are placed before its readback, so the one readback of the plan
@@ -833,16 +864,17 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   const reach = pairReach(group, w.escapes, EARLY)
   // Pair rules depend on text and escapes already chosen, so place their ordinary escapes before
   // the first write. The check below still handles a pair exposed by a later repair choice.
-  let placedEarly = reach === EARLY_PAIRS
+  let placedEarly = reach === EARLY_PAIRS || reach === EARLY_FINAL
   const escapedEarly = EARLY.size > 0
   const saved = escapedEarly ? saveEarlyState(w) : null
   if (escapedEarly) {
     addAsked(w, EARLY)
     EARLY.clear()
   }
+  const final = reach === EARLY_FINAL ? new Map([...w.escapes].map(([node, offsets]) => [node, [...offsets]])) : null
   const planned = run.stats.planned
   // An early escape can expose a later opener, as in `_b _c_` after escaping the first `_`: the plan tests for it.
-  const pairs: GroupPairs = { late: reach === LATE_PAIRS || escapedEarly, settled: false }
+  const pairs: GroupPairs = { late: reach === LATE_PAIRS || escapedEarly, settled: false, final }
   let end = writeGroupOnce(w, run, document, from, first, pairs)
   if (saved !== null && w.losses.entries.length > saved.losses.entries) {
     restoreEarlyState(w, saved)
@@ -1044,20 +1076,87 @@ function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): 
 /** C2-W-088, C2-W-125: only these opener shapes can lose a backslash without changing the ordered repair. */
 /** A star after a break inside a pair can be a stale repair escape; one before a sibling pair can be a C2-W-125 seed. */
 function starAfterBreak(nodes: readonly Node[], byte: number, parent: Node | null): boolean {
+  if (nodes.length > 8 && ordered(nodes)) return starIn(nodes, holderOf(nodes, byte), byte, parent)
   for (let index = 0; index < nodes.length; index++) {
-    const node = nodes[index]!
-    const pos = node.pos
+    const pos = nodes[index]!.pos
     if (pos === undefined || byte < pos.startOffset || byte >= pos.endOffset) continue
-    if (node.type === 'text') return (parent?.type === 'emphasis' || parent?.type === 'strong') &&
-      nodes[index - 1]?.type === 'soft_break'
-    if (starAfterBreak(childNodes(node), byte, node)) return true
+    if (starIn(nodes, index, byte, parent)) return true
+    if (nodes[index]!.type === 'text') return false
   }
   return false
 }
 
-function prunableOpener(w: Writer, source: string, at: number): boolean {
+/** The test of `starAfterBreak` at the sibling `index`, which holds `byte`, or -1 for none. */
+function starIn(nodes: readonly Node[], index: number, byte: number, parent: Node | null): boolean {
+  if (index < 0) return false
+  const node = nodes[index]!
+  if (node.type === 'text') return (parent?.type === 'emphasis' || parent?.type === 'strong') &&
+    nodes[index - 1]?.type === 'soft_break'
+  return starAfterBreak(childNodes(node), byte, node)
+}
+
+/** In siblings that do not overlap, the one that holds `byte`, or -1: only the first that ends behind it can. */
+function holderOf(nodes: readonly Node[], byte: number): number {
+  let low = 0
+  let high = nodes.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (nodes[middle]!.pos!.endOffset <= byte) low = middle + 1
+    else high = middle
+  }
+  return low < nodes.length && nodes[low]!.pos!.startOffset <= byte ? low : -1
+}
+
+const ORDERED = new WeakMap<readonly Node[], boolean>()
+
+/** Whether every node of `nodes` has a position and each starts where the one before it ends or later. */
+function ordered(nodes: readonly Node[]): boolean {
+  let known = ORDERED.get(nodes)
+  if (known !== undefined) return known
+  known = true
+  for (let at = 0; at < nodes.length && known; at++) {
+    const pos = nodes[at]!.pos
+    if (pos === undefined || (at > 0 && pos.startOffset < nodes[at - 1]!.pos!.endOffset)) known = false
+  }
+  ORDERED.set(nodes, known)
+  return known
+}
+
+/** Whether `starAfterBreak` can hold anywhere below `nodes`: a text after a soft break in emphasis or strong. */
+function textAfterBreak(nodes: readonly Node[]): boolean {
+  const pending = [...nodes]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    const children = childNodes(node)
+    if (node.type === 'emphasis' || node.type === 'strong') {
+      for (let at = 1; at < children.length; at++) {
+        if (children[at]!.type === 'text' && children[at - 1]!.type === 'soft_break') return true
+      }
+    }
+    for (const child of children) pending.push(child)
+  }
+  return false
+}
+
+/**
+ * The scan of `pruneGroupEscapes`: the UTF-8 offset of `scanned` in the source, and whether the parse of the source
+ * holds a star `starAfterBreak` can find, so that each backslash costs no walk of what lies before it.
+ */
+interface PruneScan {
+  scanned: number
+  byte: number
+  stars: boolean | null
+}
+
+function prunableStar(w: Writer, source: string, at: number, scan: PruneScan): boolean {
+  if (w.parsed === null || !(scan.stars ??= textAfterBreak(w.parsed.children))) return false
+  scan.byte += utf8Length(source.slice(scan.scanned, at))
+  scan.scanned = at
+  return starAfterBreak(w.parsed.children, scan.byte, null)
+}
+
+function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan): boolean {
   const next = source[at + 1]
-  if (next === '*') return w.parsed !== null && starAfterBreak(w.parsed.children, utf8Length(source.slice(0, at)), null)
+  if (next === '*') return prunableStar(w, source, at, scan)
   if (next === '[') {
     if (source.startsWith('^]', at + 2)) return true
     if (!source.startsWith('----', at + 2)) return false
@@ -1077,6 +1176,8 @@ function prunableOpener(w: Writer, source: string, at: number): boolean {
 function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): void {
   let source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   let at = source.indexOf('\\')
+  // A pruned backslash at `at` leaves the source before `at` as it was, so the scan goes on from there.
+  const scan: PruneScan = { scanned: 0, byte: 0, stars: null }
   while (at >= 0) {
     // C2-W-133: each candidate is one parse more, so the pruning counts toward the limit of the repair.
     if (exhausted(w)) {
@@ -1084,7 +1185,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
       if (host !== undefined) refuseRepair(w, host)
       break
     }
-    if (prunableOpener(w, source, at)) {
+    if (prunableOpener(w, source, at, scan)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
       const parsed = parseChunk(w, candidate)
       if (parsed.children.length === group.length && parsed.children.every((node, index) => {
@@ -1093,6 +1194,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
       })) {
         source = candidate
         w.parsed = parsed
+        scan.stars = null
         at = source.indexOf('\\', at)
         continue
       }
