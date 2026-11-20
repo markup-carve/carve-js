@@ -534,7 +534,7 @@ export class DataWalk {
       open.next = index + 1
       return
     }
-    const record = new TextRunRecord(`${parentPath}/children/${index}`, start, end, index + 1, leaf, parent.type, this.context.source)
+    const record = new TextRunRecord(parentPath, start, end, index + 1, leaf, parent.type, this.context.source)
     this.runs.set(parentPath, record)
     this.inline.push(record)
   }

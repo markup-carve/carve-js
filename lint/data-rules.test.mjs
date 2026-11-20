@@ -178,7 +178,7 @@ it('C2-W-147: the pair rules read each text run with the pair scan, as the hand-
   const both = (source) => ['data', 'code'].map((mode) => {
     if (mode === 'data') process.env.CARVE_LINT_RULES = 'data'
     else delete process.env.CARVE_LINT_RULES
-    return lint(source, on).map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset}`)
+    return lint(source, on).map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset} ${entry.path}`)
   })
   for (const source of ['a _b_ c\n', 'x_y_z\n', '\\_b_\n', '_b _\n', 'a ~b~ c ~~d~~ e\n', '**b** and **c d**\n', '**a*b**\n',
     '=x= y\n', 'a ^b^ c\n', '{^x^}\n', 'a _b\nc_ d\n', '*x _y_ z*\n', '[l _a_](u) _b_\n', '`c` _d_ `e`\n', '| _a_ | ~b~ |\n',
