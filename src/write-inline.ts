@@ -98,6 +98,19 @@ export function escapeOffsets(w: Writer, node: TextNode, flags: number): number[
 /** The text `value[from, to)` with the backslashes it needs. */
 function escaped(w: Writer, node: TextNode, value: string, from: number, to: number, flags: number): string {
   const escapes = w.escapes.get(node) ?? []
+  if (!mayAlwaysEscape(value, flags)) {
+    let out = ''
+    let start = from
+    let previous = -1
+    for (let index = firstFrom(escapes, from); index < escapes.length && escapes[index]! < to; index++) {
+      const at = escapes[index]!
+      if (at === previous) break
+      out += `${value.slice(start, at)}\\`
+      start = at
+      previous = at
+    }
+    return out + value.slice(start, to)
+  }
   let out = ''
   let next = firstFrom(escapes, from)
   let start = from

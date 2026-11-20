@@ -11,6 +11,22 @@ const PAIR_RULES = [
 
 const PARENTS: ReadonlySet<string> = new Set(INLINE_PARENTS)
 
+/** Whether a group's text can contain an opening pair mark at all. */
+export function hasPairMarks(group: readonly Node[]): boolean {
+  const stack = [...group]
+  for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
+    if (node.type === 'text' && /[~_=*]/.test(node.value)) return true
+    forEachSlot(node, (nodes) => { for (const child of nodes) stack.push(child) })
+  }
+  return false
+}
+
+/** A plain paragraph has no enclosing spelling choice that an early pair escape can change. */
+export function canPlacePairsEarly(group: readonly Node[]): boolean {
+  return group.every((node) => node.type === 'paragraph' && node.children.every((child) =>
+    child.type === 'text' && /^[\p{L}\p{N} _~=*.,;:!?-]*$/u.test(child.value)))
+}
+
 /** One run of text and soft breaks as the writer spells it, with the text character each source character writes. */
 interface Run {
   source: string
@@ -18,7 +34,16 @@ interface Run {
 }
 
 function escapedAt(escapes: ReadonlyMap<TextNode, readonly number[]>, node: TextNode, at: number): boolean {
-  return escapes.get(node)?.includes(at) === true
+  const offsets = escapes.get(node)
+  if (offsets === undefined) return false
+  let low = 0
+  let high = offsets.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (offsets[middle]! < at) low = middle + 1
+    else high = middle
+  }
+  return offsets[low] === at
 }
 
 function spell(run: Run, node: TextNode, escapes: ReadonlyMap<TextNode, readonly number[]>): void {
@@ -49,25 +74,41 @@ function testRun(run: Run, found: [TextNode, number][]): void {
   }
 }
 
+function testPlainText(node: TextNode, found: [TextNode, number][]): void {
+  for (const [mark, id] of PAIR_RULES) {
+    pairedMarks(node.value, mark, id, (start) => {
+      for (let at = start; at < start + mark.length; at++) found.push([node, at])
+    })
+  }
+}
+
+function testChildren(children: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>,
+  found: [TextNode, number][]): void {
+  const only = children.length === 1 ? children[0] : undefined
+  if (only?.type === 'text' && !only.value.includes('\\') && !escapes.has(only)) {
+    testPlainText(only, found)
+    return
+  }
+  let run: Run = { source: '', places: [] }
+  for (const child of children) {
+    if (child.type === 'text') spell(run, child, escapes)
+    else if (child.type === 'soft_break') {
+      run.source += '\n'
+      run.places.push(null)
+    } else {
+      testRun(run, found)
+      run = { source: '', places: [] }
+    }
+  }
+  testRun(run, found)
+}
+
 /** The escapes that the pair rules ask for in `group` under the escapes `escapes` already holds. */
 export function pairEscapes(group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>): [TextNode, number][] {
   const found: [TextNode, number][] = []
   const stack: Node[] = [...group]
   for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
-    if (PARENTS.has(node.type) && 'children' in node) {
-      let run: Run = { source: '', places: [] }
-      for (const child of node.children as readonly Node[]) {
-        if (child.type === 'text') spell(run, child, escapes)
-        else if (child.type === 'soft_break') {
-          run.source += '\n'
-          run.places.push(null)
-        } else {
-          testRun(run, found)
-          run = { source: '', places: [] }
-        }
-      }
-      testRun(run, found)
-    }
+    if (PARENTS.has(node.type) && 'children' in node) testChildren(node.children as readonly Node[], escapes, found)
     forEachSlot(node, (nodes) => { for (const child of nodes) stack.push(child) })
   }
   return found.filter(([node, at]) => !escapedAt(escapes, node, at))
