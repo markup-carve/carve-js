@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { fix, lint } from '../public/index.ts'
+import { fix, fixEdits, lint } from '../public/index.ts'
 
 interface ClauseCase { kind: string, input?: string }
 const clauseCases = (JSON.parse(readFileSync(new URL('../data/conformance/clause-cases.json', import.meta.url), 'utf8')) as { cases: ClauseCase[] }).cases
@@ -78,5 +78,15 @@ describe('fix output is lint closed', () => {
     const output = fix(source).output
     expect(output).toBe('*z*\n~~_x_~~\n**~x~**\n')
     expect(fix(output).output).toBe(output)
+  })
+
+  it('keeps a parse-valid editor edit when the full fix needs a later pass', () => {
+    const source = '_**_a_**\n'
+    const finding = lint(source).find((entry) => entry.code === 'markdown-strong-double-star')!
+    expect(fixEdits(source, finding)).toEqual([
+      { startOffset: 1, endOffset: 3, text: '*' },
+      { startOffset: 6, endOffset: 8, text: '*' },
+    ])
+    expect(fix(source).output).toBe('_*{/a/}*\n')
   })
 })

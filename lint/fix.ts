@@ -326,15 +326,20 @@ function addedSites(
 }
 
 function excludeCause(sites: readonly Site[], excluded: Set<string>, chosen: readonly Candidate[]): boolean {
+  let grew = false
+  const visited = new Set<string>()
   for (const site of sites) {
+    const key = `${site.line}:${site.column}`
+    if (visited.has(key)) continue
+    visited.add(key)
     const eligible = chosen.filter((candidate) => !excluded.has(candidate.key) &&
       (candidate.line < site.line || (candidate.line === site.line && candidate.column <= site.column)))
     const cause = eligible.sort((a, b) => b.line - a.line || b.column - a.column)[0]
     if (cause === undefined) continue
     excluded.add(cause.key)
-    return true
+    grew = true
   }
-  return false
+  return grew
 }
 
 function fixClosedPass(source: string, options: LintOptions): FixResult {
@@ -384,6 +389,5 @@ export function fixEditsFor(source: string, diagnostic: Diagnostic): FixEdit[] |
   if (diagnostic.range === undefined || diagnostic.range.endOffset > bytes.length) return null
   const found = candidates(bytes, [diagnostic])
   if (found.length === 0 || verified(bytes, found).length === 0) return null
-  const choice = quiet(bytes, found, lint(source, fixOptions({})), fixOptions({}))[0]
-  return choice?.plan.edits.map((edit) => ({ startOffset: edit.start, endOffset: edit.end, text: edit.text })) ?? null
+  return found[0]!.plan.edits.map((edit) => ({ startOffset: edit.start, endOffset: edit.end, text: edit.text }))
 }
