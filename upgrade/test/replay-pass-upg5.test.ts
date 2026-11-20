@@ -68,6 +68,12 @@ describe('the third replay pass', () => {
     expect(result.records.some((record) => record.entry === id)).toBe(true)
   })
 
+  it('C2-B-046 U-434 reads past a glued attribute block with a brace in a quoted value', () => {
+    const result = upgrade('-{title="}"}   [ ] a\n')
+    expect(result.output).toBe('-{title="}"} [ ] a\n')
+    expect(canWriteUpgrade(result)).toBe(true)
+  })
+
   it('C2-B-046 U-434 leaves a box after an ordered marker to U-120', () => {
     expect(upgrade('1.   [ ] a\n').records.some((record) => record.entry === 'U-434')).toBe(false)
   })
