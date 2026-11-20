@@ -6,7 +6,7 @@
  * `extensions` and `renderers` options, `tabsExtensions`, `tabsRenderer`), as spec/0.2/extensions.md states.
  */
 import { decodeTree as decodeTreeImpl } from '../src/ast-json.ts'
-import { CarveTreeError, validateTree as validateTreeImpl } from '../src/ast-validate.ts'
+import { CarveTreeError, type AnnotationRangeSidecar, validateTree as validateTreeImpl, validateTreeWithAnnotations } from '../src/ast-validate.ts'
 import { migrateTree as migrateTreeImpl, type MigrateOptions, type MigrationResult } from '../migrate/index.ts'
 import { type DocumentNode } from '../src/ast.ts'
 import { type SmartPunctuationNode } from '../src/ast-nodes.ts'
@@ -88,12 +88,16 @@ export interface DecodeOptions {
   extensions?: readonly ExtensionDefinition[]
   /** The source the tree was parsed from, for the checks of its positions. */
   source?: string
+  /** Optional annotation-range sidecar checked with the tree (C2-A-203). */
+  annotations?: AnnotationRangeSidecar
 }
 
 /** The options of `validateTree` (C2-A-188). */
 export interface ValidateOptions {
   /** Provisional: the registered standard extensions, read for the tree reader checks (C2-X-038). */
   extensions?: readonly ExtensionDefinition[]
+  /** Optional annotation-range sidecar checked with the tree (C2-A-203). */
+  annotations?: AnnotationRangeSidecar
 }
 
 const WRITE_OPTIONS = { extensions: 'extensions', layout: 'layout', alignTables: 'boolean', check: 'boolean' } as const
@@ -112,15 +116,18 @@ export function writeWithDiagnostics(document: DocumentNode, options?: WriteOpti
 
 /** Reads a tree of contract 2.0, bare or in an envelope, from JSON text (C2-A-188). Refuses with `CarveTreeError`. */
 export function decodeTree(json: string, options?: DecodeOptions): DocumentNode {
-  checkOptions(options, { extensions: 'extensions', source: 'string' })
+  checkOptions(options, { extensions: 'extensions', source: 'string', annotations: 'annotations' })
   if (typeof json !== 'string') throw new CarveOptionError('json', 'not a string')
-  return decodeTreeImpl(json, options?.source, options?.extensions)
+  return decodeTreeImpl(json, options?.source, options?.extensions, options?.annotations)
 }
 
 /** Refuses `document` with `CarveTreeError` unless it is a tree of contract 2.0 (C2-A-188). */
 export function validateTree(document: unknown, options?: ValidateOptions): asserts document is DocumentNode {
-  checkOptions(options, { extensions: 'extensions' })
-  validateTreeImpl(document, undefined, undefined, options?.extensions ?? [])
+  checkOptions(options, { extensions: 'extensions', annotations: 'annotations' })
+  if (options?.annotations !== undefined) {
+    validateTreeWithAnnotations(document, options.annotations, undefined, undefined, options?.extensions ?? [])
+  }
+  else validateTreeImpl(document, undefined, undefined, options?.extensions ?? [])
 }
 
 /**
