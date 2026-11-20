@@ -739,12 +739,13 @@ function placeLatePairs(w: Writer, group: readonly Node[], first: boolean): numb
 
 /** Whether the written group holds a backslash that `prunableOpener` can take, which only the repair prunes. */
 function mayPrune(lines: readonly string[], group: readonly Node[]): boolean {
+  let breaks: boolean | null = null
   for (const line of lines) {
     for (let at = line.indexOf('\\'); at >= 0; at = line.indexOf('\\', at + 1)) {
       const next = line[at + 1]
       if (next === '{' && (line[at + 2] === '/' || line[at + 2] === '*' || line[at + 2] === '#')) return true
       if (next === '[' && (line.startsWith('^]', at + 2) || line.startsWith('----', at + 2))) return true
-      if (next === '*' && breakInPair(group)) return true
+      if (next === '*' && (breaks ??= breakInPair(group))) return true
     }
   }
   return false
