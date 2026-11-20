@@ -2,6 +2,7 @@
 
 /** C2-H-137: the options, and the stage that reads each. */
 export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
+  ["adapter", "import"],
   ["alignTables", "format"],
   ["allowLosses", "render"],
   ["codeBlockRenderer", "render"],
@@ -30,6 +31,7 @@ export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
 
 /** C2-H-137: the declared type of each option, checked before anything else is read of it. */
 export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
+  ["adapter", "enum"],
   ["alignTables", "boolean"],
   ["allowLosses", "list"],
   ["codeBlockRenderer", "structure"],
@@ -60,6 +62,7 @@ export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
 export const NULL_DEFAULTS: readonly string[] = ["codeBlockRenderer","includes","social"]
 
 export const ENUM_VALUES: ReadonlyMap<string, readonly string[]> = new Map([
+  ["adapter", ["generic","tiptap","prosemirror","ckeditor","tinymce","word","google-docs"]],
   ["headingIds", ["off","keep-case","lower","ascii","ascii-lower","ascii-strict","ascii-strict-lower"]],
   ["mode", ["interactive","static"]],
   ["profile", ["full","article","comment","minimal"]],
@@ -67,6 +70,7 @@ export const ENUM_VALUES: ReadonlyMap<string, readonly string[]> = new Map([
 ])
 
 export const ENUM_DEFAULTS: ReadonlyMap<string, string> = new Map([
+  ["adapter", "generic"],
   ["headingIds", "keep-case"],
   ["mode", "interactive"],
   ["profile", "full"],
