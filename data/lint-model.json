@@ -465,6 +465,35 @@
   ],
   "rules": [
     {
+      "id": "a11y/image-alt",
+      "over": "inline",
+      "types": [
+        "image"
+      ],
+      "when": {
+        "matches": [
+          {
+            "f": "text"
+          },
+          "^!\\[\\]"
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-074",
+        "C2-A-115"
+      ]
+    },
+    {
       "id": "bare-html-tag",
       "over": "line",
       "when": {
@@ -1320,6 +1349,34 @@
       ]
     },
     {
+      "id": "braced-comment-in-a-template-source",
+      "over": "inline",
+      "types": [
+        "comment"
+      ],
+      "when": {
+        "matches": [
+          {
+            "f": "text"
+          },
+          "^\\{%\\s*(?:(?:raw|endraw|endif|endfor|endblock)\\s*|(?:if|for|block)\\s+\\S[\\s\\S]*)%\\}$"
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-025"
+      ]
+    },
+    {
       "id": "caption-looking-paragraph",
       "over": "line",
       "when": {
@@ -1690,6 +1747,105 @@
       ]
     },
     {
+      "id": "comment-line-in-line-block",
+      "over": "block",
+      "types": [
+        "line"
+      ],
+      "when": {
+        "matches": [
+          {
+            "f": "text"
+          },
+          "^[ \\t]*%%"
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-123",
+        "C2-B-135"
+      ]
+    },
+    {
+      "id": "comment-shaped-emphasis",
+      "over": "inline",
+      "types": [
+        "emphasis",
+        "strong"
+      ],
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          },
+          "when": {
+            "all": [
+              {
+                "eq": [
+                  {
+                    "f": "type"
+                  },
+                  "emphasis"
+                ]
+              },
+              {
+                "matches": [
+                  {
+                    "f": "text"
+                  },
+                  "^/\\*|\\*/$"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          },
+          "when": {
+            "all": [
+              {
+                "eq": [
+                  {
+                    "f": "type"
+                  },
+                  "strong"
+                ]
+              },
+              {
+                "matches": [
+                  {
+                    "f": "text"
+                  },
+                  "^\\*/|/\\*$"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-046",
+        "C2-I-052"
+      ]
+    },
+    {
       "id": "definition-in-container",
       "over": "line",
       "when": {
@@ -1838,6 +1994,51 @@
       ]
     },
     {
+      "id": "definition-term-block-folded",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "eq": [
+              {
+                "f": "leaf"
+              },
+              "definition_term"
+            ]
+          },
+          {
+            "f": "leaf_first"
+          }
+        ]
+      },
+      "report": [
+        {
+          "when": {
+            "matches": [
+              {
+                "f": "body"
+              },
+              "^::?[ \\t]+(?<body>(?:>[ \\t]|[-*][ \\t]|[0-9]{1,9}[.)][ \\t])[\\s\\S]*)$"
+            ]
+          },
+          "start": {
+            "match": "body"
+          },
+          "end": {
+            "match": "body",
+            "at": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-075",
+        "C2-B-069",
+        "C2-B-031",
+        "C2-B-034",
+        "C2-B-036"
+      ]
+    },
+    {
       "id": "deprecated-continuation-marker",
       "over": "line",
       "when": {
@@ -1919,6 +2120,56 @@
       },
       "clauses": [
         "C2-B-059"
+      ]
+    },
+    {
+      "id": "deprecated-loose-attribute",
+      "over": "block",
+      "types": [
+        "list"
+      ],
+      "when": {
+        "all": [
+          {
+            "f": "attributed"
+          },
+          {
+            "matches": [
+              {
+                "slice": [
+                  {
+                    "f": "text"
+                  },
+                  0,
+                  {
+                    "sub": [
+                      {
+                        "f": "opener_start"
+                      },
+                      {
+                        "f": "start"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "^(?:[^\"]|\"[^\"]*\")*?[{ \\t]loose(?:=|[ \\t}])"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-066"
       ]
     },
     {
@@ -2076,6 +2327,37 @@
       ]
     },
     {
+      "id": "djot-highlight-braces",
+      "over": "inline",
+      "types": [
+        "highlight"
+      ],
+      "when": {
+        "starts": [
+          {
+            "f": "text"
+          },
+          "{="
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-055",
+        "C2-I-046",
+        "C2-I-059",
+        "C2-I-060"
+      ]
+    },
+    {
       "id": "djot-plus-bullet",
       "over": "line",
       "when": {
@@ -2111,6 +2393,149 @@
       "clauses": [
         "C2-B-034",
         "C2-B-175"
+      ]
+    },
+    {
+      "id": "djot-subscript-tilde-braced",
+      "over": "inline",
+      "types": [
+        "strike"
+      ],
+      "when": {
+        "starts": [
+          {
+            "f": "text"
+          },
+          "{~"
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-055",
+        "C2-I-062",
+        "C2-I-059",
+        "C2-I-060"
+      ]
+    },
+    {
+      "id": "empty-include-path",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "in": [
+              {
+                "f": "leaf"
+              },
+              [
+                "caption",
+                "definition_term",
+                "heading",
+                "line",
+                "paragraph"
+              ]
+            ]
+          },
+          {
+            "contains": [
+              {
+                "f": "text"
+              },
+              "{{"
+            ]
+          }
+        ]
+      },
+      "each": {
+        "matches": [
+          {
+            "f": "text"
+          },
+          "(?<include>\\{\\{(?:\\s*|\\s+(?:\"\"|“”|[#@])[^{}]*)\\}\\})"
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "match": "include"
+          },
+          "end": {
+            "match": "include",
+            "at": "end"
+          },
+          "values": {
+            "text": {
+              "slice": [
+                {
+                  "f": "text"
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "include"
+                    },
+                    {
+                      "f": "start"
+                    }
+                  ]
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "include",
+                      "at": "end"
+                    },
+                    {
+                      "f": "start"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-201",
+        "C2-B-202"
+      ]
+    },
+    {
+      "id": "empty-link-destination",
+      "over": "inline",
+      "types": [
+        "link"
+      ],
+      "when": {
+        "matches": [
+          {
+            "f": "text"
+          },
+          "\\]\\([ \\t]*\\)(?:\\{[^{}]*\\})*$"
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-066",
+        "C2-I-067"
       ]
     },
     {
@@ -2364,6 +2789,89 @@
       ]
     },
     {
+      "id": "figure-group-opener-metadata",
+      "over": "block",
+      "types": [
+        "div"
+      ],
+      "when": {
+        "all": [
+          {
+            "matches": [
+              {
+                "f": "line.text"
+              },
+              "^[ \\t]*::: figure "
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "line.text"
+              },
+              "[\"\\[]"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "line.start"
+          },
+          "end": {
+            "f": "line.end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-127"
+      ]
+    },
+    {
+      "id": "footnotes-placement-in-container",
+      "over": "block",
+      "types": [
+        "directive"
+      ],
+      "when": {
+        "all": [
+          {
+            "not": {
+              "eq": [
+                {
+                  "f": "parent.type"
+                },
+                "document"
+              ]
+            }
+          },
+          {
+            "matches": [
+              {
+                "f": "opener_text"
+              },
+              "^:{3,}[ \\t]*footnotes(?:[ \\t]|$)"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-127",
+        "C2-H-158"
+      ]
+    },
+    {
       "id": "frontmatter-shaped-thematic-break",
       "over": "block",
       "types": [
@@ -2459,6 +2967,36 @@
       "clauses": [
         "C2-B-031",
         "C2-I-072"
+      ]
+    },
+    {
+      "id": "glob-shaped-strong",
+      "over": "inline",
+      "types": [
+        "strong"
+      ],
+      "when": {
+        "matches": [
+          {
+            "f": "text"
+          },
+          "^\\*\\.[\\s\\S]*\\*$"
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-046",
+        "C2-I-047",
+        "C2-I-048"
       ]
     },
     {

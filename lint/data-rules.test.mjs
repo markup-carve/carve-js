@@ -134,3 +134,18 @@ it('C2-B-025: an attribute line past the item content column is reported when a 
   expect(findings('- a\n\n    {.c}\n  b\n', 'data')).toEqual(['list-item-block-overindented@9-13'])
 })
 
+it('the fourth batch reports what the hand-written rules report on their triggers', () => {
+  for (const source of ['*.c,*.h*\n', 'a /* b */ c\n', '*/x/*\n', '{% if x %}\n', 'a {%endif%} b\n', '{% if %}\n',
+    '::: |\nab\n%% x\n:::\n', ':: - x\n: d\n', ':: > q\n: d\n', ':: -x\n: d\n', 'a {{ }} b\n', '{{ "" }}\n', '{{a}}\n',
+    '![](a.png)\n', '![x](a.png)\n', '[a]()\n', '[a](){.c}\n', '[a](<>)\n', '> ::: footnotes\n> :::\n', '::: footnotes\n:::\n',
+    '::: figure "T"\n:::\n', '::: figure\n:::\n', '{loose=1}\n- a\n', '{k="a loose=b"}\n- a\n', '{.loose}\n- a\n']) {
+    expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  }
+  const on = { rules: { 'djot-subscript-tilde-braced': 'on', 'djot-highlight-braces': 'on' } }
+  for (const source of ['a {~b~} c\n', '{=x=}\n', '\\{~x~}\n']) {
+    process.env.CARVE_LINT_RULES = 'data'
+    const data = lint(source, on).map((entry) => entry.code)
+    delete process.env.CARVE_LINT_RULES
+    expect(data, JSON.stringify(source)).toEqual(lint(source, on).map((entry) => entry.code))
+  }
+})
