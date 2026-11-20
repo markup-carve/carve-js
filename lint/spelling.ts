@@ -330,8 +330,7 @@ function attributeHasLaterOwner(line: Line, context: LintContext): boolean {
   if (context.state.attachedLines.has(line.number)) return true
   if (context.nodeTypes.get(line.path) === 'heading' || context.nodeTypes.get(line.path) === 'definition_term') return true
   if (line.number > 1 && firstLineOfPath(line.path, context) !== line.number) return true
-  const next = context.lines[line.number]
-  return next !== undefined && blankness(next, line, context) === 'text' && next.paragraph === false && !context.state.containerClosers.has(next.number)
+  return false
 }
 
 function unattachedAttribute(line: Line, context: LintContext): void {
@@ -340,7 +339,9 @@ function unattachedAttribute(line: Line, context: LintContext): void {
   if (!isAttributeLine(text, 0, text.length)) return
   if (attributeHasLaterOwner(line, context)) return
   const next = context.lines[line.number]
-  context.report('unattached-block-attribute', start, start + text.length, line.path, {}, blankness(next, line, context) === 'blank' ? 1 : 0)
+  const finalLineFeed = next?.start === context.source.length && next.text === ''
+  context.report('unattached-block-attribute', start, start + text.length, line.path, {},
+    !finalLineFeed && blankness(next, line, context) === 'blank' ? 1 : 0)
 }
 
 function markdownDefinition(line: Line, context: LintContext): void {
