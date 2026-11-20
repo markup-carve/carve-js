@@ -354,11 +354,10 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
   visit(parsed.document, '', context, controls)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
+  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options))
   for (const line of scanLines) {
     if (line.opaque) continue
-    for (const rule of LINE_RULES) {
-      if (active(rule.id, options)) rule.checkLine?.(line, context)
-    }
+    for (const rule of activeLineRules) rule.checkLine?.(line, context)
   }
   const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
   return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])

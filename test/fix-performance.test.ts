@@ -23,12 +23,13 @@ describe('fix performance smoke', () => {
   for (const [name, seeds] of shapes) {
     it(`finishes a 32 KB ${name} document within the smoke budget`, () => {
       const source = document(seeds, 32 * 1024)
-      const started = performance.now()
+      const started = process.cpuUsage()
       const result = fix(source)
       expect(result.output.length).toBeGreaterThan(0)
-      // The optimized build target is one second. CI can share a busy runner, so the
-      // smoke bound allows ten seconds while still catching the old minute-long path.
-      expect(performance.now() - started).toBeLessThan(10_000)
-    }, 15_000)
+      // CPU time keeps the guard useful when CI shares a busy host. The optimized
+      // wall-clock target is measured separately on the built distribution.
+      const used = process.cpuUsage(started)
+      expect((used.user + used.system) / 1_000).toBeLessThan(10_000)
+    }, 60_000)
   }
 })
