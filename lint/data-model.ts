@@ -1,4 +1,4 @@
-import { type Node } from '../src/ast.ts'
+import { INLINE_PARENTS, type Node } from '../src/ast.ts'
 import { columnOf } from '../src/layout-lines.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { shapeOf } from './data-shape.ts'
@@ -448,6 +448,8 @@ class BlockRecord {
 
 const INLINE_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'cell_paragraph'])
 
+const INLINE_PARENT_TYPES: ReadonlySet<string> = new Set(INLINE_PARENTS)
+
 class InlineRecord implements ModelInline {
   readonly type: string
   readonly path: string
@@ -470,6 +472,30 @@ class InlineRecord implements ModelInline {
   get text(): string { return this.source.slice(this.start, this.end) }
 }
 
+/** A text run record: the text and soft breaks that stand next to each other among the children of one inline parent. */
+class TextRunRecord implements ModelInline {
+  readonly type = 'text_run'
+  readonly path: string
+  readonly start: number
+  end: number
+  readonly leaf: string
+  readonly parent: string
+  next: number
+  private readonly source: string
+
+  constructor(path: string, start: number, end: number, next: number, leaf: string, parent: string, source: string) {
+    this.path = path
+    this.start = start
+    this.end = end
+    this.next = next
+    this.leaf = leaf
+    this.parent = parent
+    this.source = source
+  }
+
+  get text(): string { return this.source.slice(this.start, this.end) }
+}
+
 /**
  * The block records and inline records, collected during the lint visit so the tree is walked once: `child` is called
  * for every node in visit order, a parent before its children.
@@ -480,11 +506,37 @@ export class DataWalk {
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
   private readonly types: ReadonlySet<string>
   private readonly context: LintContext
+  private readonly runs = new Map<string, TextRunRecord>()
 
   constructor(document: Node, types: ReadonlySet<string>, context: LintContext) {
     this.types = types
     this.context = context
     this.walked.push({ node: document, path: '', parent: '', index: 0 })
+  }
+
+  /** C2-W-140: a text or soft break child of an inline parent joins the run of its previous sibling, or starts one. */
+  private run(node: Node, parent: Node, parentPath: string, index: number, leaf: string): void {
+    if (node.type !== 'text' && node.type !== 'soft_break') {
+      this.runs.delete(parentPath)
+      return
+    }
+    if (!INLINE_PARENT_TYPES.has(parent.type)) return
+    const open = this.runs.get(parentPath)
+    const joins = open !== undefined && open.next === index
+    if (node.pos === undefined) {
+      if (joins) open.next = index + 1
+      return
+    }
+    const start = this.context.chars[node.pos.startOffset] ?? 0
+    const end = this.context.chars[node.pos.endOffset] ?? this.context.source.length
+    if (joins) {
+      open.end = end
+      open.next = index + 1
+      return
+    }
+    const record = new TextRunRecord(`${parentPath}/children/${index}`, start, end, index + 1, leaf, parent.type, this.context.source)
+    this.runs.set(parentPath, record)
+    this.inline.push(record)
   }
 
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
@@ -494,8 +546,10 @@ export class DataWalk {
       if (holder.inline && this.types.has(node.type) && node.pos !== undefined) {
         this.inline.push(new InlineRecord(node, path, holder.type, parent.type, this.context))
       }
+      if (holder.inline && this.types.has('text_run')) this.run(node, parent, parentPath, index, holder.type)
       return
     }
+    if (this.types.has('text_run')) this.run(node, parent, parentPath, index, blockType(parent))
     this.walked.push({ node, path, parent: parentPath, index })
     this.holder = INLINE_HOLDERS.has(node.type) ? { path, type: node.type, inline: INLINE_LEAVES.has(node.type) } : undefined
   }

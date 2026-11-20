@@ -9,7 +9,7 @@ interface DataRule {
   types?: readonly string[]
   verbatim?: readonly string[]
   let?: Record<string, Expr>
-  each?: { matches: Expr }
+  each?: { matches?: Expr, pairs?: Expr }
   when?: Expr
   report: readonly Report[]
   range?: { start: Expr, end: Expr }
@@ -19,6 +19,9 @@ interface Model { text_leaves: string[], verbatim_leaves: string[], row_leaves: 
 
 const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right'])
 const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from'])
+
+// C2-W-142: a pattern with a Unicode property class or a `\u{...}` escape reads code points.
+const unicodeFlags = (source: string, flags: string): string => (/\\[pu]\{/.test(source) ? `${flags}u` : flags)
 
 const operatorOf = (expr: Expr): [string, Expr, Record<string, Expr>] | undefined => {
   if (typeof expr !== 'object' || expr === null || Array.isArray(expr)) return undefined
@@ -55,7 +58,7 @@ class Compiler {
 
   /** The source offset that index 0 of a text value stands at, for the spans of a `matches`. */
   hoistRegex(source: string, flags: string): string {
-    return this.hoist(`new RegExp(${literal(source)}, ${literal(flags)})`)
+    return this.hoist(`new RegExp(${literal(source)}, ${literal(unicodeFlags(source, flags))})`)
   }
 
   // A let costs nothing until a condition reads it: most lines fail a cheaper test first.
@@ -105,11 +108,11 @@ class Compiler {
     const source = String(pattern)
     const named = source.includes('(?<')
     const plain = typeof flags === 'string' ? flags : ''
-    const regex = this.hoist(`new RegExp(${literal(source)}, ${literal(plain)})`)
+    const regex = this.hoist(`new RegExp(${literal(source)}, ${literal(unicodeFlags(source, plain))})`)
     const value = this.value(subject)
     if (!named) return `test(${regex}, ${value})`
     // A plain test first: a pattern with indices is several times slower, and most lines do not match.
-    const spans = this.hoist(`new RegExp(${literal(source)}, ${literal(`${plain}d`)})`)
+    const spans = this.hoist(`new RegExp(${literal(source)}, ${literal(unicodeFlags(source, `${plain}d`))})`)
     return `(hit(${regex}, ${spans}, ${value}) && mark(${this.base(subject)}))`
   }
 
@@ -204,7 +207,12 @@ function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string
   }
   if (rule.when !== undefined) body.push(`  if (!${compiler.test(rule.when)}) return`)
   if (rule.each === undefined) body.push(...reportLines(rule, compiler, '  '))
-  else {
+  else if (rule.each.pairs !== undefined) {
+    const [subject, mark, mode] = argsOf(rule.each.pairs)
+    body.push(`  const one = (): void => {`, ...reportLines(rule, compiler, '    '), '  }',
+      `  for (const found of pairsOf(${compiler.value(subject)}, ${literal(String(mark))}, ${mode === 'strict'})) {`,
+      '    groups = found', `    base = ${compiler.base(subject)}`, '    one()', '  }')
+  } else {
     const [subject, pattern] = argsOf(rule.each.matches)
     const regex = compiler.hoistRegex(String(pattern), 'gd')
     body.push(`  const one = (): void => {`, ...reportLines(rule, compiler, '    '), '  }',
@@ -279,6 +287,59 @@ function hit(regex: RegExp, spans: RegExp, value: unknown): boolean {
 
 const matchAll = (regex: RegExp, value: unknown): RegExpStringIterator<RegExpExecArray> | [] =>
   (typeof value === 'string' ? value.matchAll(regex) : [])
+
+const PAIR_SPACE = /[\\p{Zs}\\t\\n\\r]/u
+
+function behindBackslashes(text: string, at: number): boolean {
+  let slashes = 0
+  while (text.charCodeAt(at - 1 - slashes) === 92) slashes++
+  return slashes % 2 === 1
+}
+
+// The width of the character that ends at an offset and of the one that starts there: a surrogate pair is one.
+function widthBefore(text: string, at: number): number {
+  if (at === 0) return 0
+  const low = text.charCodeAt(at - 1)
+  return at >= 2 && low >= 0xDC00 && low <= 0xDFFF && text.charCodeAt(at - 2) >= 0xD800 && text.charCodeAt(at - 2) <= 0xDBFF ? 2 : 1
+}
+const widthAt = (text: string, at: number): number => (at >= text.length ? 0 : text.codePointAt(at)! > 0xFFFF ? 2 : 1)
+
+const JOINED = /^[\\p{M}\\u200D\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]/u
+const EDGE = /^[\\p{Zs}\\t\\n\\r\\f\\v]$/u
+const WORD = /^[\\p{L}\\p{N}]$/u
+
+const joinedAt = (text: string, at: number): boolean => JOINED.test(text.slice(at, at + 2))
+
+// C2-W-147, strict: an opener that cannot open a bare pair is passed without taking a closer.
+function strictOpener(text: string, mark: string, start: number): boolean {
+  const after = text[start + mark.length]
+  const before = text.slice(start - widthBefore(text, start), start)
+  return !joinedAt(text, start + mark.length) && !behindBackslashes(text, start) && text[start - 1] !== mark[0]
+    && after !== undefined && !EDGE.test(after) && after !== mark[0] && (mark.length === 2 || !WORD.test(before))
+}
+
+// C2-W-147: the pair scan; each pair gives the groups open, inner, close, before and after.
+function* pairsOf(value: unknown, mark: string, strict: boolean): Generator<Record<string, [number, number]>> {
+  if (typeof value !== 'string') return
+  const width = mark.length
+  let at = 0
+  while (at < value.length) {
+    const start = value.indexOf(mark, at)
+    if (start < 0) return
+    if (strict && !strictOpener(value, mark, start)) {
+      at = start + width
+      continue
+    }
+    let end = value.indexOf(mark, start + width + 1)
+    while (end >= 0 && (PAIR_SPACE.test(value[end - 1] ?? '') || behindBackslashes(value, end)
+      || (strict && joinedAt(value, end + width)))) end = value.indexOf(mark, end + width)
+    if (end < 0) return
+    const after = end + width
+    yield { open: [start, start + width], inner: [start + width, end], close: [end, after],
+      before: [start - widthBefore(value, start), start], after: [after, after + widthAt(value, after)] }
+    at = after
+  }
+}
 
 function mark(at: number): boolean {
   base = at

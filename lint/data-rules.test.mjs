@@ -170,3 +170,22 @@ it('the fifth batch reports what the hand-written rules report on their triggers
     expect(data, JSON.stringify(source)).toEqual(lint(source, on).map((entry) => `${entry.code}@${entry.range.startOffset}`))
   }
 })
+
+it('C2-W-147: the pair rules read each text run with the pair scan, as the hand-written rules do', () => {
+  const pairs = ['deprecated-bare-underline', 'deprecated-bare-strike', 'deprecated-bare-highlight', 'markdown-strong-double-star',
+    'markdown-strikethrough-double-tilde', 'djot-emphasis-underscore', 'djot-subscript-tilde', 'djot-superscript-caret']
+  const on = { rules: Object.fromEntries(pairs.map((id) => [id, 'on'])) }
+  const both = (source) => ['data', 'code'].map((mode) => {
+    if (mode === 'data') process.env.CARVE_LINT_RULES = 'data'
+    else delete process.env.CARVE_LINT_RULES
+    return lint(source, on).map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset}`)
+  })
+  for (const source of ['a _b_ c\n', 'x_y_z\n', '\\_b_\n', '_b _\n', 'a ~b~ c ~~d~~ e\n', '**b** and **c d**\n', '**a*b**\n',
+    '=x= y\n', 'a ^b^ c\n', '{^x^}\n', 'a _b\nc_ d\n', '*x _y_ z*\n', '[l _a_](u) _b_\n', '`c` _d_ `e`\n', '| _a_ | ~b~ |\n',
+    '_b_\u0301\n', '_\u200db_\n', '\u00e9_b_ c\n']) {
+    const [data, code] = both(source)
+    expect(data, JSON.stringify(source)).toEqual(code)
+  }
+  // C2-I-047 tests the character before the opener, and U+1D400 is a letter: no pair opens behind it.
+  expect(both('\u{1D400}_a_ b\n')[0]).toEqual([])
+})
