@@ -458,7 +458,7 @@ function captionLooking(line: Line, context: LintContext): void {
   if (!/^(?:\*?\s*(?:Caption|Table|Tabelle|Figure|Image)(?:\s+\d+)?\s*:|:\s+\S)/i.test(text)) return
   const row = (offset: number): boolean => {
     const near = context.lines[line.number - 1 + offset]
-    return near !== undefined && (lineText(near).text.match(/\|/g)?.length ?? 0) >= 2
+    return near !== undefined && context.nodeTypes.get(near.path) === 'table_row'
   }
   const below = [1, 2].some(row)
   const above = [-2, -1].some((offset) => row(offset) || (context.lines[line.number - 1 + offset]?.text ?? '').includes('!['))
