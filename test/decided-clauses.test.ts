@@ -257,7 +257,7 @@ describe('the other clauses of the two commits', () => {
       // C2-A-181: a reader refuses a range, a region or a syntax outside its shape, so the space and the brace stand in a name.
       children: [{ type: 'include', path: 'a.crv', options: { region: 'r', shift: 1, cols: ['x }y'], code: 'js', lines: '1-2' } }],
     }
-    expect(render(document)).toBe('<p>{{ a.crv @lines:1-2 @region:r @cols:"x }y" @shift:1 @code:js }}</p>')
+    expect(render(document)).toBe('<p>{{ a.crv @code:js @lines:1-2 @region:r @cols:"x }y" @shift:1 }}</p>')
   })
 
   it('C2-W-002: the gate holds for a document the writer does not refuse', () => {
