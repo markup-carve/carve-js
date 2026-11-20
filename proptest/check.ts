@@ -12,6 +12,7 @@ import { forEachSlot, isRecord, type DocumentNode, type Node } from '../src/ast.
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { type SourceLayout } from '../src/layout.ts'
 import { type Random } from './generate.ts'
+import { importDocument } from '../import/src/index.ts'
 import { type Target } from './targets.ts'
 
 export interface Finding {
@@ -609,6 +610,7 @@ function checkValidOption(source: string, entry: OptionCase, value: unknown): Fi
     if (entry.kind === 'format') formatWithDiagnostics(source, options)
     else if (entry.kind === 'lint') lint(source, options)
     else if (entry.kind === 'parse') parse(source, options)
+    else if (entry.kind === 'import') importDocument(render(source), { from: 'html', ...options })
     else return checkRenderedOption(source, entry, value, options)
   } catch (error) {
     if (entry.kind === 'parse' && error instanceof CarveInputError) return null
@@ -625,6 +627,7 @@ function checkInvalidOption(source: string, entry: OptionCase): Finding | null {
     if (entry.kind === 'format') formatWithDiagnostics(source, options)
     else if (entry.kind === 'lint') lint(source, options)
     else if (entry.kind === 'parse') parse(source, options)
+    else if (entry.kind === 'import') importDocument('<p>x</p>', { from: 'html', ...options })
     else render(source, options)
   } catch (error) {
     return error instanceof CarveOptionError ? null : finding('option-invalid-error', `${entry.name}: ${description(error)}`)
