@@ -44,6 +44,12 @@ describe('C2-W-144: a next-line control comment keeps its line', () => {
     expect(format(`x\n\n%% foo ${CONTROL}\n## H\n`)).toBe(`x\n\n%% foo ${CONTROL}\n\n== H\n`)
   })
 
+  it('reads a base64 sidecar source as no source (C2-L-056)', () => {
+    const tree = parse(`x\n\n${CONTROL}\n\n## See [a]()\n`)
+    const layout = { nodes: [], source: 'eA==', encoding: 'base64' }
+    expect(write(tree, { layout })).toBe(`x\n\n${CONTROL}\n== See [a]()\n`)
+  })
+
   it('writes a supplied tree with the comment directly above the next block', () => {
     const tree = parse(`x\n\n${CONTROL}\n\n## See [a]()\n`)
     expect(write(tree)).toBe(`x\n\n${CONTROL}\n== See [a]()\n`)

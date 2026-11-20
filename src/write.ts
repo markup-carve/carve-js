@@ -24,7 +24,7 @@ export interface LayoutEntry extends WriterFacts {
 export interface WriteOptions {
   extensions?: readonly ExtensionDefinition[]
   /** The sidecar of the tree (C2-L-004). Its node entries are read, and its source for C2-W-144. */
-  layout?: { nodes: readonly LayoutEntry[], source?: string }
+  layout?: { nodes: readonly LayoutEntry[], source?: string, encoding?: string }
   /** C2-W-068: pads the cells of each column of a pipe table to one display width. */
   alignTables?: boolean
   /**
@@ -995,9 +995,14 @@ function keepControlsAbove(w: Writer, document: DocumentNode, source: string, or
   return restoreBlanksBelow(w, dropBlanksBelow(w, source, tree, live), tree, live)
 }
 
+/** C2-L-056: the source of a sidecar, or null where it holds the bytes of a base64 input. */
+function layoutSource(layout: WriteOptions['layout']): string | null {
+  return layout?.encoding === 'base64' ? null : layout?.source ?? null
+}
+
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
-  check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = options?.layout?.source ?? null):
+  check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout)):
   { output: WriteOutput, stats: WriterStats } {
   const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), samples: new Map(), parses: 0, work: [] }
   const run: WriterRun = { path, check, stats }
