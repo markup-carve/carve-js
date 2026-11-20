@@ -7,7 +7,7 @@ import { writerHasLoss } from '../src/write.ts'
 import { forEachSlot, type Node } from '../src/ast.ts'
 import { canWriteUpgrade, ENGINE_01_VERSION, formatRecord, needsAttention, type ReportRecord, upgrade } from '../upgrade/src/index.ts'
 import { decodeUpgradeBytes } from '../upgrade/src/bytes.ts'
-import { importDocument, ImportInputError, type Format } from '../import/src/index.ts'
+import { importDocument, ImportInputError, type Adapter, type Format } from '../import/src/index.ts'
 import { migrateTree, type MigrationResult } from '../migrate/index.ts'
 import cli from '../data/cli.json' with { type: 'json' }
 import lintRules from '../data/lint-rules.json' with { type: 'json' }
@@ -445,7 +445,8 @@ function importFile(display: string, bytes: Uint8Array, args: ParsedArgs): FileR
   const strict = args.values['strict-losses'] === true
   let result: ReturnType<typeof importDocument>
   try {
-    result = importDocument(html, { from: args.values['from'] as Format, rawHtml: args.values['raw-html'] === true, strictLosses: strict })
+    result = importDocument(html, { from: args.values['from'] as Format, rawHtml: args.values['raw-html'] === true, strictLosses: strict,
+      ...(args.values['adapter'] !== undefined ? { adapter: args.values['adapter'] as Adapter } : {}) })
   } catch (error) {
     if (error instanceof CarveTreeError) throw new FileFailure('import-tree-invalid', `${display}: ${error.message}`, { status: 1 })
     throw error
