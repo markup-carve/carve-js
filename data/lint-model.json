@@ -42,7 +42,8 @@
       "means": "the line is no line of a leaf block and holds nothing but spaces and tabs after the prefixes of its containers, so a bare quote mark is a blank line of its quote and `>>` at column 1 is text",
       "clauses": [
         "C2-B-009",
-        "C2-B-031"
+        "C2-B-031",
+        "C2-W-143"
       ]
     },
     {
