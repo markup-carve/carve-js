@@ -118,3 +118,19 @@ it('the third batch reports what the hand-written rules report on their triggers
     expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
   }
 })
+
+it('C2-B-109: a container closed with its parent stays open for the parent closer after a blank line', () => {
+  expect(findings('  :::\n:::: note\n\n:::\n', 'data').filter((found) => found.startsWith('colon-fence')))
+    .toEqual(['colon-fence-length-mismatch@17-20'])
+})
+
+it('C2-B-090: the opener of an attributed quote is its own mark, not the text behind it', () => {
+  expect(findings('{#id}\n>\n', 'data').filter((found) => found.startsWith('block-opener-overindented'))).toEqual([])
+  expect(findings('{#id}\n > a\n', 'data').filter((found) => found.startsWith('block-opener-overindented')))
+    .toEqual(['block-opener-overindented@7-8'])
+})
+
+it('C2-B-025: an attribute line past the item content column is reported when a paragraph takes it', () => {
+  expect(findings('- a\n\n    {.c}\n  b\n', 'data')).toEqual(['list-item-block-overindented@9-13'])
+})
+

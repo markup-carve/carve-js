@@ -412,7 +412,9 @@ class BlockRecord {
     const marker = this.context.layouts.get(this.path)?.markerColumn
     return marker !== undefined && this.node.attrs === undefined ? marker : this.column
   }
-  get opener_start(): number { return this.node.attrs === undefined ? this.start : openerStart(this.context.source, this.start) }
+  get opener_start(): number {
+    return this.node.attrs === undefined ? this.start : openerStart(this.context.source, this.start, this.depth())
+  }
   get mark_column(): number {
     return this.node.attrs === undefined ? this.column : columnOf(this.context.source, this.opener_start, this.depth())
   }
@@ -578,21 +580,27 @@ function colonLayoutsOf(context: LintContext): ColonLayout[] {
 }
 
 /** The opener of a block whose source starts at its attached attribute lines: past them and the next line's prefixes. */
-function openerStart(source: string, from: number): number {
+function openerStart(source: string, from: number, marks = Infinity): number {
   let at = from
   while (source.charCodeAt(at) === 123) {
     const end = source.indexOf('\n', at)
     if (end < 0) return from
     at = end + 1
-    while (source.charCodeAt(at) === 32 || source.charCodeAt(at) === 9 || source.charCodeAt(at) === 62) at++
+    while (source.charCodeAt(at) === 32 || source.charCodeAt(at) === 9) at++
+    // Only the marks of the quotes that hold the block: a quote's own mark is its opener.
+    for (let left = marks; left > 0 && source.charCodeAt(at) === 62; left--) {
+      at++
+      while (source.charCodeAt(at) === 32 || source.charCodeAt(at) === 9) at++
+    }
   }
   return at
 }
 
 function colonOpener(colon: ColonLayout, at: number, lineStart: number, context: LintContext): ColonContainer | undefined {
   const { path, layout, type, from, to, width } = colon
-  // A container that ends where an indented line starts is still open at its run.
-  if (from >= at || to < lineStart - 1) return undefined
+  if (from >= at) return undefined
+  // A container without a closer of its own stays open across the blank lines after its last block.
+  if (to < lineStart - 1 && !/^[ \t\r\n>]*$/.test(context.source.slice(to, lineStart))) return undefined
   if (to < lineStart && earlierCloser(path, layout, width, context)) return undefined
   return colonEntry(type, from, width, context)
 }

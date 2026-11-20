@@ -343,7 +343,7 @@
     {
       "name": "opener_start",
       "type": "offset",
-      "means": "where the opening mark of the block starts: start, or for an attributed block the first character after its attribute lines, the spaces, tabs and quote marks before it skipped",
+      "means": "where the opening mark of the block starts: start, or for an attributed block the first character after its attribute lines, the spaces, tabs and the quote marks of the quotes that hold the block before it skipped",
       "clauses": [
         "C2-B-090",
         "C2-W-138"
