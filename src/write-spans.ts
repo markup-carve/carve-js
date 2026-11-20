@@ -1,7 +1,9 @@
 // C2-W-145: a span count that no mark cell covers, as an import or a bridge gives it (C2-A-093), is
 // written with the marks a parse reads back as that count. Marks the tree already holds stay as they
 // are. The rows hold the added mark cells while the writer runs and get their own cells back after it.
-import { forEachSlot, type Node, type TableCellNode, type TableNode, type TableRowNode } from './ast.ts'
+import { forEachSlot, INLINE_PARENTS, type Node, type TableCellNode, type TableNode, type TableRowNode } from './ast.ts'
+
+const INLINE_ONLY: ReadonlySet<string> = new Set(INLINE_PARENTS)
 
 export interface SpanMarks {
   /** The covering cell of each added mark, which a loss on the mark is reported at. */
@@ -123,7 +125,8 @@ export function addSpanMarks(document: Node): SpanMarks | null {
   const stack: Node[] = [document]
   for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
     if (node.type === 'table' && hasCounts(node)) markTable(node, covering, unspelled, undo)
-    forEachSlot(node, (nodes) => { for (const child of nodes) stack.push(child) })
+    // An inline parent cannot contain a table. This keeps span discovery on the block skeleton.
+    if (!INLINE_ONLY.has(node.type)) forEachSlot(node, (nodes) => { for (const child of nodes) stack.push(child) })
   }
   if (undo.length === 0 && unspelled.length === 0) return null
   return { covering, unspelled, restore: () => { for (const [row, cells] of undo) row.children = cells } }

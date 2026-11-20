@@ -9,7 +9,7 @@ import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { addSpanMarks } from './write-spans.ts'
-import { pairEscapes } from './write-pairs.ts'
+import { canPlacePairsEarly, hasPairMarks, pairEscapes } from './write-pairs.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -682,9 +682,44 @@ function compareWithRepair(
  * Writes the group of top-level blocks that starts at `from` into `w.lines` and returns its end:
  * by its plan where the plan decides it, and by the repair otherwise.
  */
-function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean): number {
-  let end = writeGroupOnce(w, run, document, from, first)
-  // C2-W-146: escapes the pair rules ask for go through the test of C2-W-088 again, until none is asked.
+function clearGroupChoices(w: Writer): void {
+  w.escapes.clear()
+  w.forms.clear()
+  w.attempts.clear()
+}
+
+interface EarlyState {
+  losses: number
+  blankFirst: boolean
+  parsed: DocumentNode | null
+  lost: Set<Node> | null
+  lostKeys: Map<Node, string[]> | null
+}
+
+function saveEarlyState(w: Writer): EarlyState {
+  return {
+    losses: w.losses.entries.length, blankFirst: w.blankFirst, parsed: w.parsed,
+    lost: w.lost.size > 0 ? new Set(w.lost) : null,
+    lostKeys: w.lostKeys.size > 0 ? new Map(w.lostKeys) : null,
+  }
+}
+
+function restoreEarlyState(w: Writer, state: EarlyState): void {
+  clearGroupChoices(w)
+  w.lines = []
+  w.blankFirst = state.blankFirst
+  w.parsed = state.parsed
+  w.losses.entries.length = state.losses
+  w.losses.nodes.length = state.losses
+  w.lost = state.lost ?? new Set<Node>()
+  w.lostKeys = state.lostKeys ?? new Map<Node, string[]>()
+  w.probes.clear()
+}
+
+/** C2-W-146: new pair escapes go through the repair's readback test until no pair is left. */
+function repairPairEscapes(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,
+  initialEnd: number): number {
+  let end = initialEnd
   for (let round = 0; round < MAX_PAIR_ROUNDS; round++) {
     const asked = pairEscapes(document.children.slice(from, end), w.escapes)
     if (asked.length === 0) break
@@ -692,13 +727,34 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
     const before = saveGroup(w, end)
     addEscapes(w, asked)
     end = repairGroup(w, document, from, first, w.losses.entries.length)
-    // C2-W-002: a backslash that keeps the group from reading back is no form of it; the form before stays.
     if (w.losses.entries.length > before.losses) {
       end = restoreGroup(w, before)
       break
     }
   }
   return end
+}
+
+function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean): number {
+  // A blank line separates groups, so earlier escape and form choices no longer affect readback.
+  if (from > 0) clearGroupChoices(w)
+  const group = document.children.slice(from, groupEnd(w, document.children, from))
+  const hasPairs = hasPairMarks(group)
+  // Pair rules depend on text and escapes already chosen, so place their ordinary escapes before
+  // the first write. The check below still handles a pair exposed by a later repair choice.
+  let placedEarly = hasPairs && canPlacePairsEarly(group)
+  const initial = placedEarly ? pairEscapes(group, w.escapes) : []
+  const saved = initial.length > 0 ? saveEarlyState(w) : null
+  if (initial.length > 0) addEscapes(w, initial)
+  const planned = run.stats.planned
+  let end = writeGroupOnce(w, run, document, from, first)
+  if (saved !== null && w.losses.entries.length > saved.losses) {
+    restoreEarlyState(w, saved)
+    end = writeGroupOnce(w, run, document, from, first)
+    placedEarly = false
+  }
+  if (!hasPairs || (placedEarly && run.path === 'plan' && run.stats.planned > planned)) return end
+  return repairPairEscapes(w, run, document, from, first, end)
 }
 
 interface SavedGroup {
@@ -1060,6 +1116,11 @@ function layoutSource(layout: WriteOptions['layout']): string | null {
 
 /** C2-W-145: the document written with the marks of its span counts, its losses at the cells of the supplied tree. */
 function writeWithSpanMarks(w: Writer, run: WriterRun, document: DocumentNode, original: string | null): string {
+  // A document made of prose leaves cannot hold a table. Avoid a second walk through every inline
+  // node just to establish that no span marks need adding.
+  if (document.children.every((node) => node.type === 'paragraph' || node.type === 'heading')) {
+    return keepControlsAbove(w, document, writeDocument(w, run, document), original)
+  }
   const spans = addSpanMarks(document)
   let source: string
   try {
