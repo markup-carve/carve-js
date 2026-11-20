@@ -11,7 +11,7 @@ describe('dense dash list render', () => {
 
   it('leaves ambiguous list shapes to the full tree path', () => {
     for (const source of ['- first\n\n- second\n', '- first\n   - shifted\n',
-      '- first [link](/url)\n', '- first\n+\n> quote\n']) {
+      '- first [link](/url)\n', '- first\n+\n> quote\n', '- *a**b*\n', '- `a``b`\n']) {
       expect(denseListHtml(source)).toBeUndefined()
       expect(render(source)).toBe(renderWithDiagnostics(source).html)
     }

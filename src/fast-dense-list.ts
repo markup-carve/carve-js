@@ -26,6 +26,8 @@ function markedText(text: string, at: number): { html: string; end: number } | u
 
 /** Only unambiguous ASCII text, strong and code spans are written here. */
 function inline(text: string): string | undefined {
+  // Adjacent delimiters can form one longer span in the full grammar.
+  if (text.includes('**') || text.includes('``')) return undefined
   let html = ''
   for (let at = 0; at < text.length;) {
     const code = text.charCodeAt(at)
