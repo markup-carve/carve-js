@@ -1,19 +1,21 @@
 import { type Rule } from '../context.ts'
 import { attributeLines, openers } from './attributes.ts'
 import { blankLines } from './blank-lines.ts'
-import { commentLineBreaks, explicitInline, lineComments, typedQuotes } from './late.ts'
-import { definitions, definitionsAtTop, definitionsKept, definitionsNested } from './definitions.ts'
+import {
+  commentLineBreaks, descriptionColumns, explicitInline, itemColumns, itemParagraphBreaks, lineComments, typedQuotes,
+} from './late.ts'
+import { definitions, definitionsAtTop, definitionsKept, definitionsKeptAfter, definitionsNested } from './definitions.ts'
 import { escapes } from './escapes.ts'
 import { fences } from './fences.ts'
 import { inline, inlineBraced, lineBlockSpaces, unclosedRuns } from './inline.ts'
 import { lists } from './lists.ts'
-import { orderedTasks } from './ordered-tasks.ts'
+import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
-import { includes, tables } from './tables.ts'
+import { includes, tables, tablesHeadStyles } from './tables.ts'
 
 /** Every rule, in the order of the contract's groups. The order does not decide which edit wins. */
-export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks, attributeLines, openers, definitions, fences, tables,
-  inline, lineBlockSpaces, escapes, shortcuts, unclosedRuns]
+export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks, taskBoxSpacing, attributeLines, openers, definitions,
+  fences, tables, inline, lineBlockSpaces, escapes, shortcuts, unclosedRuns]
 
 /** Rules that run only when the first pass leaves a difference, so a source that already upgrades keeps its result. */
 export const LATE_RULES: readonly Rule[] = [lineComments, typedQuotes]
@@ -27,4 +29,9 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
   [...RULES.map((rule) => rule === inline ? inlineBraced : rule), ...LATE_RULES],
   [...RULES, ...LATE_RULES, explicitInline],
   [...RULES.map((rule) => rule === definitions ? definitionsNested : rule), ...LATE_RULES],
+  [...RULES, ...LATE_RULES, descriptionColumns],
+  [...RULES, ...LATE_RULES, itemColumns],
+  [...RULES, ...LATE_RULES, itemParagraphBreaks],
+  [...RULES.map((rule) => rule === tables ? tablesHeadStyles : rule), ...LATE_RULES],
+  [...RULES.map((rule) => rule === definitions ? definitionsKeptAfter : rule), ...LATE_RULES],
 ]

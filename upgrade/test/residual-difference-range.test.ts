@@ -3,7 +3,7 @@ import { canWriteUpgrade, needsAttention, upgrade } from '../src/upgrade.ts'
 
 describe('residual HTML differences name their source', () => {
   it('names a map row and the source range when a rewrite does not preserve HTML', () => {
-    const source = '/*a %% `*/` b*/ c\n'
+    const source = '/**/\n/*{*a*/*} b*/\n/**/\n'
     const result = upgrade(source)
     const mismatch = result.records.find((record) => record.entry === 'upgrade-mismatch')
     expect(result.check).toBe('mismatch')

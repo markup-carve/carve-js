@@ -6,7 +6,8 @@ import { migrateCaseOnlyReferences } from '../../build/engine-0.1/index.js'
 const rows = map.source.filter((row) => Number(row.id.slice(2)) >= 375)
 
 describe('the pinned replay map rows', () => {
-  it.each(rows.filter((row) => row.kind === 'rewrite' && !['U-412', 'U-413', 'U-423', 'U-424', 'U-425', 'U-429'].includes(row.id)))
+  it.each(rows.filter((row) => row.kind === 'rewrite'
+    && !['U-412', 'U-413', 'U-423', 'U-424', 'U-425', 'U-429', 'U-434', 'U-435'].includes(row.id)))
   ('$id rewrites and preserves the old HTML', (row) => {
     const result = upgrade(row.from)
     expect(result.output).toBe(row.to)

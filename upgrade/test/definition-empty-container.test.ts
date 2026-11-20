@@ -22,7 +22,7 @@ describe('C2-B-081 C2-B-083: empty definitions inside list items', () => {
   })
 
   it('does not hide an unrelated table difference beside the nested item', () => {
-    const result = upgrade('* * [d]: u\n :\n\n{valigns=top,bottom widths=40}\n| a | b | c |')
+    const result = upgrade('* * [d]: u\n :\n\n|\ta | b | c |')
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })

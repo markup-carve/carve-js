@@ -1835,11 +1835,10 @@
     "path": "resources/examples/edge-cases/0413-an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not.md",
     "line": 70,
     "input": "- [x] a\n  # h\n",
-    "check": "mismatch",
+    "check": "explained",
     "entries": [
       "U-001",
-      "U-133",
-      "U-159"
+      "U-133"
     ]
   },
   {
@@ -2459,10 +2458,10 @@
     "path": "resources/examples/edge-cases/0802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block.md",
     "line": 12,
     "input": "> [^b]: +\n# H\n\nr[^b]\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-038",
-      "U-209"
+      "U-124"
     ]
   },
   {
@@ -2471,10 +2470,10 @@
     "path": "resources/examples/edge-cases/0840-a-refused-plus-reads-like-a-letter.md",
     "line": 41,
     "input": "> [^a]: +\n- b\n\nr[^a]\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-038",
-      "U-209"
+      "U-124"
     ]
   },
   {

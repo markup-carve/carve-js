@@ -147,8 +147,9 @@ function moveToTop(ctx: Context, id: string, span: Span, cut: number, message: s
 
 /** Cuts the definition of `span` and writes it at column 0 after the line `end`, set off by blank lines. */
 function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
-  if (top) { moveToTop(ctx, id, span, cut, message); return }
-  change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), '', message)
+  if (top === 'moved' || top === 'kept') { moveToTop(ctx, id, span, cut, message); return }
+  const kept = top === 'keptAfter' && cut > 0 ? lineText(ctx.lines, span.first).slice(0, cut) + '{%%}\n' : ''
+  change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), kept, message)
   const after = lineText(ctx.lines, end + 1)
   const tail = end < ctx.lines.count && !isBlank(after) ? '\n' : ''
   const at = lineStart(ctx.lines, end + 1)
@@ -186,7 +187,8 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
 
 /** The definition is the last thing in its container. */
 function hoistLast(ctx: Context, id: string, span: Span, cut: number, message: string): void {
-  if (top) moveToTop(ctx, id, span, cut, message)
+  if (top === 'moved' || top === 'kept') moveToTop(ctx, id, span, cut, message)
+  else if (top === 'keptAfter') moveAfter(ctx, id, span, cut, span.last, message)
   else if (!preserveEmptyItem(ctx, id, span, message) && !preserveEmptyQuote(ctx, id, span, message)) {
     hoistInPlace(ctx, id, span, cut, message)
   }
@@ -259,12 +261,31 @@ export function definitionsNested(ctx: Context): void {
  * Set while a late variant runs: a moved definition goes above the document instead of after its
  * container, and with `kept` an empty comment stays in its place.
  */
-let top: false | 'moved' | 'kept' = false
+let top: false | 'moved' | 'kept' | 'keptAfter' = false
 
 /**
  * U-042: 0.1 and 0.2 both keep the first definition of a note key. A later one in a container left no
  * block in 0.1, but 0.2 reads it as text there, so the late passes remove it; quote marks before it stay.
  */
+const NOTE_LINE = /^\[\^[^\]]+\]: /u
+const DROPPED = 'a later definition of the note key, which 0.1 dropped, is removed'
+
+/** Below a definition that moves out, the marks would open a quote of their own, unless 0.1 wrote that quote empty. */
+function belowMovedNote(ctx: Context, line: number): boolean {
+  return line > 1 && NOTE_LINE.test(insideQuotes(lineText(ctx.lines, line - 1)).trimStart())
+    && !ctx.visits.some(({ node }) => node.type === 'block_quote' && (node.children?.length ?? 0) === 0
+      && node.pos !== undefined && node.pos.startLine <= line - 1 && node.pos.endLine >= line - 1)
+}
+
+/** Its lazy lines went with the dropped definition in 0.1: no block of the tree holds them. Returns the last line removed. */
+function dropLazyLines(ctx: Context, line: number): number {
+  while (line < ctx.lines.count && isGap(ctx, line + 1) && !isBlank(lineText(ctx.lines, line + 1))
+    && !/^\[\^?[^\]]+\]: /u.test(insideQuotes(lineText(ctx.lines, line + 1)).trimStart())) {
+    removeLine(ctx, 'U-042', ++line, 'a lazy line of the dropped note definition is removed')
+  }
+  return line
+}
+
 function droppedNoteDefinitions(ctx: Context): void {
   const keys = ctx.doc.footnoteDefs
   if (typeof keys !== 'object' || keys === null) return
@@ -276,8 +297,9 @@ function droppedNoteDefinitions(ctx: Context): void {
     const label = /^\[\^([^\]]+)\]: /u.exec(insideQuotes(text).trimStart())?.[1]
     if (label === undefined || kept.has(line) || !isGap(ctx, line) || !(label in keys) || prefixLength(text) === 0) continue
     const start = lineStart(ctx.lines, line)
-    if (marks === '') removeLine(ctx, 'U-042', line, 'a later definition of the note key, which 0.1 dropped, is removed')
-    else change(ctx, 'U-042', start, start + text.length, marks, 'a later definition of the note key, which 0.1 dropped, is removed')
+    if (marks === '' || belowMovedNote(ctx, line)) removeLine(ctx, 'U-042', line, DROPPED)
+    else change(ctx, 'U-042', start, start + text.length, marks, DROPPED)
+    line = dropLazyLines(ctx, line)
   }
 }
 
@@ -305,5 +327,11 @@ export function definitionsAtTop(ctx: Context): void {
 /** `definitionsAtTop`, leaving an empty braced comment where the definition stood. */
 export function definitionsKept(ctx: Context): void {
   top = 'kept'
+  try { definitions(ctx) } finally { top = false }
+}
+
+/** `definitions`, leaving an empty braced comment where the definition stood, so its container stays open. */
+export function definitionsKeptAfter(ctx: Context): void {
+  top = 'keptAfter'
   try { definitions(ctx) } finally { top = false }
 }

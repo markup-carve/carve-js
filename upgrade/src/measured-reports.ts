@@ -52,7 +52,7 @@ function taskLabelBoundary(input: string, expected: string, actual: string): boo
 function tableTab(input: string, expected: string, actual: string): boolean {
   if (expected === actual || !input.includes('\t')) return false
   for (const line of input.split('\n')) {
-    if (line.trimStart().startsWith('|') && line.includes('\t')) return true
+    if (line.replace(/^[ \t>]*/u, '').startsWith('|') && line.includes('\t')) return true
   }
   return false
 }
@@ -127,9 +127,13 @@ function measuredTabOrDiv(input: string, expected: string, actual: string, line:
   return null
 }
 
+const CAPTION_LEAD = /(<(?:fig)?caption[^>]*>)[ \t]+/gu
+
 function boundaryReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
   const tabOrDiv = measuredTabOrDiv(input, expected, actual, line)
   if (tabOrDiv !== null) return tabOrDiv
+  if (expected.replace(CAPTION_LEAD, '') !== expected && expected.replace(CAPTION_LEAD, '$1') === actual) return recordOf('U-279', line,
+    'C2-B-146 starts the caption text at its first character that is not a space or a tab, and a tab has no escape')
   if (input.includes('</#') && expected.includes('<a href=') && actual.includes('<a href=')) return recordOf('U-206', line,
     'C2-H-095 and C2-H-096 use plain heading text or the caption label and number for a resolved cross-reference')
   if (taskLabelBoundary(input, expected, actual)) return recordOf('U-133', line,
