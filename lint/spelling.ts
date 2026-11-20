@@ -112,18 +112,20 @@ function spacedText(line: Line): { text: string, start: number } {
 }
 
 /**
- * C2-W-143: blank for the rules inside the containers of `owner` when only spaces and tabs follow the quote marks of those
- * containers; a quote mark counts only when a space or the end of the line follows it (C2-B-031).
+ * C2-W-143: how `line` reads for the rules inside the quotes of `owner`: blank when only spaces and tabs follow their quote
+ * marks, outside when it lacks one of them, so those quotes ended above it; a mark counts only when a space or the end of
+ * the line follows it (C2-B-031).
  */
-function blank(line: Line | undefined, owner: Line, context: LintContext): boolean {
-  if (line === undefined) return false
+function blankness(line: Line | undefined, owner: Line, context: LintContext): 'blank' | 'outside' | 'text' {
+  if (line === undefined) return 'outside'
   let depth = 0
   for (let split = owner.path.lastIndexOf('/children/'); split > 0; split = owner.path.lastIndexOf('/children/', split - 1)) {
     if (context.nodeTypes.get(owner.path.slice(0, split)) === 'block_quote') depth++
   }
   let rest = line.text.trimStart()
   for (; depth > 0 && rest[0] === '>' && (rest.length === 1 || rest[1] === ' '); depth--) rest = rest.slice(1).trimStart()
-  return rest === ''
+  if (depth > 0) return 'outside'
+  return rest === '' ? 'blank' : 'text'
 }
 
 function spacedBreak(line: Line, context: LintContext): void {
@@ -236,7 +238,8 @@ const HEADING_MARK = /^(?:#{1,6}|={1,6}) /
 
 function startsBlock(text: string): boolean {
   if (HEADING_MARK.test(text) || text.startsWith('> ') || text.startsWith(':: ')) return true
-  if (text.startsWith(': ') || text.startsWith('{.')) return true
+  // Any valid attribute line, spaced or with an id or a key (C2-B-090, carve#6197).
+  if (text.startsWith(': ') || text.startsWith('{') && isAttributeLine(text, 0, text.length)) return true
   return text.startsWith('[') && text.includes(']:')
 }
 
@@ -328,20 +331,16 @@ function attributeHasLaterOwner(line: Line, context: LintContext): boolean {
   if (context.nodeTypes.get(line.path) === 'heading' || context.nodeTypes.get(line.path) === 'definition_term') return true
   if (line.number > 1 && firstLineOfPath(line.path, context) !== line.number) return true
   const next = context.lines[line.number]
-  return next !== undefined && !blank(next, line, context) && next.paragraph === false && !context.state.containerClosers.has(next.number)
+  return next !== undefined && blankness(next, line, context) === 'text' && next.paragraph === false && !context.state.containerClosers.has(next.number)
 }
 
 function unattachedAttribute(line: Line, context: LintContext): void {
   const { text, start } = lineText(line)
   if (!line.paragraph || !text.startsWith('{') || !text.endsWith('}') || text.length < 3) return
-  if (!attributeLead(text[1])) return
+  if (!isAttributeLine(text, 0, text.length)) return
   if (attributeHasLaterOwner(line, context)) return
   const next = context.lines[line.number]
-  context.report('unattached-block-attribute', start, start + text.length, line.path, {}, blank(next, line, context) ? 1 : 0)
-}
-
-function attributeLead(second: string | undefined): boolean {
-  return second === '.' || second === '#' || (second !== undefined && second >= 'a' && second <= 'z')
+  context.report('unattached-block-attribute', start, start + text.length, line.path, {}, blankness(next, line, context) === 'blank' ? 1 : 0)
 }
 
 function markdownDefinition(line: Line, context: LintContext): void {

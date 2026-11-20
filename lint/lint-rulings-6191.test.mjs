@@ -44,9 +44,16 @@ describe('lint rulings of 20 November', () => {
     expect(codes).not.toContain('unattached-block-attribute')
   })
 
+  it('carve#6197: every attribute line spelling counts for both attribute rules', () => {
+    expect(ranges('para\n{ .c }\n', 'block-opener-without-blank-line')).toEqual([[5, 11]])
+    expect(ranges('para\n{#id}\n', 'block-opener-without-blank-line')).toEqual([[5, 10]])
+    expect(ranges('{ #id }\n', 'unattached-block-attribute')).toEqual([[0, 7]])
+  })
+
   it('carve#6196: a line of only container quote marks is blank; >> at column 1 is text', () => {
     expect(messageOf('> {.c}\n>\n> # H\n', 'unattached-block-attribute')).toContain('A blank line follows this attribute line')
     expect(ranges('{.c}\n>>\n', 'unattached-block-attribute')).toEqual([])
+    expect(messageOf('> > {.c}\n>\n', 'unattached-block-attribute')).toContain('This attribute line reaches no block')
     expect(messageOf('- > {.c}\n  >\n', 'unattached-block-attribute')).toContain('A blank line follows this attribute line')
   })
 })
