@@ -35,6 +35,12 @@ describe('round two lint parity ticket inputs', () => {
     expect(ranges('{#id}\n::::\n:::', 'colon-fence-length-mismatch')).toEqual([[11, 14]])
   })
 
+  it('keeps a figure-group fence in the live colon-container search', () => {
+    const panels = '![A](a.png)\n^ (a) One\n\n![B](b.png)\n^ (b) Two\n'
+    expect(ranges(`:::: note\n::: figure\n${panels}::::\n`, 'colon-fence-length-mismatch')).toHaveLength(1)
+    expect(ranges(`{.c}\n:::: note\n::: figure\n${panels}::::\n`, 'colon-fence-length-mismatch')).toHaveLength(1)
+  })
+
   it('keeps heading continuations out of the definition warning', () => {
     for (const mark of ['#', '##', '=']) {
       expect(ranges(`${mark} H\n [a]: u`, 'definition-in-container')).toEqual([])

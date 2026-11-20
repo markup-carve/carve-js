@@ -542,23 +542,40 @@ function closedBeforeRun(path: string, layout: NodeLayout, width: number, contex
   return layout.closerRaw === undefined ? hasOwnEarlierCloser(path, layout, width, context) : layout.closerRaw !== ''
 }
 
+function colonOpener(type: string, layout: NodeLayout, context: LintContext): { raw: string, start: number } | undefined {
+  const from = context.chars[layout.startByte] ?? 0
+  if (layout.openerRaw !== undefined) {
+    const start = context.source.indexOf(layout.openerRaw, from)
+    return start < 0 ? undefined : { raw: layout.openerRaw, start }
+  }
+  if (type !== 'figure_group') return undefined
+  const to = context.chars[layout.endByte] ?? from
+  const first = context.offsetLines[from] ?? 1
+  const last = context.offsetLines[to] ?? first
+  for (let number = first; number <= last; number++) {
+    const line = context.lines[number - 1]
+    if (line === undefined) break
+    const candidate = contentLine(line)
+    if (/^:{3,}/.test(candidate.text)) return { raw: candidate.text, start: candidate.start }
+  }
+  return undefined
+}
+
 function colonContainer(path: string, layout: NodeLayout, start: number, context: LintContext):
   { width: number, start: number, kind: string } | undefined {
   const type = context.nodeTypes.get(path)
   if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) return undefined
-  const raw = layout.openerRaw
-  const run = raw === undefined ? undefined : /^:{3,}/.exec(raw)?.[0]
+  const opener = colonOpener(type, layout, context)
+  const run = opener === undefined ? undefined : /^:{3,}/.exec(opener.raw)?.[0]
   if (run === undefined) return undefined
-  const from = context.chars[layout.startByte] ?? 0
   const to = context.chars[layout.endByte] ?? 0
-  const opener = context.source.indexOf(raw!, from)
-  if (opener < 0 || opener >= start) return undefined
+  if (opener!.start >= start) return undefined
   if (to < start) {
     const parent = context.layouts.get(path.slice(0, path.lastIndexOf('/children/')))
     const parentEnd = parent === undefined ? -1 : context.chars[parent.endByte] ?? -1
     if (closedBeforeRun(path, layout, run.length, context) || parentEnd < start) return undefined
   }
-  return { width: run.length, start: opener, kind: colonKind(type, raw!) }
+  return { width: run.length, start: opener!.start, kind: colonKind(type, opener!.raw) }
 }
 
 function colonContainers(start: number, context: LintContext): { width: number, start: number, kind: string }[] {
