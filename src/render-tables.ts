@@ -112,10 +112,10 @@ export interface IncludeOptionRule {
 
 /** In the order of C2-A-181. */
 export const INCLUDE_OPTIONS: ReadonlyMap<string, IncludeOptionRule> = new Map([
+  ["code", { value: "language", needsValue: false }],
   ["lines", { value: "range", needsValue: true }],
   ["region", { value: "identifier", needsValue: true }],
   ["rows", { value: "range", needsValue: true }],
   ["cols", { value: "range_or_names", needsValue: true }],
   ["shift", { value: "signed_integer_or_auto", needsValue: true }],
-  ["code", { value: "language", needsValue: false }],
 ])
