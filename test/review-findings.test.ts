@@ -649,7 +649,7 @@ describe('every option is checked against its declared type first', () => {
   const rows = (JSON.parse(readFileSync(new URL('../data/options.json', import.meta.url), 'utf8')) as { options: OptionRow[] }).options
 
   const VALID: Readonly<Record<string, unknown>> = {
-    alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', normalize: true, platforms: ['github'],
+    adapter: 'word', alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', normalize: true, platforms: ['github'],
     profile: 'minimal', rawHtml: true, renderers: {}, roundtrip: true, rules: { r: 'on' }, sections: false, smartTypography: false,
     social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
     allowLosses: ['raw-format-dropped'], maxLosses: 5, softBreak: 'br', codeBlockRenderer: () => undefined,
@@ -686,14 +686,14 @@ describe('every option is checked against its declared type first', () => {
   const typeRefusal = (message: string): boolean =>
     message.startsWith('option ') && !/unknown option|not an option of|not offered/.test(message) && message !== 'accepted'
 
-  it('C2-H-137: the option list is the 24 of the data file', () => {
-    expect(rows).toHaveLength(24)
+  it('C2-H-137: the option list is the 25 of the data file', () => {
+    expect(rows).toHaveLength(25)
     expect(Object.keys(VALID).sort()).toEqual(rows.map((row) => row.name).sort())
   })
 
   for (const row of rows) {
     it(`C2-H-137: ${row.name} (${row.type}) takes a valid value, refuses each wrong type, and reads null as its spec says`, () => {
-      const lint = row.kind === 'lint'
+      const lint = row.kind === 'lint' || row.kind === 'import'
       expect(outcome(row, VALID[row.name])).toBe(lint ? `option ${row.name}: not an option of render` : 'accepted')
       if (UNOFFERED[row.name] !== undefined) expect(outcome(row, UNOFFERED[row.name])).toBe(`option ${row.name}: not offered by this engine`)
       for (const [sample, value] of SAMPLES) {

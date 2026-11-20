@@ -265,7 +265,7 @@ function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
   checkValues(given, names, stage)
   for (const name of names) {
     const kind = OPTION_KINDS.get(name)
-    if (kind === 'format' || kind === 'lint' || (stage === 'parse' && kind === 'render')) {
+    if (kind === 'format' || kind === 'lint' || kind === 'import' || (stage === 'parse' && kind === 'render')) {
       throw new CarveOptionError(name, `not an option of ${stage}`)
     }
   }
