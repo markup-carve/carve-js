@@ -355,10 +355,58 @@ function escapeLeadingCaret(w: Writer, children: readonly Inline[], flags: numbe
   }
 }
 
+type BracketPlace = { node: TextNode, at: number }
+
+function textBracketPlaces(node: TextNode, open: BracketPlace[], lone: BracketPlace[]): void {
+  for (let at = 0; at < node.value.length; at++) {
+    if (node.value[at] === '[') open.push({ node, at })
+    else if (node.value[at] === ']') {
+      if (open.length > 0) open.pop()
+      else lone.push({ node, at })
+    }
+  }
+}
+
+/** Collect brackets that have no partner among the text of this link label. */
+function loneLinkBrackets(nodes: readonly Inline[], open: BracketPlace[], lone: BracketPlace[]): void {
+  for (const node of nodes) {
+    if (node.type === 'text') textBracketPlaces(node, open, lone)
+    else if ('children' in node && node.type !== 'citation_group') loneLinkBrackets(node.children, open, lone)
+  }
+}
+
+/** Merge two ascending escape lists without lengthening a link's write beyond its text. */
+function mergeLinkEscapes(escapes: readonly number[], positions: readonly number[]): number[] {
+  const merged: number[] = []
+  let prior = 0, next = 0
+  while (prior < escapes.length || next < positions.length) {
+    const at = next === positions.length || prior < escapes.length && escapes[prior]! < positions[next]!
+      ? escapes[prior++]! : positions[next++]!
+    if (merged.at(-1) !== at) merged.push(at)
+  }
+  return merged
+}
+
+/** C2-W-125 case five: a bracket without a partner in link text would take the link's own closer. */
+function escapeLoneLinkBrackets(w: Writer, children: readonly Inline[]): void {
+  const open: BracketPlace[] = [], lone: BracketPlace[] = []
+  loneLinkBrackets(children, open, lone)
+  const byNode = new Map<TextNode, number[]>()
+  for (const { node, at } of [...lone, ...open]) {
+    const positions = byNode.get(node) ?? []
+    positions.push(at)
+    byNode.set(node, positions)
+  }
+  for (const [node, positions] of byNode) {
+    w.escapes.set(node, mergeLinkEscapes(w.escapes.get(node) ?? [], positions))
+  }
+}
+
 function linkNode(w: Writer, node: LinkNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
   escapeLeadingCaret(w, node.children, flags)
+  escapeLoneLinkBrackets(w, node.children)
   if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
   const content = writeInlines(w, node.children, flags | IN_BRACKET)
   return `[${collapsedContent(node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`

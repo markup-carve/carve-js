@@ -14,6 +14,7 @@ describe('fix7 JS 0.2 clauses', () => {
       expect(treesEqual(parse(format(source)), parse(source))).toBe(true)
     }
     expect(format('[[\\[1\\]]{.c}](#x)')).toBe('[[[1]]{.c}](#x)\n')
+    expect(format('[\\]\\[]()')).toBe('[\\]\\[]()\n')
   })
 
   it('C2-M-061 consumes consecutive footnote sections without an empty placement', () => {
