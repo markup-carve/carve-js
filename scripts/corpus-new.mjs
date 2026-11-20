@@ -206,7 +206,7 @@ function run(entry) {
   const options = optionsOf(entry)
   const input = inputOf(entry)
   if (kind === 'tree') {
-    const document = engine.decodeTree(entry.json ?? JSON.stringify(entry.tree), undefined, options.extensions)
+    const document = engine.decodeTree(entry.json ?? JSON.stringify(entry.tree), undefined, options.extensions, entry.annotations)
     return [...treeFields(document, expected), ...(expected.accepted === false ? ['accepted'] : [])]
   }
   if (kind === 'migrate') {

@@ -1,5 +1,5 @@
 // The annotation text of a node (C2-A-207) and the offsets of an annotation-range sidecar into it (C2-A-214).
-import { forEachSlot, isRecord, type Node, pointerToken } from './ast.ts'
+import { forEachSlot, isRecord, type ExtensionDeclaration, type Node, pointerToken, SPEC_ORDER } from './ast.ts'
 import { unitBytes } from './positions.ts'
 
 /** The node at the RFC 6901 pointer `path` of `root`, or null. */
@@ -30,11 +30,11 @@ function ownText(node: Node): string {
 }
 
 /** C2-A-207: the `value`, `alt` or `source` of the node, then the text of its child slots in the order of node-slots.json. */
-export function annotationText(node: Node): string {
+export function annotationText(node: Node, declarations: readonly ExtensionDeclaration[] = []): string {
   const parts = [ownText(node)]
   const pending: Node[][] = []
-  forEachSlot(node, (nodes) => pending.push([...nodes]))
-  for (const nodes of pending) for (const child of nodes) parts.push(annotationText(child))
+  forEachSlot(node, (nodes) => pending.push([...nodes]), SPEC_ORDER, declarations)
+  for (const nodes of pending) for (const child of nodes) parts.push(annotationText(child, declarations))
   return parts.join('')
 }
 

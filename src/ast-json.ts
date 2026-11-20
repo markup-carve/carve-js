@@ -1,7 +1,7 @@
 // The JSON form of a tree (C2-A-012, C2-A-165) and tree equality (C2-A-161, C2-A-162).
 import { type DocumentNode, type Envelope, isRecord, type Node } from './ast.ts'
 import { AST_RESULTS, type ResultField } from './ast-tables.ts'
-import { CarveTreeError, validateEnvelope, validateTree } from './ast-validate.ts'
+import { type AnnotationRangeSidecar, CarveTreeError, validateEnvelope, validateTree, validateTreeWithAnnotations } from './ast-validate.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { utf8Length } from './positions.ts'
 
@@ -42,7 +42,8 @@ function envelopeOf(value: unknown): Record<string, unknown> | null {
  * Reads a bare tree or an envelope from JSON. C2-A-167, C2-A-170: a text that is no JSON, or no
  * tree of contract 2.0, is refused here with a `CarveTreeError`, not with the error of the JSON library.
  */
-export function decodeTree(json: string, source?: string, extensions: readonly ExtensionDefinition[] = []): DocumentNode {
+export function decodeTree(json: string, source?: string, extensions: readonly ExtensionDefinition[] = [],
+  annotations?: AnnotationRangeSidecar): DocumentNode {
   let value: unknown
   try {
     value = JSON.parse(json, cleanString)
@@ -59,6 +60,7 @@ export function decodeTree(json: string, source?: string, extensions: readonly E
     if (envelope !== null && error instanceof CarveTreeError) throw new CarveTreeError(`/document${error.path}`, error.reason)
     throw error
   }
+  if (annotations !== undefined) validateTreeWithAnnotations(document, annotations, envelope ?? undefined, source, extensions)
   Object.defineProperty(document, JSON_SOURCE_LENGTH, { value: utf8Length(json) })
   return document
 }

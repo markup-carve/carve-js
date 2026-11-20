@@ -41,8 +41,8 @@ HTML importer uses.
 | `applyPatch` | a tree, a patch, `{ fingerprint, extensions }` | the patched tree | `CarveOptionError`, `CarveTreeError`, `CarvePatchError` |
 | `sourceFingerprint`, `treeFingerprint` | source, or a tree | `sha256:` and a hex hash | `CarveOptionError`, `CarveTreeError` |
 | `encodeTree`, `encodeEnvelope` | a tree | JSON text; `encodeTree` uses JSON Canonicalization Scheme key order | |
-| `decodeTree` | JSON text, `{ extensions, source }` | the tree | `CarveOptionError`, `CarveTreeError` |
-| `validateTree` | a value, `{ extensions }` | nothing | `CarveOptionError`, `CarveTreeError` |
+| `decodeTree` | JSON text, `{ extensions, source, annotations }` | the tree | `CarveOptionError`, `CarveTreeError` |
+| `validateTree` | a value, `{ extensions, annotations }` | nothing | `CarveOptionError`, `CarveTreeError` |
 | `migrateTree` | the JSON value of a 1.x or draft tree, `{ source }` | `{ document, envelope, layout, diagnostics }` | `CarveOptionError`, `CarveTreeError` |
 | `validateLayout` | a sidecar value | the sidecar | `CarveLayoutError` |
 | `writeDocument`, `createWriterRegistry` | a target name and a tree | `{ output, diagnostics }` | `CarveOptionError`, and the errors of the writer |
@@ -363,7 +363,7 @@ old and new host HTML. The command line spelling is `carve upgrade --registered-
 | `fencedRender`, `mermaid`, `d2`, `graphviz`, `wavedrom`, `abc`, `plantuml`, `vegaLite`, `chart`, `presets`, `mathBlock`, `codeGroup`, `codeCallouts` | same names from `@markup-carve/carve/extensions` | provisional; each returns `{ extensions, renderers }`, see [fenced renderers](fenced-renderers.md) |
 | `glossary`, `index`, `citations` | same names from `@markup-carve/carve/extensions` | provisional; each returns `{ extensions, renderers, transforms }`, see [glossary, index and citations](extensions-reference.md) |
 | `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingNumbers`, `headingLevelShift`, `externalLinks`, `autolink` | `@markup-carve/carve/extensions` | provisional; see [Standard extensions: navigation](extensions-navigation.md) |
-| `parseWithProvenance`, `astNodePaths`, `readNodeIdentity`, `toNodeIdentity`, `readAnnotationRanges`, `toAnnotationRanges`, `readProvenance`, `toProvenance`, `toAuthoredProvenance`, `AstSidecarError` | gone | 0.2 has one sidecar, the source layout; a diagnostic names its node by an RFC 6901 `path` |
+| `parseWithProvenance`, `astNodePaths`, `readNodeIdentity`, `toNodeIdentity`, `readAnnotationRanges`, `toAnnotationRanges`, `readProvenance`, `toProvenance`, `toAuthoredProvenance`, `AstSidecarError` | gone | `validateTree` and `decodeTree` accept an optional annotation-range sidecar as `annotations`; node identity and provenance have no 0.2 call or schema; a diagnostic names its node by an RFC 6901 `path` |
 | `createEditorSession`, `EditorChangeError`, `tryRenderHtmlStreaming` | gone | no incremental session in 0.2; parse again |
 | `diffAst`, `createAstPatch` | `diffTree` | a JSON Patch over the encoded tree |
 | `applyAstPatch` | `applyPatch` | with `fingerprint` to bind the patch to its tree |
@@ -379,7 +379,7 @@ old and new host HTML. The command line spelling is `carve upgrade --registered-
 | `BbcodeInputTooLargeError`, `BBCODE_MAX_INPUT_LENGTH` | the same names of `@markup-carve/carve/import` | the error is an `ImportInputError` |
 | `djotMigrationWarnings` | `lint` | the `djot-` and `markdown-` lint rules report the collisions; the `djot-` rules are off unless `rules` turns them on |
 | `applyMigrationFixes` | `fix` | `fixEdits` returns the edits of one finding |
-| `renderCarveWithConversionReport`, `formatMigrationWarnings`, `BbcodeSentinelSpaceExhaustedError` | gone | the importers return `diagnostics`; the BBCode reader needs no sentinel characters |
+| `renderCarveWithConversionReport`, `formatMigrationWarnings`, `BbcodeSentinelSpaceExhaustedError` | gone | use `writeWithDiagnostics` for Carve writer losses and `lint` or `fix` for migration warnings; the BBCode reader needs no sentinel characters |
 | `SPEC_VERSION` | `SPEC_VERSION` | `{ version: '0.2', commit }` |
 | `migrateCaseOnlyReferences` | `upgrade` (`./upgrade`) | the source upgrade covers it |
 | `stampCarve`, `buildMarker`, `stripTrailingMarker`, `readStamp`, `needsReview`, `compareSpecVersions` | gone | 0.2 source carries no version stamp; `SPEC_VERSION` names what the engine reads |

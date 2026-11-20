@@ -1,6 +1,6 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
-import { AST_VERSION, type DocumentNode, INLINE_PARENTS, isRecord, pointerKey } from './ast.ts'
+import { AST_VERSION, type DocumentNode, type ExtensionDeclaration, INLINE_PARENTS, isRecord, pointerKey } from './ast.ts'
 import { annotationText, isCharacterBoundary, nodeAtPointer } from './annotation-text.ts'
 import { isFenceWord } from './opener.ts'
 import { isIncludeIdentifier, isRange } from './include.ts'
@@ -1308,6 +1308,19 @@ export interface AnnotationRangeSidecar {
 }
 
 function checkAnnotations(sidecar: AnnotationRangeSidecar, tree: TreeFacts): void {
+  if (!isRecord(sidecar) || Object.keys(sidecar).some((key) => key !== 'ranges') || !Array.isArray(sidecar.ranges)) {
+    fail('', 'not an annotation-range sidecar with ranges')
+  }
+  sidecar.ranges.forEach((range, index) => {
+    if (!isRecord(range) || Object.keys(range).some((key) => !['id', 'start', 'end'].includes(key)) ||
+      typeof range.id !== 'string' || range.id.length === 0) fail(`/ranges/${index}`, 'invalid annotation range')
+    for (const side of ['start', 'end'] as const) {
+      const endpoint = range[side]
+      if (!isRecord(endpoint) || Object.keys(endpoint).some((key) => !['path', 'offset'].includes(key)) ||
+        typeof endpoint.path !== 'string' || !/^(?:|\/(?:[^~/]|~[01])*)*$/.test(endpoint.path) ||
+        !Number.isInteger(endpoint.offset) || endpoint.offset < 0) fail(`/ranges/${index}/${side}`, 'invalid annotation endpoint')
+    }
+  })
   const ranges = new Map<string, AnnotationRangeSidecar['ranges'][number]>()
   sidecar.ranges.forEach((range, index) => {
     if (ranges.has(range.id)) fail(`/ranges/${index}/id`, 'duplicate annotation range id')
@@ -1315,9 +1328,9 @@ function checkAnnotations(sidecar: AnnotationRangeSidecar, tree: TreeFacts): voi
   })
   for (const [id, path] of tree.annotationIds) {
     const range = ranges.get(id)
-    if (range === undefined) fail(path, `annotation ${JSON.stringify(id)} has no range`)
+    if (range === undefined) fail(`${path}/data/carve.annotation`, `annotation ${JSON.stringify(id)} has no range`)
     const attached = [range.start.path, range.end.path].some((endpoint) => endpoint === path || endpoint.startsWith(`${path}/`))
-    if (!attached) fail(path, `annotation ${JSON.stringify(id)} has no endpoint on this node or its descendants`)
+    if (!attached) fail(`${path}/data/carve.annotation`, `annotation ${JSON.stringify(id)} has no endpoint on this node or its descendants`)
   }
 }
 
@@ -1438,14 +1451,17 @@ export function fragmentValidator(declarations: NonNullable<DocumentNode['extens
 }
 
 /** C2-A-207, C2-A-214: each endpoint names a node and a byte offset of its annotation text between two characters. */
-function checkRangeOffsets(document: DocumentNode, sidecar: AnnotationRangeSidecar): void {
+function checkRangeOffsets(document: DocumentNode, sidecar: AnnotationRangeSidecar,
+  envelope?: Readonly<Record<string, unknown>>): void {
+  const outer = Array.isArray(envelope?.['extensions']) ? envelope['extensions'] as ExtensionDeclaration[] : []
+  const declarations = [...(document.extensions ?? []), ...outer]
   sidecar.ranges.forEach((range, index) => {
     for (const side of ['start', 'end'] as const) {
       const endpoint = range[side]
       const at = `/ranges/${index}/${side}`
       const node = nodeAtPointer(document, endpoint.path)
       if (node === null) fail(`${at}/path`, 'names no node of the tree')
-      const text = annotationText(node)
+      const text = annotationText(node, declarations)
       const offset = endpoint.offset
       const past = !Number.isInteger(offset) || offset < 0 || offset > utf8Length(text)
       if (past) fail(`${at}/offset`, 'is past the annotation text of its node')
@@ -1459,5 +1475,5 @@ export function validateTreeWithAnnotations(document: unknown, annotations: Anno
   envelope?: Readonly<Record<string, unknown>>, source?: string,
   extensions: readonly ExtensionDefinition[] = []): asserts document is DocumentNode {
   validateTree(document, envelope, source, extensions, annotations)
-  checkRangeOffsets(document, annotations)
+  checkRangeOffsets(document, annotations, envelope)
 }
