@@ -8,6 +8,8 @@ import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
+import { addSpanMarks } from './write-spans.ts'
+import { pairEscapes } from './write-pairs.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -681,6 +683,62 @@ function compareWithRepair(
  * by its plan where the plan decides it, and by the repair otherwise.
  */
 function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean): number {
+  let end = writeGroupOnce(w, run, document, from, first)
+  // C2-W-146: escapes the pair rules ask for go through the test of C2-W-088 again, until none is asked.
+  for (let round = 0; round < MAX_PAIR_ROUNDS; round++) {
+    const asked = pairEscapes(document.children.slice(from, end), w.escapes)
+    if (asked.length === 0) break
+    if (round === 0) run.stats.repaired++
+    const before = saveGroup(w, end)
+    addEscapes(w, asked)
+    end = repairGroup(w, document, from, first, w.losses.entries.length)
+    // C2-W-002: a backslash that keeps the group from reading back is no form of it; the form before stays.
+    if (w.losses.entries.length > before.losses) {
+      end = restoreGroup(w, before)
+      break
+    }
+  }
+  return end
+}
+
+interface SavedGroup {
+  end: number
+  lines: string[]
+  escapes: Map<TextNode, number[]>
+  forms: Map<Node, number>
+  attempts: Writer['attempts']
+  blankFirst: boolean
+  losses: number
+  lost: Set<Node>
+  lostKeys: Map<Node, string[]>
+  parsed: DocumentNode | null
+}
+
+function saveGroup(w: Writer, end: number): SavedGroup {
+  return {
+    end, lines: [...w.lines], escapes: new Map([...w.escapes].map(([node, at]) => [node, [...at]])), forms: new Map(w.forms),
+    attempts: new Map(w.attempts), blankFirst: w.blankFirst, losses: w.losses.entries.length, lost: new Set(w.lost),
+    lostKeys: new Map(w.lostKeys), parsed: w.parsed,
+  }
+}
+
+function restoreGroup(w: Writer, saved: SavedGroup): number {
+  w.lines = saved.lines
+  w.escapes = saved.escapes
+  w.forms = saved.forms
+  w.attempts = saved.attempts
+  w.blankFirst = saved.blankFirst
+  w.losses.entries.length = saved.losses
+  w.losses.nodes.length = saved.losses
+  w.lost = saved.lost
+  w.lostKeys = saved.lostKeys
+  w.parsed = saved.parsed
+  return saved.end
+}
+
+const MAX_PAIR_ROUNDS = 64
+
+function writeGroupOnce(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean): number {
   // C2-W-002: the losses that the first write reports count for the repair that follows a plan with no decision.
   const reported = w.losses.entries.length
   if (run.path !== 'repair') {
@@ -1000,6 +1058,21 @@ function layoutSource(layout: WriteOptions['layout']): string | null {
   return layout?.encoding === 'base64' ? null : layout?.source ?? null
 }
 
+/** C2-W-145: the document written with the marks of its span counts, its losses at the cells of the supplied tree. */
+function writeWithSpanMarks(w: Writer, run: WriterRun, document: DocumentNode, original: string | null): string {
+  const spans = addSpanMarks(document)
+  let source: string
+  try {
+    source = keepControlsAbove(w, document, writeDocument(w, run, document), original)
+  } finally {
+    spans?.restore()
+  }
+  if (spans === null) return source
+  w.losses.nodes = w.losses.nodes.map((node) => (node === null ? null : spans.covering.get(node) ?? node))
+  for (const cell of spans.unspelled) lose(w, cell, 'rowspan')
+  return source
+}
+
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout)):
@@ -1013,7 +1086,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
     new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
-  const source = keepControlsAbove(w, document, writeDocument(w, run, document), original)
+  const source = writeWithSpanMarks(w, run, document, original)
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
   rootMetadataLosses(document, diagnostics)

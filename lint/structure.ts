@@ -54,9 +54,17 @@ function escaped(text: string, at: number): boolean {
   return slashes % 2 === 1
 }
 
-function nextCloser(text: string, mark: string, from: number): number {
+// C2-I-050: a bare mark followed by a combining mark, a variation selector or a zero-width joiner takes no part.
+const JOINED = /^[\p{M}\u200D\uFE00-\uFE0F\u{E0100}-\u{E01EF}]/u
+
+function joined(text: string, mark: string, id: Rule['id'], at: number): boolean {
+  return id.startsWith('deprecated-bare-') && JOINED.test(text.slice(at + mark.length, at + mark.length + 2))
+}
+
+function nextCloser(text: string, mark: string, from: number, id?: Rule['id']): number {
   let end = text.indexOf(mark, from)
-  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end))) {
+  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end) ||
+    (id !== undefined && joined(text, mark, id, end)))) {
     end = text.indexOf(mark, end + mark.length)
   }
   return end
@@ -77,12 +85,16 @@ function validPair(text: string, mark: string, id: Rule['id'], start: number, en
   return !isWord(text[start - 1]) && !isWord(text[end + mark.length])
 }
 
-function paired(text: string, mark: string, id: Rule['id'], visit: (start: number, end: number) => void): void {
+export function pairedMarks(text: string, mark: string, id: Rule['id'], visit: (start: number, end: number) => void): void {
   let at = 0
   while (at < text.length) {
     const start = text.indexOf(mark, at)
     if (start < 0) return
-    const end = nextCloser(text, mark, start + mark.length + 1)
+    if (joined(text, mark, id, start)) {
+      at = start + mark.length
+      continue
+    }
+    const end = nextCloser(text, mark, start + mark.length + 1, id)
     if (end < 0) return
     if (validPair(text, mark, id, start, end)) visit(start, end + mark.length)
     at = end + mark.length
@@ -101,7 +113,7 @@ function checkTextPair(node: Node, path: string, context: LintContext, mark: str
   const flush = (): void => {
     if (first === undefined) return
     const begin = first
-    paired(context.source.slice(begin, last), mark, id, (start, end) => context.report(id, begin + start, begin + end, path))
+    pairedMarks(context.source.slice(begin, last), mark, id, (start, end) => context.report(id, begin + start, begin + end, path))
     first = undefined
   }
   for (const child of node.children) {

@@ -1,6 +1,6 @@
 // The checks of the writer (spec/0.2/writer.md): its two gates, with and without the sidecar,
 // that a canonical input stays as it is, and that its escapes are those of the procedure of C2-W-088.
-import { format, formatWithDiagnostics, parse, treesEqual, write, writeWithDiagnostics } from '../../src/index.ts'
+import { format, formatWithDiagnostics, lint, parse, treesEqual, write, writeWithDiagnostics } from '../../src/index.ts'
 import { type DocumentNode, type Node, type Position, type TextNode } from '../../src/ast.ts'
 import { type Diagnostic } from '../../src/diagnostics.ts'
 import { unitBytes } from '../../src/positions.ts'
@@ -366,7 +366,7 @@ function nextEscape(text: string, toBare: readonly number[], parsed: Node, sourc
  * The procedure of C2-W-088 from the backslashes `seeds`: the form it reaches, or the text at which it ends
  * with the tree unformed and the construct it last looked at.
  */
-type ProcedureEnd = { form: string } | { text: string, best: Construct | null }
+type ProcedureEnd = { form: string, toBare: number[] } | { text: string, best: Construct | null }
 
 /** The constructs of the parse of `bare` with the backslashes `added`, as `name@start` with their ends, in bare offsets. */
 function formedConstructs(bare: string, added: readonly number[]): Map<string, number> {
@@ -422,7 +422,7 @@ function runProcedure(source: BareText, tree: DocumentNode, seeds: readonly numb
   for (;;) {
     const { text, toBare } = withEscapes(source.bare, added)
     const parsed = parse(text)
-    if (treesEqual(parsed, tree)) return { form: text }
+    if (treesEqual(parsed, tree)) return { form: text, toBare }
     const next = nextEscape(text, toBare, parsed, source)
     const best = next.best
     const target = next.target < 0 ? -1 : sigilTarget(source, added, next.target)
@@ -466,8 +466,38 @@ function nextRepair(source: BareText, tree: DocumentNode, seeds: readonly number
   return repair >= 0 ? repair : candidates[0] ?? -1
 }
 
+// C2-W-146: the pair rules of lint, with the length of the opening run each one reports.
+const PAIR_RULES = new Map([
+  ['deprecated-bare-underline', 1], ['deprecated-bare-strike', 1], ['deprecated-bare-highlight', 1],
+  ['markdown-strikethrough-double-tilde', 2], ['markdown-strong-double-star', 2],
+])
+
+/** C2-W-091: the backslashes the procedure placed stay, and it runs again with those the pairs ask for. */
+function keepPlaced(seeds: number[], toBare: readonly number[], paired: readonly number[]): void {
+  for (let at = 0; at + 1 < toBare.length; at++) {
+    if (toBare[at] === toBare[at + 1] && !seeds.includes(toBare[at]!)) seeds.push(toBare[at]!)
+  }
+  seeds.push(...paired.filter((at) => !seeds.includes(at)))
+}
+
+/** C2-W-146: the bare offsets of the marks of each opening run that a pair rule of lint reports in `form`. */
+function pairSeeds(form: string, toBare: readonly number[], seeds: readonly number[]): number[] {
+  const offsets = stringOffsets(form)
+  const found: number[] = []
+  for (const entry of lint(form)) {
+    const run = PAIR_RULES.get(entry.code)
+    const start = entry.range === undefined ? undefined : offsets.get(entry.range.startOffset)
+    if (run === undefined || start === undefined) continue
+    for (let at = start; at < start + run; at++) {
+      const bare = toBare[at]
+      if (bare !== undefined && !seeds.includes(bare) && !found.includes(bare)) found.push(bare)
+    }
+  }
+  return found
+}
+
 /**
- * C2-W-088, C2-W-091, C2-W-125: the escapes of the procedure, as a slow reference. The text of `written` is
+ * C2-W-088, C2-W-091, C2-W-125, C2-W-146: the escapes of the procedure, as a slow reference. The text of `written` is
  * taken bare of the escapes of its text nodes and parsed; while the parse holds a construct that
  * `tree` does not hold, the opener of the leftmost one (by start, the outer of two at one start)
  * takes a backslash and the text is parsed again. Where the procedure ends with a node of the tree
@@ -478,7 +508,12 @@ export function referenceForm(written: string, tree: DocumentNode): ReferenceFor
   const seeds: number[] = []
   for (let restart = 0; restart <= source.bare.length; restart++) {
     const result = runProcedure(source, tree, seeds)
-    if ('form' in result) return result
+    if ('form' in result) {
+      const paired = pairSeeds(result.form, result.toBare, seeds)
+      if (paired.length === 0) return { form: result.form }
+      keepPlaced(seeds, result.toBare, paired)
+      continue
+    }
     const seeded = withEscapes(source.bare, [...seeds].sort((x, y) => x - y))
     const missing = missingConstructs(parse(seeded.text), seeded.text, seeded.toBare, source.held)
     const extra = nextRepair(source, tree, seeds, missing)
