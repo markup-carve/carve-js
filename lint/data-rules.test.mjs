@@ -218,3 +218,17 @@ it('C2-W-141: rules that look up other records of the document report what the h
     expect(runs[0], JSON.stringify(source)).toEqual(runs[1])
   }
 })
+
+it('C2-W-141: lookups after a record and ancestor fields give what the hand-written rules report', () => {
+  const sources = ['[^a]: x\n\n[^ a]: y\n\nUse [^a].\n', '{.c}\n[^a]: x\n\n[^ a]: y\n', '[^a  b]: x\n\n[^a b]: y\n',
+    '| a | b |\n| c |\n|---|\n| d | e | f |\n', '> | a |\n> | b | c |\n', 'i. one\n\na. two\n', 'i. one\n\n\n\n\na. two\n',
+    'I. one\n- x\n\nA. two\n', '> i) one\n>\n> a) two\n', '::: figure\npara\n:::\n', '::: figure\n> ::: figure\n> x\n> :::\n:::\n']
+  for (const source of sources) expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  expect(findings('[^a]: x\n\n[^ a]: y\n\nUse [^a].\n', 'data')).toEqual(['footnote-labels-differ-only-in-whitespace@9-17'])
+  expect(findings('i. one\n\na. two\n', 'data')).toEqual(['ordered-list-kind-split@0-6'])
+})
+
+it('C2-B-127: figure-group-nested reads the opener of a div behind its attribute line', () => {
+  const source = '::: figure\n{.x}\n::: figure\nin\n:::\n![i](j)\n^ c\n:::\n'
+  for (const mode of ['code', 'data']) expect(findings(source, mode)).toContain('figure-group-nested@11-33')
+})

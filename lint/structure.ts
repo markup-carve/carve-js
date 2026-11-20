@@ -2,6 +2,7 @@ import { forEachSlot, INLINE_PARENTS, type Node, type TableCellNode, type TableC
 import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
+import { openerStart } from './data-model.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
 import { columnOf, readPrefix } from '../src/layout-lines.ts'
 import { advanceColumn } from '../src/source.ts'
@@ -403,7 +404,11 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
 
 /** C2-B-127: a bare `::: figure` in the body of a figure group, which opens a plain div. */
 function figureNested(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'div' || !/^\s*:{3,}\s*figure\s*$/.test(raw(node, context).split('\n', 1)[0] ?? '')) return
+  const range = bounds(node, context)
+  if (node.type !== 'div' || range === null) return
+  // C2-B-127: the opener line, behind an attached attribute line.
+  const from = node.attrs === undefined ? range[0] : openerStart(context.source, range[0])
+  if (!/^\s*:{3,}\s*figure\s*$/.test(context.source.slice(from, range[1]).split('\n', 1)[0] ?? '')) return
   for (let split = path.lastIndexOf('/children/'); split > 0; split = path.lastIndexOf('/children/', split - 1)) {
     if (context.nodeTypes.get(path.slice(0, split)) === 'figure_group') return reportNode('figure-group-nested', node, path, context)
   }
