@@ -149,3 +149,8 @@ it('the fourth batch reports what the hand-written rules report on their trigger
     expect(data, JSON.stringify(source)).toEqual(lint(source, on).map((entry) => entry.code))
   }
 })
+
+it('C2-B-109: a quoted backtick run inside a fence outside the quote is content, not an indented closer', () => {
+  expect(findings('```\n> ```\n', 'data').filter((found) => found.startsWith('fence-closer'))).toEqual([])
+  expect(findings('> ```\n>   ```\n', 'data').filter((found) => found.startsWith('fence-closer'))).toEqual(['fence-closer-indented@10-13'])
+})
