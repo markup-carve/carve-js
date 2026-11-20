@@ -111,9 +111,19 @@ function spacedText(line: Line): { text: string, start: number } {
   return { text: line.text.slice(at).trimEnd(), start: line.start + at }
 }
 
-/** A blank line, or one that holds only quote marks. */
-function blank(line: Line | undefined): boolean {
-  return line !== undefined && /^[\s>]*$/.test(line.text)
+/**
+ * C2-W-143: blank for the rules inside the containers of `owner` when only spaces and tabs follow the quote marks of those
+ * containers; a quote mark counts only when a space or the end of the line follows it (C2-B-031).
+ */
+function blank(line: Line | undefined, owner: Line, context: LintContext): boolean {
+  if (line === undefined) return false
+  let depth = 0
+  for (let split = owner.path.lastIndexOf('/children/'); split > 0; split = owner.path.lastIndexOf('/children/', split - 1)) {
+    if (context.nodeTypes.get(owner.path.slice(0, split)) === 'block_quote') depth++
+  }
+  let rest = line.text.trimStart()
+  for (; depth > 0 && rest[0] === '>' && (rest.length === 1 || rest[1] === ' '); depth--) rest = rest.slice(1).trimStart()
+  return rest === ''
 }
 
 function spacedBreak(line: Line, context: LintContext): void {
@@ -318,7 +328,7 @@ function attributeHasLaterOwner(line: Line, context: LintContext): boolean {
   if (context.nodeTypes.get(line.path) === 'heading' || context.nodeTypes.get(line.path) === 'definition_term') return true
   if (line.number > 1 && firstLineOfPath(line.path, context) !== line.number) return true
   const next = context.lines[line.number]
-  return next !== undefined && !blank(next) && next.paragraph === false && !context.state.containerClosers.has(next.number)
+  return next !== undefined && !blank(next, line, context) && next.paragraph === false && !context.state.containerClosers.has(next.number)
 }
 
 function unattachedAttribute(line: Line, context: LintContext): void {
@@ -327,7 +337,7 @@ function unattachedAttribute(line: Line, context: LintContext): void {
   if (!attributeLead(text[1])) return
   if (attributeHasLaterOwner(line, context)) return
   const next = context.lines[line.number]
-  context.report('unattached-block-attribute', start, start + text.length, line.path, {}, blank(next) ? 1 : 0)
+  context.report('unattached-block-attribute', start, start + text.length, line.path, {}, blank(next, line, context) ? 1 : 0)
 }
 
 function attributeLead(second: string | undefined): boolean {

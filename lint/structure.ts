@@ -388,7 +388,7 @@ function frontmatterQuote(node: Node, path: string, context: LintContext): void 
   for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
     const line = context.lines[number - 1]
     if (line === undefined || !/^>[^ ]/.test(line.text) || line.text.length < 2) continue
-    context.report('blockquote-marker-without-space', line.start, line.start + 1, path,
+    context.report('blockquote-marker-without-space', line.start, line.start + line.text.trimEnd().length, path,
       { text: line.text.slice(1) }, 1)
   }
 }
@@ -1050,7 +1050,9 @@ function blockColumn(node: Node, path: string, context: LintContext): number | u
 }
 
 function isLintableItemBlock(child: Node | undefined): child is Node & { pos: NonNullable<Node['pos']> } {
-  if (child === undefined || child.pos === undefined || child.type === 'list' || child.type === 'comment') return false
+  // The row lists its openers one by one, and an include directive is none of them (carve#6193).
+  if (child === undefined || child.pos === undefined || child.type === 'list' || child.type === 'comment'
+    || child.type === 'include') return false
   return child.type !== 'paragraph' || child.children.length === 1 && child.children[0]?.type === 'image'
 }
 
@@ -1175,6 +1177,18 @@ function listItemThroughDiv(path: string, ownerType: string, context: LintContex
   return false
 }
 
+/** The whole opening mark of a block opener, as the row of `block-opener-overindented` states its range (carve#6192). */
+function openingMarkWidth(node: Node, text: string): number {
+  if (node.type === 'block_quote' || node.type === 'table') return 1
+  if (node.type === 'definition_term') return 2
+  if (node.type === 'thematic_break') return text.trimEnd().length
+  const mark = text[0]
+  if (mark === undefined || !'#=:`~|'.includes(mark)) return 1
+  let width = 1
+  while (text[width] === mark) width++
+  return width
+}
+
 function blockOverindent(node: Node, path: string, context: LintContext): void {
   if (node.pos === undefined) return
   const { path: ownerPath, type: ownerType } = blockOwner(path, context)
@@ -1190,7 +1204,7 @@ function blockOverindent(node: Node, path: string, context: LintContext): void {
   const colonDiv = node.type === 'div' || node.type === 'directive' || node.type === 'admonition'
     || node.type === 'figure_group'
   const kind = node.type === 'block_quote' ? 'quote' : colonDiv ? 'div' : node.type.replaceAll('_', ' ')
-  const width = node.type === 'definition_term' ? 2 : colonDiv ? 3 : 1
+  const width = openingMarkWidth(node, line.text.slice(start - line.start))
   const past = column - content
   context.report('block-opener-overindented', start, start + width, path,
     { kind, past: String(past), columns: past === 1 ? 'column' : 'columns', owner: ownerType.replaceAll('_', ' ') })
