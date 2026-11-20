@@ -31,8 +31,9 @@ export function sourceLines(source: string): { bytes: Uint32Array, chars: Uint32
 /** The parser's leaf block positions decide whether a source line can be checked as text. */
 export function markNodeLines(lines: Line[], type: string, path: string, firstLine: number, lastLine: number): void {
   const paragraph = type === 'paragraph' || type === 'caption' || type === 'definition_term' || type === 'heading' || type === 'line'
+  const tableRow = type === 'table_row'
   const opaque = type === 'code_block' || type === 'raw_block' || type === 'frontmatter' || type === 'comment_block'
-  if (!paragraph && !opaque) return
+  if (!paragraph && !opaque && !tableRow) return
   for (let index = firstLine - 1; index < lastLine; index++) {
     const line = lines[index]!
     if (paragraph) {
@@ -40,6 +41,7 @@ export function markNodeLines(lines: Line[], type: string, path: string, firstLi
       line.paragraph = true
       line.paragraphLeaf = type === 'paragraph'
     }
+    if (tableRow) line.path = path
     if (opaque) line.opaque = true
   }
 }

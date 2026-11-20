@@ -626,7 +626,12 @@ function fenceCloserIndent(node: Node, path: string, context: LintContext): void
   const opener = first.text.indexOf('```')
   const closer = last.text.indexOf('```')
   if (opener < 0 || closer < 0 || opener === closer) return
-  if (last.text.slice(0, closer).trim() !== '' || !/^`{3,}[ \t]*$/.test(last.text.slice(closer))) return
+  const openingRun = /^`+/.exec(first.text.slice(opener))?.[0]
+  const closingRun = /^`+/.exec(last.text.slice(closer))?.[0]
+  if (openingRun === undefined || closingRun === undefined || closingRun.length < openingRun.length) return
+  const quotes = quoteDepth(path, context)
+  const prefix = quotes === 0 ? last.start : readPrefix(context.source, last.start, last.end, quotes).pos
+  if (last.text.slice(prefix - last.start, closer).trim() !== '' || !/^`{3,}[ \t]*$/.test(last.text.slice(closer))) return
   context.report('fence-closer-indented', last.start + closer, last.end, path)
 }
 
@@ -797,10 +802,12 @@ function commentFenceCloserText(node: Node, path: string, context: LintContext):
   let width = 0
   while (opener[width] === '%') width++
   if (width < 3) return
+  const quotes = quoteDepth(path, context)
   for (let lineNumber = node.pos.startLine + 1; lineNumber <= node.pos.endLine; lineNumber++) {
     const line = context.lines[lineNumber - 1]
     if (line === undefined) continue
-    const text = line.text.trimStart()
+    const prefix = quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
+    const text = line.text.slice(prefix - line.start).trimStart()
     let run = 0
     while (text[run] === '%') run++
     if (run >= width && text.slice(run).trim() !== '') {
