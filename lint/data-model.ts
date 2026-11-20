@@ -83,14 +83,14 @@ const LEAF_TYPES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'defini
 
 const isSpace = (code: number): boolean => code === 32 || code === 9
 
-/** Behind leading spaces and tabs and every quote mark followed by a space, at most `marks` of them. */
+/** Behind leading spaces and tabs and every quote mark followed by a space or the line end (C2-B-031), at most `marks` of them. */
 function quotedStart(line: Line, marks = Infinity): number {
   const text = line.text
   let at = 0
   let left = marks
   while (isSpace(text.charCodeAt(at))) at++
-  while (left-- > 0 && text.charCodeAt(at) === 62 && text.charCodeAt(at + 1) === 32) {
-    at += 2
+  while (left-- > 0 && text.charCodeAt(at) === 62 && (text.charCodeAt(at + 1) === 32 || at + 1 === text.length)) {
+    at = Math.min(at + 2, text.length)
     while (isSpace(text.charCodeAt(at))) at++
   }
   return line.start + at
@@ -267,7 +267,8 @@ function lineRecord(line: Line, index: number, model: ModelLine[], found: Leaves
   return new LineRecord({
     number: line.number, start: line.start, end: line.end, text: line.text,
     body, body_start: bodyStart, body_end: bodyStart + body.length,
-    blank: leaf === 'none' && /^[\s>]*$/.test(line.text), leaf, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
+    // carve#6196: blank within its containers, so a bare quote mark is a blank line of its quote and `>>` is text.
+    blank: leaf === 'none' && body === '', leaf, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
     attached_here: context.state.attachedLines.has(line.number),
     closes_container: context.state.containerClosers.has(line.number),
     leaf_head: found.head[index]!, leaf_last: found.last[index]!, leaf_start: found.start[index]!,

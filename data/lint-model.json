@@ -39,9 +39,10 @@
     {
       "name": "blank",
       "type": "boolean",
-      "means": "the line is no line of a leaf block and holds nothing but spaces, tabs and quote marks",
+      "means": "the line is no line of a leaf block and holds nothing but spaces and tabs after the prefixes of its containers, so a bare quote mark is a blank line of its quote and `>>` at column 1 is text",
       "clauses": [
-        "C2-B-009"
+        "C2-B-009",
+        "C2-B-031"
       ]
     },
     {
@@ -64,7 +65,7 @@
     {
       "name": "body_start",
       "type": "offset",
-      "means": "where the text of the line starts behind its container prefixes and indent: on a line of a leaf block, where the parse puts the leaf's text on that line, the marker of an item, description or footnote body on its marker line and the quote marks of the open quotes being prefixes up to their content column; on a lazy line, which carries no prefix of the containers it does not reach, its first character that is not a space or tab; on a line of a leaf of `verbatim_leaves` whose prefixes the parse does not place, behind its leading spaces and tabs and as many quote marks followed by a space as quotes hold the leaf, since a further mark is content; on any other line, behind its leading spaces and tabs and its quote marks that are followed by a space",
+      "means": "where the text of the line starts behind its container prefixes and indent: on a line of a leaf block, where the parse puts the leaf's text on that line, the marker of an item, description or footnote body on its marker line and the quote marks of the open quotes being prefixes up to their content column; on a lazy line, which carries no prefix of the containers it does not reach, its first character that is not a space or tab; on a line of a leaf of `verbatim_leaves` whose prefixes the parse does not place, behind its leading spaces and tabs and as many quote marks followed by a space as quotes hold the leaf, since a further mark is content; on any other line, behind its leading spaces and tabs and its quote marks that are followed by a space or end the line",
       "clauses": [
         "C2-B-003",
         "C2-B-024",
@@ -803,40 +804,27 @@
             "f": "start"
           },
           "end": {
-            "add": [
+            "if": [
               {
-                "f": "start"
+                "matches": [
+                  {
+                    "text_from": {
+                      "f": "start"
+                    }
+                  },
+                  "^(?<mark>#+|=+|:+|`+|~+|\\*+|-+|_+)"
+                ]
               },
               {
-                "if": [
+                "match": "mark",
+                "at": "end"
+              },
+              {
+                "add": [
                   {
-                    "eq": [
-                      {
-                        "f": "type"
-                      },
-                      "definition_term"
-                    ]
+                    "f": "start"
                   },
-                  2,
-                  {
-                    "if": [
-                      {
-                        "in": [
-                          {
-                            "f": "type"
-                          },
-                          [
-                            "admonition",
-                            "directive",
-                            "div",
-                            "figure_group"
-                          ]
-                        ]
-                      },
-                      3,
-                      1
-                    ]
-                  }
+                  1
                 ]
               }
             ]

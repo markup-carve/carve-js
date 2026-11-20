@@ -68,3 +68,8 @@ it('bare-html-tag reads paragraph, heading and table row lines, not term lines',
   expect(findings(':: a <b>\n', 'data')).toEqual([])
   expect(findings('| <i> |\n', 'data')).toEqual(['bare-html-tag@2-5'])
 })
+
+it('carve#6192: block-opener-overindented reports the whole opening mark', () => {
+  expect(findings('# H\n\n   ::::\n   x\n   ::::\n', 'data')).toEqual(['block-opener-overindented@8-12'])
+  expect(findings('  ### H\n', 'data')).toEqual(['block-opener-overindented@2-5'])
+})

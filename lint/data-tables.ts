@@ -65,38 +65,39 @@ const K1 = new Set<unknown>(["table_cell","table_row"])
 const K2 = new RegExp("^(?:[^<]|<!--.*?-->|<[^!<A-Za-z/]|<[A-Za-z/]|<<|<!(?:[^-]|$)|<!-(?:[^-]|$)|<$)*?<*(?<tag></?[A-Za-z][A-Za-z0-9_:-]*(?:\\s[^<>]*)?/?>)", "d")
 const K3 = new RegExp("(?<label>\\[(?<caret>\\^)?[ \\t\\n]+\\])", "gd")
 const K4 = new Set<unknown>(["admonition","directive","div","figure_group"])
-const K5 = new Set<unknown>(["caption","paragraph"])
-const K6 = new RegExp("^(?<mark>#{1,6}|={1,6}) ", "d")
-const K7 = new RegExp("^(?<mark>>)(?: |$)", "d")
-const K8 = new RegExp("^[ \t]*> ", "")
-const K9 = new RegExp("^(?<mark>::) ", "d")
-const K10 = new RegExp("^(?<mark>:) ", "d")
-const K11 = new RegExp("^(?<mark>\\[.*?\\]:)", "d")
-const K12 = new RegExp("^>[^ ]", "")
-const K13 = new Set<unknown>(["caption","definition_term","heading","line","paragraph","table_cell"])
-const K14 = new RegExp("^(?:\\*?\\s*(?:Caption|Table|Tabelle|Figure|Image)(?:\\s+\\d+)?\\s*:|:\\s+\\S)", "i")
-const K15 = new RegExp("^(?<op>%+)", "d")
-const K16 = new RegExp("^%+(?:[ \\t]*[^ \\t%]|[ \\t]+%)", "")
-const K17 = new Set<unknown>(["caption","definition_term","heading","line","paragraph"])
-const K18 = new RegExp("^(?<label>\\[.+?\\]:).", "d")
-const K19 = new RegExp("^[ \\t]", "")
-const K20 = new Set<unknown>(["admonition","block_quote","definition_description","definition_list","directive","div","figure_group","list","list_item"])
-const K21 = new RegExp("^\\*(?:[ \t]*\\*){2,}$", "")
-const K22 = new RegExp("^-(?:[ \t]*-){2,}$", "")
-const K23 = new RegExp("^_(?:[ \t]*_){2,}$", "")
-const K24 = new RegExp("[ \t]", "")
-const K25 = new RegExp("^%%", "")
-const K26 = new RegExp("^[^`]*(?<run>`{3,})", "d")
-const K27 = new RegExp("^(?<pre>[ \\t>]*)(?<close>`{3,})[ \\t]*$", "d")
-const K28 = new RegExp("^---\\n", "")
-const K29 = new RegExp("^---\\n[ \\t]*(?:\\n|$)", "")
-const K30 = new RegExp("[ \\t](?<block>\\{[ \\t]*[.#][^{}]*\\})[ \\t]*$", "d")
-const K31 = new RegExp("^[ \\t]*$", "")
-const K32 = new RegExp("^ {4,}[^ ]", "")
-const K33 = new Set<unknown>(["admonition","block_quote","code_block","definition_list","directive","div","figure_group","heading","line_block","raw_block","table","thematic_break"])
-const K34 = new Set<unknown>(["definition_term","paragraph"])
-const K35 = new RegExp("^(?:[-*]|[0-9]{1,9}[.)]) [ \\t]*[^ \\t]", "")
-const K36 = new RegExp("^(?:-{3,}|_{3,})$", "")
+const K5 = new RegExp("^(?<mark>#+|=+|:+|`+|~+|\\*+|-+|_+)", "d")
+const K6 = new Set<unknown>(["caption","paragraph"])
+const K7 = new RegExp("^(?<mark>#{1,6}|={1,6}) ", "d")
+const K8 = new RegExp("^(?<mark>>)(?: |$)", "d")
+const K9 = new RegExp("^[ \t]*> ", "")
+const K10 = new RegExp("^(?<mark>::) ", "d")
+const K11 = new RegExp("^(?<mark>:) ", "d")
+const K12 = new RegExp("^(?<mark>\\[.*?\\]:)", "d")
+const K13 = new RegExp("^>[^ ]", "")
+const K14 = new Set<unknown>(["caption","definition_term","heading","line","paragraph","table_cell"])
+const K15 = new RegExp("^(?:\\*?\\s*(?:Caption|Table|Tabelle|Figure|Image)(?:\\s+\\d+)?\\s*:|:\\s+\\S)", "i")
+const K16 = new RegExp("^(?<op>%+)", "d")
+const K17 = new RegExp("^%+(?:[ \\t]*[^ \\t%]|[ \\t]+%)", "")
+const K18 = new Set<unknown>(["caption","definition_term","heading","line","paragraph"])
+const K19 = new RegExp("^(?<label>\\[.+?\\]:).", "d")
+const K20 = new RegExp("^[ \\t]", "")
+const K21 = new Set<unknown>(["admonition","block_quote","definition_description","definition_list","directive","div","figure_group","list","list_item"])
+const K22 = new RegExp("^\\*(?:[ \t]*\\*){2,}$", "")
+const K23 = new RegExp("^-(?:[ \t]*-){2,}$", "")
+const K24 = new RegExp("^_(?:[ \t]*_){2,}$", "")
+const K25 = new RegExp("[ \t]", "")
+const K26 = new RegExp("^%%", "")
+const K27 = new RegExp("^[^`]*(?<run>`{3,})", "d")
+const K28 = new RegExp("^(?<pre>[ \\t>]*)(?<close>`{3,})[ \\t]*$", "d")
+const K29 = new RegExp("^---\\n", "")
+const K30 = new RegExp("^---\\n[ \\t]*(?:\\n|$)", "")
+const K31 = new RegExp("[ \\t](?<block>\\{[ \\t]*[.#][^{}]*\\})[ \\t]*$", "d")
+const K32 = new RegExp("^[ \\t]*$", "")
+const K33 = new RegExp("^ {4,}[^ ]", "")
+const K34 = new Set<unknown>(["admonition","block_quote","code_block","definition_list","directive","div","figure_group","heading","line_block","raw_block","table","thematic_break"])
+const K35 = new Set<unknown>(["definition_term","paragraph"])
+const K36 = new RegExp("^(?:[-*]|[0-9]{1,9}[.)]) [ \\t]*[^ \\t]", "")
+const K37 = new RegExp("^(?:-{3,}|_{3,})$", "")
 
 function rule0(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
@@ -126,28 +127,29 @@ function rule1(self: ModelInline, path: string, context: LintContext): void {
 }
 
 function rule2(self: ModelBlock, path: string, context: LintContext): void {
+  const line = self.line
   groups = undefined
   if (!(!same(self.owner?.["type"], "list_item") && !Boolean(self.after_quote_mark) && (num(self.column) > num(self.owner?.["content_column"])))) return
-  context.report("block-opener-overindented", num(self.start), (num(self.start) + num((same(self.type, "definition_term") ? 2 : (K4.has(self.type) ? 3 : 1)))), path, { "kind": String((same(self.type, "block_quote") ? "quote" : (K4.has(self.type) ? "div" : str(self.type).replaceAll('_', ' ')))), "past": String((num(self.column) - num(self.owner?.["content_column"]))), "columns": String((same((num(self.column) - num(self.owner?.["content_column"])), 1) ? "column" : "columns")), "owner": String(str(self.owner?.["type"]).replaceAll('_', ' ')) }, 0)
+  context.report("block-opener-overindented", num(self.start), num(((hit(K5, textFrom(line, num(self.start))) && mark(num(self.start))) ? group("mark", 1) : (num(self.start) + 1))), path, { "kind": String((same(self.type, "block_quote") ? "quote" : (K4.has(self.type) ? "div" : str(self.type).replaceAll('_', ' ')))), "past": String((num(self.column) - num(self.owner?.["content_column"]))), "columns": String((same((num(self.column) - num(self.owner?.["content_column"])), 1) ? "column" : "columns")), "owner": String(str(self.owner?.["type"]).replaceAll('_', ' ')) }, 0)
   return
 }
 
 function rule3(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!((self.prev !== undefined) && K5.has(self.leaf) && same(self.prev?.["leaf_id"], self.leaf_id) && !Boolean(self.prev?.["blank"]))) return
-  if ((hit(K6, self.body) && mark(num(self.body_start)))) {
+  if (!((self.prev !== undefined) && K6.has(self.leaf) && same(self.prev?.["leaf_id"], self.leaf_id) && !Boolean(self.prev?.["blank"]))) return
+  if ((hit(K7, self.body) && mark(num(self.body_start)))) {
     context.report("block-opener-without-blank-line", num(group("mark", 0)), num(group("mark", 1)), path, { "opener": String("a heading") }, 0)
     return
   }
-  if (((hit(K7, self.body) && mark(num(self.body_start))) && !(Boolean(self.quote_prefix) && test(K8, self.prev?.["text"]) && contains(self.ancestors, "block_quote")))) {
+  if (((hit(K8, self.body) && mark(num(self.body_start))) && !(Boolean(self.quote_prefix) && test(K9, self.prev?.["text"]) && contains(self.ancestors, "block_quote")))) {
     context.report("block-opener-without-blank-line", num(group("mark", 0)), num(group("mark", 1)), path, { "opener": String("a quote") }, 0)
     return
   }
-  if ((hit(K9, self.body) && mark(num(self.body_start)))) {
+  if ((hit(K10, self.body) && mark(num(self.body_start)))) {
     context.report("block-opener-without-blank-line", num(group("mark", 0)), num(group("mark", 1)), path, { "opener": String("a term") }, 0)
     return
   }
-  if ((hit(K10, self.body) && mark(num(self.body_start)))) {
+  if ((hit(K11, self.body) && mark(num(self.body_start)))) {
     context.report("block-opener-without-blank-line", num(group("mark", 0)), num(group("mark", 1)), path, { "opener": String("a description") }, 0)
     return
   }
@@ -155,7 +157,7 @@ function rule3(self: ModelLine, path: string, context: LintContext): void {
     context.report("block-opener-without-blank-line", num(self.body_start), num(self.body_end), path, { "opener": String("an attribute line") }, 0)
     return
   }
-  if (((hit(K11, self.body) && mark(num(self.body_start))) && !contains(self.ancestors, "footnote"))) {
+  if (((hit(K12, self.body) && mark(num(self.body_start))) && !contains(self.ancestors, "footnote"))) {
     context.report("block-opener-without-blank-line", num(group("mark", 0)), num(group("mark", 1)), path, { "opener": String("a definition") }, 0)
     return
   }
@@ -163,8 +165,8 @@ function rule3(self: ModelLine, path: string, context: LintContext): void {
 
 function rule4(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!test(K12, self.text)) return
-  if (K13.has(self.leaf)) {
+  if (!test(K13, self.text)) return
+  if (K14.has(self.leaf)) {
     context.report("blockquote-marker-without-space", num(self.start), (num(self.start) + trimEnd(str(self.text)).length), path, { "text": String(trimEnd(str(self.text)).slice(1)) }, 0)
     return
   }
@@ -176,7 +178,7 @@ function rule4(self: ModelLine, path: string, context: LintContext): void {
 
 function rule5(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.leaf, "paragraph") && test(K14, self.body))) return
+  if (!(same(self.leaf, "paragraph") && test(K15, self.body))) return
   if ((K1.has(self.next?.["leaf"]) || K1.has(self.next2?.["leaf"]))) {
     context.report("caption-looking-paragraph", num(self.body_start), (num(self.body_start) + 1), path, {  }, 0)
     return
@@ -204,15 +206,15 @@ function rule6(self: ModelLine, path: string, context: LintContext): void {
 
 function rule7(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  const v_opener = ((hit(K15, str(self.leaf_head?.["text"]).slice((num(self.leaf_start) - num(self.leaf_head?.["start"])))) && mark(0)) ? str(self.leaf_head?.["text"]).slice((num(self.leaf_start) - num(self.leaf_head?.["start"]))).slice(0, num(group("op", 1))) : "")
-  if (!(same(self.leaf, "comment_block") && !Boolean(self.leaf_first) && (str(v_opener).length >= 3) && starts(self.body, str(v_opener)) && test(K16, self.body))) return
+  const v_opener = ((hit(K16, str(self.leaf_head?.["text"]).slice((num(self.leaf_start) - num(self.leaf_head?.["start"])))) && mark(0)) ? str(self.leaf_head?.["text"]).slice((num(self.leaf_start) - num(self.leaf_head?.["start"]))).slice(0, num(group("op", 1))) : "")
+  if (!(same(self.leaf, "comment_block") && !Boolean(self.leaf_first) && (str(v_opener).length >= 3) && starts(self.body, str(v_opener)) && test(K17, self.body))) return
   context.report("comment-fence-closer-with-text", num(self.start), num(self.end), path, {  }, 0)
   return
 }
 
 function rule8(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(K17.has(self.leaf) && (hit(K18, self.body) && mark(num(self.body_start))) && !contains(self.ancestors, "footnote") && !(same(self.leaf, "definition_term") && !Boolean(self.leaf_first) && !test(K19, self.text)) && (test(K19, self.text) || someFrom(self.ancestors, 0, (item) => K20.has(item))))) return
+  if (!(K18.has(self.leaf) && (hit(K19, self.body) && mark(num(self.body_start))) && !contains(self.ancestors, "footnote") && !(same(self.leaf, "definition_term") && !Boolean(self.leaf_first) && !test(K20, self.text)) && (test(K20, self.text) || someFrom(self.ancestors, 0, (item) => K21.has(item))))) return
   context.report("definition-in-container", num(group("label", 0)), num(group("label", 1)), path, {  }, 0)
   return
 }
@@ -221,7 +223,7 @@ function rule9(self: ModelLine, path: string, context: LintContext): void {
   const line = self
   groups = undefined
   const v_run_start = scan(line, scan(line, num(self.body_start), (" \t" + str(self.body).slice(0, 1)), -1), " \t", 1)
-  if (!((test(K21, textFrom(line, num(v_run_start))) || test(K22, textFrom(line, num(v_run_start))) || test(K23, textFrom(line, num(v_run_start)))) && test(K24, textFrom(line, num(v_run_start))))) return
+  if (!((test(K22, textFrom(line, num(v_run_start))) || test(K23, textFrom(line, num(v_run_start))) || test(K24, textFrom(line, num(v_run_start)))) && test(K25, textFrom(line, num(v_run_start))))) return
   context.report("deprecated-spaced-thematic-break", num(v_run_start), num(self.body_end), path, {  }, 0)
   return
 }
@@ -229,7 +231,7 @@ function rule9(self: ModelLine, path: string, context: LintContext): void {
 function rule10(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   if (!(num(self.last_line?.["number"]) > num(self.line?.["number"]))) return
-  if (!test(K25, self.line?.["next"]?.["body"])) {
+  if (!test(K26, self.line?.["next"]?.["body"])) {
     context.report("description-term-multi-line", num(self.line?.["next"]?.["body_start"]), num(self.line?.["next"]?.["end"]), path, {  }, 0)
     return
   }
@@ -241,23 +243,23 @@ function rule10(self: ModelBlock, path: string, context: LintContext): void {
 
 function rule11(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  const v_run = ((hit(K26, self.line?.["text"]) && mark(num(self.line?.["start"]))) ? str(self.line?.["text"]).slice((num(group("run", 0)) - num(self.line?.["start"])), (num(group("run", 1)) - num(self.line?.["start"]))) : "")
-  const v_at = ((hit(K26, self.line?.["text"]) && mark(num(self.line?.["start"]))) ? (num(group("run", 0)) - num(self.line?.["start"])) : -1)
-  if (!((num(self.last_line?.["number"]) > num(self.line?.["number"])) && (str(v_run).length >= 3) && (hit(K27, self.last_line?.["text"]) && mark(num(self.last_line?.["start"]))) && !same((num(group("close", 0)) - num(self.last_line?.["start"])), v_at) && starts(str(self.last_line?.["text"]).slice((num(group("close", 0)) - num(self.last_line?.["start"]))), str(v_run)))) return
+  const v_run = ((hit(K27, self.line?.["text"]) && mark(num(self.line?.["start"]))) ? str(self.line?.["text"]).slice((num(group("run", 0)) - num(self.line?.["start"])), (num(group("run", 1)) - num(self.line?.["start"]))) : "")
+  const v_at = ((hit(K27, self.line?.["text"]) && mark(num(self.line?.["start"]))) ? (num(group("run", 0)) - num(self.line?.["start"])) : -1)
+  if (!((num(self.last_line?.["number"]) > num(self.line?.["number"])) && (str(v_run).length >= 3) && (hit(K28, self.last_line?.["text"]) && mark(num(self.last_line?.["start"]))) && !same((num(group("close", 0)) - num(self.last_line?.["start"])), v_at) && starts(str(self.last_line?.["text"]).slice((num(group("close", 0)) - num(self.last_line?.["start"]))), str(v_run)))) return
   context.report("fence-closer-indented", num(group("close", 0)), num(self.last_line?.["end"]), path, {  }, 0)
   return
 }
 
 function rule12(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(test(K28, self.text) && (test(K29, self.text) || !contains(str(self.text).slice(4), ":")))) return
+  if (!(test(K29, self.text) && (test(K30, self.text) || !contains(str(self.text).slice(4), ":")))) return
   context.report("frontmatter-shaped-thematic-break", num(self.start), num(self.end), path, {  }, 0)
   return
 }
 
 function rule13(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(hit(K30, self.last_line?.["text"]) && mark(num(self.last_line?.["start"])))) return
+  if (!(hit(K31, self.last_line?.["text"]) && mark(num(self.last_line?.["start"])))) return
   context.report("heading-trailing-attribute", num(group("block", 0)), num(group("block", 1)), path, { "block": String(str(self.last_line?.["text"]).slice((num(group("block", 0)) - num(self.last_line?.["start"])), (num(group("block", 1)) - num(self.last_line?.["start"])))) }, 0)
   return
 }
@@ -265,14 +267,14 @@ function rule13(self: ModelBlock, path: string, context: LintContext): void {
 function rule14(self: ModelBlock, path: string, context: LintContext): void {
   const line = self.line
   groups = undefined
-  if (!(same(self.parent?.["type"], "document") && (num(self.line?.["number"]) > 1) && test(K31, self.line?.["prev"]?.["text"]) && !same(self.prev_type, "list") && test(K32, self.line?.["text"]))) return
+  if (!(same(self.parent?.["type"], "document") && (num(self.line?.["number"]) > 1) && test(K32, self.line?.["prev"]?.["text"]) && !same(self.prev_type, "list") && test(K33, self.line?.["text"]))) return
   context.report("indented-code-block", scan(line, num(self.line?.["start"]), " \t", 1), (num(self.line?.["start"]) + trimEnd(str(self.line?.["text"])).length), path, {  }, 0)
   return
 }
 
 function rule15(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.parent?.["type"], "list_item") && (K33.has(self.type) || Boolean(self.image_line) || Boolean(self.attributed)) && (num(self.opener_column) > num(self.parent?.["content_column"])))) return
+  if (!(same(self.parent?.["type"], "list_item") && (K34.has(self.type) || Boolean(self.image_line) || Boolean(self.attributed)) && (num(self.opener_column) > num(self.parent?.["content_column"])))) return
   context.report("list-item-block-overindented", num(self.start), num(self.line?.["end"]), path, { "contentColumn": String((num(self.parent?.["content_column"]) + 1)) }, 0)
   return
 }
@@ -286,7 +288,7 @@ function rule16(self: ModelBlock, path: string, context: LintContext): void {
 
 function rule17(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!((self.prev !== undefined) && K34.has(self.leaf) && same(self.prev?.["leaf_id"], self.leaf_id) && !Boolean(self.leaf_first) && test(K35, self.body))) return
+  if (!((self.prev !== undefined) && K35.has(self.leaf) && same(self.prev?.["leaf_id"], self.leaf_id) && !Boolean(self.leaf_first) && test(K36, self.body))) return
   if ((same(self.leaf, "definition_term") || contains(self.ancestors, "definition_term") || contains(self.ancestors, "definition_description"))) {
     context.report("list-marker-without-blank-line", num(self.body_start), num(self.body_end), path, {  }, 1)
     return
@@ -297,7 +299,7 @@ function rule17(self: ModelLine, path: string, context: LintContext): void {
 
 function rule18(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(test(K36, self.body) && !(starts(self.body, "-") && same(self.prev?.["leaf"], "paragraph") && !Boolean(self.prev?.["blank"])) && !(same(self.number, 1) && same(self.body_start, self.start) && same(self.body, "---")))) return
+  if (!(test(K37, self.body) && !(starts(self.body, "-") && same(self.prev?.["leaf"], "paragraph") && !Boolean(self.prev?.["blank"])) && !(same(self.number, 1) && same(self.body_start, self.start) && same(self.body, "---")))) return
   context.report("thematic-break-spelling", num(self.body_start), num(self.body_end), path, { "raw": String(self.body) }, 0)
   return
 }
