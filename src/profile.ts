@@ -266,6 +266,11 @@ function profileType(node: Node, block: boolean): string {
   return block && captionedLeaf(node) !== undefined ? 'figure' : node.type
 }
 
+/** C2-H-166: a list item belongs to its list; only a block container consumes a nesting level. */
+function containerLevel(node: Node): number {
+  return node.type === 'list' || (isBlockParent(node) && node.type !== 'list_item') ? 1 : 0
+}
+
 function isOutside(filter: Filter, node: Node, block: boolean, depth: number): boolean {
   const rule = filter.rule
   const type = profileType(node, block)
@@ -273,7 +278,7 @@ function isOutside(filter: Filter, node: Node, block: boolean, depth: number): b
   if (denied?.includes(type) === true) return true
   const allowed = block ? rule.allowedBlock : rule.allowedInline
   if (allowed !== null && !allowed.includes(type)) return true
-  return rule.maxNesting >= 0 && depth > rule.maxNesting
+  return rule.maxNesting >= 0 && depth + containerLevel(node) > rule.maxNesting
 }
 
 function degradationMessage(filter: Filter, node: Node, block: boolean): string {
@@ -296,7 +301,7 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
     if (UNWRITTEN.includes(node.type)) {
       // Kept as it is: a definition still resolves the references to it. The body of a note is
       // filtered where the profile has notes; elsewhere no reference is left to write it.
-      if (node.type === 'footnote' && !isOutside(filter, node, block, depth)) filterNode(filter, node, depth + 1)
+      if (node.type === 'footnote' && !isOutside(filter, node, block, depth)) filterNode(filter, node, depth + containerLevel(node))
     } else if (isOutside(filter, node, block, depth)) {
       // C2-H-165: one report for the degraded node, which stays in the tree; the nodes inside it are not reported again.
       const out = degrade(node)
@@ -308,7 +313,7 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
       changed = true
       continue
     } else if (!filter.writesAsText(node)) {
-      filterNode(filter, node, depth + 1)
+      filterNode(filter, node, depth + containerLevel(node))
     }
     kept.push(node)
   }
@@ -355,8 +360,8 @@ function filterNode(filter: Filter, node: Node, depth: number): void {
     // The slots are the node's own lists; the walk hands them on read-only, and the filter edits them in place.
     const list = nodes as Node[]
     if (step === 'children') filterChildren(filter, node, depth)
-    else if (single) filterNode(filter, list[0]!, depth + 1)
-    else if (step === 'pairs' || step === 'columns') for (const child of list) filterNode(filter, child, depth + 1)
+    else if (single) filterNode(filter, list[0]!, depth + containerLevel(list[0]!))
+    else if (step === 'pairs' || step === 'columns') for (const child of list) filterNode(filter, child, depth + containerLevel(child))
     else if (isBlockSlot(node, step, nodes)) {
       filterList<Block>(filter, list as Block[], true, depth, degradedBlocks)
     }
