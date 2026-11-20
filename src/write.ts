@@ -753,7 +753,8 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
     end = writeGroupOnce(w, run, document, from, first)
     placedEarly = false
   }
-  if (!hasPairs || (placedEarly && run.path === 'plan' && run.stats.planned > planned)) return end
+  // An early escape can expose a later opener, as in `_b _c_` after escaping the first `_`.
+  if (!hasPairs || (placedEarly && initial.length === 0 && run.path === 'plan' && run.stats.planned > planned)) return end
   return repairPairEscapes(w, run, document, from, first, end)
 }
 
