@@ -27,7 +27,8 @@ const blockRenderer: ExtensionRenderer = {
     const title = summary.length === 0 ? '' : host.inlines(summary).trim()
     const heading = `<h3 class="spoiler-title">${title === '' ? host.escapeText(host.labels['spoiler'] ?? 'Spoiler') : title}</h3>`
     const base = { ...node, attrs: withClass(node.attrs, 'spoiler-revealed') }
-    return container(`<section${nodeAttrs(base, host, 'spoiler')}>`, heading, host.blocks(node.slots?.['body'] ?? []), '</section>', host)
+    return container(`<section${nodeAttrs(base, host, 'spoiler')}>`, heading,
+      host.blocks(node.slots?.['body'] ?? [], host.blockDepth + 1), '</section>', host)
   },
 }
 

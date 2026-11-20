@@ -35,6 +35,26 @@ describe('details', () => {
       '<ul>\n  <li>x\n    <details>\n      <summary>Details</summary>\n      <p>a</p>\n      <p>b</p>\n    </details>\n  </li>\n</ul>')
   })
 
+  it('preserves fenced code text inside disclosures at every nesting depth', () => {
+    const cases = [
+      ['::: details "Req"\n```php\nx\n```\n:::\n', 'x\n'],
+      ['::: details "Req"\n```php\nfirst\n  second\nthird\n```\n:::\n', 'first\n  second\nthird\n'],
+      ['- item\n\n  ::: details "Req"\n  ```php\n  x\n  ```\n  :::', 'x\n'],
+      ['- item\n\n  ::: details "Req"\n  ```php\n  first\n    second\n  third\n  ```\n  :::', 'first\n  second\nthird\n'],
+      [':::: details "Outer"\n::: details "Req"\n```php\nx\n```\n:::\n::::', 'x\n'],
+      [':::: details "Outer"\n::: details "Req"\n```php\nfirst\n  second\nthird\n```\n:::\n::::', 'first\n  second\nthird\n'],
+    ] as const
+    for (const [source, expected] of cases) {
+      for (const mode of ['interactive', 'static'] as const) {
+        const html = render(source, { ...options, mode })
+        const code = html.match(/<pre><code class="language-php">([\s\S]*?)<\/code><\/pre>/)
+        expect(code?.[1]).toBe(expected)
+      }
+    }
+    expect(render(cases[0][0], options)).toBe(
+      '<details>\n  <summary>Req</summary>\n  <pre><code class="language-php">x\n</code></pre>\n</details>')
+  })
+
   it('writes the disclosure expanded in static mode, once', () => {
     expect(render('::: details\nx\n:::\n', { ...options, mode: 'static' })).toMatch(/^<details open>/)
     expect(render('{open}\n::: details\nx\n:::\n', { ...options, mode: 'static' })).toMatch(/^<details open="">/)
@@ -83,6 +103,12 @@ describe('spoiler', () => {
     expect(render(':spoiler[x]', { ...options, mode: 'static' })).toBe('<p><span class="spoiler spoiler-revealed">x</span></p>')
     expect(render('::: spoiler "E"\nx\n:::\n', { ...options, mode: 'static' })).toBe(
       '<section class="spoiler spoiler-revealed">\n  <h3 class="spoiler-title">E</h3>\n  <p>x</p>\n</section>')
+  })
+
+  it('preserves fenced code text in a static spoiler', () => {
+    const html = render('::: spoiler "Example"\n```php\nfirst\n  second\n```\n:::\n',
+      { ...use(spoiler()), mode: 'static' })
+    expect(html).toContain('<pre><code class="language-php">first\n  second\n</code></pre>')
   })
 
   it('keeps the core forms without the extension', () => {

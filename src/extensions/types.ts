@@ -46,7 +46,8 @@ export interface ExtensionDefinition {
 }
 
 export interface ExtensionRenderHost {
-  blocks(nodes: readonly Node[]): string
+  /** Render blocks at `depth`, leaving the first line unindented for insertion by the caller. */
+  blocks(nodes: readonly Node[], depth?: number): string
   inlines(nodes: readonly Node[]): string
   plainText(nodes: readonly Node[]): string
   escapeText(value: string): string

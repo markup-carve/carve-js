@@ -23,13 +23,13 @@ export function disclosureDefinition(name: string, source: string): ExtensionDef
     transform: disclosureTransform(name) }
 }
 
-/** Writes `head`, the body one level in, then `tail`, indented to the block depth like core containers. */
+/** Writes structural lines around a body already rendered at its actual depth. */
 export function container(head: string, inner: string, body: string, tail: string, host: ExtensionRenderHost): string {
-  const lines = [head, `  ${inner}`]
-  if (body !== '') lines.push(body.replace(/^(?=.)/gm, '  '))
-  lines.push(tail)
   const indent = '  '.repeat(host.blockDepth)
-  return lines.join('\n').replaceAll('\n', `\n${indent}`)
+  const childIndent = `${indent}  `
+  return `${head}\n${childIndent}${inner}` +
+    (body === '' ? '' : `\n${childIndent}${body}`) +
+    `\n${indent}${tail}`
 }
 
 function nodeAttrs(node: BlockExtensionNode, host: ExtensionRenderHost, base?: string): string {
@@ -44,7 +44,7 @@ export function renderDisclosure(node: BlockExtensionNode, host: ExtensionRender
   const authoredOpen = node.attrs?.keyValues?.some(([key]) => key.toLowerCase() === 'open') === true
   const open = host.mode === 'static' && !authoredOpen ? ' open' : ''
   return container(`<details${open}${nodeAttrs(node, host, base)}>`, `<summary>${text === '' ? host.escapeText(label) : text}</summary>`,
-    host.blocks(node.slots?.['body'] ?? []), '</details>', host)
+    host.blocks(node.slots?.['body'] ?? [], host.blockDepth + 1), '</details>', host)
 }
 
 export { nodeAttrs }
