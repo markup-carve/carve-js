@@ -9,7 +9,7 @@ import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 import { append } from '../src/append.ts'
-import { runDataRules, startDataWalk } from './data-rules.ts'
+import { DATA_RULE_IDS, runDataRules, startDataWalk } from './data-rules.ts'
 import { DATA_RULES } from './data-tables.ts'
 
 interface Control {
@@ -116,7 +116,7 @@ function runNodeRules(node: Node, path: string, context: LintContext): void {
 function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
   const byType = new Map<Node['type'], Rule[]>()
   for (const rule of NODE_RULES) {
-    if (!active(rule.id, options)) continue
+    if (!active(rule.id, options) || DATA_RULE_IDS.has(rule.id)) continue
     for (const type of rule.nodes ?? []) {
       const rules = byType.get(type)
       if (rules === undefined) byType.set(type, [rule])
@@ -532,7 +532,7 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
   visit(parsed.document, '', context, controls)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
-  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options))
+  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !DATA_RULE_IDS.has(rule.id))
   for (const line of scanLines) {
     if (line.opaque) continue
     for (const rule of activeLineRules) rule.checkLine?.(line, context)
@@ -542,6 +542,8 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
   return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
 }
 
-export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES,
-  ...DATA_RULES.map((rule): Rule => ({ id: rule.id, ...(rule.over === 'line' ? { lines: true } : {}) }))]
+export const IMPLEMENTED_RULES: readonly Rule[] = [
+  ...[...LINE_RULES, ...NODE_RULES].filter((rule) => !DATA_RULE_IDS.has(rule.id)),
+  ...DATA_RULES.map((rule): Rule => ({ id: rule.id, ...(rule.over === 'line' ? { lines: true } : {}) })),
+]
 export type { LintOptions } from './types.ts'
