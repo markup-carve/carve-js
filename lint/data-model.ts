@@ -62,6 +62,8 @@ export interface ModelBlock {
   readonly node: Node
   readonly ancestors: string[]
   readonly ancestor_ids: string[]
+  readonly identity: string
+  readonly layout: NodeLayout | undefined
 }
 
 /** An inline record: one node of an inline content, with the leaf block that holds it. */
@@ -411,6 +413,10 @@ class BlockRecord {
   get attributed(): boolean { return this.node.attrs !== undefined }
   get ancestors(): string[] { return ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>) }
   get ancestor_ids(): string[] { return ancestorPaths(this.path) }
+  /** The identity of the block, as ancestor_ids gives the identities of the blocks that hold it. */
+  get identity(): string { return this.path }
+  /** C2-L-009: the layout entry of the block, absent where the layout has none. */
+  get layout(): NodeLayout | undefined { return this.context.layouts.get(this.path) }
   get end(): number { return this.context.chars[this.node.pos?.endOffset ?? 0] ?? this.context.source.length }
   get text(): string { return this.context.source.slice(this.start, this.end) }
   get last_line(): ModelLine { return this.lines[(this.node.pos?.endLine ?? 1) - 1] ?? this.line }
