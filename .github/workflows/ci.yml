@@ -133,6 +133,55 @@ jobs:
         if: matrix.shard == 1
         run: npm run test:package
 
+  lint-suite:
+    name: lint suite
+    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:lint
+
+  migrate-suite:
+    name: migration suite
+    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:migrate
+
+  proptest-suite:
+    name: property regression suite
+    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm ci --prefix import --ignore-scripts
+      - run: npm run test:proptest
+
   browser-bundle:
     name: browser bundle parity
 
