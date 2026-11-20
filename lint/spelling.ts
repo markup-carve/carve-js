@@ -252,16 +252,20 @@ function quoteContinues(line: Line, previous: Line, context: LintContext): boole
   return previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')
 }
 
+function openerCandidate(line: Line, context: LintContext): { text: string, start: number } {
+  // A lazy quote marker is part of the candidate even when the leaf content starts after it.
+  if (line.text[0] !== '>' && line.text[0] !== ' ' && line.text[0] !== '\t') return lineText(line)
+  const original = context.lines[line.number - 1] ?? line
+  return original.text.trimStart().startsWith('> ') && !hasAncestor(line.path, context, 'block_quote')
+    ? trimmed(original) : lineText(line)
+}
+
 function openerWithoutBlank(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || previous.path !== line.path || previous.text.trim() === '') return
   const owner = context.nodeTypes.get(line.path)
   if (owner !== 'paragraph' && owner !== 'caption' && owner !== 'cell_paragraph') return
-  // A lazy quote marker is part of the candidate even if the leaf content begins after it.
-  const original = context.lines[line.number - 1] ?? line
-  const candidate = original.text.trimStart().startsWith('> ') && !hasAncestor(line.path, context, 'block_quote')
-    ? trimmed(original) : lineText(line)
-  const { text, start } = candidate
+  const { text, start } = openerCandidate(line, context)
   if (!startsBlock(text)) return
   if (text.startsWith('{') && !text.endsWith('}')) return
   if (text.startsWith('[') && hasAncestor(line.path, context, 'footnote')) return
@@ -389,11 +393,18 @@ function foldedTerm(line: Line, context: LintContext): void {
 }
 
 function githubAlert(line: Line, context: LintContext): void {
-  const match = /^\s*(?:>[ \t]*)+(?:(?:[-*]|[0-9]+[.)]|[A-Za-z][.)])[ \t]*>[ \t]*)?(?:\[[^\]\n]+\]:[ \t]*>[ \t]*)?\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
+  const match = GITHUB_ALERT.exec(line.text)
   if (match === null || !line.paragraph) return
   const at = match[0].lastIndexOf('[!')
   context.report('github-alert-marker', line.start + at, line.end, line.path)
 }
+
+const GITHUB_ALERT = new RegExp(
+  '^\\s*(?:>[ \\t]*)+'
+  + '(?:(?:[-*]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]*>[ \\t]*)?'
+  + '(?:\\[[^\\]\\n]+\\]:[ \\t]*>[ \\t]*)?'
+  + '\\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\]',
+)
 
 function djotHeadingContinuation(line: Line, context: LintContext): void {
   const previous = prior(line, context)
@@ -531,25 +542,30 @@ function closedBeforeRun(path: string, layout: NodeLayout, width: number, contex
   return layout.closerRaw === undefined ? hasOwnEarlierCloser(path, layout, width, context) : layout.closerRaw !== ''
 }
 
+function colonContainer(path: string, layout: NodeLayout, start: number, context: LintContext):
+  { width: number, start: number, kind: string } | undefined {
+  const type = context.nodeTypes.get(path)
+  if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) return undefined
+  const raw = layout.openerRaw
+  const run = raw === undefined ? undefined : /^:{3,}/.exec(raw)?.[0]
+  if (run === undefined) return undefined
+  const from = context.chars[layout.startByte] ?? 0
+  const to = context.chars[layout.endByte] ?? 0
+  const opener = context.source.indexOf(raw!, from)
+  if (opener < 0 || opener >= start) return undefined
+  if (to < start) {
+    const parent = context.layouts.get(path.slice(0, path.lastIndexOf('/children/')))
+    const parentEnd = parent === undefined ? -1 : context.chars[parent.endByte] ?? -1
+    if (closedBeforeRun(path, layout, run.length, context) || parentEnd < start) return undefined
+  }
+  return { width: run.length, start: opener, kind: colonKind(type, raw!) }
+}
+
 function colonContainers(start: number, context: LintContext): { width: number, start: number, kind: string }[] {
   const open: { width: number, start: number, kind: string }[] = []
   for (const [path, layout] of context.layouts) {
-    const from = context.chars[layout.startByte] ?? 0
-    const to = context.chars[layout.endByte] ?? 0
-    const raw = layout.openerRaw
-    if (raw === undefined) continue
-    const opener = context.source.indexOf(raw, from)
-    if (opener < 0 || opener >= start) continue
-    const run = /^:{3,}/.exec(raw)?.[0]
-    if (run === undefined) continue
-    if (to < start) {
-      const parent = context.layouts.get(path.slice(0, path.lastIndexOf('/children/')))
-      const parentEnd = parent === undefined ? -1 : context.chars[parent.endByte] ?? -1
-      if (closedBeforeRun(path, layout, run.length, context) || parentEnd < start) continue
-    }
-    const type = context.nodeTypes.get(path)
-    if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) continue
-    open.push({ width: run.length, start: opener, kind: colonKind(type, raw) })
+    const container = colonContainer(path, layout, start, context)
+    if (container !== undefined) open.push(container)
   }
   return open.sort((a, b) => b.start - a.start)
 }
