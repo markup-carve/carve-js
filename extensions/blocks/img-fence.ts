@@ -21,14 +21,6 @@ function definition(name: 'img' | 'image'): ExtensionDefinition {
 
 export const imgFenceExtensions: readonly ExtensionDefinition[] = [definition('img'), definition('image')]
 
-function svgTitle(svg: string): string | undefined {
-  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(svg)?.[1]
-  if (title === undefined) return undefined
-  const text = title.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-    .replace(/&#3[49];/g, "'").replace(/&amp;/g, '&').trim()
-  return text === '' ? undefined : text
-}
-
 function mergeRoot(svg: string, attrs: string): string {
   if (attrs === '') return svg
   const names = [...attrs.matchAll(/\s([a-z_:][\w:.-]*)\s*=/gi)].map((match) => match[1]?.toLowerCase() ?? '')
@@ -66,7 +58,7 @@ export function createImgFence(options: ImgFenceOptions = {}, reportFailure = fa
     const src = `data:image/svg+xml,${encodeURIComponent(sanitized.svg)}`
     if (src.length > 8 * 1024 * 1024) return failure(node, host, reportFailure, 'the sanitized SVG URL is above 8 MiB')
     // C2-X-060: this sink alone admits its own sanitized SVG URL; authored data URLs stay under C2-H-159.
-    const alt = attrValue(node.attrs, 'alt') ?? svgTitle(sanitized.svg) ?? ''
+    const alt = attrValue(node.attrs, 'alt') ?? ''
     return `<img src="${host.escapeAttribute(src)}" alt="${host.escapeAttribute(alt)}"${attrs}>`
   }
   const renderer: ExtensionRenderer = { version: '1', render: renderImage, buildTime: renderImage }

@@ -13,7 +13,7 @@ import type { NodeLayout } from './layout.ts'
 import { columnOf, lineEndOf, lineStartOf, readPrefix } from './layout-lines.ts'
 import {
   bulletMarkerEnd, descriptionMarkEnd, footnoteMarkerEnd, orderedDelimiter, orderedMarkerEnd, skipSpaces,
-  taskBoxEnd, trimEnd,
+  trimEnd,
 } from './lines.ts'
 import { definitionLabel, openerWord } from './opener.ts'
 import { isSpaceOrTab } from './source.ts'
@@ -78,8 +78,8 @@ const itemFacts: Measure = (src, _node, origin, quotes, facts) => {
   if (first === HYPHEN || first === STAR) {
     setMarker(src, start, start + 1, quotes, facts)
     const content = bulletMarkerEnd(src, start, end)
-    // The task box is not content of the item, so the content starts behind it.
-    setContent(src, origin, origin.aux !== 0 && content >= 0 ? taskBoxEnd(src, content, end) : content, end, quotes, facts)
+    // C2-B-027: the task mark is item text, so it does not move the content column.
+    setContent(src, origin, content, end, quotes, facts)
     return
   }
   const delimiter = orderedDelimiter(src, start, end)

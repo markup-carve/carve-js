@@ -52,12 +52,12 @@ describe('imgFence — sandbox mode (default)', () => {
     expect(out).not.toContain('alt=""')
   })
 
-  it('falls back to the SVG <title> for alt when {alt=…} is absent', () => {
+  it('writes empty alt when only the SVG <title> is present', () => {
     const out = carveToHtml(fence('', '<svg viewBox="0 0 1 1"><title>A red square</title><rect width="1" height="1" fill="red"/></svg>'), {
       extensions: ext,
     })
-    expect(out).toContain('alt="A red square"')
-    expect(out).not.toContain('alt=""')
+    expect(out).toContain('alt=""')
+    expect(out).not.toContain('alt="A red square"')
   })
 
   it('prefers an explicit {alt=…} over the SVG <title>', () => {
