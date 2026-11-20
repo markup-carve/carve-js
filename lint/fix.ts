@@ -181,6 +181,64 @@ function verified(bytes: Uint8Array, chosen: readonly Candidate[]): Candidate[] 
   return []
 }
 
+/** A bare span can be forced without changing its meaning when another fix meets it at a delimiter. */
+function braced(candidate: Candidate): Candidate | null {
+  const { edits, node } = candidate.plan
+  if ((node !== 'emphasis' && node !== 'strong') || edits.length !== 2) return null
+  const marker = node === 'emphasis' ? '/' : '*'
+  if (edits[0]?.text !== marker || edits[1]?.text !== marker) return null
+  return { ...candidate, plan: { ...candidate.plan, edits: [
+    { ...edits[0], text: `{${marker}` }, { ...edits[1], text: `${marker}}` },
+  ] } }
+}
+
+function counts(entries: readonly Diagnostic[]): Map<string, number> {
+  const result = new Map<string, number>()
+  for (const entry of entries) result.set(entry.code, (result.get(entry.code) ?? 0) + 1)
+  return result
+}
+
+/** Keep the fix pass from introducing a lint finding at a meeting of independent edits. */
+function quiet(bytes: Uint8Array, chosen: Candidate[], original: readonly Diagnostic[], settings: LintOptions): Candidate[] {
+  const before = counts(original)
+  const additions = (plans: readonly Candidate[]): number => {
+    const after = counts(lint(decoder.decode(apply(bytes, plans)), settings))
+    let total = 0
+    for (const [code, count] of after) total += Math.max(0, count - (before.get(code) ?? 0))
+    return total
+  }
+  let current = chosen
+  let excess = additions(current)
+  if (excess === 0) return current
+  // Prefer the innermost span, so its authoring form changes as little as possible.
+  const byWidth = current.map((candidate, index) => ({ index,
+    width: candidate.plan.edits.at(-1)!.end - candidate.plan.edits[0]!.start }))
+    .sort((a, b) => a.width - b.width)
+  for (const { index: at } of byWidth) {
+    if (excess === 0) break
+    const alternate = braced(current[at]!)
+    if (alternate === null) continue
+    const trial = [...current]
+    trial[at] = alternate
+    if (verified(bytes, trial).length !== trial.length) continue
+    const remaining = additions(trial)
+    if (remaining < excess) {
+      current = trial
+      excess = remaining
+    }
+  }
+  // A replacement without a quiet, parse-equivalent spelling stays for the author.
+  for (let at = current.length - 1; at >= 0 && excess > 0; at--) {
+    const trial = current.filter((_, index) => index !== at)
+    const remaining = additions(trial)
+    if (remaining < excess) {
+      current = trial
+      excess = remaining
+    }
+  }
+  return excess === 0 ? current : []
+}
+
 /** The options of the lint run that finds what to fix: every fixable rule is on unless `rules` turns it off. */
 export function fixOptions(options: LintOptions): LintOptions {
   const rules: Record<string, 'on' | 'off'> = {}
@@ -199,7 +257,8 @@ export function fixSource(source: string, options: LintOptions): FixResult {
   let changed = false
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const text = decoder.decode(bytes)
-    const chosen = verified(bytes, select(candidates(bytes, lint(text, settings))))
+    const findings = lint(text, settings)
+    const chosen = quiet(bytes, verified(bytes, select(candidates(bytes, findings))), findings, settings)
     if (chosen.length === 0) break
     bytes = apply(bytes, chosen)
     changed = true
@@ -224,5 +283,6 @@ export function fixEditsFor(source: string, diagnostic: Diagnostic): FixEdit[] |
   if (diagnostic.range === undefined || diagnostic.range.endOffset > bytes.length) return null
   const found = candidates(bytes, [diagnostic])
   if (found.length === 0 || verified(bytes, found).length === 0) return null
-  return found[0]!.plan.edits.map((edit) => ({ startOffset: edit.start, endOffset: edit.end, text: edit.text }))
+  const choice = quiet(bytes, found, lint(source, fixOptions({})), fixOptions({}))[0]
+  return choice?.plan.edits.map((edit) => ({ startOffset: edit.start, endOffset: edit.end, text: edit.text })) ?? null
 }
