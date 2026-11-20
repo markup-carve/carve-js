@@ -344,17 +344,22 @@ function markerEnd(source: string, marker: string, from: number): number {
 }
 
 interface SvgState {
-  out: string
+  out: string[]
   dropStack: string[]
-  kept: string[]
+  kept: { name: string, contentStart: number }[]
   sawRoot: boolean
   rootSelfClosed: boolean
 }
 
 function closeTag(name: string, state: SvgState): boolean {
   if (state.dropStack.length > 0) return state.dropStack.pop() === name
-  if (state.kept.pop() !== name) return false
-  state.out += `</${name}>`
+  const frame = state.kept.pop()
+  if (frame?.name !== name) return false
+  if (state.out.length === frame.contentStart) {
+    const opener = state.out.pop()!
+    state.out.push(`${opener.slice(0, -1)}/>`)
+    if (name === 'svg') state.rootSelfClosed = true
+  } else state.out.push(`</${name}>`)
   return true
 }
 
@@ -368,8 +373,8 @@ function openTag(name: string, raw: string, selfClose: boolean, state: SvgState,
   if (isRoot) markRoot(state, selfClose)
   let attrs = sanitizeAttrs(raw, opts, name)
   if (isRoot) attrs = rootAttrs(attrs)
-  state.out += `<${name}${attrs}${selfClose ? '/>' : '>'}`
-  if (!selfClose) state.kept.push(name)
+  state.out.push(`<${name}${attrs}${selfClose ? '/>' : '>'}`)
+  if (!selfClose) state.kept.push({ name, contentStart: state.out.length })
   return true
 }
 
@@ -400,7 +405,7 @@ function consumeText(src: string, start: number, end: number, state: SvgState): 
   if (end <= start) return true
   const between = src.slice(start, end)
   if (!state.sawRoot) return between.trim() === ''
-  if (state.dropStack.length === 0) state.out += escapeText(between)
+  if (state.dropStack.length === 0) state.out.push(escapeText(between))
   return true
 }
 
@@ -410,7 +415,7 @@ function consumeText(src: string, start: number, end: number, state: SvgState): 
 export function sanitizeSvg(source: string, opts: SanitizeSvgOptions = {}): SanitizeResult {
   const src = source.trim()
   let cursor = 0
-  const state: SvgState = { out: '', dropStack: [], kept: [], sawRoot: false, rootSelfClosed: false }
+  const state: SvgState = { out: [], dropStack: [], kept: [], sawRoot: false, rootSelfClosed: false }
   while (cursor < src.length) {
     const start = src.indexOf('<', cursor)
     if (start < 0) break
@@ -422,6 +427,7 @@ export function sanitizeSvg(source: string, opts: SanitizeSvgOptions = {}): Sani
   }
   if (!consumeText(src, cursor, src.length, state)) return { svg: '', ok: false }
   if (!state.sawRoot || state.kept.length !== 0 || state.dropStack.length !== 0) return { svg: '', ok: false }
-  const tailOk = state.rootSelfClosed ? /\/>\s*$/.test(state.out) : /<\/svg>\s*$/i.test(state.out)
-  return /^<svg[\s/>]/i.test(state.out) && tailOk ? { svg: state.out, ok: true } : { svg: '', ok: false }
+  const svg = state.out.join('')
+  const tailOk = state.rootSelfClosed ? /\/>\s*$/.test(svg) : /<\/svg>\s*$/i.test(svg)
+  return /^<svg[\s/>]/i.test(svg) && tailOk ? { svg, ok: true } : { svg: '', ok: false }
 }
