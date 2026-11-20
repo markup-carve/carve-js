@@ -59,6 +59,7 @@ export interface ModelBlock {
   readonly owner: Container
   readonly item_owner: Container
   readonly parent: Container
+  readonly node: Node
 }
 
 /** An inline record: one node of an inline content, with the leaf block that holds it. */
@@ -70,6 +71,7 @@ export interface ModelInline {
   readonly text: string
   leaf: string
   parent: string
+  readonly node: Node | undefined
 }
 
 export interface Container { readonly type: string, readonly content_column: number, readonly marker_column: number | undefined }
@@ -371,7 +373,7 @@ class BlockRecord {
   readonly start: number
   readonly index: number
   readonly line: ModelLine
-  private readonly node: Node
+  readonly node: Node
   private readonly parentPath: string
   private readonly context: LintContext
 
@@ -457,9 +459,11 @@ class InlineRecord implements ModelInline {
   readonly end: number
   readonly leaf: string
   readonly parent: string
+  readonly node: Node
   private readonly source: string
 
   constructor(node: Node, path: string, leaf: string, parent: string, context: LintContext) {
+    this.node = node
     this.type = node.type
     this.path = path
     this.start = context.chars[node.pos?.startOffset ?? 0] ?? 0
@@ -475,6 +479,7 @@ class InlineRecord implements ModelInline {
 /** A text run record: the text and soft breaks that stand next to each other among the children of one inline parent. */
 class TextRunRecord implements ModelInline {
   readonly type = 'text_run'
+  readonly node = undefined
   readonly path: string
   readonly start: number
   end: number

@@ -17,7 +17,7 @@ interface DataRule {
 }
 interface Model { text_leaves: string[], verbatim_leaves: string[], row_leaves: string[], rules: DataRule[] }
 
-const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right'])
+const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right', 'count'])
 const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from'])
 
 // C2-W-142: a pattern with a Unicode property class or a `\u{...}` escape reads code points.
@@ -53,7 +53,10 @@ class Compiler {
 
   field(path: string): string {
     const [head, ...rest] = path.split('.')
-    return (head === 'item' ? 'item' : `self.${head}`) + rest.map((part) => `?.[${literal(/^\d+$/.test(part) ? Number(part) : part)}]`).join('')
+    const keys = rest.map((part) => literal(/^\d+$/.test(part) ? Number(part) : part))
+    // A list item or an AST node has no static type here: its fields are read by name.
+    if (head === 'item' || head === 'node') return `at(${head === 'item' ? 'item' : 'self.node'}${keys.map((key) => `, ${key}`).join('')})`
+    return `self.${head}` + keys.map((key) => `?.[${key}]`).join('')
   }
 
   /** The source offset that index 0 of a text value stands at, for the spans of a `matches`. */
@@ -121,6 +124,11 @@ class Compiler {
     return `someFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
   }
 
+  count(arg: Expr): string {
+    const spec = arg as { in: string, from?: number, where: Expr }
+    return `countFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
+  }
+
   member(arg: Expr): string {
     const [subject, set] = argsOf(arg)
     const members = typeof set === 'string' ? this.sets[set] ?? [] : argsOf(set)
@@ -153,6 +161,7 @@ const VALUES: Record<string, Make> = {
   if: (c, _arg, args) => `(${c.test(args[0])} ? ${c.value(args[1])} : ${c.value(args[2])})`,
   match: (_c, arg, _args, node) => `group(${literal(String(arg))}, ${node['at'] === 'end' ? 1 : 0})`,
   text_from: (c, arg) => `textFrom(line, ${c.number(arg)})`,
+  count: (c, arg) => c.count(arg),
   extend_left: (c, _arg, args) => `scan(line, ${c.number(args[0])}, ${c.text(args[1])}, -1)`,
   skip_right: (c, _arg, args) => `scan(line, ${c.number(args[0])}, ${c.text(args[1])}, 1)`,
 }
@@ -356,10 +365,26 @@ function contains(haystack: unknown, needle: unknown): boolean {
   return typeof haystack === 'string' && typeof needle === 'string' && haystack.includes(needle)
 }
 
-function someFrom<T>(list: readonly T[] | undefined, from: number, where: (item: T) => boolean): boolean {
+function someFrom(list: unknown, from: number, where: (item: unknown) => boolean): boolean {
   if (!Array.isArray(list)) return false
-  for (let at = from; at < list.length; at++) if (where(list[at] as T)) return true
+  for (let index = from; index < list.length; index++) if (where(list[index])) return true
   return false
+}
+
+function countFrom(list: unknown, from: number, where: (item: unknown) => boolean): number {
+  if (!Array.isArray(list)) return 0
+  let found = 0
+  for (let index = from; index < list.length; index++) if (where(list[index])) found++
+  return found
+}
+
+function at(value: unknown, ...keys: (string | number)[]): unknown {
+  let current = value
+  for (const key of keys) {
+    if (current === null || typeof current !== 'object') return undefined
+    current = (current as Record<string | number, unknown>)[key]
+  }
+  return current
 }
 
 const textFrom = (line: ModelLine, from: number): string => trimEnd(line.text.slice(from - line.start))

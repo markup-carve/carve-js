@@ -189,3 +189,18 @@ it('C2-W-147: the pair rules read each text run with the pair scan, as the hand-
   // C2-I-047 tests the character before the opener, and U+1D400 is a letter: no pair opens behind it.
   expect(both('\u{1D400}_a_ b\n')[0]).toEqual([])
 })
+
+it('C2-W-140, C2-W-141: rules that read the node of a record and count its children report what the hand-written rules report', () => {
+  const on = { rules: { 'emphasis-as-heading': 'on' } }
+  for (const source of ['a[^x] b\n', 'a[^x] b\n\n[^x]: note\n', '*[^[g]*] b*\n', '::: figure\n![one](a.png)\n^ (a) One\n:::\n',
+    '::: figure\n![a](a.png)\n^ A\n\n![b](b.png)\n^ B\n:::\n', '::: figure\ntext\n:::\n', '::: figure\n| a |\n:::\n', '*bold*\n',
+    '*a* %% c\n', '*a* b\n', '*a*\n/b/\n', '{.wide}\n{{ a.crv }}\n', '{.wide}\n{{ a.js @code }}\n',
+    '{table}\n{{ d.csv @lines:1-2 @code:csv }}\n', '{table}\n{{ d.csv @rows:1-2 @code:csv }}\n']) {
+    const runs = ['data', 'code'].map((mode) => {
+      if (mode === 'data') process.env.CARVE_LINT_RULES = 'data'
+      else delete process.env.CARVE_LINT_RULES
+      return lint(source, on).map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset} ${entry.path}`)
+    })
+    expect(runs[0], JSON.stringify(source)).toEqual(runs[1])
+  }
+})
