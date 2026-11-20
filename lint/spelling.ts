@@ -392,7 +392,8 @@ function djotPlus(line: Line, context: LintContext): void {
 
 function definitionInContainer(line: Line, context: LintContext): void {
   // C2-B-081: the line's text behind every container mark, a list marker or description mark included.
-  const { text, start } = lineText(line)
+  const content = lineText(line)
+  const { text, start } = content.text.startsWith('> ') ? contentLine(line) : content
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
   if (textOwner(line.path, context) === 'heading' || textOwner(line.path, context) === 'caption') return
