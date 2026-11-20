@@ -40,4 +40,12 @@ describe('fix output is lint closed', () => {
     expect(fix('**_x_**\n').output).toBe('*{/x/}*\n')
     expect(counts(fix('**_x_**\n').output).get('comment-shaped-emphasis')).toBeUndefined()
   })
+
+  it('continues when one fix exposes another fixable spelling', () => {
+    const source = '_**_a_**\n'
+    const output = fix(source).output
+    expect(output).not.toBe(source)
+    expect(counts(output)).toEqual(new Map())
+    expect(fix(output).output).toBe(output)
+  })
 })

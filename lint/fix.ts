@@ -199,44 +199,40 @@ function counts(entries: readonly Diagnostic[]): Map<string, number> {
 }
 
 /** Keep the fix pass from introducing a lint finding at a meeting of independent edits. */
-function quiet(bytes: Uint8Array, chosen: Candidate[], original: readonly Diagnostic[], settings: LintOptions): Candidate[] {
+function quiet(
+  bytes: Uint8Array, chosen: Candidate[], original: readonly Diagnostic[], settings: LintOptions, allowTransient = false,
+): Candidate[] {
   const before = counts(original)
-  const additions = (plans: readonly Candidate[]): number => {
+  const introduced = (plans: readonly Candidate[]): Map<string, number> => {
     const after = counts(lint(decoder.decode(apply(bytes, plans)), settings))
-    let total = 0
-    for (const [code, count] of after) total += Math.max(0, count - (before.get(code) ?? 0))
-    return total
+    const extra = new Map<string, number>()
+    for (const [code, count] of after) {
+      const increase = count - (before.get(code) ?? 0)
+      if (increase > 0) extra.set(code, increase)
+    }
+    return extra
   }
+  const additions = (plans: readonly Candidate[]): number =>
+    [...introduced(plans).values()].reduce((sum, count) => sum + count, 0)
   let current = chosen
   let excess = additions(current)
   if (excess === 0) return current
-  // Prefer the innermost span, so its authoring form changes as little as possible.
-  const byWidth = current.map((candidate, index) => ({ index,
-    width: candidate.plan.edits.at(-1)!.end - candidate.plan.edits[0]!.start }))
-    .sort((a, b) => a.width - b.width)
-  for (const { index: at } of byWidth) {
-    if (excess === 0) break
-    const alternate = braced(current[at]!)
-    if (alternate === null) continue
-    const trial = [...current]
-    trial[at] = alternate
+  // Try the inner delimiter class first. One batch covers many repeated collisions without a lint and parse per span.
+  for (const node of ['emphasis', 'strong'] as const) {
+    const trial = current.map((candidate) => candidate.plan.node === node ? braced(candidate) ?? candidate : candidate)
+    if (trial.every((candidate, index) => candidate === current[index])) continue
     if (verified(bytes, trial).length !== trial.length) continue
     const remaining = additions(trial)
     if (remaining < excess) {
       current = trial
       excess = remaining
     }
+    if (excess === 0) return current
   }
+  // A later pass can resolve a warning exposed by an earlier replacement.
+  if (allowTransient) return current
   // A replacement without a quiet, parse-equivalent spelling stays for the author.
-  for (let at = current.length - 1; at >= 0 && excess > 0; at--) {
-    const trial = current.filter((_, index) => index !== at)
-    const remaining = additions(trial)
-    if (remaining < excess) {
-      current = trial
-      excess = remaining
-    }
-  }
-  return excess === 0 ? current : []
+  return []
 }
 
 /** The options of the lint run that finds what to fix: every fixable rule is on unless `rules` turns it off. */
@@ -255,14 +251,20 @@ export function fixSource(source: string, options: LintOptions): FixResult {
   const applied = new Map<string, number>()
   let bytes: Uint8Array = encoder.encode(source)
   let changed = false
+  const baseline = counts(lint(source, settings))
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const text = decoder.decode(bytes)
     const findings = lint(text, settings)
-    const chosen = quiet(bytes, verified(bytes, select(candidates(bytes, findings))), findings, settings)
+    const chosen = quiet(bytes, verified(bytes, select(candidates(bytes, findings))), findings, settings, true)
     if (chosen.length === 0) break
     bytes = apply(bytes, chosen)
     changed = true
     for (const candidate of chosen) applied.set(candidate.rule, (applied.get(candidate.rule) ?? 0) + 1)
+  }
+  if (changed) {
+    for (const [code, count] of counts(lint(decoder.decode(bytes), settings))) {
+      if (count > (baseline.get(code) ?? 0)) return { output: source, applied: new Map() }
+    }
   }
   return { output: changed ? decoder.decode(bytes) : source, applied }
 }
