@@ -1170,11 +1170,25 @@
         "frontmatter"
       ],
       "when": {
-        "matches": [
+        "all": [
           {
-            "f": "text"
+            "matches": [
+              {
+                "f": "text"
+              },
+              "^>[^ ]"
+            ]
           },
-          "^>[^ ]"
+          {
+            "not": {
+              "matches": [
+                {
+                  "f": "raw_body"
+                },
+                "^>[ \\t]"
+              ]
+            }
+          }
         ]
       },
       "report": [
@@ -1774,6 +1788,90 @@
       ]
     },
     {
+      "id": "deprecated-continuation-marker",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "eq": [
+              {
+                "f": "body"
+              },
+              "+"
+            ]
+          },
+          {
+            "not": {
+              "in": [
+                {
+                  "f": "leaf"
+                },
+                "row_leaves"
+              ]
+            }
+          }
+        ]
+      },
+      "report": [
+        {
+          "when": {
+            "matches": [
+              {
+                "slice": [
+                  {
+                    "f": "text"
+                  },
+                  0,
+                  {
+                    "sub": [
+                      {
+                        "f": "body_start"
+                      },
+                      {
+                        "f": "start"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "(?:^|[ \\t>])(?:[-*+]|[0-9]{1,9}[.)]|[A-Za-z][.)])(?:[ \\t]+\\[[ xX]\\])?[ \\t]+$"
+            ]
+          },
+          "message": 2
+        },
+        {
+          "when": {
+            "contains": [
+              {
+                "f": "ancestors"
+              },
+              "list_item"
+            ]
+          },
+          "message": 1
+        },
+        {
+          "message": 0
+        }
+      ],
+      "range": {
+        "start": {
+          "f": "body_start"
+        },
+        "end": {
+          "add": [
+            {
+              "f": "body_start"
+            },
+            1
+          ]
+        }
+      },
+      "clauses": [
+        "C2-B-059"
+      ]
+    },
+    {
       "id": "deprecated-spaced-thematic-break",
       "over": "line",
       "let": {
@@ -1925,6 +2023,134 @@
       ],
       "clauses": [
         "C2-B-069"
+      ]
+    },
+    {
+      "id": "djot-plus-bullet",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "eq": [
+              {
+                "f": "leaf"
+              },
+              "paragraph"
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "body"
+              },
+              "^\\+[ \\t]+[^ \\t]"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "body_start"
+          },
+          "end": {
+            "f": "body_end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-034",
+        "C2-B-175"
+      ]
+    },
+    {
+      "id": "empty-reference-definition",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "in": [
+              {
+                "f": "leaf"
+              },
+              [
+                "caption",
+                "definition_term",
+                "heading",
+                "line",
+                "paragraph"
+              ]
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "body"
+              },
+              "^(?<def>\\[(?<label>[^\\]]*[^\\] \\t][^\\]]*)\\]:)$"
+            ]
+          },
+          {
+            "not": {
+              "matches": [
+                {
+                  "f": "body"
+                },
+                "^\\[\\^[ \\t]*\\]"
+              ]
+            }
+          }
+        ]
+      },
+      "report": [
+        {
+          "when": {
+            "starts": [
+              {
+                "f": "body"
+              },
+              "[^"
+            ]
+          },
+          "message": 1
+        },
+        {
+          "message": 0
+        }
+      ],
+      "range": {
+        "start": {
+          "match": "def"
+        },
+        "end": {
+          "match": "def",
+          "at": "end"
+        }
+      },
+      "values": {
+        "label": {
+          "slice": [
+            {
+              "f": "body"
+            },
+            1,
+            {
+              "sub": [
+                {
+                  "len": {
+                    "f": "body"
+                  }
+                },
+                2
+              ]
+            }
+          ]
+        }
+      },
+      "clauses": [
+        "C2-B-083",
+        "C2-B-082",
+        "C2-I-079"
       ]
     },
     {
@@ -2139,6 +2365,150 @@
         "C2-B-161",
         "C2-B-162",
         "C2-B-164"
+      ]
+    },
+    {
+      "id": "github-alert-marker",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "in": [
+              {
+                "f": "leaf"
+              },
+              [
+                "heading",
+                "paragraph",
+                "table_cell",
+                "table_row"
+              ]
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "text"
+              },
+              "^[ \\t]*(?:>[ \\t]*)+(?:(?:[-*]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]*>[ \\t]*)?(?:\\[[^\\]]+\\]:[ \\t]*>[ \\t]*)?(?<mark>\\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\])"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "match": "mark"
+          },
+          "end": {
+            "match": "mark",
+            "at": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-031",
+        "C2-I-072"
+      ]
+    },
+    {
+      "id": "heading-closing-hashes",
+      "over": "block",
+      "types": [
+        "heading"
+      ],
+      "when": {
+        "any": [
+          {
+            "all": [
+              {
+                "eq": [
+                  {
+                    "f": "last_line.number"
+                  },
+                  {
+                    "f": "line.number"
+                  }
+                ]
+              },
+              {
+                "matches": [
+                  {
+                    "f": "line.body"
+                  },
+                  "^(?:#+|=+)[ \\t]+[^ \\t].*?[ \\t](?<run>#+)$"
+                ]
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "gt": [
+                  {
+                    "f": "last_line.number"
+                  },
+                  {
+                    "f": "line.number"
+                  }
+                ]
+              },
+              {
+                "matches": [
+                  {
+                    "f": "last_line.text"
+                  },
+                  "(?:^|[ \\t])(?<run>#+)[ \\t]*$"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "match": "run"
+          },
+          "end": {
+            "match": "run",
+            "at": "end"
+          },
+          "values": {
+            "run": {
+              "slice": [
+                {
+                  "f": "last_line.text"
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "run"
+                    },
+                    {
+                      "f": "last_line.start"
+                    }
+                  ]
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "run",
+                      "at": "end"
+                    },
+                    {
+                      "f": "last_line.start"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-153",
+        "C2-B-151"
       ]
     },
     {
@@ -2536,6 +2906,184 @@
         "C2-B-022",
         "C2-B-034",
         "C2-B-036"
+      ]
+    },
+    {
+      "id": "setext-heading-underline",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "matches": [
+              {
+                "f": "text"
+              },
+              "^[ \\t]*(?:>[ \\t]+)*(?<run>={3,}|-{3,})[ \\t]*$"
+            ]
+          },
+          {
+            "has": "prev"
+          },
+          {
+            "eq": [
+              {
+                "f": "prev.leaf"
+              },
+              "paragraph"
+            ]
+          },
+          {
+            "not": {
+              "f": "prev.blank"
+            }
+          },
+          {
+            "any": [
+              {
+                "starts": [
+                  {
+                    "text_from": {
+                      "match": "run"
+                    }
+                  },
+                  "-"
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "eq": [
+                      {
+                        "f": "leaf"
+                      },
+                      "paragraph"
+                    ]
+                  },
+                  {
+                    "eq": [
+                      {
+                        "f": "prev.leaf_id"
+                      },
+                      {
+                        "f": "leaf_id"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "match": "run"
+          },
+          "end": {
+            "match": "run",
+            "at": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-160",
+        "C2-B-012",
+        "C2-B-033"
+      ]
+    },
+    {
+      "id": "table-shaped-paragraph",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "in": [
+              {
+                "f": "leaf"
+              },
+              [
+                "caption",
+                "definition_term",
+                "heading",
+                "line",
+                "paragraph"
+              ]
+            ]
+          },
+          {
+            "starts": [
+              {
+                "f": "body"
+              },
+              "|"
+            ]
+          },
+          {
+            "ne": [
+              {
+                "f": "body"
+              },
+              "|"
+            ]
+          },
+          {
+            "not": {
+              "matches": [
+                {
+                  "f": "body"
+                },
+                "\\|(?:[ \\t]*\\{[^{}]*\\})?[ \\t\\x00]*$"
+              ]
+            }
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "body_start"
+          },
+          "end": {
+            "f": "body_end"
+          }
+        }
+      ],
+      "values": {
+        "owner": {
+          "if": [
+            {
+              "eq": [
+                {
+                  "f": "leaf"
+                },
+                "definition_term"
+              ]
+            },
+            "term",
+            {
+              "if": [
+                {
+                  "eq": [
+                    {
+                      "f": "leaf"
+                    },
+                    "line"
+                  ]
+                },
+                "line-block line",
+                {
+                  "f": "leaf"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "clauses": [
+        "C2-B-168",
+        "C2-B-166",
+        "C2-B-167"
       ]
     },
     {

@@ -106,3 +106,15 @@ it('the data rules follow the hand-written fixes of carve-js#5183, #5186 and #51
   expect(only(':: t\n: ````\n      ````\n  > *[x1]:\n>   [^n]: : text', 'definition-in-container'))
     .toEqual(['definition-in-container@38-43'])
 })
+
+it('C2-B-031: a quote mark followed by a space and an inline comment is no marker without a space', () => {
+  expect(findings('a\n> %% x\n', 'data').filter((found) => found.startsWith('blockquote'))).toEqual([])
+  expect(findings('a\n>%% x\n', 'data').filter((found) => found.startsWith('blockquote'))).toEqual(['blockquote-marker-without-space@2-7'])
+})
+
+it('the third batch reports what the hand-written rules report on their triggers', () => {
+  for (const source of ['a\n===\n', 'a\n---\n', '> a\n> ---\n', '+ b\n', '[a]:\n', '[^a]:\n', '[ ]:\n', '| a\n', '| a |\n', '+\n',
+    '- +\n', '- a\n\n  +\n', '> [!NOTE]\n', '# H ##\n', '= ##\n', '# H\\##\n']) {
+    expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  }
+})
