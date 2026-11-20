@@ -4,12 +4,12 @@ import { lint } from '../lint/lint.ts'
 
 describe('C2-I-050 joined bare marks', () => {
   it('skips joined openers and closers for all three legacy marks', () => {
-    for (const [mark, id] of [['_', 'deprecated-bare-underline'], ['~', 'deprecated-bare-strike'], ['=', 'deprecated-bare-highlight']]) {
+    for (const [mark, id] of [['_', 'deprecated-bare-underline'], ['~', 'deprecated-bare-strike'], ['=', 'deprecated-bare-highlight']] as const) {
       for (const join of ['\u0301', '\ufe0f', '\u200d']) {
-        const ranges = []
+        const ranges: [number, number][] = []
         pairedMarks(`${mark}a${mark}${join}b${mark}`, mark, id, (start, end) => ranges.push([start, end]))
         expect(ranges).toEqual([[0, `${mark}a${mark}${join}b${mark}`.length]])
-        const opener = []
+        const opener: [number, number][] = []
         pairedMarks(`${mark}${join}a${mark}`, mark, id, (start, end) => opener.push([start, end]))
         expect(opener).toEqual([])
       }
