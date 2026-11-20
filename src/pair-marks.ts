@@ -22,11 +22,10 @@ function joined(text: string, mark: string, id: string, at: number): boolean {
 }
 
 function canOpen(text: string, mark: string, id: string, at: number): boolean {
-  if (!id.startsWith('deprecated-bare-') && id !== 'markdown-strong-double-star' && id !== 'markdown-strikethrough-double-tilde') {
-    return !joined(text, mark, id, at)
-  }
+  if (!id.startsWith('deprecated-bare-')) return true
   const after = text[at + mark.length]
   return !joined(text, mark, id, at) && !escaped(text, at)
+    && !(id.startsWith('deprecated-bare-') && text[at - 1] === mark[0])
     && after !== undefined && !EDGE_SPACE.test(after) && after !== mark[0]
     && (mark.length === 2 || !isWord(text[at - 1]))
 }

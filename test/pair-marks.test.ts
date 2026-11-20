@@ -26,4 +26,9 @@ describe('C2-I-050 joined bare marks', () => {
       expect(ranges).toEqual([[start, source.length]])
     }
   })
+  it('does not start a legacy pair inside a longer delimiter run', () => {
+    const ranges: [number, number][] = []
+    pairedMarks('~~a~', '~', 'deprecated-bare-strike', (from, to) => ranges.push([from, to]))
+    expect(ranges).toEqual([])
+  })
 })

@@ -49,19 +49,19 @@ describe('fix output is lint closed', () => {
     expect(fix(output).output).toBe(output)
   })
 
-  it('keeps independent fixes when one line cannot be made lint clean', () => {
+  it('keeps independent fixes when neighboring pairs can now be made lint clean', () => {
     const source = '~~_x_~~\n**~x~**\n\n**z**\n'
     const output = fix(source).output
     expect(output).toContain('*z*\n')
-    expect(output).toContain('**~x~**\n')
+    expect(output).toContain('*{~x~}*\n')
     const before = counts(source)
     for (const [rule, count] of counts(output)) expect(count).toBeLessThanOrEqual(before.get(rule) ?? 0)
   })
 
-  it('keeps a safe fix beside a blocked fix on one line', () => {
+  it('keeps both safe fixes on one line', () => {
     const source = '~~_x_~~\n**~x~** and **z**\n'
     const output = fix(source).output
-    expect(output).toContain('**~x~** and *z*')
+    expect(output).toContain('*{~x~}* and *z*')
     const before = counts(source)
     for (const [rule, count] of counts(output)) expect(count).toBeLessThanOrEqual(before.get(rule) ?? 0)
   })
@@ -73,10 +73,10 @@ describe('fix output is lint closed', () => {
     expect(fix(output).output).toBe(output)
   })
 
-  it('keeps an independent fix before a blocked collision', () => {
+  it('keeps an independent fix before a resolved collision', () => {
     const source = '**z**\n~~_x_~~\n**~x~**\n'
     const output = fix(source).output
-    expect(output).toBe('*z*\n~~_x_~~\n**~x~**\n')
+    expect(output).toBe('*z*\n{~/x/~}\n*{~x~}*\n')
     expect(fix(output).output).toBe(output)
   })
 
