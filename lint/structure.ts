@@ -1162,18 +1162,22 @@ function blockOwner(path: string, context: LintContext): { path: string, type: s
   return { path: ownerPath, type: ownerType }
 }
 
+function listItemThroughDiv(path: string, context: LintContext): boolean {
+  let ancestor = path
+  let type = context.nodeTypes.get(ancestor) ?? 'document'
+  while (type === 'div' || type === 'admonition' || type === 'directive' || type === 'figure_group') {
+    const split = ancestor.lastIndexOf('/children/')
+    ancestor = split < 0 ? '' : ancestor.slice(0, split)
+    type = context.nodeTypes.get(ancestor) ?? 'document'
+    if (type === 'list_item') return true
+  }
+  return false
+}
+
 function blockOverindent(node: Node, path: string, context: LintContext): void {
   if (node.pos === undefined) return
   const { path: ownerPath, type: ownerType } = blockOwner(path, context)
-  if (ownerType === 'list_item') return
-  let ancestor = ownerPath
-  let ancestorType = ownerType
-  while (ancestorType === 'div' || ancestorType === 'admonition' || ancestorType === 'directive' || ancestorType === 'figure_group') {
-    const split = ancestor.lastIndexOf('/children/')
-    ancestor = split < 0 ? '' : ancestor.slice(0, split)
-    ancestorType = context.nodeTypes.get(ancestor) ?? 'document'
-    if (ancestorType === 'list_item') return
-  }
+  if (ownerType === 'list_item' || listItemThroughDiv(ownerPath, context)) return
   const start = context.chars[node.pos.startOffset] ?? 0
   const line = context.lines[node.pos.startLine - 1]
   if (line === undefined) return
