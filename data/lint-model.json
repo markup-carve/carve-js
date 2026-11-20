@@ -64,7 +64,7 @@
     {
       "name": "body_start",
       "type": "offset",
-      "means": "where the text of the line starts behind its container prefixes and indent: on a line of a leaf block, where the parse puts the leaf's text on that line, the marker of an item, description or footnote body on its marker line and the quote marks of the open quotes being prefixes up to their content column; on a lazy line, which carries no prefix of the containers it does not reach, its first character that is not a space or tab; on any other line, behind its leading spaces and tabs and its quote marks that are followed by a space",
+      "means": "where the text of the line starts behind its container prefixes and indent: on a line of a leaf block, where the parse puts the leaf's text on that line, the marker of an item, description or footnote body on its marker line and the quote marks of the open quotes being prefixes up to their content column; on a lazy line, which carries no prefix of the containers it does not reach, its first character that is not a space or tab; on a line of a leaf of `verbatim_leaves` whose prefixes the parse does not place, behind its leading spaces and tabs and as many quote marks followed by a space as quotes hold the leaf, since a further mark is content; on any other line, behind its leading spaces and tabs and its quote marks that are followed by a space",
       "clauses": [
         "C2-B-003",
         "C2-B-024",
@@ -115,6 +115,14 @@
       ]
     },
     {
+      "name": "leaf_head",
+      "type": "line",
+      "means": "the first line of the leaf block of the line; absent for a line of no leaf block",
+      "clauses": [
+        "C2-B-017"
+      ]
+    },
+    {
       "name": "leaf_id",
       "type": "name",
       "means": "an identity of the leaf block of the line, equal on two lines exactly when one leaf block holds both",
@@ -129,6 +137,14 @@
       "clauses": [
         "C2-B-010",
         "C2-W-107"
+      ]
+    },
+    {
+      "name": "leaf_start",
+      "type": "offset",
+      "means": "where the leaf block of the line starts in the source; absent for a line of no leaf block",
+      "clauses": [
+        "C2-A-141"
       ]
     },
     {
@@ -229,6 +245,14 @@
       ]
     },
     {
+      "name": "end",
+      "type": "offset",
+      "means": "the end of the block in the source",
+      "clauses": [
+        "C2-A-141"
+      ]
+    },
+    {
       "name": "image_line",
       "type": "boolean",
       "means": "the block is a paragraph that holds a single image, a block image line",
@@ -242,6 +266,14 @@
       "means": "the position of the block among the blocks of its owner, from 0",
       "clauses": [
         "C2-B-025"
+      ]
+    },
+    {
+      "name": "last_line",
+      "type": "line",
+      "means": "the line record of the last line of the block",
+      "clauses": [
+        "C2-B-001"
       ]
     },
     {
@@ -282,11 +314,28 @@
       ]
     },
     {
+      "name": "prev_type",
+      "type": "text",
+      "means": "the type of the block directly before this one among the blocks of its parent; absent for the first",
+      "clauses": [
+        "C2-B-025"
+      ]
+    },
+    {
       "name": "start",
       "type": "offset",
       "means": "the first character of the block's source",
       "clauses": [
         "C2-B-028"
+      ]
+    },
+    {
+      "name": "text",
+      "type": "text",
+      "base": "start",
+      "means": "the source of the block from start to end",
+      "clauses": [
+        "C2-A-141"
       ]
     },
     {
@@ -298,7 +347,412 @@
       ]
     }
   ],
+  "inline_fields": [
+    {
+      "name": "end",
+      "type": "offset",
+      "means": "the end of the node in the source",
+      "clauses": [
+        "C2-A-141"
+      ]
+    },
+    {
+      "name": "leaf",
+      "type": "text",
+      "means": "the type of the leaf block whose inline content holds the node",
+      "clauses": [
+        "C2-I-001"
+      ]
+    },
+    {
+      "name": "parent",
+      "type": "text",
+      "means": "the type of the node that holds the node, the leaf block for a node at the top of the content",
+      "clauses": [
+        "C2-I-001"
+      ]
+    },
+    {
+      "name": "start",
+      "type": "offset",
+      "means": "the start of the node in the source",
+      "clauses": [
+        "C2-A-141"
+      ]
+    },
+    {
+      "name": "text",
+      "type": "text",
+      "base": "start",
+      "means": "the source of the node from start to end",
+      "clauses": [
+        "C2-A-141"
+      ]
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "means": "the node type",
+      "clauses": [
+        "C2-A-001"
+      ]
+    }
+  ],
   "rules": [
+    {
+      "id": "bare-html-tag",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "any": [
+              {
+                "in": [
+                  {
+                    "f": "leaf"
+                  },
+                  [
+                    "heading",
+                    "paragraph"
+                  ]
+                ]
+              },
+              {
+                "in": [
+                  {
+                    "f": "leaf"
+                  },
+                  "row_leaves"
+                ]
+              }
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "text"
+              },
+              "^(?:[^<]|<!--.*?-->|<[^!<A-Za-z/]|<[A-Za-z/]|<<|<!(?:[^-]|$)|<!-(?:[^-]|$)|<$)*?<*(?<tag></?[A-Za-z][A-Za-z0-9_:-]*(?:\\s[^<>]*)?/?>)"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "match": "tag"
+          },
+          "end": {
+            "match": "tag",
+            "at": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-073",
+        "C2-I-124",
+        "C2-B-116"
+      ]
+    },
+    {
+      "id": "blank-reference-label",
+      "over": "inline",
+      "types": [
+        "text"
+      ],
+      "when": {
+        "contains": [
+          {
+            "f": "text"
+          },
+          "["
+        ]
+      },
+      "each": {
+        "matches": [
+          {
+            "f": "text"
+          },
+          "(?<label>\\[(?<caret>\\^)?[ \\t\\n]+\\])"
+        ]
+      },
+      "report": [
+        {
+          "when": {
+            "any": [
+              {
+                "ge": [
+                  {
+                    "match": "caret"
+                  },
+                  0
+                ]
+              },
+              {
+                "eq": [
+                  {
+                    "slice": [
+                      {
+                        "f": "text"
+                      },
+                      {
+                        "sub": [
+                          {
+                            "sub": [
+                              {
+                                "match": "label"
+                              },
+                              {
+                                "f": "start"
+                              }
+                            ]
+                          },
+                          1
+                        ]
+                      },
+                      {
+                        "sub": [
+                          {
+                            "match": "label"
+                          },
+                          {
+                            "f": "start"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "]"
+                ]
+              }
+            ]
+          },
+          "start": {
+            "match": "label"
+          },
+          "end": {
+            "match": "label",
+            "at": "end"
+          },
+          "values": {
+            "text": {
+              "slice": [
+                {
+                  "f": "text"
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "label"
+                    },
+                    {
+                      "f": "start"
+                    }
+                  ]
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "label",
+                      "at": "end"
+                    },
+                    {
+                      "f": "start"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "when": {
+            "all": [
+              {
+                "any": [
+                  {
+                    "eq": [
+                      {
+                        "sub": [
+                          {
+                            "match": "label"
+                          },
+                          {
+                            "f": "start"
+                          }
+                        ]
+                      },
+                      0
+                    ]
+                  },
+                  {
+                    "eq": [
+                      {
+                        "slice": [
+                          {
+                            "f": "text"
+                          },
+                          {
+                            "sub": [
+                              {
+                                "sub": [
+                                  {
+                                    "match": "label"
+                                  },
+                                  {
+                                    "f": "start"
+                                  }
+                                ]
+                              },
+                              1
+                            ]
+                          },
+                          {
+                            "sub": [
+                              {
+                                "match": "label"
+                              },
+                              {
+                                "f": "start"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "\n"
+                    ]
+                  }
+                ]
+              },
+              {
+                "eq": [
+                  {
+                    "slice": [
+                      {
+                        "f": "text"
+                      },
+                      {
+                        "sub": [
+                          {
+                            "match": "label",
+                            "at": "end"
+                          },
+                          {
+                            "f": "start"
+                          }
+                        ]
+                      },
+                      {
+                        "add": [
+                          {
+                            "sub": [
+                              {
+                                "match": "label",
+                                "at": "end"
+                              },
+                              {
+                                "f": "start"
+                              }
+                            ]
+                          },
+                          1
+                        ]
+                      }
+                    ]
+                  },
+                  ":"
+                ]
+              },
+              {
+                "not": {
+                  "contains": [
+                    {
+                      "slice": [
+                        {
+                          "f": "text"
+                        },
+                        {
+                          "sub": [
+                            {
+                              "match": "label"
+                            },
+                            {
+                              "f": "start"
+                            }
+                          ]
+                        },
+                        {
+                          "sub": [
+                            {
+                              "match": "label",
+                              "at": "end"
+                            },
+                            {
+                              "f": "start"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "\n"
+                  ]
+                }
+              }
+            ]
+          },
+          "start": {
+            "match": "label"
+          },
+          "end": {
+            "add": [
+              {
+                "match": "label",
+                "at": "end"
+              },
+              1
+            ]
+          },
+          "values": {
+            "text": {
+              "slice": [
+                {
+                  "f": "text"
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "label"
+                    },
+                    {
+                      "f": "start"
+                    }
+                  ]
+                },
+                {
+                  "add": [
+                    {
+                      "sub": [
+                        {
+                          "match": "label",
+                          "at": "end"
+                        },
+                        {
+                          "f": "start"
+                        }
+                      ]
+                    },
+                    1
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "clauses": [
+        "C2-I-079"
+      ]
+    },
     {
       "id": "block-opener-overindented",
       "over": "block",
@@ -993,6 +1447,245 @@
       ]
     },
     {
+      "id": "comment-fence-closer-with-text",
+      "over": "line",
+      "verbatim": [
+        "comment_block"
+      ],
+      "let": {
+        "opener": {
+          "if": [
+            {
+              "matches": [
+                {
+                  "slice": [
+                    {
+                      "f": "leaf_head.text"
+                    },
+                    {
+                      "sub": [
+                        {
+                          "f": "leaf_start"
+                        },
+                        {
+                          "f": "leaf_head.start"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "^(?<op>%+)"
+              ]
+            },
+            {
+              "slice": [
+                {
+                  "slice": [
+                    {
+                      "f": "leaf_head.text"
+                    },
+                    {
+                      "sub": [
+                        {
+                          "f": "leaf_start"
+                        },
+                        {
+                          "f": "leaf_head.start"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                0,
+                {
+                  "match": "op",
+                  "at": "end"
+                }
+              ]
+            },
+            ""
+          ]
+        }
+      },
+      "when": {
+        "all": [
+          {
+            "eq": [
+              {
+                "f": "leaf"
+              },
+              "comment_block"
+            ]
+          },
+          {
+            "not": {
+              "f": "leaf_first"
+            }
+          },
+          {
+            "ge": [
+              {
+                "len": {
+                  "v": "opener"
+                }
+              },
+              3
+            ]
+          },
+          {
+            "starts": [
+              {
+                "f": "body"
+              },
+              {
+                "v": "opener"
+              }
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "body"
+              },
+              "^%+(?:[ \\t]*[^ \\t%]|[ \\t]+%)"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-110",
+        "C2-B-195"
+      ]
+    },
+    {
+      "id": "definition-in-container",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "in": [
+              {
+                "f": "leaf"
+              },
+              [
+                "caption",
+                "definition_term",
+                "heading",
+                "line",
+                "paragraph"
+              ]
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "body"
+              },
+              "^(?<label>\\[.+?\\]:)."
+            ]
+          },
+          {
+            "not": {
+              "contains": [
+                {
+                  "f": "ancestors"
+                },
+                "footnote"
+              ]
+            }
+          },
+          {
+            "not": {
+              "all": [
+                {
+                  "eq": [
+                    {
+                      "f": "leaf"
+                    },
+                    "definition_term"
+                  ]
+                },
+                {
+                  "not": {
+                    "f": "leaf_first"
+                  }
+                },
+                {
+                  "not": {
+                    "matches": [
+                      {
+                        "f": "text"
+                      },
+                      "^[ \\t]"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "any": [
+              {
+                "matches": [
+                  {
+                    "f": "text"
+                  },
+                  "^[ \\t]"
+                ]
+              },
+              {
+                "some": {
+                  "in": "ancestors",
+                  "where": {
+                    "in": [
+                      {
+                        "f": "item"
+                      },
+                      [
+                        "admonition",
+                        "block_quote",
+                        "definition_description",
+                        "definition_list",
+                        "directive",
+                        "div",
+                        "figure_group",
+                        "list",
+                        "list_item"
+                      ]
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "match": "label"
+          },
+          "end": {
+            "match": "label",
+            "at": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-081"
+      ]
+    },
+    {
       "id": "deprecated-spaced-thematic-break",
       "over": "line",
       "let": {
@@ -1085,6 +1778,419 @@
         "C2-B-027",
         "C2-B-058",
         "C2-B-160"
+      ]
+    },
+    {
+      "id": "description-term-multi-line",
+      "over": "block",
+      "types": [
+        "definition_term"
+      ],
+      "when": {
+        "gt": [
+          {
+            "f": "last_line.number"
+          },
+          {
+            "f": "line.number"
+          }
+        ]
+      },
+      "report": [
+        {
+          "when": {
+            "not": {
+              "matches": [
+                {
+                  "f": "line.next.body"
+                },
+                "^%%"
+              ]
+            }
+          },
+          "start": {
+            "f": "line.next.body_start"
+          },
+          "end": {
+            "f": "line.next.end"
+          }
+        },
+        {
+          "when": {
+            "has": "line.next2"
+          },
+          "start": {
+            "f": "line.next2.body_start"
+          },
+          "end": {
+            "f": "line.next2.end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-069"
+      ]
+    },
+    {
+      "id": "fence-closer-indented",
+      "over": "block",
+      "types": [
+        "code_block"
+      ],
+      "let": {
+        "run": {
+          "if": [
+            {
+              "matches": [
+                {
+                  "f": "line.text"
+                },
+                "^[^`]*(?<run>`{3,})"
+              ]
+            },
+            {
+              "slice": [
+                {
+                  "f": "line.text"
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "run"
+                    },
+                    {
+                      "f": "line.start"
+                    }
+                  ]
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "run",
+                      "at": "end"
+                    },
+                    {
+                      "f": "line.start"
+                    }
+                  ]
+                }
+              ]
+            },
+            ""
+          ]
+        },
+        "at": {
+          "if": [
+            {
+              "matches": [
+                {
+                  "f": "line.text"
+                },
+                "^[^`]*(?<run>`{3,})"
+              ]
+            },
+            {
+              "sub": [
+                {
+                  "match": "run"
+                },
+                {
+                  "f": "line.start"
+                }
+              ]
+            },
+            -1
+          ]
+        }
+      },
+      "when": {
+        "all": [
+          {
+            "gt": [
+              {
+                "f": "last_line.number"
+              },
+              {
+                "f": "line.number"
+              }
+            ]
+          },
+          {
+            "ge": [
+              {
+                "len": {
+                  "v": "run"
+                }
+              },
+              3
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "last_line.text"
+              },
+              "^(?<pre>[ \\t>]*)(?<close>`{3,})[ \\t]*$"
+            ]
+          },
+          {
+            "ne": [
+              {
+                "sub": [
+                  {
+                    "match": "close"
+                  },
+                  {
+                    "f": "last_line.start"
+                  }
+                ]
+              },
+              {
+                "v": "at"
+              }
+            ]
+          },
+          {
+            "starts": [
+              {
+                "slice": [
+                  {
+                    "f": "last_line.text"
+                  },
+                  {
+                    "sub": [
+                      {
+                        "match": "close"
+                      },
+                      {
+                        "f": "last_line.start"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "v": "run"
+              }
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "match": "close"
+          },
+          "end": {
+            "f": "last_line.end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-108",
+        "C2-B-109"
+      ]
+    },
+    {
+      "id": "frontmatter-shaped-thematic-break",
+      "over": "block",
+      "types": [
+        "frontmatter"
+      ],
+      "when": {
+        "all": [
+          {
+            "matches": [
+              {
+                "f": "text"
+              },
+              "^---\\n"
+            ]
+          },
+          {
+            "any": [
+              {
+                "matches": [
+                  {
+                    "f": "text"
+                  },
+                  "^---\\n[ \\t]*(?:\\n|$)"
+                ]
+              },
+              {
+                "not": {
+                  "contains": [
+                    {
+                      "slice": [
+                        {
+                          "f": "text"
+                        },
+                        4
+                      ]
+                    },
+                    ":"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "f": "start"
+          },
+          "end": {
+            "f": "end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-161",
+        "C2-B-162",
+        "C2-B-164"
+      ]
+    },
+    {
+      "id": "heading-trailing-attribute",
+      "over": "block",
+      "types": [
+        "heading"
+      ],
+      "when": {
+        "matches": [
+          {
+            "f": "last_line.text"
+          },
+          "[ \\t](?<block>\\{[ \\t]*[.#][^{}]*\\})[ \\t]*$"
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "match": "block"
+          },
+          "end": {
+            "match": "block",
+            "at": "end"
+          },
+          "values": {
+            "block": {
+              "slice": [
+                {
+                  "f": "last_line.text"
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "block"
+                    },
+                    {
+                      "f": "last_line.start"
+                    }
+                  ]
+                },
+                {
+                  "sub": [
+                    {
+                      "match": "block",
+                      "at": "end"
+                    },
+                    {
+                      "f": "last_line.start"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-153",
+        "C2-I-036"
+      ]
+    },
+    {
+      "id": "indented-code-block",
+      "over": "block",
+      "types": [
+        "paragraph"
+      ],
+      "when": {
+        "all": [
+          {
+            "eq": [
+              {
+                "f": "parent.type"
+              },
+              "document"
+            ]
+          },
+          {
+            "gt": [
+              {
+                "f": "line.number"
+              },
+              1
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "line.prev.text"
+              },
+              "^[ \\t]*$"
+            ]
+          },
+          {
+            "ne": [
+              {
+                "f": "prev_type"
+              },
+              "list"
+            ]
+          },
+          {
+            "matches": [
+              {
+                "f": "line.text"
+              },
+              "^ {4,}[^ ]"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "start": {
+            "skip_right": [
+              {
+                "f": "line.start"
+              },
+              " \t"
+            ]
+          },
+          "end": {
+            "add": [
+              {
+                "f": "line.start"
+              },
+              {
+                "len": {
+                  "trim_end": {
+                    "f": "line.text"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-011",
+        "C2-I-002"
       ]
     },
     {
@@ -1224,6 +2330,105 @@
       "clauses": [
         "C2-B-025",
         "C2-B-027"
+      ]
+    },
+    {
+      "id": "list-marker-without-blank-line",
+      "over": "line",
+      "when": {
+        "all": [
+          {
+            "has": "prev"
+          },
+          {
+            "in": [
+              {
+                "f": "leaf"
+              },
+              [
+                "definition_term",
+                "paragraph"
+              ]
+            ]
+          },
+          {
+            "eq": [
+              {
+                "f": "prev.leaf_id"
+              },
+              {
+                "f": "leaf_id"
+              }
+            ]
+          },
+          {
+            "not": {
+              "f": "leaf_first"
+            }
+          },
+          {
+            "matches": [
+              {
+                "f": "body"
+              },
+              "^(?:[-*]|[0-9]{1,9}[.)]) [ \\t]*[^ \\t]"
+            ]
+          }
+        ]
+      },
+      "report": [
+        {
+          "when": {
+            "any": [
+              {
+                "eq": [
+                  {
+                    "f": "leaf"
+                  },
+                  "definition_term"
+                ]
+              },
+              {
+                "contains": [
+                  {
+                    "f": "ancestors"
+                  },
+                  "definition_term"
+                ]
+              },
+              {
+                "contains": [
+                  {
+                    "f": "ancestors"
+                  },
+                  "definition_description"
+                ]
+              }
+            ]
+          },
+          "message": 1,
+          "start": {
+            "f": "body_start"
+          },
+          "end": {
+            "f": "body_end"
+          }
+        },
+        {
+          "message": 0,
+          "start": {
+            "f": "body_start"
+          },
+          "end": {
+            "f": "body_end"
+          }
+        }
+      ],
+      "clauses": [
+        "C2-B-015",
+        "C2-B-022",
+        "C2-B-034",
+        "C2-B-036"
       ]
     },
     {

@@ -29,6 +29,8 @@ export interface ModelLine {
   readonly next: ModelLine | undefined
   readonly next2: ModelLine | undefined
   readonly leaf_next: ModelLine | undefined
+  readonly leaf_head: ModelLine | undefined
+  leaf_start: number
 }
 
 export interface ColonContainer { width: number, line: number, column: number, kind: string, start: number }
@@ -44,8 +46,23 @@ export interface ModelBlock {
   index: number
   readonly after_quote_mark: boolean
   line: ModelLine
+  readonly last_line: ModelLine
+  readonly prev_type: string | undefined
+  readonly end: number
+  readonly text: string
   readonly owner: Container
   readonly parent: Container
+}
+
+/** An inline record: one node of an inline content, with the leaf block that holds it. */
+export interface ModelInline {
+  type: string
+  path: string
+  start: number
+  end: number
+  readonly text: string
+  leaf: string
+  parent: string
 }
 
 export interface Container { readonly type: string, readonly content_column: number, readonly marker_column: number | undefined }
@@ -53,22 +70,26 @@ export interface Container { readonly type: string, readonly content_column: num
 export interface LineModel {
   lines: ModelLine[]
   blocks: ModelBlock[]
+  walked: readonly Walked[]
 }
 
 const INLINE_HOLDERS: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line',
   'cell_paragraph', 'code_block', 'raw_block', 'frontmatter', 'comment', 'include'])
+
+const VERBATIM_LEAVES: ReadonlySet<string> = new Set(['code_block', 'comment_block', 'frontmatter', 'raw_block'])
 
 const LEAF_TYPES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'table_cell',
   'table_row', 'code_block', 'raw_block', 'frontmatter', 'comment_block'])
 
 const isSpace = (code: number): boolean => code === 32 || code === 9
 
-/** Behind leading spaces and tabs and every quote mark followed by a space. */
-function quotedStart(line: Line): number {
+/** Behind leading spaces and tabs and every quote mark followed by a space, at most `marks` of them. */
+function quotedStart(line: Line, marks = Infinity): number {
   const text = line.text
   let at = 0
+  let left = marks
   while (isSpace(text.charCodeAt(at))) at++
-  while (text.charCodeAt(at) === 62 && text.charCodeAt(at + 1) === 32) {
+  while (left-- > 0 && text.charCodeAt(at) === 62 && text.charCodeAt(at + 1) === 32) {
     at += 2
     while (isSpace(text.charCodeAt(at))) at++
   }
@@ -108,7 +129,7 @@ function colonKind(type: string, opener: string): string {
   return /^:{3,}[ \t]+\\(?:[ \t]|$)/.test(opener) ? 'hard-break block' : 'div'
 }
 
-interface Walked { node: Node, path: string, parent: string, index: number }
+export interface Walked { node: Node, path: string, parent: string, index: number }
 
 function walk(document: Node): Walked[] {
   const out: Walked[] = []
@@ -132,14 +153,15 @@ function walk(document: Node): Walked[] {
   return out
 }
 
-interface Leaves { type: string[], id: string[], first: boolean[], last: number[] }
+interface Leaves { type: string[], id: string[], first: boolean[], head: number[], last: number[], start: number[] }
 
 const blockType = (node: Node): string => (node.type === 'comment' && node.form === 'block' ? 'comment_block' : node.type)
 
 /** The innermost leaf block of each line: later, deeper nodes of the walk overwrite their holders. */
-function leaves(walked: readonly Walked[], count: number): Leaves {
+function leaves(walked: readonly Walked[], count: number, chars: Uint32Array): Leaves {
   const out: Leaves = { type: new Array<string>(count).fill('none'), id: new Array<string>(count).fill(''),
-    first: new Array<boolean>(count).fill(false), last: new Array<number>(count).fill(0) }
+    first: new Array<boolean>(count).fill(false), head: new Array<number>(count).fill(0), last: new Array<number>(count).fill(0),
+    start: new Array<number>(count).fill(-1) }
   for (const { node, path } of walked) {
     const type = blockType(node)
     if (!LEAF_TYPES.has(type) || node.pos === undefined) continue
@@ -147,6 +169,8 @@ function leaves(walked: readonly Walked[], count: number): Leaves {
       out.type[number - 1] = type
       out.id[number - 1] = path
       out.first[number - 1] = number === node.pos.startLine
+      out.head[number - 1] = node.pos.startLine
+      out.start[number - 1] = chars[node.pos.startOffset] ?? 0
       out.last[number - 1] = node.pos.endLine
     }
   }
@@ -166,7 +190,8 @@ function ancestorTypes(path: string, types: Map<string, string>): string[] {
 
 interface LineFields {
   number: number, start: number, end: number, text: string, body: string, body_start: number, body_end: number
-  blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, closes_container: boolean, leaf_last: number
+  blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, closes_container: boolean
+  leaf_head: number, leaf_last: number, leaf_start: number
 }
 
 class LineRecord {
@@ -183,10 +208,12 @@ class LineRecord {
   readonly leaf_first: boolean
   readonly attached_here: boolean
   readonly closes_container: boolean
+  readonly leaf_start: number
   private ancestorsCache: string[] | undefined = undefined
   private colonCache: ColonContainer[] | undefined = undefined
   private shapeCache: string | undefined = undefined
   private lazyCache: boolean | undefined = undefined
+  private readonly leafHead: number
   private readonly leafLast: number
   private readonly path: string
   private readonly index: number
@@ -207,6 +234,8 @@ class LineRecord {
     this.leaf_first = fields.leaf_first
     this.attached_here = fields.attached_here
     this.closes_container = fields.closes_container
+    this.leaf_start = fields.leaf_start
+    this.leafHead = fields.leaf_head
     this.leafLast = fields.leaf_last
     this.path = path
     this.index = index
@@ -224,20 +253,24 @@ class LineRecord {
   get next(): ModelLine | undefined { return this.model[this.index + 1] }
   get next2(): ModelLine | undefined { return this.model[this.index + 2] }
   get leaf_next(): ModelLine | undefined { return this.leafLast === 0 ? this.next : this.model[this.leafLast] }
+  get leaf_head(): ModelLine | undefined { return this.leafHead === 0 ? undefined : this.model[this.leafHead - 1] }
 }
 
 function lineRecord(line: Line, index: number, model: ModelLine[], found: Leaves, context: LintContext): ModelLine {
+  const leaf = found.type[index]!
+  // A verbatim body line keeps quote marks past the quotes that hold its leaf: they are content.
+  const marks = VERBATIM_LEAVES.has(leaf) ? quoteDepth(found.id[index]!, context.nodeTypes as Map<string, string>) : Infinity
   const bodyStart = line.content !== undefined && line.content >= line.start && line.content <= line.end
-    ? line.content : quotedStart(line)
+    ? line.content : quotedStart(line, marks)
   const from = bodyStart - line.start
   const body = line.text.slice(from, trimEndAt(line.text, from))
-  const leaf = found.type[index]!
   return new LineRecord({
     number: line.number, start: line.start, end: line.end, text: line.text,
     body, body_start: bodyStart, body_end: bodyStart + body.length,
     blank: leaf === 'none' && /^[\s>]*$/.test(line.text), leaf, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
     attached_here: context.state.attachedLines.has(line.number),
-    closes_container: context.state.containerClosers.has(line.number), leaf_last: found.last[index]!,
+    closes_container: context.state.containerClosers.has(line.number),
+    leaf_head: found.head[index]!, leaf_last: found.last[index]!, leaf_start: found.start[index]!,
   }, line.path, index, model, context)
 }
 
@@ -326,8 +359,11 @@ class BlockRecord {
 
   private readonly containers: Map<string, number>
 
-  constructor(item: Walked, line: ModelLine, start: number, context: LintContext, containers: Map<string, number>) {
+  private readonly lines: ModelLine[]
+
+  constructor(item: Walked, line: ModelLine, start: number, context: LintContext, containers: Map<string, number>, lines: ModelLine[]) {
     this.containers = containers
+    this.lines = lines
     this.node = item.node
     this.type = blockType(item.node)
     this.path = item.path
@@ -339,6 +375,13 @@ class BlockRecord {
   }
 
   get attributed(): boolean { return this.node.attrs !== undefined }
+  get end(): number { return this.context.chars[this.node.pos?.endOffset ?? 0] ?? this.context.source.length }
+  get text(): string { return this.context.source.slice(this.start, this.end) }
+  get last_line(): ModelLine { return this.lines[(this.node.pos?.endLine ?? 1) - 1] ?? this.line }
+  get prev_type(): string | undefined {
+    const split = this.path.lastIndexOf('/')
+    return this.index === 0 || split < 0 ? undefined : this.context.nodeTypes.get(`${this.path.slice(0, split)}/${this.index - 1}`)
+  }
   get image_line(): boolean {
     return this.node.type === 'paragraph' && this.node.children.length === 1 && this.node.children[0]?.type === 'image'
   }
@@ -365,10 +408,58 @@ class BlockRecord {
 }
 
 
+const INLINE_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'cell_paragraph'])
+
+class InlineRecord implements ModelInline {
+  readonly type: string
+  readonly path: string
+  readonly start: number
+  readonly end: number
+  readonly leaf: string
+  readonly parent: string
+  private readonly source: string
+
+  constructor(node: Node, path: string, leaf: string, parent: string, context: LintContext) {
+    this.type = node.type
+    this.path = path
+    this.start = context.chars[node.pos?.startOffset ?? 0] ?? 0
+    this.end = context.chars[node.pos?.endOffset ?? 0] ?? context.source.length
+    this.leaf = leaf
+    this.parent = parent
+    this.source = context.source
+  }
+
+  get text(): string { return this.source.slice(this.start, this.end) }
+}
+
+/** The inline nodes of `types` in the inline contents of the walked leaves, in source order. */
+export function inlineRecords(walked: readonly Walked[], types: ReadonlySet<string>, context: LintContext): ModelInline[] {
+  const out: ModelInline[] = []
+  const visit = (node: Node, path: string, leaf: string, parent: string): void => {
+    if (types.has(node.type) && node.pos !== undefined) out.push(new InlineRecord(node, path, leaf, parent, context))
+    forEachSlot(node, (nodes, step, single) => {
+      for (let at = 0; at < nodes.length; at++) {
+        const child = nodes[at]
+        if (child !== undefined) visit(child, single ? `${path}/${step}` : `${path}/${step}/${at}`, leaf, node.type)
+      }
+    }, SOURCE_ORDER)
+  }
+  for (const { node, path } of walked) {
+    if (!INLINE_LEAVES.has(node.type)) continue
+    forEachSlot(node, (nodes, step, single) => {
+      for (let at = 0; at < nodes.length; at++) {
+        const child = nodes[at]
+        if (child !== undefined) visit(child, single ? `${path}/${step}` : `${path}/${step}/${at}`, node.type, node.type)
+      }
+    }, SOURCE_ORDER)
+  }
+  return out
+}
+
 export function buildModel(document: Node, context: LintContext): LineModel {
   const { source, lines } = context
   const walked = walk(document)
-  const found = leaves(walked, lines.length)
+  const found = leaves(walked, lines.length, context.chars)
   // C2-B-010: the empty rest after the last line terminator is no line.
   const count = lines.length > 1 && lines[lines.length - 1]!.text === '' && source.endsWith('\n') ? lines.length - 1 : lines.length
   const model: ModelLine[] = []
@@ -379,9 +470,9 @@ export function buildModel(document: Node, context: LintContext): LineModel {
     if (item.path === '' || item.node.pos === undefined) continue
     const start = context.chars[item.node.pos.startOffset] ?? 0
     const line = model[(context.offsetLines[start] ?? 1) - 1]
-    if (line !== undefined) blocks.push(new BlockRecord(item, line, start, context, containers))
+    if (line !== undefined) blocks.push(new BlockRecord(item, line, start, context, containers, model))
   }
-  return { lines: model, blocks }
+  return { lines: model, blocks, walked }
 }
 
 function ownerContent(type: string, layout: NodeLayout | undefined, quotes: number, context: LintContext): number {

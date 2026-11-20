@@ -5,10 +5,11 @@ type Expr = unknown
 interface Report { when?: Expr, message?: number, start?: Expr, end?: Expr, values?: Record<string, Expr> }
 interface DataRule {
   id: string
-  over: 'line' | 'block'
+  over: 'line' | 'block' | 'inline'
   types?: readonly string[]
   verbatim?: readonly string[]
   let?: Record<string, Expr>
+  each?: { matches: Expr }
   when?: Expr
   report: readonly Report[]
   range?: { start: Expr, end: Expr }
@@ -51,7 +52,11 @@ class Compiler {
   }
 
   /** The source offset that index 0 of a text value stands at, for the spans of a `matches`. */
-  private base(expr: Expr): string {
+  hoistRegex(source: string, flags: string): string {
+    return this.hoist(`new RegExp(${literal(source)}, ${literal(flags)})`)
+  }
+
+  base(expr: Expr): string {
     const operator = operatorOf(expr)
     if (operator?.[0] === 'f' && typeof operator[1] === 'string') {
       const path = operator[1]
@@ -157,28 +162,45 @@ const TESTS: Record<string, Make> = {
   v: (_c, arg) => `Boolean(${local(String(arg))})`,
 }
 
-function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string {
-  const self = rule.over === 'line' ? 'ModelLine' : 'ModelBlock'
-  const body: string[] = ['  groups = undefined']
-  for (const [name, expr] of Object.entries(rule.let ?? {})) body.push(`  const ${local(name)} = ${compiler.value(expr)}`)
-  if (rule.when !== undefined) body.push(`  if (!${compiler.test(rule.when)}) return`)
+const SELF = { line: 'ModelLine', block: 'ModelBlock', inline: 'ModelInline' } as const
+
+function reportLines(rule: DataRule, compiler: Compiler, indent: string): string[] {
+  const body: string[] = []
   for (const report of rule.report) {
     const values = Object.entries({ ...rule.values, ...report.values })
       .map(([name, expr]) => `${literal(name)}: String(${compiler.value(expr)})`).join(', ')
     const call = `context.report(${literal(rule.id)}, ${compiler.number(report.start ?? rule.range?.start)}, `
       + `${compiler.number(report.end ?? rule.range?.end)}, path, { ${values} }, ${report.message ?? 0})`
     if (report.when === undefined) {
-      body.push(`  ${call}`, '  return')
+      body.push(`${indent}${call}`, `${indent}return`)
       break
     }
-    body.push(`  if (${compiler.test(report.when)}) {`, `    ${call}`, '    return', '  }')
+    body.push(`${indent}if (${compiler.test(report.when)}) {`, `${indent}  ${call}`, `${indent}  return`, `${indent}}`)
   }
-  if (body.some((code) => /[(\s]line[,)]/.test(code))) body.unshift(`  const line = ${rule.over === 'block' ? 'self.line' : 'self'}`)
-  return [`function rule${index}(self: ${self}, path: string, context: LintContext): void {`, ...body, '}'].join('\n')
+  return body
+}
+
+function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string {
+  const body: string[] = ['  groups = undefined']
+  for (const [name, expr] of Object.entries(rule.let ?? {})) body.push(`  const ${local(name)} = ${compiler.value(expr)}`)
+  if (rule.when !== undefined) body.push(`  if (!${compiler.test(rule.when)}) return`)
+  if (rule.each === undefined) body.push(...reportLines(rule, compiler, '  '))
+  else {
+    const [subject, pattern] = argsOf(rule.each.matches)
+    const regex = compiler.hoistRegex(String(pattern), 'gd')
+    body.push(`  const one = (): void => {`, ...reportLines(rule, compiler, '    '), '  }',
+      `  for (const found of matchAll(${regex}, ${compiler.value(subject)})) {`,
+      '    groups = spansOf(found)', `    base = ${compiler.base(subject)}`, '    one()', '  }')
+  }
+  if (body.some((code) => /[(\s]line[,)]/.test(code))) {
+    if (rule.over === 'inline') throw new Error(`lint-model: ${rule.id} reads a line offset over inline records`)
+    body.unshift(`  const line = ${rule.over === 'block' ? 'self.line' : 'self'}`)
+  }
+  return [`function rule${index}(self: ${SELF[rule.over]}, path: string, context: LintContext): void {`, ...body, '}'].join('\n')
 }
 
 const PRELUDE = `import { type RuleId } from './catalog.ts'
-import { type ModelBlock, type ModelLine } from './data-model.ts'
+import { type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
 import { type LintContext } from './types.ts'
 
 let groups: Record<string, [number, number]> | undefined
@@ -191,15 +213,22 @@ const trimEnd = (text: string): string => text.replace(/[ \\t]+$/, '')
 const test = (regex: RegExp, value: unknown): boolean => typeof value === 'string' && regex.test(value)
 const starts = (value: unknown, prefix: string): boolean => typeof value === 'string' && value.startsWith(prefix)
 
+function spansOf(found: RegExpExecArray | RegExpMatchArray): Record<string, [number, number]> {
+  const spans: Record<string, [number, number]> = {}
+  for (const [name, span] of Object.entries(found.indices?.groups ?? {})) if (span !== undefined) spans[name] = span
+  return spans
+}
+
 function hit(regex: RegExp, value: unknown): boolean {
   if (typeof value !== 'string') return false
   const found = regex.exec(value)
   if (found === null) return false
-  const spans: Record<string, [number, number]> = {}
-  for (const [name, span] of Object.entries(found.indices?.groups ?? {})) if (span !== undefined) spans[name] = span
-  groups = spans
+  groups = spansOf(found)
   return true
 }
+
+const matchAll = (regex: RegExp, value: unknown): RegExpStringIterator<RegExpExecArray> | [] =>
+  (typeof value === 'string' ? value.matchAll(regex) : [])
 
 function mark(at: number): boolean {
   base = at
@@ -248,6 +277,8 @@ export function generateDataTables(json: string): string {
     '  | { id: RuleId, over: \'line\', types: undefined, verbatim: ReadonlySet<string>, run: (self: ModelLine, path: string, context: LintContext) => void }',
     '  | { id: RuleId, over: \'block\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, '
       + 'run: (self: ModelBlock, path: string, context: LintContext) => void }',
+    '  | { id: RuleId, over: \'inline\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, '
+      + 'run: (self: ModelInline, path: string, context: LintContext) => void }',
     '',
     `export const VERBATIM_LEAVES: ReadonlySet<string> = new Set(${literal(model.verbatim_leaves)})`,
     '',

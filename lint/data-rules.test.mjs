@@ -38,3 +38,33 @@ it('C2-B-031: a quote mark followed by a tab is text', () => {
 it('C2-B-146: a lone pipe is no table row next to a caption-looking line', () => {
   expect(findings('Table: x\n|\n', 'data')).toEqual([])
 })
+
+it('the data rules of the second batch report what the hand-written rules report on their triggers', () => {
+  for (const source of ['x [^ ] y\n', '[a][ ]\n', '[ ]: u\n', 'a <b> c\n', '> a\n>\n> [x]: y\n', ' [x]: y\n', 'a\n- b\n',
+    '# H {.c}\n', '%%%\n%%% x\n%%%\n', '```\ncode\n ```\n']) {
+    expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  }
+})
+
+it('C2-B-011: indented-code-block skips a paragraph whose previous block is a list', () => {
+  expect(findings('\t1. w.\n\n    :\n', 'data')).toEqual([])
+})
+
+it('C2-B-109: fence-closer-indented reports no unclosed fence and reads the source column in a quote', () => {
+  expect(findings('````\n  ```\n', 'data')).toEqual([])
+  expect(findings('> ```\n>   ```\n', 'data')).toEqual(['fence-closer-indented@10-13'])
+})
+
+it('C2-B-110: comment-fence-closer-with-text reads a quoted line behind its quote mark only', () => {
+  expect(findings('> %%%%\n> %%%% x\n', 'data')).toEqual(['comment-fence-closer-with-text@7-15'])
+  expect(findings('>   %%%%\n> >   %%%% x\n', 'data')).toEqual([])
+})
+
+it('C2-B-069: description-term-multi-line starts behind the prefixes of the line', () => {
+  expect(findings('> :: w\n> w\n', 'data')).toEqual(['description-term-multi-line@9-10'])
+})
+
+it('bare-html-tag reads paragraph, heading and table row lines, not term lines', () => {
+  expect(findings(':: a <b>\n', 'data')).toEqual([])
+  expect(findings('| <i> |\n', 'data')).toEqual(['bare-html-tag@2-5'])
+})
