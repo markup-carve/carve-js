@@ -167,7 +167,14 @@ describe('mathBlock', () => {
 
   it('keeps the author attributes after the math classes', () => {
     expect(html('{#e1 .big data-n=1}\n```math\nx\n```', mathBlock())).toBe(
-      '<div id="e1" class="math display big" role="math" data-n="1">\\[x\\]</div>')
+      '<div id="e1" class="math display big" data-n="1" role="math">\\[x\\]</div>')
+  })
+
+  it('writes authored keys before the generated role in both render modes (C2-H-009)', () => {
+    const source = '{#eq .big data-n=1 title=Equation aria-label=Formula}\n```math\nx^2\n```'
+    const start = '<div id="eq" class="math display big" data-n="1" title="Equation" aria-label="Formula" role="math">'
+    expect(html(source, mathBlock())).toBe(start + '\\[x^2\\]</div>')
+    expect(html(source, mathBlock({ build: () => '<math></math>' }), 'static')).toBe(start + '<math></math></div>')
   })
 
   it('static mode uses the host build function, or the fallback without one', () => {
