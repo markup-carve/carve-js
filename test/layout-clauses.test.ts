@@ -366,7 +366,7 @@ describe('measured facts', () => {
     expect(entry('-\ta\n', FIRST)).not.toHaveProperty('markerRaw')
     expect(entry('- a\n', item)!.contentColumn).toBe(2)
     expect(entry('-   a\n', item)!.contentColumn).toBe(4)
-    expect(entry('- [x] a\n', item)!.contentColumn).toBe(6)
+    expect(entry('- [x] a\n', item)!.contentColumn).toBe(2)
     expect(entry('10. a\n', item)!.contentColumn).toBe(4)
     expect(entry(':: t\n:   d\n', `${FIRST}/children/1`)!.contentColumn).toBe(4)
     expect(entry('[^n]: a\n', FIRST)!.contentColumn).toBe(6)

@@ -336,8 +336,8 @@ describe('the other clauses of the two commits', () => {
     expect(entry(src, '/children/3/children/0')).toMatchObject({ markerRaw: '::', metadataSeparatorRaw: ' ' })
   })
 
-  it('C2-L-051: a task box is not content of the item', () => {
-    expect(entry('- [x] a', '/children/0/children/0')).toMatchObject({ contentColumn: 6 })
+  it('C2-L-051: a task box is item text after the bullet', () => {
+    expect(entry('- [x] a', '/children/0/children/0')).toMatchObject({ contentColumn: 2 })
   })
 
   it('C2-L-052: continuationStyle on every item, description and footnote', () => {
