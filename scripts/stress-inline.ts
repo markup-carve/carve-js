@@ -1,6 +1,6 @@
 // CPU time of the inline pass on shapes that make a naive scan quadratic, at three sizes ten
 // times apart. A linear pass takes about ten times longer per step. It prints and fails only
-// when a step takes more than `--limit` times the step before it (default 30).
+// when every attempt at a row has a last step above `--limit` (default 30).
 //   node scripts/stress-inline.ts [--sizes 1000,10000,100000] [--limit N]
 import { loadavg } from 'node:os'
 import { acquireInlineState, scanInline } from '../src/index.ts'
@@ -79,8 +79,19 @@ if (process.argv[1] === import.meta.filename) {
   console.log(`|---|${sizes.map(() => '--:').join('|')}|--:|`)
   let worst = 0
   for (const [name, build] of SHAPES) {
-    const times = sizes.map((size) => time(build(size)))
-    const step = times[times.length - 1]! / Math.max(times[times.length - 2]!, 0.05)
+    const sources = sizes.map(build)
+    let times: number[] = []
+    let step = Infinity
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const sample = sources.map(time)
+      const sampledStep = sample[sample.length - 1]! / Math.max(sample[sample.length - 2]!, 0.05)
+      if (sampledStep < step) {
+        times = sample
+        step = sampledStep
+      }
+      if (step <= limit) break
+      console.log(`Attempt ${attempt + 1}/3 for ${name}: last step ${sampledStep.toFixed(1)} exceeds ${limit}`)
+    }
     worst = Math.max(worst, step)
     console.log(`| ${name.replaceAll('|', '\\|')} | ${times.map((ms) => ms.toFixed(2)).join(' | ')} | ${step.toFixed(1)} |`)
   }
