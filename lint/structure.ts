@@ -1199,7 +1199,11 @@ function openerBehindAttributes(node: Node, context: LintContext): { start: numb
     const rest = line.text.slice(start - line.start).trimEnd()
     const next = context.lines[number]
     if (next === undefined || !rest.startsWith('{') || !isAttributeLine(rest, 0, rest.length)) break
-    start = next.start + Math.min(start - line.start, next.text.length)
+    // The opener may stand at another indent than its attribute line: find its first character on its own line.
+    let at = Math.min(start - line.start, next.text.length)
+    while (at < next.text.length && (next.text[at] === ' ' || next.text[at] === '\t')) at++
+    while (at > 0 && !' \t>'.includes(next.text[at - 1]!)) at--
+    start = next.start + at
     line = next
     number++
   }

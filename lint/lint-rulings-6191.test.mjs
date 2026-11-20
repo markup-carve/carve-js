@@ -24,6 +24,8 @@ describe('lint rulings of 20 November', () => {
     expect(ranges('   > q\n', 'block-opener-overindented')).toEqual([[3, 4]])
     expect(ranges('   | a |\n', 'block-opener-overindented')).toEqual([[3, 4]])
     expect(ranges('   {.x}\n   :::: foo\n   x\n   ::::\n', 'block-opener-overindented')).toEqual([[11, 15]])
+    expect(ranges('   {.x}\n    :::: foo\n    x\n    ::::\n', 'block-opener-overindented')).toEqual([[12, 16]])
+    expect(ranges('    {.x}\n   :::: foo\n   x\n   ::::\n', 'block-opener-overindented')).toEqual([[12, 16]])
   })
 
   it('carve#6193: an include directive line is no block opener for list-item-block-overindented', () => {
