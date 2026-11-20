@@ -124,28 +124,32 @@ class Compiler {
   }
 
   some(arg: Expr): string {
-    const spec = arg as { in: string, from?: number, where: Expr }
-    return `someFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
+    const spec = arg as { in: Expr, from?: number, where: Expr }
+    return `someFrom(${this.list(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
   }
 
   lookup(arg: Expr): string {
     const spec = arg as { over: 'block' | 'inline' | 'id', types?: string[], key?: Expr, value?: Expr, before?: boolean, after?: boolean,
-      all?: boolean, field: string }
-    const kinds = spec.over === 'id' ? ['id'] : spec.types ?? []
-    if (spec.over !== 'id') for (const type of kinds) this.needs[spec.over].add(type)
-    const types = this.hoist(`new Set<string>(${literal(kinds)})`)
+      all?: boolean, from?: Expr, field?: string }
+    const kinds = spec.over === 'id' ? ['id'] : spec.types
+    // C2-W-150: a block lookup that names no types reads every block.
+    if (spec.over !== 'id') for (const type of kinds ?? ['*']) this.needs[spec.over].add(type)
+    const types = kinds === undefined ? 'undefined' : this.hoist(`new Set<string>(${literal(kinds)})`)
     const key = spec.key === undefined ? 'undefined' : `(item: unknown): unknown => ${this.value(spec.key)}`
     const value = spec.key === undefined ? 'undefined' : this.value(spec.value)
     // Lookups over the same records by the same key share one index.
     const signature = `${spec.over} ${types} ${key}`
     let site = this.lookupSites.get(signature)
     if (site === undefined) this.lookupSites.set(signature, site = this.lookupSites.size)
-    const keys = spec.field.split('.').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')
+    const keys = (spec.field ?? '').split('.').filter((part) => part !== '').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')
     if (spec.all === true) return `lookupAll(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}).map((record) => at(record${keys}))`
     const side = spec.before === true ? -1 : spec.after === true ? 1 : 0
-    const found = `lookupAt(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, self.start, ${side})`
-    return `at(${found}${spec.field.split('.').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')})`
+    const from = spec.from === undefined ? 'self.start' : this.number(spec.from)
+    return `at(lookupAt(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, ${from}, ${side})${keys})`
   }
+
+  // C2-W-150: the list of some or count is a field path, or a value.
+  list(arg: Expr): string { return typeof arg === 'string' ? this.field(arg) : this.value(arg) }
 
   find(arg: Expr): string {
     const spec = arg as { in: Expr, where: Expr }
@@ -153,8 +157,8 @@ class Compiler {
   }
 
   count(arg: Expr): string {
-    const spec = arg as { in: string, from?: number, where: Expr }
-    return `countFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
+    const spec = arg as { in: Expr, from?: number, where: Expr }
+    return `countFrom(${this.list(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
   }
 
   member(arg: Expr): string {
@@ -428,13 +432,13 @@ export function useRecords(block: readonly Located[], inline: readonly Located[]
 
 // C2-W-141: the first record of the types whose key equals the value, the last one that starts before the record
 // (side -1) or the first one that starts after it (side 1).
-function lookupIndex(site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string>,
+function lookupIndex(site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string> | undefined,
   key: ((item: unknown) => unknown) | undefined): Map<unknown, Located[]> {
   let index = lookupSites.get(site)
   if (index === undefined) {
     index = new Map()
     for (const record of lookupRecords[over]) {
-      if (!types.has((record as { type?: string }).type ?? '')) continue
+      if (types !== undefined && !types.has((record as { type?: string }).type ?? '')) continue
       const found = key === undefined ? undefined : key(record)
       const list = index.get(found)
       if (list === undefined) index.set(found, [record])
@@ -446,10 +450,10 @@ function lookupIndex(site: number, over: 'block' | 'inline' | 'id', types: Reado
 }
 
 // C2-W-150: with all, every record of the types whose key equals the value, in document order.
-const lookupAll = (site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string>,
+const lookupAll = (site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string> | undefined,
   key: ((item: unknown) => unknown) | undefined, value: unknown): readonly Located[] => lookupIndex(site, over, types, key).get(value) ?? []
 
-function lookupAt(site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string>, key: ((item: unknown) => unknown) | undefined,
+function lookupAt(site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string> | undefined, key: ((item: unknown) => unknown) | undefined,
   value: unknown, start: number, side: -1 | 0 | 1): Located | undefined {
   const list = lookupIndex(site, over, types, key).get(value)
   if (list === undefined) return undefined

@@ -288,15 +288,16 @@ function tableRows(node: Node, path: string, context: LintContext): void {
       const row = section.children[inner]
       if (row?.type !== 'table_row') continue
       if (width < 0) width = row.children.length
-      else if (row.children.length !== width) {
-        const rowPath = `${path}/children/${outer}/children/${inner}`
-        const values = { cells: String(row.children.length), width: String(width) }
-        const range = row.pos === undefined ? continuedRowRange(rowPath, context) : null
-        if (range === null) reportNode('table-row-cell-count', row, rowPath, context, values)
-        else context.report('table-row-cell-count', range[0], range[1], rowPath, values)
-      }
+      else if (row.children.length !== width) reportRowCount(row, `${path}/children/${outer}/children/${inner}`, width, context)
     }
   }
+}
+
+function reportRowCount(row: Node, path: string, width: number, context: LintContext): void {
+  const values = { cells: String(row.type === 'table_row' ? row.children.length : 0), width: String(width) }
+  const range = row.pos === undefined ? continuedRowRange(path, context) : null
+  if (range === null) reportNode('table-row-cell-count', row, path, context, values)
+  else context.report('table-row-cell-count', range[0], range[1], path, values)
 }
 
 /** C2-A-158: a continued row has no pos; its range runs from the `+` of its last continuation row to the end of its layout entry. */
@@ -1263,13 +1264,19 @@ function consumedNearMiss(node: Node, path: string, context: LintContext): void 
   }
 }
 
-function orderedRightAligned(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list' || node.marker.kind !== 'ordered' || node.children.length < 2) return
+/** C2-B-030: an ordered marker left of the list's first marker that ends where the list's markers end. */
+function rightAligned(node: Node, path: string, at: number, context: LintContext): boolean {
+  if (node.type !== 'list' || node.marker.kind !== 'ordered' || at < 1) return false
   const first = context.layouts.get(`${path}/children/0`)
-  const second = context.layouts.get(`${path}/children/1`)
-  if (first?.markerColumn === undefined || second?.markerColumn === undefined) return
-  if (first.markerColumn > second.markerColumn && first.contentColumn === second.contentColumn) {
-    reportNode('ordered-marker-right-aligned', node.children[1]!, `${path}/children/1`, context)
+  const item = context.layouts.get(`${path}/children/${at}`)
+  if (first?.markerColumn === undefined || item?.markerColumn === undefined) return false
+  return first.markerColumn > item.markerColumn && first.contentColumn === item.contentColumn
+}
+
+function orderedRightAligned(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'list') return
+  for (let at = 1; at < node.children.length; at++) {
+    if (rightAligned(node, path, at, context)) reportNode('ordered-marker-right-aligned', node.children[at]!, `${path}/children/${at}`, context)
   }
 }
 
@@ -1326,7 +1333,7 @@ function unevenListIndent(node: Node, path: string, context: LintContext): void 
       }
     }
     const previous = context.layouts.get(`${path}/children/${at - 1}`)?.markerColumn ?? 0
-    if (Math.max(0, column - footnoteColumn) >= Math.max(0, previous - footnoteColumn)) return
+    if (Math.max(0, column - footnoteColumn) >= Math.max(0, previous - footnoteColumn) || rightAligned(node, path, at, context)) return
     if (item !== undefined && (outer === undefined || column <= outer)) reportNode('uneven-list-indent', item, `${path}/children/${at}`, context)
   })
 }

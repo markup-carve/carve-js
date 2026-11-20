@@ -621,6 +621,13 @@ export class DataWalk {
   }
 }
 
+// C2-W-150: a block that omits pos (C2-A-158) is bounded by its layout entry, where it has one.
+const startByteOf = (item: Walked, context: LintContext): number | undefined =>
+  item.node.pos?.startOffset ?? context.layouts.get(item.path)?.startByte
+
+// A lookup that names no block types reads every block.
+const isNeeded = (needed: ReadonlySet<string>, type: string): boolean => needed.has(type) || needed.has('*')
+
 /** The model; a block record is made only where `runsFor` gives runs for its type and its parent's type, or a lookup needs it. */
 export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   runsFor: (type: string, parent: string) => readonly T[], needed: ReadonlySet<string> = new Set()): LineModel<T> {
@@ -634,11 +641,10 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   const runs: (readonly T[])[] = []
   const containers = new Map<string, number>()
   for (const item of walked) {
-    // C2-W-150: a block that omits pos (C2-A-158) is bounded by its layout entry, where it has one.
-    const startByte = item.node.pos?.startOffset ?? context.layouts.get(item.path)?.startByte
+    const startByte = startByteOf(item, context)
     if (item.path === '' || startByte === undefined) continue
     const blockRuns = runsFor(blockType(item.node), context.nodeTypes.get(item.parent) ?? 'document')
-    if (blockRuns.length === 0 && !needed.has(blockType(item.node))) continue
+    if (blockRuns.length === 0 && !isNeeded(needed, blockType(item.node))) continue
     const start = context.chars[startByte] ?? 0
     const line = model[(context.offsetLines[start] ?? 1) - 1]
     if (line === undefined) continue
