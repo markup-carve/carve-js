@@ -298,7 +298,7 @@ function indentedCode(line: Line, context: LintContext): void {
 /** A line outside paragraph text that starts with a bracket is a link, abbreviation or citation definition. */
 function isDefinitionLine(text: string): boolean {
   const start = text.trimStart()
-  return start.startsWith('[') || start.startsWith('*[')
+  return (start.startsWith('[') && !start.startsWith('[^')) || start.startsWith('*[')
 }
 
 function unattachedCaption(line: Line, context: LintContext): void {
@@ -370,7 +370,7 @@ function djotPlus(line: Line, context: LintContext): void {
 
 function definitionInContainer(line: Line, context: LintContext): void {
   // C2-B-081: the line's text behind every container mark, a list marker or description mark included.
-  const { text, start } = lineText(line)
+  const { text, start } = quoteDepth(line.path, context) > 0 ? contentLine(line) : lineText(line)
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
   if (textOwner(line.path, context) === 'heading') return
@@ -485,6 +485,8 @@ function listColumnAbove(line: Line, context: LintContext): number | undefined {
 interface BelowColumn { text: string, start: number, column: number, hostColumn: number }
 
 function belowListColumn(line: Line, context: LintContext): BelowColumn | undefined {
+  // A quote-shaped lazy line outside a quote starts with `>`, not with the colon behind it.
+  if (quoteDepth(line.path, context) === 0 && line.text.trimStart().startsWith('>')) return undefined
   if (context.state.descriptionStarts.has(line.number)) return undefined
   const { text, start } = contentLine(line)
   if (!/^::?(?:[ \t]|$)/.test(text) || opensEntry(line, context)) return undefined

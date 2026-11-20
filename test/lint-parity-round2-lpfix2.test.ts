@@ -47,6 +47,19 @@ describe('round two lint parity ticket inputs', () => {
     }
   })
 
+  it('reads a definition shape behind a quote owned by a description', () => {
+    const source = ':: t\n: ````\n      ````\n  > *[x1]:\n>   [^n]: : text'
+    expect(ranges(source, 'definition-in-container')).toEqual([[38, 43]])
+  })
+
+  it('does not read a lazy quote marker as a description separator', () => {
+    expect(ranges('\t:: more\n> ::', 'description-separator-below-content-column')).toEqual([])
+  })
+
+  it('reports a caption-shaped line after a footnote with a directive', () => {
+    expect(ranges('[^f]: {{ x.crv#s }}\n^ x', 'unattached-caption')).toEqual([[20, 23]])
+  })
+
   it('accepts the permitted frontmatter opener whitespace', () => {
     for (const whitespace of [' ', '\t', ' \t']) {
       expect(ranges(`---${whitespace}\n$$`, 'frontmatter-shaped-thematic-break')).toHaveLength(1)
