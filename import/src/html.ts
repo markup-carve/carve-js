@@ -365,7 +365,8 @@ function notesDirective(node: Html.Element, context: HtmlContext): Block[] {
   const parts = titled(node, context)
   const parent = node.parentNode
   const siblings = parent === null ? [] : parent.childNodes
-  const behind = siblings.slice(siblings.indexOf(node) + 1).some(child => !isBlank(child))
+  const behind = siblings.slice(siblings.indexOf(node) + 1).some(child =>
+    !isBlank(child) && !(isElement(child) && isFootnoteSection(child)))
   if (parts.title === undefined && parts.groupLabel === undefined && !behind) return []
   return [{ type: 'directive', kind: 'footnotes', children: [], ...(parts.title ? { title: parts.title } : {}),
     ...(parts.groupLabel !== undefined ? { groupLabel: parts.groupLabel } : {}) }]

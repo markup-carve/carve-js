@@ -71,14 +71,12 @@ function inQuotedBrace(value: string, at: number, cursor: BraceQuoteCursor): boo
 /** Whether the character `at` of a text takes a backslash whatever the reparse finds: C2-W-097, C2-W-098. */
 function alwaysEscaped(value: string, at: number, flags: number, cursor: BraceQuoteCursor): boolean {
   const code = value.charCodeAt(at)
-  return (code === BACKSLASH && doubles(value, at, cursor)) || ((flags & IN_CELL) !== 0 && code === PIPE) ||
-    ((flags & IN_BRACKET) !== 0 && (code === 91 || code === 93))
+  return (code === BACKSLASH && doubles(value, at, cursor)) || ((flags & IN_CELL) !== 0 && code === PIPE)
 }
 
 /** Whether a character of `value` can take a backslash by `alwaysEscaped`. */
 function mayAlwaysEscape(value: string, flags: number): boolean {
-  return value.includes('\\') || ((flags & IN_CELL) !== 0 && value.includes('|')) ||
-    ((flags & IN_BRACKET) !== 0 && (value.includes('[') || value.includes(']')))
+  return value.includes('\\') || ((flags & IN_CELL) !== 0 && value.includes('|'))
 }
 
 /** The offsets of `node` that take a backslash: those asked for and those of C2-W-097, C2-W-098. */
@@ -148,9 +146,7 @@ export function spelledEnd(w: Writer, node: TextNode, from: number, bytes: numbe
 function textNode(w: Writer, node: TextNode, flags: number): string {
   const value = node.value
   const points = (flags & IN_CELL) !== 0 ? w.wrapPoints?.get(node) : undefined
-  if (points === undefined && !w.escapes.has(node) && !value.includes('\\') &&
-    !((flags & IN_CELL) !== 0 && value.includes('|')) &&
-    !((flags & IN_BRACKET) !== 0 && (value.includes('[') || value.includes(']')))) return value
+  if (points === undefined && !w.escapes.has(node) && !mayAlwaysEscape(value, flags)) return value
   let out = ''
   let from = 0
   for (const point of points ?? []) {

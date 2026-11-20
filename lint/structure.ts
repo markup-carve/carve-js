@@ -1053,7 +1053,8 @@ function isLintableItemBlock(child: Node | undefined): child is Node & { pos: No
   // The row lists its openers one by one, and an include directive is none of them (carve#6193).
   if (child === undefined || child.pos === undefined || child.type === 'list' || child.type === 'comment'
     || child.type === 'include') return false
-  return child.type !== 'paragraph' || child.children.length === 1 && child.children[0]?.type === 'image'
+  return child.type !== 'paragraph' || child.attrs !== undefined ||
+    child.children.length === 1 && child.children[0]?.type === 'image'
 }
 
 function overindentedBlocks(node: Node, path: string, context: LintContext,

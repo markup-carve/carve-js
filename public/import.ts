@@ -17,6 +17,8 @@ export interface ImportOptions {
   from: 'html'
   /** C2-M-065, C2-M-066: keeps comments and raw elements of HTML as raw nodes. */
   rawHtml?: boolean
+  /** C2-M-101: the label map used when the HTML was rendered. */
+  labels?: Readonly<Record<string, string>>
   /** C2-M-102: the editor that wrote the HTML; default `generic`. */
   adapter?: Adapter
   /** C2-M-082: makes each loss of the import an error. */
@@ -33,7 +35,7 @@ export interface ImportOptions {
  */
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   if (options === undefined) throw new CarveOptionError('from', 'required')
-  checkOptions(options, { from: 'string', rawHtml: 'boolean', adapter: 'string', strictLosses: 'boolean', allowLosses: 'losses', maxLosses: 'losses' })
+  checkOptions(options, { from: 'string', rawHtml: 'boolean', labels: 'labels', adapter: 'string', strictLosses: 'boolean', allowLosses: 'losses', maxLosses: 'losses' })
   if (options.from !== 'html') {
     const routed = (OTHER_FORMATS as readonly unknown[]).includes(options.from)
     throw new CarveOptionError('from', routed ? `${JSON.stringify(options.from)} is read by @markup-carve/carve/import`
@@ -41,5 +43,5 @@ export function importDocument(input: string, options: ImportOptions): ImportRes
   }
   const adapter = readAdapter(options.adapter)
   if (typeof input !== 'string') throw new ImportInputError('the input is not text', 'html')
-  return runImport('html', options, () => importHtml(input, options.rawHtml === true, {}, true, {}, adapter))
+  return runImport('html', options, () => importHtml(input, options.rawHtml === true, {}, true, options.labels, adapter))
 }
