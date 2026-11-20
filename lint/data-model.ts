@@ -48,7 +48,7 @@ export interface ModelBlock {
   readonly parent: Container
 }
 
-export interface Container { type: string, content_column: number, marker_column: number | undefined }
+export interface Container { readonly type: string, readonly content_column: number, readonly marker_column: number | undefined }
 
 export interface LineModel {
   lines: ModelLine[]
@@ -61,25 +61,23 @@ const INLINE_HOLDERS: ReadonlySet<string> = new Set(['paragraph', 'caption', 'de
 const LEAF_TYPES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'table_cell',
   'table_row', 'code_block', 'raw_block', 'frontmatter', 'comment_block'])
 
-function trimmedStart(line: Line): number {
-  let at = 0
-  while (line.text[at] === ' ' || line.text[at] === '\t') at++
-  return line.start + at
-}
+const isSpace = (code: number): boolean => code === 32 || code === 9
 
 /** Behind leading spaces and tabs and every quote mark followed by a space. */
 function quotedStart(line: Line): number {
-  let at = trimmedStart(line) - line.start
-  while (line.text.startsWith('> ', at)) {
+  const text = line.text
+  let at = 0
+  while (isSpace(text.charCodeAt(at))) at++
+  while (text.charCodeAt(at) === 62 && text.charCodeAt(at + 1) === 32) {
     at += 2
-    while (line.text[at] === ' ' || line.text[at] === '\t') at++
+    while (isSpace(text.charCodeAt(at))) at++
   }
   return line.start + at
 }
 
-function trimEndAt(text: string): number {
+function trimEndAt(text: string, from: number): number {
   let end = text.length
-  while (end > 0 && (text[end - 1] === ' ' || text[end - 1] === '\t')) end--
+  while (end > from && isSpace(text.charCodeAt(end - 1))) end--
   return end
 }
 
@@ -231,8 +229,8 @@ class LineRecord {
 function lineRecord(line: Line, index: number, model: ModelLine[], found: Leaves, context: LintContext): ModelLine {
   const bodyStart = line.content !== undefined && line.content >= line.start && line.content <= line.end
     ? line.content : quotedStart(line)
-  const rest = line.text.slice(bodyStart - line.start)
-  const body = rest.slice(0, trimEndAt(rest))
+  const from = bodyStart - line.start
+  const body = line.text.slice(from, trimEndAt(line.text, from))
   const leaf = found.type[index]!
   return new LineRecord({
     number: line.number, start: line.start, end: line.end, text: line.text,
@@ -282,6 +280,36 @@ function ownerOf(parent: string, types: Map<string, string>): { path: string, ty
   return { path, type }
 }
 
+/** A container as a block record sees it; its content column is computed on first read and shared per path. */
+class ContainerRecord implements Container {
+  readonly type: string
+  private readonly path: string
+  private readonly quotes: () => number
+  private readonly context: LintContext
+  private readonly contents: Map<string, number>
+
+  constructor(path: string, type: string, quotes: () => number, context: LintContext, contents: Map<string, number>) {
+    this.path = path
+    this.type = type
+    this.quotes = quotes
+    this.context = context
+    this.contents = contents
+  }
+
+  get content_column(): number {
+    const quotes = this.quotes()
+    const key = `${quotes}:${this.path}`
+    let found = this.contents.get(key)
+    if (found === undefined) {
+      found = ownerContent(this.type, this.context.layouts.get(this.path), quotes, this.context)
+      this.contents.set(key, found)
+    }
+    return found
+  }
+
+  get marker_column(): number | undefined { return this.context.layouts.get(this.path)?.markerColumn }
+}
+
 class BlockRecord {
   private quotes: number | undefined = undefined
   private columnCache: number | undefined = undefined
@@ -296,7 +324,10 @@ class BlockRecord {
   private readonly parentPath: string
   private readonly context: LintContext
 
-  constructor(item: Walked, line: ModelLine, start: number, context: LintContext) {
+  private readonly containers: Map<string, number>
+
+  constructor(item: Walked, line: ModelLine, start: number, context: LintContext, containers: Map<string, number>) {
+    this.containers = containers
     this.node = item.node
     this.type = blockType(item.node)
     this.path = item.path
@@ -313,8 +344,7 @@ class BlockRecord {
   }
   private depth(): number { return (this.quotes ??= quoteDepth(this.path, this.context.nodeTypes as Map<string, string>)) }
   private container(at: string, type: string): Container {
-    const layout = this.context.layouts.get(at)
-    return { type, content_column: ownerContent(type, layout, this.depth(), this.context), marker_column: layout?.markerColumn }
+    return new ContainerRecord(at, type, () => this.depth(), this.context, this.containers)
   }
   get column(): number { return (this.columnCache ??= columnOf(this.context.source, this.start, this.depth())) }
   get opener_column(): number {
@@ -334,9 +364,6 @@ class BlockRecord {
   }
 }
 
-function blockRecord(item: Walked, line: ModelLine, start: number, context: LintContext): ModelBlock {
-  return new BlockRecord(item, line, start, context)
-}
 
 export function buildModel(document: Node, context: LintContext): LineModel {
   const { source, lines } = context
@@ -347,11 +374,12 @@ export function buildModel(document: Node, context: LintContext): LineModel {
   const model: ModelLine[] = []
   for (let index = 0; index < count; index++) model.push(lineRecord(lines[index]!, index, model, found, context))
   const blocks: ModelBlock[] = []
+  const containers = new Map<string, number>()
   for (const item of walked) {
     if (item.path === '' || item.node.pos === undefined) continue
     const start = context.chars[item.node.pos.startOffset] ?? 0
     const line = model[(context.offsetLines[start] ?? 1) - 1]
-    if (line !== undefined) blocks.push(blockRecord(item, line, start, context))
+    if (line !== undefined) blocks.push(new BlockRecord(item, line, start, context, containers))
   }
   return { lines: model, blocks }
 }
@@ -388,15 +416,30 @@ function earlierCloser(path: string, layout: NodeLayout, width: number, context:
   return false
 }
 
-function colonOpener(path: string, layout: NodeLayout, at: number, context: LintContext): ColonContainer | undefined {
-  const from = context.chars[layout.startByte] ?? 0
-  const to = context.chars[layout.endByte] ?? 0
+interface ColonLayout { path: string, layout: NodeLayout, type: string, from: number, to: number, width: number }
+
+const colonLayouts = new WeakMap<LintContext['layouts'], ColonLayout[]>()
+
+/** The layouts of colon containers, whose opener is a run of three or more colons, in layout order. */
+function colonLayoutsOf(context: LintContext): ColonLayout[] {
+  let found = colonLayouts.get(context.layouts)
+  if (found !== undefined) return found
+  found = []
+  for (const [path, layout] of context.layouts) {
+    const type = context.nodeTypes.get(path)
+    if (type === undefined || !COLON_KINDS.has(type)) continue
+    const from = context.chars[layout.startByte] ?? 0
+    let width = 0
+    while (context.source.charCodeAt(from + width) === 58) width++
+    if (width >= 3) found.push({ path, layout, type, from, to: context.chars[layout.endByte] ?? 0, width })
+  }
+  colonLayouts.set(context.layouts, found)
+  return found
+}
+
+function colonOpener(colon: ColonLayout, at: number, context: LintContext): ColonContainer | undefined {
+  const { path, layout, type, from, to, width } = colon
   if (from >= at || to < at - 1) return undefined
-  let width = 0
-  while (context.source.charCodeAt(from + width) === 58) width++
-  if (width < 3) return undefined
-  const type = context.nodeTypes.get(path)
-  if (type === undefined || !COLON_KINDS.has(type)) return undefined
   if (to < at && earlierCloser(path, layout, width, context)) return undefined
   return colonEntry(type, from, width, context)
 }
@@ -410,8 +453,8 @@ function colonEntry(type: string, from: number, width: number, context: LintCont
 
 function openColon(line: ModelLine, context: LintContext): ColonContainer[] {
   const open: ColonContainer[] = []
-  for (const [path, layout] of context.layouts) {
-    const found = colonOpener(path, layout, line.body_start, context)
+  for (const colon of colonLayoutsOf(context)) {
+    const found = colonOpener(colon, line.body_start, context)
     if (found !== undefined) open.push(found)
   }
   return open.sort((a, b) => b.start - a.start)

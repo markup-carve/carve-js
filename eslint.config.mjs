@@ -41,4 +41,8 @@ export default [{
   files: ['public/**/*.ts', 'cli/**/*.ts', 'test/**/*.ts', 'lint/**/*.ts', 'migrate/**/*.ts', 'proptest/**/*.ts', 'extensions/**/*.ts'],
   ignores: ['test/support/**'],
   rules: { 'max-len': ['error', { code: 140, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }] },
+}, {
+  // Generated from data/lint-model.json: one function per rule, its conditions inlined.
+  files: ['lint/data-tables.ts'],
+  rules: { complexity: 'off', 'sonarjs/cognitive-complexity': 'off', 'max-len': 'off' },
 }]
