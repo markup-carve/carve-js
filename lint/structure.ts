@@ -618,6 +618,15 @@ function markerRunPadding(node: Node, path: string, context: LintContext): void 
     { spelling: block + marker, marker, block, correctedPrefix: `{${marker} ${block.slice(1, -1)}}` })
 }
 
+function backtickRunLength(line: string, at: number): number {
+  return /^`+/.exec(line.slice(at))?.[0].length ?? 0
+}
+
+function fenceCloserPrefix(line: LintContext['lines'][number], path: string, context: LintContext): number {
+  const quotes = quoteDepth(path, context)
+  return quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
+}
+
 function fenceCloserIndent(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'code_block' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
   const first = context.lines[node.pos.startLine - 1]
@@ -626,11 +635,8 @@ function fenceCloserIndent(node: Node, path: string, context: LintContext): void
   const opener = first.text.indexOf('```')
   const closer = last.text.indexOf('```')
   if (opener < 0 || closer < 0 || opener === closer) return
-  const openingRun = /^`+/.exec(first.text.slice(opener))?.[0]
-  const closingRun = /^`+/.exec(last.text.slice(closer))?.[0]
-  if (openingRun === undefined || closingRun === undefined || closingRun.length < openingRun.length) return
-  const quotes = quoteDepth(path, context)
-  const prefix = quotes === 0 ? last.start : readPrefix(context.source, last.start, last.end, quotes).pos
+  if (backtickRunLength(last.text, closer) < backtickRunLength(first.text, opener)) return
+  const prefix = fenceCloserPrefix(last, path, context)
   if (last.text.slice(prefix - last.start, closer).trim() !== '' || !/^`{3,}[ \t]*$/.test(last.text.slice(closer))) return
   context.report('fence-closer-indented', last.start + closer, last.end, path)
 }

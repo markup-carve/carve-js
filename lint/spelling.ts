@@ -390,10 +390,14 @@ function djotPlus(line: Line, context: LintContext): void {
   }
 }
 
+function definitionCandidate(line: Line): { text: string, start: number } {
+  const content = lineText(line)
+  return content.text.startsWith('> ') ? contentLine(line) : content
+}
+
 function definitionInContainer(line: Line, context: LintContext): void {
   // C2-B-081: the line's text behind every container mark, a list marker or description mark included.
-  const content = lineText(line)
-  const { text, start } = content.text.startsWith('> ') ? contentLine(line) : content
+  const { text, start } = definitionCandidate(line)
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
   if (textOwner(line.path, context) === 'heading' || textOwner(line.path, context) === 'caption') return
