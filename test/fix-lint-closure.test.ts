@@ -57,4 +57,12 @@ describe('fix output is lint closed', () => {
     const before = counts(source)
     for (const [rule, count] of counts(output)) expect(count).toBeLessThanOrEqual(before.get(rule) ?? 0)
   })
+
+  it('keeps a safe fix beside a blocked fix on one line', () => {
+    const source = '~~_x_~~\n**~x~** and **z**\n'
+    const output = fix(source).output
+    expect(output).toContain('**~x~** and *z*')
+    const before = counts(source)
+    for (const [rule, count] of counts(output)) expect(count).toBeLessThanOrEqual(before.get(rule) ?? 0)
+  })
 })
