@@ -44,7 +44,7 @@ it(
   () => {
     for (const name of [
       'ast-results.json', 'ast-schema.json', 'div-names.json', 'layout-schema.json', 'node-slots.json',
-      'options.json', 'task-states.json', 'unicode-categories.json',
+      'lint-model.json', 'options.json', 'task-states.json', 'unicode-categories.json',
     ]) {
       expect(read(`data/${name}`)).toBe(readFileSync(join(specData, name), 'utf8'))
     }
