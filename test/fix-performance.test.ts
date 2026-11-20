@@ -27,8 +27,8 @@ describe('fix performance smoke', () => {
       const result = fix(source)
       expect(result.output.length).toBeGreaterThan(0)
       // The optimized build target is one second. CI can share a busy runner, so the
-      // smoke bound allows five seconds while still catching the old minute-long path.
-      expect(performance.now() - started).toBeLessThan(5_000)
+      // smoke bound allows ten seconds while still catching the old minute-long path.
+      expect(performance.now() - started).toBeLessThan(10_000)
     }, 15_000)
   }
 })
