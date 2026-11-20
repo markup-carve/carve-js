@@ -154,3 +154,19 @@ it('C2-B-109: a quoted backtick run inside a fence outside the quote is content,
   expect(findings('```\n> ```\n', 'data').filter((found) => found.startsWith('fence-closer'))).toEqual([])
   expect(findings('> ```\n>   ```\n', 'data').filter((found) => found.startsWith('fence-closer'))).toEqual(['fence-closer-indented@10-13'])
 })
+
+it('the fifth batch reports what the hand-written rules report on their triggers', () => {
+  for (const source of ['[a] (u)\n', 'x [a]\t(b) [c] ( ) [d] (e)\n', '> q\n::: >\nz\n:::\n', '> q\n::: > n\n:::\n',
+    '^ cap\n', 'para\n^ cap\n', '[x]: /u\n^ cap\n', '*[A]: b\n^ cap\n', '> [x]: u\n^ c\n', '![a](b.png)\n^ cap\n',
+    '| a | b |\n|---|:-:|\n', '| a | b\n|---|---|\n', '| x |--y\n|--|\n', '|---|\n|---|\n', '| a |\n| -:- |\n',
+    '| {.c}< a | {#i}~ b |\n', '| {}> a |\n', '|={.c}< a |\n', '|  {a}~  |\n']) {
+    expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  }
+  const on = { rules: { 'djot-heading-continuation': 'on' } }
+  for (const source of ['# Head\nnext\n', '# Head\n  next\n', '> # H\n> x\n', '## H\nx\n']) {
+    process.env.CARVE_LINT_RULES = 'data'
+    const data = lint(source, on).map((entry) => `${entry.code}@${entry.range.startOffset}`)
+    delete process.env.CARVE_LINT_RULES
+    expect(data, JSON.stringify(source)).toEqual(lint(source, on).map((entry) => `${entry.code}@${entry.range.startOffset}`))
+  }
+})
