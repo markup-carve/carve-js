@@ -618,6 +618,15 @@ function markerRunPadding(node: Node, path: string, context: LintContext): void 
     { spelling: block + marker, marker, block, correctedPrefix: `{${marker} ${block.slice(1, -1)}}` })
 }
 
+function backtickRunLength(line: string, at: number): number {
+  return /^`+/.exec(line.slice(at))?.[0].length ?? 0
+}
+
+function fenceCloserPrefix(line: LintContext['lines'][number], path: string, context: LintContext): number {
+  const quotes = quoteDepth(path, context)
+  return quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
+}
+
 function fenceCloserIndent(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'code_block' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
   const first = context.lines[node.pos.startLine - 1]
@@ -626,7 +635,9 @@ function fenceCloserIndent(node: Node, path: string, context: LintContext): void
   const opener = first.text.indexOf('```')
   const closer = last.text.indexOf('```')
   if (opener < 0 || closer < 0 || opener === closer) return
-  if (last.text.slice(0, closer).trim() !== '' || !/^`{3,}[ \t]*$/.test(last.text.slice(closer))) return
+  if (backtickRunLength(last.text, closer) < backtickRunLength(first.text, opener)) return
+  const prefix = fenceCloserPrefix(last, path, context)
+  if (last.text.slice(prefix - last.start, closer).trim() !== '' || !/^`{3,}[ \t]*$/.test(last.text.slice(closer))) return
   context.report('fence-closer-indented', last.start + closer, last.end, path)
 }
 
@@ -797,10 +808,12 @@ function commentFenceCloserText(node: Node, path: string, context: LintContext):
   let width = 0
   while (opener[width] === '%') width++
   if (width < 3) return
+  const quotes = quoteDepth(path, context)
   for (let lineNumber = node.pos.startLine + 1; lineNumber <= node.pos.endLine; lineNumber++) {
     const line = context.lines[lineNumber - 1]
     if (line === undefined) continue
-    const text = line.text.trimStart()
+    const prefix = quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
+    const text = line.text.slice(prefix - line.start).trimStart()
     let run = 0
     while (text[run] === '%') run++
     if (run >= width && text.slice(run).trim() !== '') {

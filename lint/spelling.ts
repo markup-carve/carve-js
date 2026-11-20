@@ -176,7 +176,8 @@ function tagEnd(text: string, at: number): number {
 
 // C2-W-106: every `<` is tested, so the tag in `<<k>` is found behind the first bracket.
 function bareHtml(line: Line, context: LintContext): void {
-  if (!line.paragraph) return
+  if (!line.paragraph && context.nodeTypes.get(line.path) !== 'table_row') return
+  if (textOwner(line.path, context) === 'term') return
   for (let at = line.text.indexOf('<'); at >= 0; at = line.text.indexOf('<', at + 1)) {
     if (line.text.startsWith('<!--', at)) {
       at = line.text.indexOf('-->', at + 4)
@@ -220,8 +221,9 @@ function tableShaped(line: Line, context: LintContext): void {
 }
 
 function quoteWithoutSpace(line: Line, context: LintContext): void {
-  const text = line.text.replace(/[ \t]+$/u, '')
-  if (!line.paragraph || !text.startsWith('>') || text.length < 2 || text[1] === ' ') return
+  const text = context.lines[line.number - 1]?.text.replace(/[ \t]+$/u, '') ?? ''
+  const raw = context.lines[line.number - 1]?.text ?? ''
+  if (!line.paragraph || !raw.startsWith('>') || raw.length < 2 || raw[1] === ' ') return
   context.report('blockquote-marker-without-space', line.start, line.start + text.length, line.path, { text: text.slice(1) })
 }
 
@@ -237,10 +239,10 @@ function isListMarker(text: string): boolean {
 const HEADING_MARK = /^(?:#{1,6}|={1,6}) /
 
 function startsBlock(text: string): boolean {
-  if (HEADING_MARK.test(text) || text.startsWith('> ') || text.startsWith(':: ')) return true
+  if (HEADING_MARK.test(text) || text === '>' || text.startsWith('> ') || text.startsWith(':: ')) return true
   // Any valid attribute line, spaced or with an id or a key (C2-B-090, carve#6197).
   if (text.startsWith(': ') || text.startsWith('{') && isAttributeLine(text, 0, text.length)) return true
-  return text.startsWith('[') && text.includes(']:')
+  return (text.startsWith('[') || text.startsWith('*[')) && text.includes(']:')
 }
 
 function openerName(text: string): string {
@@ -255,7 +257,7 @@ function openerWidth(text: string): number {
   if (text.startsWith('{')) return text.length
   if (HEADING_MARK.test(text)) return text.indexOf(' ')
   if (text.startsWith('::')) return 2
-  if (text.startsWith('[')) return text.indexOf(']:') + 2
+  if (text.startsWith('[') || text.startsWith('*[')) return text.indexOf(']:') + 2
   return 1
 }
 
@@ -292,6 +294,7 @@ function listWithoutBlank(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || previous.path !== line.path || previous.text.trim() === '') return
   const { text, start } = lineText(line)
+  if (textOwner(line.path, context) === 'caption') return
   const own = context.nodeTypes.get(line.path)
   const term = own === 'definition_term' || own === 'definition_description'
     || hasAncestor(line.path, context, 'definition_term') || hasAncestor(line.path, context, 'definition_description')
@@ -302,8 +305,10 @@ function listWithoutBlank(line: Line, context: LintContext): void {
 
 function indentedCode(line: Line, context: LintContext): void {
   const previous = prior(line, context)
+  const priorBlock = context.lines[line.number - 3]
   if (line.number > 1 && previous?.text.trim() === '' && line.paragraphLeaf && firstLineOfPath(line.path, context) === line.number
-    && line.path.split('/').length <= 3 && line.text.startsWith('    ') && line.text.trim() !== '') {
+    && line.path.split('/').length <= 3 && line.text.startsWith('    ') && line.text.trim() !== ''
+    && (priorBlock === undefined || !hasAncestor(priorBlock.path, context, 'list'))) {
     reportLine('indented-code-block', line, context)
   }
 }
@@ -338,7 +343,14 @@ function unattachedAttribute(line: Line, context: LintContext): void {
   if (!line.paragraph || !text.startsWith('{') || !text.endsWith('}') || text.length < 3) return
   if (!isAttributeLine(text, 0, text.length)) return
   if (attributeHasLaterOwner(line, context)) return
-  const next = context.lines[line.number]
+  let after = line.number
+  while (after < context.lines.length) {
+    const candidate = context.lines[after]!
+    const candidateText = lineText(candidate).text
+    if (!isAttributeLine(candidateText, 0, candidateText.length)) break
+    after++
+  }
+  const next = context.lines[after]
   const finalLineFeed = next?.start === context.source.length && next.text === ''
   context.report('unattached-block-attribute', start, start + text.length, line.path, {},
     !finalLineFeed && blankness(next, line, context) === 'blank' ? 1 : 0)
@@ -378,12 +390,17 @@ function djotPlus(line: Line, context: LintContext): void {
   }
 }
 
+function definitionCandidate(line: Line): { text: string, start: number } {
+  const content = lineText(line)
+  return content.text.startsWith('> ') ? contentLine(line) : content
+}
+
 function definitionInContainer(line: Line, context: LintContext): void {
   // C2-B-081: the line's text behind every container mark, a list marker or description mark included.
-  const { text, start } = quoteDepth(line.path, context) > 0 ? contentLine(line) : lineText(line)
+  const { text, start } = definitionCandidate(line)
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
-  if (textOwner(line.path, context) === 'heading') return
+  if (textOwner(line.path, context) === 'heading' || textOwner(line.path, context) === 'caption') return
   if (hasAncestor(line.path, context, 'footnote')) return
   if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) !== line.number
     && line.text[0] !== ' ' && line.text[0] !== '\t') return
@@ -403,6 +420,8 @@ function foldedTerm(line: Line, context: LintContext): void {
 }
 
 function githubAlert(line: Line, context: LintContext): void {
+  if (textOwner(line.path, context) === 'term') return
+  if (/^\s*>>/.test(line.text)) return
   const match = GITHUB_ALERT.exec(line.text)
   if (match === null || !line.paragraph) return
   const at = match[0].lastIndexOf('[!')
@@ -444,7 +463,7 @@ function captionLooking(line: Line, context: LintContext): void {
   if (!/^(?:\*?\s*(?:Caption|Table|Tabelle|Figure|Image)(?:\s+\d+)?\s*:|:\s+\S)/i.test(text)) return
   const row = (offset: number): boolean => {
     const near = context.lines[line.number - 1 + offset]
-    return near !== undefined && lineText(near).text.startsWith('|')
+    return near !== undefined && context.nodeTypes.get(near.path) === 'table_row'
   }
   const below = [1, 2].some(row)
   const above = [-2, -1].some((offset) => row(offset) || (context.lines[line.number - 1 + offset]?.text ?? '').includes('!['))
