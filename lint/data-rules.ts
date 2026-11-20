@@ -1,6 +1,6 @@
 import { type RuleId } from './catalog.ts'
 import { buildModel, DataWalk, type LineModel, type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
-import { DATA_RULES, type DataRule, VERBATIM_LEAVES } from './data-tables.ts'
+import { DATA_RULES, type DataRule, useRecords, VERBATIM_LEAVES } from './data-tables.ts'
 import { type LintContext } from './types.ts'
 import { type Node } from '../src/ast.ts'
 
@@ -21,6 +21,9 @@ interface Active {
   lines: DataRule[]
   blocks: DataRule[]
   inline: Map<string, InlineRun[]>
+  /** The block and inline types that lookups read, whose records are made with or without a rule of their own. */
+  needBlocks: Set<string>
+  needInline: Set<string>
   /** The line rules per leaf and the block rules per type and parent type, in catalog order. */
   byLeaf: Map<string, LineRun[]>
   byBlock: Map<string, Map<string, BlockRun[]>>
@@ -33,6 +36,8 @@ const push = <T>(map: Map<string, T[]>, key: string, value: T): void => {
 }
 
 function addRule(out: Active, rule: DataRule): void {
+  for (const type of rule.needs.block) out.needBlocks.add(type)
+  for (const type of rule.needs.inline) out.needInline.add(type)
   if (rule.over === 'line') out.lines.push(rule)
   else if (rule.over === 'inline') for (const type of rule.types ?? []) push(out.inline, type, rule.run)
   else out.blocks.push(rule)
@@ -47,7 +52,7 @@ function activeRules(active: (id: RuleId) => boolean, defaults: boolean): Active
   const key = on.map((value) => (value ? '1' : '0')).join('')
   let out = activeCache.get(key)
   if (out === undefined) {
-    out = { lines: [], blocks: [], inline: new Map(), byLeaf: new Map(), byBlock: new Map() }
+    out = { lines: [], blocks: [], inline: new Map(), needBlocks: new Set(), needInline: new Set(), byLeaf: new Map(), byBlock: new Map() }
     for (const [index, rule] of DATA_RULES.entries()) if (on[index]) addRule(out, rule)
     activeCache.set(key, out)
   }
@@ -106,13 +111,14 @@ export function startDataWalk(document: Node, context: LintContext, active: (id:
   defaults: boolean): DataWalk | undefined {
   const rules = activeRules(active, defaults)
   if (rules.lines.length === 0 && rules.blocks.length === 0 && rules.inline.size === 0) return undefined
-  return new DataWalk(document, new Set(rules.inline.keys()), context)
+  return new DataWalk(document, new Set([...rules.inline.keys(), ...rules.needInline]), context)
 }
 
 /** Run the data rules that `active` keeps on the model of the parsed document, walked by the lint visit. */
 export function runDataRules(walk: DataWalk, context: LintContext, active: (id: RuleId) => boolean, defaults: boolean): void {
   const rules = activeRules(active, defaults)
-  const model = buildModel(walk.walked, context, (type, parent) => blockRuns(rules, type, parent))
+  const model = buildModel(walk.walked, context, (type, parent) => blockRuns(rules, type, parent), rules.needBlocks)
+  useRecords(model.blocks, walk.inline)
   // The hand-written node rules report during the visit, before the line rules: findings at one offset keep that order.
   runBlocks(model, context)
   runInline(walk, rules, context)

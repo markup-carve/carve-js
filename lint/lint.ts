@@ -161,9 +161,17 @@ function markDescriptionAndCloser(node: Node, context: LintContext): void {
     && /^\s*:{3,}\s*$/.test(context.lines[pos.endLine - 1]?.text ?? '')) context.state.containerClosers.add(pos.endLine)
 }
 
+/** The footnote and reference keys that several rules read, collected whichever of them run by hand. */
+function collectKeys(node: Node, path: string, context: LintContext): void {
+  if (node.type === 'footnote') context.state.footnoteKeys.set(path, node.key)
+  // The platform rules read the used footnote keys, and unresolved-reference-link reads the definitions.
+  else if (node.type === 'footnote_ref') context.state.usedFootnotes.add(node.key)
+  else if (node.type === 'link_reference_definition') context.state.referenceDefinitions.push({ node, path })
+}
+
 function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
   context.nodeTypes.set(path, node.type)
-  if (node.type === 'footnote') context.state.footnoteKeys.set(path, node.key)
+  collectKeys(node, path, context)
   if (node.attrs?.id !== undefined) {
     context.state.ids.add(node.attrs.id)
     context.state.idOwners.set(node.attrs.id, node.type)

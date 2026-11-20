@@ -204,3 +204,17 @@ it('C2-W-140, C2-W-141: rules that read the node of a record and count its child
     expect(runs[0], JSON.stringify(source)).toEqual(runs[1])
   }
 })
+
+it('C2-W-141: rules that look up other records of the document report what the hand-written rules report', () => {
+  const on = { rules: { 'duplicate-reference-url': 'on' } }
+  for (const source of ['[a]: /u\n[b]: /u\n', '[a]: /u\n[a]: /v\n\n[a]\n', '[a]: /u\n\n[x][a]\n', '[a]: /u\n\n![x][a]\n', '[^n]: x\n',
+    'a[^n]\n\n[^n]: x\n', '[^n]: x [^m]\n\n[^m]: y\n', '# A\n\n### B\n', '## A\n\n# B\n\n### C\n', '= A\n\n# B\n', '# A\n\n# B\n',
+    '{.c}\n# A\n\n= B\n', '> # A\n\n=== C\n', '- ## A\n\n#### B\n']) {
+    const runs = ['data', 'code'].map((mode) => {
+      if (mode === 'data') process.env.CARVE_LINT_RULES = 'data'
+      else delete process.env.CARVE_LINT_RULES
+      return lint(source, on).map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset} ${entry.path} ${entry.message}`)
+    })
+    expect(runs[0], JSON.stringify(source)).toEqual(runs[1])
+  }
+})

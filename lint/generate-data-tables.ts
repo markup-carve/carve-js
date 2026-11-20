@@ -17,7 +17,7 @@ interface DataRule {
 }
 interface Model { text_leaves: string[], verbatim_leaves: string[], row_leaves: string[], rules: DataRule[] }
 
-const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right', 'count'])
+const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right', 'count', 'index_of'])
 const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from'])
 
 // C2-W-142: a pattern with a Unicode property class or a `\u{...}` escape reads code points.
@@ -36,6 +36,9 @@ const local = (name: string): string => `v_${name.replace(/\W/g, '_')}`
 /** Compiles the expressions of one model into TypeScript, hoisting its patterns and sets. */
 class Compiler {
   readonly hoisted: string[] = []
+  /** The record kinds and types that the lookups of the rule being compiled read. */
+  needs = { block: new Set<string>(), inline: new Set<string>() }
+  private sites = 0
   /** The compiled value of each `let` of the rule being compiled, read lazily where a rule names it. */
   lets = new Map<string, string>()
   private readonly sets: Record<string, readonly string[]>
@@ -124,6 +127,16 @@ class Compiler {
     return `someFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
   }
 
+  lookup(arg: Expr): string {
+    const spec = arg as { over: 'block' | 'inline', types: string[], key?: Expr, value?: Expr, before?: boolean, field: string }
+    for (const type of spec.types) this.needs[spec.over].add(type)
+    const types = this.hoist(`new Set<string>(${literal(spec.types)})`)
+    const key = spec.key === undefined ? 'undefined' : `(item: unknown): unknown => ${this.value(spec.key)}`
+    const value = spec.key === undefined ? 'undefined' : this.value(spec.value)
+    const found = `lookupAt(${this.sites++}, ${literal(spec.over)}, ${types}, ${key}, ${value}, ${spec.before === true ? 'self.start' : 'undefined'})`
+    return `at(${found}${spec.field.split('.').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')})`
+  }
+
   count(arg: Expr): string {
     const spec = arg as { in: string, from?: number, where: Expr }
     return `countFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
@@ -162,6 +175,8 @@ const VALUES: Record<string, Make> = {
   match: (_c, arg, _args, node) => `group(${literal(String(arg))}, ${node['at'] === 'end' ? 1 : 0})`,
   text_from: (c, arg) => `textFrom(line, ${c.number(arg)})`,
   count: (c, arg) => c.count(arg),
+  lookup: (c, arg) => c.lookup(arg),
+  index_of: (c, _arg, args) => `${c.text(args[0])}.indexOf(${c.text(args[1])})`,
   extend_left: (c, _arg, args) => `scan(line, ${c.number(args[0])}, ${c.text(args[1])}, -1)`,
   skip_right: (c, _arg, args) => `scan(line, ${c.number(args[0])}, ${c.text(args[1])}, 1)`,
 }
@@ -208,6 +223,7 @@ function reportLines(rule: DataRule, compiler: Compiler, indent: string): string
 
 function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string {
   const body: string[] = ['  groups = undefined']
+  compiler.needs = { block: new Set(), inline: new Set() }
   compiler.lets = new Map()
   for (const [name, expr] of Object.entries(rule.let ?? {})) {
     const code = compiler.value(expr)
@@ -378,6 +394,45 @@ function countFrom(list: unknown, from: number, where: (item: unknown) => boolea
   return found
 }
 
+interface Located { readonly start: number }
+
+let lookupRecords: { block: readonly Located[], inline: readonly Located[] } = { block: [], inline: [] }
+let lookupSites = new Map<number, Map<unknown, Located[]>>()
+
+/** The records of one document that the lookups read, in document order. */
+export function useRecords(block: readonly Located[], inline: readonly Located[]): void {
+  lookupRecords = { block, inline }
+  lookupSites = new Map()
+}
+
+// C2-W-141: the first record of the types whose key equals the value, or the last one that starts before the record.
+function lookupAt(site: number, over: 'block' | 'inline', types: ReadonlySet<string>, key: ((item: unknown) => unknown) | undefined,
+  value: unknown, before: number | undefined): Located | undefined {
+  let index = lookupSites.get(site)
+  if (index === undefined) {
+    index = new Map()
+    for (const record of lookupRecords[over]) {
+      if (!types.has((record as { type?: string }).type ?? '')) continue
+      const found = key === undefined ? undefined : key(record)
+      const list = index.get(found)
+      if (list === undefined) index.set(found, [record])
+      else list.push(record)
+    }
+    lookupSites.set(site, index)
+  }
+  const list = index.get(value)
+  if (list === undefined) return undefined
+  if (before === undefined) return list[0]
+  let low = 0
+  let high = list.length
+  while (low < high) {
+    const middle = (low + high) >> 1
+    if (list[middle]!.start < before) low = middle + 1
+    else high = middle
+  }
+  return low === 0 ? undefined : list[low - 1]
+}
+
 function at(value: unknown, ...keys: (string | number)[]): unknown {
   let current = value
   for (const key of keys) {
@@ -426,23 +481,33 @@ export function generateDataTables(json: string): string {
   const model = JSON.parse(json) as Model
   const compiler = new Compiler(model)
   const sets = { text_leaves: model.text_leaves, verbatim_leaves: model.verbatim_leaves, row_leaves: model.row_leaves }
-  const functions = model.rules.map((rule, index) => ruleFunction(rule, index, compiler))
+  const needs: { block: string[], inline: string[] }[] = []
+  const functions = model.rules.map((rule, index) => {
+    const code = ruleFunction(rule, index, compiler)
+    needs.push({ block: [...compiler.needs.block].sort(), inline: [...compiler.needs.inline].sort() })
+    return code
+  })
   const entries = model.rules.map((rule, index) => {
     const types = rule.types === undefined ? 'undefined' : literal(rule.types)
     const field = rule.over === 'line' ? 'leaf' : rule.over === 'block' ? 'parent.type' : 'parent'
     const only = rule.when === undefined ? undefined : admitted(rule.when, field, sets)
     return `  { id: ${literal(rule.id)}, over: ${literal(rule.over)}, types: ${types}, verbatim: new Set(${literal(rule.verbatim ?? [])}), `
-      + `only: ${only === undefined ? 'undefined' : `new Set(${literal([...only].sort())})`}, run: rule${index} },`
+      + `only: ${only === undefined ? 'undefined' : `new Set(${literal([...only].sort())})`}, needs: ${literal(needs[index])}, run: rule${index} },`
   })
   return ['// Generated from data/lint-model.json by lint/generate-data-tables.ts. Do not edit.', PRELUDE,
     ...compiler.hoisted.map((code, index) => `const K${index} = ${code}`), '', ...functions.flatMap((code) => [code, '']),
-    '/** `only`: the leaf of a line, the parent type of a block or the parent of an inline record that the rule can match. */',
+    '/**',
+    ' * `only`: the leaf of a line, the parent type of a block or the parent of an inline record that the rule can match.',
+    ' * `needs`: the block and inline types whose records the lookups of the rule read.',
+    ' */',
+    'interface Needs { readonly block: readonly string[], readonly inline: readonly string[] }',
     'export type DataRule =',
-    '  | { id: RuleId, over: \'line\', types: undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, run: (self: ModelLine, path: string, context: LintContext) => void }',
+    '  | { id: RuleId, over: \'line\', types: undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, needs: Needs, '
+      + 'run: (self: ModelLine, path: string, context: LintContext) => void }',
     '  | { id: RuleId, over: \'block\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, '
-      + 'run: (self: ModelBlock, path: string, context: LintContext) => void }',
+      + 'needs: Needs, run: (self: ModelBlock, path: string, context: LintContext) => void }',
     '  | { id: RuleId, over: \'inline\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, '
-      + 'run: (self: ModelInline, path: string, context: LintContext) => void }',
+      + 'needs: Needs, run: (self: ModelInline, path: string, context: LintContext) => void }',
     '',
     `export const VERBATIM_LEAVES: ReadonlySet<string> = new Set(${literal(model.verbatim_leaves)})`,
     '',
