@@ -152,16 +152,23 @@ function indexFor(entry: Diagnostic, own: LocationIndex, included: Map<string, L
 }
 
 /** C2-T-019: `FILE:LINE:COLUMN: SEVERITY CODE MESSAGE`, or `FILE: SEVERITY CODE MESSAGE` with no range. */
-function diagnosticLine(display: string, entry: Diagnostic, index: LocationIndex): string {
+function diagnosticLine(display: string, entry: Diagnostic, own: LocationIndex,
+  included: Map<string, LocationIndex>): string {
+  const index = indexFor(entry, own, included)
   const place = location(index, entry)
   const head = `${entry.file ?? display}${place === null ? '' : `:${place.line}:${place.column}`}`
-  return `${head}: ${entry.severity} ${entry.code} ${entry.message}\n`
+  const chain = entry.includedBy?.map((part) => {
+    const siteIndex = part.file === undefined ? own : indexFor({ ...entry, file: part.file }, own, included)
+    const site = location(siteIndex, { ...entry, range: part.range })
+    return `${part.file ?? display}${site === null ? '' : `:${site.line}:${site.column}`}`
+  }).join(' > ')
+  return `${head}: ${entry.severity} ${entry.code} ${entry.message}${chain ? ` (included from ${chain})` : ''}\n`
 }
 
 function lines(display: string, input: string, entries: readonly Diagnostic[], bytes?: Uint8Array): string {
   const own = locationIndex(bytes ?? input)
   const included = new Map<string, LocationIndex>()
-  return entries.map((entry) => diagnosticLine(display, entry, indexFor(entry, own, included))).join('')
+  return entries.map((entry) => diagnosticLine(display, entry, own, included)).join('')
 }
 
 /** C2-T-020: an entry with `line` and `column` added where it has a range. */
