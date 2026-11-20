@@ -113,7 +113,8 @@ export function startDataWalk(document: Node, context: LintContext, active: (id:
 export function runDataRules(walk: DataWalk, context: LintContext, active: (id: RuleId) => boolean, defaults: boolean): void {
   const rules = activeRules(active, defaults)
   const model = buildModel(walk.walked, context, (type, parent) => blockRuns(rules, type, parent))
-  runLines(model, rules, context)
+  // The hand-written node rules report during the visit, before the line rules: findings at one offset keep that order.
   runBlocks(model, context)
   runInline(walk, rules, context)
+  runLines(model, rules, context)
 }
