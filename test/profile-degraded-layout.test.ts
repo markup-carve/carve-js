@@ -59,7 +59,7 @@ describe('denied link past the nesting bound', () => {
       expect(codes(source)).toEqual(['destination-denied'])
     })
 
-  it('C2-H-166: a denied link itself past the bound is still degraded and reported', () => {
-    expect(codes('> > - [x](javascript:x)\n')).toEqual(['profile-construct-degraded'])
+  it('C2-H-166: a link under three containers stays, so its destination is reported', () => {
+    expect(codes('> > - [x](javascript:x)\n')).toEqual(['destination-denied'])
   })
 })

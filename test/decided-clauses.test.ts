@@ -221,9 +221,9 @@ describe('the other clauses of the two commits', () => {
     expect(render('![alt](i.png)', { profile: 'minimal' })).toBe('<p>[img: alt]</p>')
   })
 
-  it('C2-H-166: a node at the bound of max_nesting stays and its children are degraded', () => {
+  it('C2-H-166: four nested list containers stay at the comment bound and the fifth degrades', () => {
     expect(render('- a\n  - b\n    - c\n      - d\n        - e', { profile: 'comment' }))
-      .toBe('<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <p>- d - e</p>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>')
+      .toBe('<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\n                <p>- e</p>\n              </li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>')
   })
 
   it('C2-H-168: static mode writes core math as interactive mode does', () => {

@@ -7,9 +7,9 @@ describe('readiness diagnostic messages', () => {
     expect(excluded.find(entry => entry.code === 'profile-construct-degraded')?.message).toBe(
       'Degraded a construct the profile "minimal" does not allow: block_quote.',
     )
-    const nested = renderWithDiagnostics('> > > > `x`', { profile: 'comment' }).diagnostics
+    const nested = renderWithDiagnostics('> > > > > `x`', { profile: 'comment' }).diagnostics
     expect(nested.find(entry => entry.code === 'profile-construct-degraded')?.message).toBe(
-      'Degraded code because it exceeds the nesting limit of profile "comment"; move it to a shallower level or use a profile that permits the depth.',
+      'Degraded block_quote because it exceeds the nesting limit of profile "comment"; move it to a shallower level or use a profile that permits the depth.',
     )
     const captioned = renderWithDiagnostics('![x](a)\n^ caption', { profile: 'comment' }).diagnostics
     expect(captioned.find(entry => entry.code === 'profile-construct-degraded')?.message).toBe(
