@@ -1055,26 +1055,35 @@ function isLintableItemBlock(child: Node | undefined): child is Node & { pos: No
 }
 
 function overindentedBlocks(node: Node, path: string, context: LintContext,
-  visit: (at: number, child: Node, start: number, end: number, past: number, content: number) => void): void {
+  visit: (path: string, child: Node, start: number, end: number, past: number, content: number) => void): void {
   if (node.type !== 'list_item') return
   const layout = context.layouts.get(path)
   const content = layout?.contentColumn
   const marker = layout?.markerColumn
   if (content === undefined || marker === undefined) return
-  for (let at = 0; at < node.children.length; at++) {
-    const child = node.children[at]
-    if (!isLintableItemBlock(child)) continue
-    const line = context.lines[child.pos.startLine - 1]
-    const childPath = `${path}/children/${at}`
-    const column = blockColumn(child, childPath, context)
-    if (line === undefined || column === undefined || column <= content) continue
-    visit(at, child, line.start + child.pos.startColumn - 1, line.end, column - content, content)
+  const scan = (children: Node[], parentPath: string): void => {
+    for (let at = 0; at < children.length; at++) {
+      const child = children[at]
+      if (child === undefined) continue
+      const childPath = `${parentPath}/children/${at}`
+      if (isLintableItemBlock(child)) {
+        const line = context.lines[child.pos.startLine - 1]
+        const column = blockColumn(child, childPath, context)
+        if (line !== undefined && column !== undefined && column > content) {
+          visit(childPath, child, line.start + child.pos.startColumn - 1, line.end, column - content, content)
+        }
+      }
+      if (child.type === 'div' || child.type === 'admonition' || child.type === 'directive' || child.type === 'figure_group') {
+        scan(child.children, childPath)
+      }
+    }
   }
+  scan(node.children, path)
 }
 
 function listItemBlockIndent(node: Node, path: string, context: LintContext): void {
-  overindentedBlocks(node, path, context, (at, _child, start, end, _past, content) => context.report(
-    'list-item-block-overindented', start, end, `${path}/children/${at}`, { contentColumn: String(content + 1) }))
+  overindentedBlocks(node, path, context, (childPath, _child, start, end, _past, content) => context.report(
+    'list-item-block-overindented', start, end, childPath, { contentColumn: String(content + 1) }))
 }
 
 /** The marker column of the list item that holds the list at `path`, or undefined at the top of a container. */
@@ -1108,7 +1117,8 @@ function listMarkerBelowColumn(node: Node, path: string, context: LintContext): 
   if (context.nodeTypes.get(owner) === 'list_item' && index > 0) {
     const previous = `${owner}/children/${index - 1}`
     const outer = context.layouts.get(owner)?.markerColumn
-    const deeper = context.layouts.get(`${previous}/children/0`)?.markerColumn
+    const deeper = context.nodeTypes.get(previous) === 'list'
+      ? context.layouts.get(`${previous}/children/0`)?.markerColumn : undefined
     const column = context.layouts.get(`${path}/children/0`)?.markerColumn
     if (outer !== undefined && deeper !== undefined && column !== undefined && outer < column && column < deeper) {
       reportNode('list-marker-below-content-column', node.children[0]!, `${path}/children/0`, context,
@@ -1152,10 +1162,23 @@ function blockOwner(path: string, context: LintContext): { path: string, type: s
   return { path: ownerPath, type: ownerType }
 }
 
+function listItemThroughDiv(path: string, ownerType: string, context: LintContext): boolean {
+  if (ownerType === 'list_item') return true
+  let ancestor = path
+  let type = ownerType
+  while (type === 'div' || type === 'admonition' || type === 'directive' || type === 'figure_group') {
+    const split = ancestor.lastIndexOf('/children/')
+    ancestor = split < 0 ? '' : ancestor.slice(0, split)
+    type = context.nodeTypes.get(ancestor) ?? 'document'
+    if (type === 'list_item') return true
+  }
+  return false
+}
+
 function blockOverindent(node: Node, path: string, context: LintContext): void {
   if (node.pos === undefined) return
   const { path: ownerPath, type: ownerType } = blockOwner(path, context)
-  if (ownerType === 'list_item') return
+  if (listItemThroughDiv(ownerPath, ownerType, context)) return
   const start = context.chars[node.pos.startOffset] ?? 0
   const line = context.lines[node.pos.startLine - 1]
   if (line === undefined) return
