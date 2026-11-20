@@ -7,6 +7,8 @@
  * corpus is corrected, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
+  // The engine follows merged C2-W-058; the shared pin still contains the older writer-45 expectation.
+  ['writer-45', { fields: ['carve'], fix: 'Pin spec 8e5e2b251 after the separate adapter work lands.' }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
