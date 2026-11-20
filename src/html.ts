@@ -548,7 +548,7 @@ function isInlineNode(node: Node): node is Inline {
 
 function rendererHost(r: Render, blockDepth: number): ExtensionRenderHost {
   return {
-    blocks: (nodes) => {
+    blocks: (nodes, depth = 0) => {
       const previous = r.out
       const bidi = r.bidi
       const count = r.count
@@ -557,9 +557,9 @@ function rendererHost(r: Render, blockDepth: number): ExtensionRenderHost {
       try {
         for (const node of nodes.filter(isBlockNode)) {
           r.out = ''
-          writeBlocks(r, [node], 0)
-          if (html !== '' && r.out !== '') html += '\n'
-          html += r.out.slice(1)
+          writeBlocks(r, [node], depth)
+          if (html !== '' && r.out !== '') html += `\n${'  '.repeat(depth)}`
+          html += r.out.slice(1 + depth * 2)
         }
         return html
       } finally {
