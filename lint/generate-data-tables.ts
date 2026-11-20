@@ -94,9 +94,13 @@ class Compiler {
     const [subject, pattern, flags] = argsOf(arg)
     const source = String(pattern)
     const named = source.includes('(?<')
-    const regex = this.hoist(`new RegExp(${literal(source)}, ${literal(`${typeof flags === 'string' ? flags : ''}${named ? 'd' : ''}`)})`)
+    const plain = typeof flags === 'string' ? flags : ''
+    const regex = this.hoist(`new RegExp(${literal(source)}, ${literal(plain)})`)
     const value = this.value(subject)
-    return named ? `(hit(${regex}, ${value}) && mark(${this.base(subject)}))` : `test(${regex}, ${value})`
+    if (!named) return `test(${regex}, ${value})`
+    // A plain test first: a pattern with indices is several times slower, and most lines do not match.
+    const spans = this.hoist(`new RegExp(${literal(source)}, ${literal(`${plain}d`)})`)
+    return `(hit(${regex}, ${spans}, ${value}) && mark(${this.base(subject)}))`
   }
 
   some(arg: Expr): string {
@@ -215,15 +219,35 @@ const starts = (value: unknown, prefix: string): boolean => typeof value === 'st
 
 function spansOf(found: RegExpExecArray | RegExpMatchArray): Record<string, [number, number]> {
   const spans: Record<string, [number, number]> = {}
-  for (const [name, span] of Object.entries(found.indices?.groups ?? {})) if (span !== undefined) spans[name] = span
+  const all = found.indices?.groups
+  if (all === undefined) return spans
+  for (const name in all) {
+    const span = all[name]
+    if (span !== undefined) spans[name] = span
+  }
   return spans
 }
 
-function hit(regex: RegExp, value: unknown): boolean {
+let lastRegex: RegExp | undefined
+let lastValue = ''
+let lastSpans: Record<string, [number, number]> | undefined
+
+// The lines of one leaf often test the same text against the same pattern, as a block's opener line.
+function hit(regex: RegExp, spans: RegExp, value: unknown): boolean {
   if (typeof value !== 'string') return false
-  const found = regex.exec(value)
+  if (regex === lastRegex && value === lastValue) {
+    if (lastSpans === undefined) return false
+    groups = lastSpans
+    return true
+  }
+  lastRegex = regex
+  lastValue = value
+  lastSpans = undefined
+  if (!regex.test(value)) return false
+  const found = spans.exec(value)
   if (found === null) return false
-  groups = spansOf(found)
+  lastSpans = spansOf(found)
+  groups = lastSpans
   return true
 }
 

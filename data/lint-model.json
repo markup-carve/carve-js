@@ -1444,51 +1444,73 @@
         "opener": {
           "if": [
             {
-              "matches": [
+              "all": [
                 {
-                  "slice": [
+                  "eq": [
                     {
-                      "f": "leaf_head.text"
+                      "f": "leaf"
                     },
-                    {
-                      "sub": [
-                        {
-                          "f": "leaf_start"
-                        },
-                        {
-                          "f": "leaf_head.start"
-                        }
-                      ]
-                    }
+                    "comment_block"
                   ]
                 },
-                "^(?<op>%+)"
+                {
+                  "not": {
+                    "f": "leaf_first"
+                  }
+                }
               ]
             },
             {
-              "slice": [
+              "if": [
+                {
+                  "matches": [
+                    {
+                      "slice": [
+                        {
+                          "f": "leaf_head.text"
+                        },
+                        {
+                          "sub": [
+                            {
+                              "f": "leaf_start"
+                            },
+                            {
+                              "f": "leaf_head.start"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "^(?<op>%+)"
+                  ]
+                },
                 {
                   "slice": [
                     {
-                      "f": "leaf_head.text"
-                    },
-                    {
-                      "sub": [
+                      "slice": [
                         {
-                          "f": "leaf_start"
+                          "f": "leaf_head.text"
                         },
                         {
-                          "f": "leaf_head.start"
+                          "sub": [
+                            {
+                              "f": "leaf_start"
+                            },
+                            {
+                              "f": "leaf_head.start"
+                            }
+                          ]
                         }
                       ]
+                    },
+                    0,
+                    {
+                      "match": "op",
+                      "at": "end"
                     }
                   ]
                 },
-                0,
-                {
-                  "match": "op",
-                  "at": "end"
-                }
+                ""
               ]
             },
             ""

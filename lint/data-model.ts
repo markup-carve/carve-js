@@ -520,13 +520,25 @@ function colonLayoutsOf(context: LintContext): ColonLayout[] {
   for (const [path, layout] of context.layouts) {
     const type = context.nodeTypes.get(path)
     if (type === undefined || !COLON_KINDS.has(type)) continue
-    const from = context.chars[layout.startByte] ?? 0
+    const from = openerStart(context.source, context.chars[layout.startByte] ?? 0)
     let width = 0
     while (context.source.charCodeAt(from + width) === 58) width++
     if (width >= 3) found.push({ path, layout, type, from, to: context.chars[layout.endByte] ?? 0, width })
   }
   colonLayouts.set(context.layouts, found)
   return found
+}
+
+/** The opener of a block whose source starts at its attached attribute lines: past them and the next line's prefixes. */
+function openerStart(source: string, from: number): number {
+  let at = from
+  while (source.charCodeAt(at) === 123) {
+    const end = source.indexOf('\n', at)
+    if (end < 0) return from
+    at = end + 1
+    while (source.charCodeAt(at) === 32 || source.charCodeAt(at) === 9 || source.charCodeAt(at) === 62) at++
+  }
+  return at
 }
 
 function colonOpener(colon: ColonLayout, at: number, context: LintContext): ColonContainer | undefined {
@@ -545,13 +557,21 @@ function colonEntry(type: string, from: number, width: number, context: LintCont
 
 const OWNER_BOUNDARIES: ReadonlySet<string> = new Set(['block_quote', 'list_item', 'footnote', 'definition_description'])
 
+const owners = new WeakMap<LintContext['layouts'], { path: string, from: number, to: number }[]>()
+
 /** The path of the innermost quote, item, footnote or description whose source covers `at`, or `undefined`. */
 function ownerBoundary(at: number, context: LintContext): string | undefined {
+  let list = owners.get(context.layouts)
+  if (list === undefined) {
+    list = []
+    for (const [path, layout] of context.layouts) {
+      if (!OWNER_BOUNDARIES.has(context.nodeTypes.get(path) ?? '')) continue
+      list.push({ path, from: context.chars[layout.startByte] ?? 0, to: context.chars[layout.endByte] ?? 0 })
+    }
+    owners.set(context.layouts, list)
+  }
   let found: string | undefined
-  for (const [path, layout] of context.layouts) {
-    if (!OWNER_BOUNDARIES.has(context.nodeTypes.get(path) ?? '')) continue
-    const from = context.chars[layout.startByte] ?? 0
-    const to = context.chars[layout.endByte] ?? 0
+  for (const { path, from, to } of list) {
     if (from <= at && at < to && (found === undefined || path.length > found.length)) found = path
   }
   return found

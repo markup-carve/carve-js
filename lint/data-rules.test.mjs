@@ -87,3 +87,7 @@ it('C2-B-161: frontmatter-shaped-thematic-break reads an opener with trailing sp
 it('carve#6194: a div inside a footnote is not compared with a run that the document owns', () => {
   expect(findings('[^n]: :::: warning\n      ---\n:::\n', 'data').filter((f) => f.startsWith('colon'))).toEqual([])
 })
+
+it('C2-B-090: a colon container with an attached attribute line is an open colon container', () => {
+  expect(findings('{.c}\n::: note\n::::\n', 'data')).toEqual(findings('{.c}\n::: note\n::::\n', 'code'))
+})
