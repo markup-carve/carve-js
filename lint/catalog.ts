@@ -370,8 +370,8 @@ export const CATALOG = {
   ] },
   "deprecated-table-attribute": { severity: "warning", default: "on", messages: [
     [
-      "(key) does not apply to a pipe table in 0.2. Mark header cells with ",
-      "the header mark and write alignment on the cells.",
+      "`header-rows` does not apply to a pipe table in 0.2. Mark header cel",
+      "ls with the header mark and write alignment on the cells.",
     ].join(''),
   ], conditions: [
     "",
