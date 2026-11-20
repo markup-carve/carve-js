@@ -208,33 +208,45 @@ function movedBlock(below: Visit, above: Visit, line: number): Visit {
   return block
 }
 
+/** The block that starts on `line` and how far it moves left, when 0.1 ended a description above it. */
+function leftOfDescription(ctx: Context, line: number): { block: Visit; shift: number } | null {
+  const above = ctx.blocks.leaf[line - 1]
+  const below = ctx.blocks.leaf[line]
+  if (above == null || below == null || below === above || below.node.pos!.startLine !== line) return null
+  const left = quotesOf(above).length > 0 ? null : leftList(above, below)
+  if (left === null) return null
+  const owner = below.parent?.node.type === 'definition_list' ? below.parent : left
+  const shift = indentOf(lineText(ctx.lines, line)) - columnOf(ctx, owner)
+  const block = movedBlock(below, above, line)
+  // U-204 writes a fence at this column into the description on purpose, so a second run must keep it there.
+  return shift > 0 && block.node.type !== 'code_block' ? { block, shift } : null
+}
+
+/** The lines from `line` through `last` that are not blank, or none when one of them is indented less than `shift`. */
+function shiftedLines(ctx: Context, line: number, last: number, shift: number): number[] {
+  const lines: number[] = []
+  for (let at = line; at <= last; at++) {
+    const text = lineText(ctx.lines, at)
+    if (isBlank(text)) continue
+    if (!text.startsWith(' '.repeat(shift))) return []
+    lines.push(at)
+  }
+  return lines
+}
+
 /**
  * U-435, C2-B-067, C2-B-076: a block indented past a description mark stays in the description in 0.2.
  * Where 0.1 ended the description above it, the block moves to the column of the list that holds it.
  */
 export function descriptionColumns(ctx: Context): void {
   for (let line = 2; line <= ctx.lines.count; line++) {
-    const above = ctx.blocks.leaf[line - 1]
-    const below = ctx.blocks.leaf[line]
-    if (above == null || below == null || below === above || below.node.pos!.startLine !== line) continue
-    if (quotesOf(above).length > 0) continue
-    const left = leftList(above, below)
-    if (left === null) continue
-    const owner = below.parent?.node.type === 'definition_list' ? below.parent : left
-    const shift = indentOf(lineText(ctx.lines, line)) - columnOf(ctx, owner)
-    if (shift <= 0) continue
-    const block = movedBlock(below, above, line)
-    const last = block.node.pos!.endLine
-    const moved: number[] = []
-    for (let at = line; at <= last; at++) {
-      const text = lineText(ctx.lines, at)
-      if (isBlank(text)) continue
-      if (!text.startsWith(' '.repeat(shift))) { moved.length = 0; break }
-      moved.push(at)
-    }
+    const found = leftOfDescription(ctx, line)
+    if (found === null) continue
+    const last = found.block.node.pos!.endLine
+    const moved = shiftedLines(ctx, line, last, found.shift)
     for (const at of moved) {
       const start = lineStart(ctx.lines, at)
-      change(ctx, 'U-435', start, start + shift, '', 'block moved out of the description that 0.1 ended above it')
+      change(ctx, 'U-435', start, start + found.shift, '', 'block moved out of the description that 0.1 ended above it')
     }
     if (moved.length > 0) line = last
   }

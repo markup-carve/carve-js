@@ -59,6 +59,9 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-363#0': { output: 'a {%%}’word\n', entry: 'U-190', check: 'pass' },
   'U-165#2': { check: 'pass' },
   'U-215#0': { check: 'pass' },
+  // U-434 and U-437 write a spelling for these report shapes now.
+  'U-163#0': { output: '- [ ] q', entry: 'U-434', check: 'explained' },
+  'U-209#0': { output: '> quoted\n>\n> - item\n>\n> more\n', entry: 'U-437', check: 'pass' },
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */

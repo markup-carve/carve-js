@@ -267,6 +267,25 @@ let top: false | 'moved' | 'kept' | 'keptAfter' = false
  * U-042: 0.1 and 0.2 both keep the first definition of a note key. A later one in a container left no
  * block in 0.1, but 0.2 reads it as text there, so the late passes remove it; quote marks before it stay.
  */
+const NOTE_LINE = /^\[\^[^\]]+\]: /u
+const DROPPED = 'a later definition of the note key, which 0.1 dropped, is removed'
+
+/** Below a definition that moves out, the marks would open a quote of their own, unless 0.1 wrote that quote empty. */
+function belowMovedNote(ctx: Context, line: number): boolean {
+  return line > 1 && NOTE_LINE.test(insideQuotes(lineText(ctx.lines, line - 1)).trimStart())
+    && !ctx.visits.some(({ node }) => node.type === 'block_quote' && (node.children?.length ?? 0) === 0
+      && node.pos !== undefined && node.pos.startLine <= line - 1 && node.pos.endLine >= line - 1)
+}
+
+/** Its lazy lines went with the dropped definition in 0.1: no block of the tree holds them. Returns the last line removed. */
+function dropLazyLines(ctx: Context, line: number): number {
+  while (line < ctx.lines.count && isGap(ctx, line + 1) && !isBlank(lineText(ctx.lines, line + 1))
+    && !/^\[\^?[^\]]+\]: /u.test(insideQuotes(lineText(ctx.lines, line + 1)).trimStart())) {
+    removeLine(ctx, 'U-042', ++line, 'a lazy line of the dropped note definition is removed')
+  }
+  return line
+}
+
 function droppedNoteDefinitions(ctx: Context): void {
   const keys = ctx.doc.footnoteDefs
   if (typeof keys !== 'object' || keys === null) return
@@ -278,17 +297,9 @@ function droppedNoteDefinitions(ctx: Context): void {
     const label = /^\[\^([^\]]+)\]: /u.exec(insideQuotes(text).trimStart())?.[1]
     if (label === undefined || kept.has(line) || !isGap(ctx, line) || !(label in keys) || prefixLength(text) === 0) continue
     const start = lineStart(ctx.lines, line)
-    // Below a definition that moves out, the marks would open a quote of their own, unless 0.1 wrote that quote empty.
-    const above = line > 1 && /^\[\^[^\]]+\]: /u.test(insideQuotes(lineText(ctx.lines, line - 1)).trimStart())
-      && !ctx.visits.some(({ node }) => node.type === 'block_quote' && (node.children?.length ?? 0) === 0
-        && node.pos !== undefined && node.pos.startLine <= line - 1 && node.pos.endLine >= line - 1)
-    if (marks === '' || above) removeLine(ctx, 'U-042', line, 'a later definition of the note key, which 0.1 dropped, is removed')
-    else change(ctx, 'U-042', start, start + text.length, marks, 'a later definition of the note key, which 0.1 dropped, is removed')
-    // Its lazy lines went with it in 0.1: no block of the tree holds them.
-    while (line < ctx.lines.count && isGap(ctx, line + 1) && !isBlank(lineText(ctx.lines, line + 1))
-      && !/^\[\^?[^\]]+\]: /u.test(insideQuotes(lineText(ctx.lines, line + 1)).trimStart())) {
-      removeLine(ctx, 'U-042', ++line, 'a lazy line of the dropped note definition is removed')
-    }
+    if (marks === '' || belowMovedNote(ctx, line)) removeLine(ctx, 'U-042', line, DROPPED)
+    else change(ctx, 'U-042', start, start + text.length, marks, DROPPED)
+    line = dropLazyLines(ctx, line)
   }
 }
 

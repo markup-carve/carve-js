@@ -35,17 +35,25 @@ export function orderedTasks(ctx: Context): void {
 
 const BULLETS = '-*+'
 
+/** Where the spaces behind a bullet start and the box begins, for a 0.1 task item with more than one space between. */
+function wideBoxGap(ctx: Context, node: Node01): { from: number; to: number } | null {
+  const marker = node.pos!.startOffset
+  if (!BULLETS.includes(ctx.src[marker] ?? '')) return null
+  // An attribute block glued to the bullet stands before the spaces (C2-B-046 counts them after it).
+  const glued = ctx.src[marker + 1] === '{' ? ctx.src.indexOf('}', marker + 1) : marker
+  if (glued < 0 || glued >= lineEnd(ctx.lines, node.pos!.startLine)) return null
+  let at = glued + 1
+  while (ctx.src[at] === ' ') at++
+  return at - glued >= 3 && boxAt(ctx, at, node.pos!.startLine) !== null ? { from: glued + 2, to: at } : null
+}
+
 /** U-434, C2-B-046: 0.1 read a box after a run of spaces behind a bullet; 0.2 reads it only directly after one space. */
 export function taskBoxSpacing(ctx: Context): void {
   for (const visit of ctx.visits) {
     const { node } = visit
     if (node.type !== 'list_item' || typeof node.checked !== 'boolean' || node.pos === undefined) continue
     if (visit.parent?.node.type !== 'list' || visit.parent.node.ordered === true) continue
-    const marker = node.pos.startOffset
-    if (!BULLETS.includes(ctx.src[marker] ?? '')) continue
-    let at = marker + 1
-    while (ctx.src[at] === ' ') at++
-    if (at - marker < 3 || boxAt(ctx, at, node.pos.startLine) === null) continue
-    change(ctx, 'U-434', marker + 2, at, '', 'spaces between the bullet and the task box reduced to one')
+    const gap = wideBoxGap(ctx, node)
+    if (gap !== null) change(ctx, 'U-434', gap.from, gap.to, '', 'spaces between the bullet and the task box reduced to one')
   }
 }
