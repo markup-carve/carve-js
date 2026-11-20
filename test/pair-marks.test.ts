@@ -19,4 +19,11 @@ describe('C2-I-050 joined bare marks', () => {
     const found = lint('~a~\u200db~\n').find((entry) => entry.code === 'deprecated-bare-strike')
     expect(found?.range).toBeDefined()
   })
+  it('keeps a later pair when an earlier candidate cannot open', () => {
+    for (const [source, start] of [['\\~foo ~bar~', 6], ['a~x ~bar~', 4], ['~ x ~bar~', 4]] as const) {
+      const ranges: [number, number][] = []
+      pairedMarks(source, '~', 'deprecated-bare-strike', (from, to) => ranges.push([from, to]))
+      expect(ranges).toEqual([[start, source.length]])
+    }
+  })
 })

@@ -21,6 +21,16 @@ function joined(text: string, mark: string, id: string, at: number): boolean {
   return id.startsWith('deprecated-bare-') && JOINED.test(text.slice(at + mark.length, at + mark.length + 2))
 }
 
+function canOpen(text: string, mark: string, id: string, at: number): boolean {
+  if (!id.startsWith('deprecated-bare-') && id !== 'markdown-strong-double-star' && id !== 'markdown-strikethrough-double-tilde') {
+    return !joined(text, mark, id, at)
+  }
+  const after = text[at + mark.length]
+  return !joined(text, mark, id, at) && !escaped(text, at)
+    && after !== undefined && !EDGE_SPACE.test(after) && after !== mark[0]
+    && (mark.length === 2 || !isWord(text[at - 1]))
+}
+
 function nextCloser(text: string, mark: string, id: string, from: number): number {
   let end = text.indexOf(mark, from)
   while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end) || joined(text, mark, id, end))) {
@@ -50,7 +60,7 @@ export function pairedMarks(text: string, mark: string, id: string, visit: (star
   while (at < text.length) {
     const start = text.indexOf(mark, at)
     if (start < 0) return
-    if (joined(text, mark, id, start)) {
+    if (!canOpen(text, mark, id, start)) {
       at = start + mark.length
       continue
     }
