@@ -9,6 +9,16 @@ import { type LintOptions } from './types.ts'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
+const replacements = new Map<string, Uint8Array>()
+
+function replacement(text: string): Uint8Array {
+  let bytes = replacements.get(text)
+  if (bytes === undefined) {
+    bytes = encoder.encode(text)
+    replacements.set(text, bytes)
+  }
+  return bytes
+}
 
 interface Edit {
   start: number
@@ -109,10 +119,6 @@ function sameEdits(left: Plan, right: Plan): boolean {
       edit.text === right.edits[index]?.text)
 }
 
-function overlaps(edit: Edit, taken: readonly Edit[]): boolean {
-  return taken.some((other) => edit.start < other.end && other.start < edit.end)
-}
-
 /** Two rules that report one range with different replacements leave it to the author. */
 function candidates(bytes: Uint8Array, entries: readonly Diagnostic[]): Candidate[] {
   const byRange = new Map<string, Candidate[]>()
@@ -139,14 +145,40 @@ function candidates(bytes: Uint8Array, entries: readonly Diagnostic[]): Candidat
   return result
 }
 
+function lowerBound(sorted: readonly number[], value: number): number {
+  let low = 0
+  let high = sorted.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (sorted[middle]! < value) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
 function select(found: readonly Candidate[]): Candidate[] {
-  const taken: Edit[] = []
+  const starts = [...new Set(found.flatMap((candidate) => candidate.plan.edits.map((edit) => edit.start)))].sort((a, b) => a - b)
+  const greatestEnd = new Array<number>(starts.length + 1).fill(0)
+  const prefixEnd = (before: number): number => {
+    let at = lowerBound(starts, before)
+    let end = 0
+    while (at > 0) {
+      end = Math.max(end, greatestEnd[at]!)
+      at -= at & -at
+    }
+    return end
+  }
+  const take = (edit: Edit): void => {
+    let at = lowerBound(starts, edit.start) + 1
+    while (at < greatestEnd.length) {
+      greatestEnd[at] = Math.max(greatestEnd[at]!, edit.end)
+      at += at & -at
+    }
+  }
   const chosen: Candidate[] = []
-  let rightmost = 0
   for (const candidate of [...found].sort((a, b) => a.plan.at - b.plan.at)) {
-    if (candidate.plan.edits.some((edit) => edit.start < rightmost && overlaps(edit, taken))) continue
-    taken.push(...candidate.plan.edits)
-    for (const edit of candidate.plan.edits) rightmost = Math.max(rightmost, edit.end)
+    if (candidate.plan.edits.some((edit) => prefixEnd(edit.end) > edit.start)) continue
+    for (const edit of candidate.plan.edits) take(edit)
     chosen.push(candidate)
   }
   return chosen
@@ -157,7 +189,7 @@ function apply(bytes: Uint8Array, chosen: readonly Candidate[]): Uint8Array {
   const parts: Uint8Array[] = []
   let at = 0
   for (const edit of edits) {
-    parts.push(bytes.subarray(at, edit.start), encoder.encode(edit.text))
+    parts.push(bytes.subarray(at, edit.start), replacement(edit.text))
     at = edit.end
   }
   parts.push(bytes.subarray(at))
@@ -175,7 +207,7 @@ function offsetMap(chosen: readonly Candidate[]): (offset: number) => number {
   const shifts: number[] = []
   let shift = 0
   for (const edit of edits) {
-    shift += encoder.encode(edit.text).length - (edit.end - edit.start)
+    shift += replacement(edit.text).length - (edit.end - edit.start)
     shifts.push(shift)
   }
   return (offset) => {
