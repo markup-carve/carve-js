@@ -377,7 +377,7 @@ function substitutionArrow(node: Node, path: string, context: LintContext): void
 
 function frontmatterBreak(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'frontmatter') return
-  if (!raw(node, context).startsWith('---\n')) return
+  if (!/^---[ \t]*\r?\n/.test(raw(node, context))) return
   const value = node.value.trim()
   const first = node.value.split('\n', 1)[0]?.trim() ?? ''
   if (first === '' || value === '' || !value.includes(':')) reportNode('frontmatter-shaped-thematic-break', node, path, context)
