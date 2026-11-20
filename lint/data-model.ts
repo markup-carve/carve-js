@@ -60,6 +60,8 @@ export interface ModelBlock {
   readonly item_owner: Container
   readonly parent: Container
   readonly node: Node
+  readonly ancestors: string[]
+  readonly ancestor_ids: string[]
 }
 
 /** An inline record: one node of an inline content, with the leaf block that holds it. */
@@ -174,6 +176,17 @@ function ancestorTypes(path: string, types: Map<string, string>): string[] {
     const type = types.get(current)
     if (type !== undefined) out.push(type)
   }
+  return out
+}
+
+/** The paths of the blocks that hold the node at `path`, innermost first, the document last. */
+function ancestorPaths(path: string): string[] {
+  const out: string[] = []
+  for (let split = path.lastIndexOf('/children/'); split >= 0; split = path.lastIndexOf('/children/')) {
+    path = path.slice(0, split)
+    out.push(path)
+  }
+  if (out.at(-1) !== '') out.push('')
   return out
 }
 
@@ -395,6 +408,8 @@ class BlockRecord {
   }
 
   get attributed(): boolean { return this.node.attrs !== undefined }
+  get ancestors(): string[] { return ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>) }
+  get ancestor_ids(): string[] { return ancestorPaths(this.path) }
   get end(): number { return this.context.chars[this.node.pos?.endOffset ?? 0] ?? this.context.source.length }
   get text(): string { return this.context.source.slice(this.start, this.end) }
   get last_line(): ModelLine { return this.lines[(this.node.pos?.endLine ?? 1) - 1] ?? this.line }
@@ -639,7 +654,7 @@ function colonLayoutsOf(context: LintContext): ColonLayout[] {
 }
 
 /** The opener of a block whose source starts at its attached attribute lines: past them and the next line's prefixes. */
-function openerStart(source: string, from: number, marks = Infinity): number {
+export function openerStart(source: string, from: number, marks = Infinity): number {
   let at = from
   while (source.charCodeAt(at) === 123) {
     const end = source.indexOf('\n', at)

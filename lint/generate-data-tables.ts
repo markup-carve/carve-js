@@ -18,7 +18,7 @@ interface DataRule {
 interface Model { text_leaves: string[], verbatim_leaves: string[], row_leaves: string[], rules: DataRule[] }
 
 const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right', 'count', 'index_of'])
-const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from'])
+const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from', 'json_escape'])
 
 // C2-W-142: a pattern with a Unicode property class or a `\u{...}` escape reads code points.
 const unicodeFlags = (source: string, flags: string): string => (/\\[pu]\{/.test(source) ? `${flags}u` : flags)
@@ -38,7 +38,7 @@ class Compiler {
   readonly hoisted: string[] = []
   /** The record kinds and types that the lookups of the rule being compiled read. */
   needs = { block: new Set<string>(), inline: new Set<string>() }
-  private sites = 0
+  private readonly lookupSites = new Map<string, number>()
   /** The compiled value of each `let` of the rule being compiled, read lazily where a rule names it. */
   lets = new Map<string, string>()
   private readonly sets: Record<string, readonly string[]>
@@ -128,12 +128,17 @@ class Compiler {
   }
 
   lookup(arg: Expr): string {
-    const spec = arg as { over: 'block' | 'inline', types: string[], key?: Expr, value?: Expr, before?: boolean, field: string }
+    const spec = arg as { over: 'block' | 'inline', types: string[], key?: Expr, value?: Expr, before?: boolean, after?: boolean, field: string }
     for (const type of spec.types) this.needs[spec.over].add(type)
     const types = this.hoist(`new Set<string>(${literal(spec.types)})`)
     const key = spec.key === undefined ? 'undefined' : `(item: unknown): unknown => ${this.value(spec.key)}`
     const value = spec.key === undefined ? 'undefined' : this.value(spec.value)
-    const found = `lookupAt(${this.sites++}, ${literal(spec.over)}, ${types}, ${key}, ${value}, ${spec.before === true ? 'self.start' : 'undefined'})`
+    // Lookups over the same records by the same key share one index.
+    const signature = `${spec.over} ${types} ${key}`
+    let site = this.lookupSites.get(signature)
+    if (site === undefined) this.lookupSites.set(signature, site = this.lookupSites.size)
+    const side = spec.before === true ? -1 : spec.after === true ? 1 : 0
+    const found = `lookupAt(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, self.start, ${side})`
     return `at(${found}${spec.field.split('.').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')})`
   }
 
@@ -164,7 +169,7 @@ type Make = (c: Compiler, arg: Expr, args: Expr[], node: Record<string, Expr>) =
 const VALUES: Record<string, Make> = {
   f: (c, arg) => c.field(String(arg)),
   v: (c, arg) => c.letValue(String(arg)),
-  len: (c, arg) => `${c.text(arg)}.length`,
+  len: (c, arg) => `lenOf(${c.value(arg)})`,
   add: (c, _arg, args) => `(${args.map((item) => c.number(item)).join(' + ')})`,
   sub: (c, _arg, args) => `(${c.number(args[0])} - ${c.number(args[1])})`,
   slice: (c, _arg, args) => `${c.text(args[0])}.slice(${args.slice(1).map((item) => c.number(item)).join(', ')})`,
@@ -177,6 +182,7 @@ const VALUES: Record<string, Make> = {
   count: (c, arg) => c.count(arg),
   lookup: (c, arg) => c.lookup(arg),
   index_of: (c, _arg, args) => `${c.text(args[0])}.indexOf(${c.text(args[1])})`,
+  json_escape: (c, arg) => `JSON.stringify(${c.text(arg)}).slice(1, -1)`,
   extend_left: (c, _arg, args) => `scan(line, ${c.number(args[0])}, ${c.text(args[1])}, -1)`,
   skip_right: (c, _arg, args) => `scan(line, ${c.number(args[0])}, ${c.text(args[1])}, 1)`,
 }
@@ -405,9 +411,10 @@ export function useRecords(block: readonly Located[], inline: readonly Located[]
   lookupSites = new Map()
 }
 
-// C2-W-141: the first record of the types whose key equals the value, or the last one that starts before the record.
+// C2-W-141: the first record of the types whose key equals the value, the last one that starts before the record
+// (side -1) or the first one that starts after it (side 1).
 function lookupAt(site: number, over: 'block' | 'inline', types: ReadonlySet<string>, key: ((item: unknown) => unknown) | undefined,
-  value: unknown, before: number | undefined): Located | undefined {
+  value: unknown, start: number, side: -1 | 0 | 1): Located | undefined {
   let index = lookupSites.get(site)
   if (index === undefined) {
     index = new Map()
@@ -422,16 +429,18 @@ function lookupAt(site: number, over: 'block' | 'inline', types: ReadonlySet<str
   }
   const list = index.get(value)
   if (list === undefined) return undefined
-  if (before === undefined) return list[0]
+  if (side === 0) return list[0]
   let low = 0
   let high = list.length
   while (low < high) {
     const middle = (low + high) >> 1
-    if (list[middle]!.start < before) low = middle + 1
+    if (side < 0 ? list[middle]!.start < start : list[middle]!.start <= start) low = middle + 1
     else high = middle
   }
-  return low === 0 ? undefined : list[low - 1]
+  return side < 0 ? (low === 0 ? undefined : list[low - 1]) : list[low]
 }
+
+const lenOf = (value: unknown): number => (typeof value === 'string' || Array.isArray(value) ? value.length : 0)
 
 function at(value: unknown, ...keys: (string | number)[]): unknown {
   let current = value
