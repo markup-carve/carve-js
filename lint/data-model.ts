@@ -22,6 +22,8 @@ export interface ModelLine {
   readonly ancestors: string[]
   readonly shape: string
   readonly quote_prefix: boolean
+  readonly quote_depth: number
+  readonly quote_marks: number
   readonly raw_body: string
   readonly lazy: boolean
   readonly open_colon: ColonContainer[]
@@ -46,6 +48,9 @@ export interface ModelBlock {
   image_line: boolean
   index: number
   readonly after_quote_mark: boolean
+  readonly opener_start: number
+  readonly mark_column: number
+  readonly opener_text: string
   line: ModelLine
   readonly last_line: ModelLine
   readonly prev_type: string | undefined
@@ -227,6 +232,17 @@ class LineRecord {
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
   get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
+  get quote_depth(): number { return this.leaf_id === '' ? 0 : quoteDepth(this.leaf_id, this.context.nodeTypes as Map<string, string>) }
+  get quote_marks(): number {
+    let marks = 0
+    let at = 0
+    for (;;) {
+      while (this.text[at] === ' ' || this.text[at] === '\t') at++
+      if (this.text[at] !== '>' || (at + 1 < this.text.length && this.text[at + 1] !== ' ' && this.text[at + 1] !== '\t')) return marks
+      marks++
+      at++
+    }
+  }
   get raw_body(): string {
     const raw = this.context.source.slice(this.start, this.start + this.text.length)
     const from = this.body_start - this.start
@@ -395,6 +411,16 @@ class BlockRecord {
   get opener_column(): number {
     const marker = this.context.layouts.get(this.path)?.markerColumn
     return marker !== undefined && this.node.attrs === undefined ? marker : this.column
+  }
+  get opener_start(): number { return this.node.attrs === undefined ? this.start : openerStart(this.context.source, this.start) }
+  get mark_column(): number {
+    return this.node.attrs === undefined ? this.column : columnOf(this.context.source, this.opener_start, this.depth())
+  }
+  get opener_text(): string {
+    const source = this.context.source
+    const from = this.opener_start
+    const end = source.indexOf('\n', from)
+    return source.slice(from, end < 0 ? source.length : end).replace(/[ \t\r]+$/, '')
   }
   get after_quote_mark(): boolean { return this.context.source.slice(this.line.start, this.start).endsWith('> ') }
   get owner(): Container {

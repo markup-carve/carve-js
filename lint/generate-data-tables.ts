@@ -74,6 +74,7 @@ class Compiler {
       const last = split < 0 ? path : path.slice(split + 1)
       if (last === 'body' || last === 'raw_body') return `num(${this.field(`${head}body_start`)})`
       if (last === 'text') return `num(${this.field(`${head}start`)})`
+      if (last === 'opener_text') return `num(${this.field(`${head}opener_start`)})`
     }
     if (operator?.[0] === 'text_from') return this.number(operator[1])
     return '0'

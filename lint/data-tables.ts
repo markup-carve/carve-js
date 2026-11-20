@@ -193,10 +193,9 @@ function rule1(self: ModelInline, path: string, context: LintContext): void {
 }
 
 function rule2(self: ModelBlock, path: string, context: LintContext): void {
-  const line = self.line
   groups = undefined
-  if (!(!Boolean(self.after_quote_mark) && (num(self.column) > num(self.owner?.["content_column"])) && !same(self.item_owner?.["type"], "list_item"))) return
-  context.report("block-opener-overindented", num(self.start), num(((hit(K6, K7, textFrom(line, num(self.start))) && mark(num(self.start))) ? group("mark", 1) : (num(self.start) + 1))), path, { "kind": String((same(self.type, "block_quote") ? "quote" : (K5.has(self.type) ? "div" : str(self.type).replaceAll('_', ' ')))), "past": String((num(self.column) - num(self.owner?.["content_column"]))), "columns": String((same((num(self.column) - num(self.owner?.["content_column"])), 1) ? "column" : "columns")), "owner": String(str(self.owner?.["type"]).replaceAll('_', ' ')) }, 0)
+  if (!(!Boolean(self.after_quote_mark) && (num(self.mark_column) > num(self.owner?.["content_column"])) && !same(self.item_owner?.["type"], "list_item"))) return
+  context.report("block-opener-overindented", num(self.opener_start), num(((hit(K6, K7, self.opener_text) && mark(num(self.opener_start))) ? group("mark", 1) : (num(self.opener_start) + 1))), path, { "kind": String((same(self.type, "block_quote") ? "quote" : (K5.has(self.type) ? "div" : str(self.type).replaceAll('_', ' ')))), "past": String((num(self.mark_column) - num(self.owner?.["content_column"]))), "columns": String((same((num(self.mark_column) - num(self.owner?.["content_column"])), 1) ? "column" : "columns")), "owner": String(str(self.owner?.["type"]).replaceAll('_', ' ')) }, 0)
   return
 }
 
@@ -237,7 +236,7 @@ function rule4(self: ModelLine, path: string, context: LintContext): void {
     return
   }
   if (same(self.leaf, "frontmatter")) {
-    context.report("blockquote-marker-without-space", num(self.start), (num(self.start) + 1), path, { "text": String(str(self.text).slice(1)) }, 1)
+    context.report("blockquote-marker-without-space", num(self.start), (num(self.start) + trimEnd(str(self.text)).length), path, { "text": String(trimEnd(str(self.text)).slice(1)) }, 1)
     return
   }
 }
@@ -435,7 +434,7 @@ function rule25(self: ModelLine, path: string, context: LintContext): void {
 function rule26(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
   if (!(same(self.leaf, "paragraph") && Boolean(self.leaf_first) && same(self.shape, "attribute_line") && !Boolean(self.attached_here) && (!(self.leaf_next !== undefined) || Boolean(self.leaf_next?.["blank"]) || Boolean(self.leaf_next?.["closes_container"]) || !same(self.leaf_next?.["leaf_id"], self.leaf_id)))) return
-  if (Boolean(self.leaf_next?.["blank"])) {
+  if ((Boolean(self.leaf_next?.["blank"]) && (num(self.leaf_next?.["quote_marks"]) >= num(self.quote_depth)))) {
     context.report("unattached-block-attribute", num(self.body_start), num(self.body_end), path, {  }, 1)
     return
   }

@@ -185,6 +185,23 @@
       ]
     },
     {
+      "name": "quote_depth",
+      "type": "number",
+      "means": "the number of quotes that hold the leaf of the line",
+      "clauses": [
+        "C2-B-031"
+      ]
+    },
+    {
+      "name": "quote_marks",
+      "type": "number",
+      "means": "the number of quote marks at the start of the line, each after optional spaces and tabs and followed by a space, a tab or the end of the line",
+      "clauses": [
+        "C2-B-031",
+        "C2-W-143"
+      ]
+    },
+    {
       "name": "quote_prefix",
       "type": "boolean",
       "means": "the line before body_start holds a quote mark, so the line carries a prefix of a quote",
@@ -306,12 +323,39 @@
       ]
     },
     {
+      "name": "mark_column",
+      "type": "number",
+      "means": "the column of opener_start, counted as column is",
+      "clauses": [
+        "C2-B-003",
+        "C2-B-090"
+      ]
+    },
+    {
       "name": "opener_column",
       "type": "number",
       "means": "the marker column of the block where it has a marker and no attached attribute block, otherwise column",
       "clauses": [
         "C2-B-025",
         "C2-B-028"
+      ]
+    },
+    {
+      "name": "opener_start",
+      "type": "offset",
+      "means": "where the opening mark of the block starts: start, or for an attributed block the first character after its attribute lines, the spaces, tabs and quote marks before it skipped",
+      "clauses": [
+        "C2-B-090",
+        "C2-W-138"
+      ]
+    },
+    {
+      "name": "opener_text",
+      "type": "text",
+      "base": "opener_start",
+      "means": "the line from opener_start to its end, without trailing spaces and tabs",
+      "clauses": [
+        "C2-W-138"
       ]
     },
     {
@@ -809,7 +853,7 @@
           {
             "gt": [
               {
-                "f": "column"
+                "f": "mark_column"
               },
               {
                 "f": "owner.content_column"
@@ -829,16 +873,14 @@
       "report": [
         {
           "start": {
-            "f": "start"
+            "f": "opener_start"
           },
           "end": {
             "if": [
               {
                 "matches": [
                   {
-                    "text_from": {
-                      "f": "start"
-                    }
+                    "f": "opener_text"
                   },
                   "^(?<mark>#+|=+|:+|`+|~+|\\*+|-+|_+)"
                 ]
@@ -850,7 +892,7 @@
               {
                 "add": [
                   {
-                    "f": "start"
+                    "f": "opener_start"
                   },
                   1
                 ]
@@ -897,7 +939,7 @@
             "past": {
               "sub": [
                 {
-                  "f": "column"
+                  "f": "mark_column"
                 },
                 {
                   "f": "owner.content_column"
@@ -911,7 +953,7 @@
                     {
                       "sub": [
                         {
-                          "f": "column"
+                          "f": "mark_column"
                         },
                         {
                           "f": "owner.content_column"
@@ -1250,14 +1292,22 @@
               {
                 "f": "start"
               },
-              1
+              {
+                "len": {
+                  "trim_end": {
+                    "f": "text"
+                  }
+                }
+              }
             ]
           },
           "values": {
             "text": {
               "slice": [
                 {
-                  "f": "text"
+                  "trim_end": {
+                    "f": "text"
+                  }
                 },
                 1
               ]
@@ -3240,7 +3290,21 @@
       "report": [
         {
           "when": {
-            "f": "leaf_next.blank"
+            "all": [
+              {
+                "f": "leaf_next.blank"
+              },
+              {
+                "ge": [
+                  {
+                    "f": "leaf_next.quote_marks"
+                  },
+                  {
+                    "f": "quote_depth"
+                  }
+                ]
+              }
+            ]
           },
           "message": 1
         },
