@@ -9,7 +9,8 @@ import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 import { append } from '../src/append.ts'
-import { DATA_RULE_IDS, dataRulesOn, runDataRules, startDataWalk } from './data-rules.ts'
+import { runDataRules, startDataWalk } from './data-rules.ts'
+import { DATA_RULES } from './data-tables.ts'
 
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
@@ -114,9 +115,8 @@ function runNodeRules(node: Node, path: string, context: LintContext): void {
 
 function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
   const byType = new Map<Node['type'], Rule[]>()
-  const data = dataRulesOn()
   for (const rule of NODE_RULES) {
-    if (!active(rule.id, options) || data && DATA_RULE_IDS.has(rule.id)) continue
+    if (!active(rule.id, options)) continue
     for (const type of rule.nodes ?? []) {
       const rules = byType.get(type)
       if (rules === undefined) byType.set(type, [rule])
@@ -287,6 +287,130 @@ function filterControls(context: LintContext, controls: Control[][]): Diagnostic
   return output
 }
 
+const NODE_ORDER: ReadonlyMap<string, number> = new Map([
+  ['include-attributes-unused', 0],
+  ['include-lines-table-rows-hint', 1],
+  ['deprecated-bare-underline', 2],
+  ['deprecated-bare-strike', 3],
+  ['deprecated-bare-highlight', 4],
+  ['markdown-strong-double-star', 5],
+  ['markdown-strikethrough-double-tilde', 6],
+  ['djot-emphasis-underscore', 7],
+  ['djot-subscript-tilde', 8],
+  ['djot-superscript-caret', 9],
+  ['a11y/image-alt', 10],
+  ['empty-link-destination', 11],
+  ['deprecated-loose-attribute', 12],
+  ['deprecated-table-attribute', 13],
+  ['heading-level-skip', 14],
+  ['heading-marker-mixed', 15],
+  ['heading-closing-hashes', 16],
+  ['heading-trailing-attribute', 17],
+  ['duplicate-reference-url', 18],
+  ['deprecated-separator-row', 19],
+  ['table-row-cell-count', 20],
+  ['figure-group-empty', 21],
+  ['figure-group-single-panel', 22],
+  ['deprecated-substitution-arrow', 23],
+  ['frontmatter-shaped-thematic-break', 24],
+  ['blockquote-marker-without-space', 25],
+  ['html-comment-renders-as-text', 26],
+  ['bidi-control-in-source', 27],
+  ['description-term-multi-line', 28],
+  ['deprecated-indented-line-under-heading', 29],
+  ['figure-group-nested', 30],
+  ['figure-group-panel-number', 31],
+  ['footnotes-placement-in-container', 32],
+  ['references-placement-in-container', 33],
+  ['semantic-attribute-outside-span', 34],
+  ['semantic-attribute-value-ignored', 35],
+  ['table-column-arity', 36],
+  ['table-attribute-invalid', 37],
+  ['table-row-count-clamped', 38],
+  ['comment-splits-table-row', 39],
+  ['table-width-total', 40],
+  ['table-row-attribute-as-cell', 41],
+  ['emphasis-as-heading', 42],
+  ['comment-shaped-emphasis', 43],
+  ['glob-shaped-strong', 44],
+  ['djot-subscript-tilde-braced', 45],
+  ['djot-highlight-braces', 46],
+  ['unattached-inline-attribute', 47],
+  ['deprecated-cell-alignment', 48],
+  ['table-marker-run-padding', 49],
+  ['fence-closer-indented', 50],
+  ['figure-group-opener-metadata', 51],
+  ['comment-line-in-line-block', 52],
+  ['broken-crossref', 53],
+  ['broken-fragment-link', 54],
+  ['platform-issue-reference', 55],
+  ['platform-mention-token', 56],
+  ['delimited-table-wide-row', 57],
+  ['djot-intraword-underscore', 58],
+  ['emphasis-marker-before-attributes', 59],
+  ['emphasis-marker-before-attributes', 60],
+  ['carve-version-unsupported', 61],
+  ['blank-reference-label', 62],
+  ['comment-fence-closer-with-text', 63],
+  ['comment-in-reference-label', 64],
+  ['footnote-labels-differ-only-in-whitespace', 65],
+  ['table-column-overlap', 66],
+  ['tight-list-item-with-blank-line', 67],
+  ['braced-comment-in-a-template-source', 68],
+  ['region-marker-renders-as-text', 69],
+  ['unclosed-braced-comment', 70],
+  ['unclosed-inline-emphasis', 71],
+  ['ordered-list-kind-split', 72],
+  ['sigil-after-letter', 73],
+  ['list-item-body-below-content-column', 74],
+  ['list-item-block-overindented', 75],
+  ['list-marker-below-content-column', 76],
+  ['block-opener-overindented', 77],
+  ['braced-span-opener-as-text', 78],
+  ['consumed-key-near-miss', 79],
+  ['ordered-marker-right-aligned', 80],
+  ['table-span-marker-blocked', 81],
+  ['table-span-marker-attribute', 82],
+  ['uneven-list-indent', 83],
+  ['non-descriptive-link-text', 84],
+  ['unresolved-reference-link', 85],
+  ['unused-link-reference-definition', 86],
+  ['unresolved-footnote', 87],
+  ['unused-footnote-definition', 88],
+])
+
+const LINE_ORDER: ReadonlyMap<string, number> = new Map([
+  ['deprecated-continuation-marker', 0],
+  ['thematic-break-spelling', 1],
+  ['setext-heading-underline', 2],
+  ['deprecated-spaced-thematic-break', 3],
+  ['block-marker-as-text', 4],
+  ['html-comment-renders-as-text', 5],
+  ['bare-html-tag', 6],
+  ['empty-reference-definition', 7],
+  ['table-shaped-paragraph', 8],
+  ['blockquote-marker-without-space', 9],
+  ['block-opener-without-blank-line', 10],
+  ['list-marker-without-blank-line', 11],
+  ['indented-code-block', 12],
+  ['unattached-caption', 13],
+  ['unattached-block-attribute', 14],
+  ['markdown-definition-paragraph', 15],
+  ['empty-include-path', 16],
+  ['link-gap-before-destination', 17],
+  ['djot-plus-bullet', 18],
+  ['definition-in-container', 19],
+  ['definition-term-block-folded', 20],
+  ['github-alert-marker', 21],
+  ['djot-heading-continuation', 22],
+  ['quote-fence-ends-the-quote-above', 23],
+  ['region-marker-renders-as-text', 24],
+  ['caption-looking-paragraph', 25],
+  ['colon-fence-length-mismatch', 26],
+  ['description-separator-below-content-column', 27],
+  ['table-row-without-closing-pipe', 28],
+])
+
 function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnostic[] {
   const buckets = new Map<number, Diagnostic[]>()
   for (const diagnostic of diagnostics) {
@@ -296,10 +420,37 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
     else bucket.push(diagnostic)
   }
   const output: Diagnostic[] = []
+  const kind = new Map<string, number>([
+    ...DATA_RULES.map((rule): [string, number] => [rule.id, rule.over === 'line' ? 2 : 1]),
+    ...NODE_RULES.map((rule): [string, number] => [rule.id, 1]),
+    ...LINE_RULES.map((rule): [string, number] => [rule.id, 2]),
+  ])
+  const visitOrder = new Map([...context.nodeTypes.keys()].map((path, index) => [path, index]))
   const length = context.bytes[context.source.length] ?? 0
   for (let at = 0; at <= length; at++) {
     const bucket = buckets.get(at)
-    if (bucket !== undefined) append(output, bucket)
+    if (bucket !== undefined) {
+      bucket.sort((a, b) => {
+        const aKind = a.channel === 'lint' ? (kind.get(a.code) ?? 1) : 0
+        const bKind = b.channel === 'lint' ? (kind.get(b.code) ?? 1) : 0
+        if (aKind !== bKind) return aKind - bKind
+        if (aKind === 1) {
+          const origin = (diagnostic: Diagnostic): string => {
+            const path = diagnostic.path ?? ''
+            if (diagnostic.code !== 'table-row-cell-count') return path
+            const row = path.lastIndexOf('/children/')
+            const group = path.lastIndexOf('/children/', row - 1)
+            return group < 0 ? path : path.slice(0, group)
+          }
+          const visit = (visitOrder.get(origin(a)) ?? 0) - (visitOrder.get(origin(b)) ?? 0)
+          if (visit !== 0) return visit
+          return (NODE_ORDER.get(a.code) ?? 999) - (NODE_ORDER.get(b.code) ?? 999)
+        }
+        if (aKind === 2) return (LINE_ORDER.get(a.code) ?? 999) - (LINE_ORDER.get(b.code) ?? 999)
+        return 0
+      })
+      append(output, bucket)
+    }
   }
   return output
 }
@@ -367,15 +518,14 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
     ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
-  const data = dataRulesOn()
   // The default rule set is the same on every call, so its compiled rule lists are kept.
   const defaults = options.rules === undefined && options.platforms === undefined
-  const walk = data ? startDataWalk(parsed.document, context, (id) => active(id, options), defaults) : undefined
+  const walk = startDataWalk(parsed.document, context, (id) => active(id, options), defaults)
   if (walk !== undefined) context.dataWalk = walk
   visit(parsed.document, '', context, controls)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
-  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !(data && DATA_RULE_IDS.has(rule.id)))
+  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options))
   for (const line of scanLines) {
     if (line.opaque) continue
     for (const rule of activeLineRules) rule.checkLine?.(line, context)
@@ -385,5 +535,6 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
   return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
 }
 
-export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES]
+export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES,
+  ...DATA_RULES.map((rule): Rule => ({ id: rule.id, ...(rule.over === 'line' ? { lines: true } : {}) }))]
 export type { LintOptions } from './types.ts'

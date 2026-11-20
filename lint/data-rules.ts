@@ -11,12 +11,6 @@ type InlineRun = (self: ModelInline, path: string, context: LintContext) => void
 /** The ids of the catalog rows that `data/lint-model.json` states as data. */
 export const DATA_RULE_IDS: ReadonlySet<string> = new Set(DATA_RULES.map((rule) => rule.id))
 
-/** The internal switch: run the data rules in place of the hand-written ones. */
-export function dataRulesOn(): boolean {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
-  return env?.['CARVE_LINT_RULES'] === 'data'
-}
-
 interface Active {
   lines: DataRule[]
   blocks: DataRule[]
@@ -119,8 +113,24 @@ export function runDataRules(walk: DataWalk, context: LintContext, active: (id: 
   const rules = activeRules(active, defaults)
   const model = buildModel(walk.walked, context, (type, parent) => blockRuns(rules, type, parent), rules.needBlocks)
   useRecords(model.blocks, walk.inline)
+  let commentPaths: Map<number, string> | undefined
+  const report: LintContext['report'] = (id, start, end, path, values, message) => {
+    if (id === 'list-item-body-below-content-column') path = path.slice(0, path.lastIndexOf('/children/'))
+    if (id === 'comment-fence-closer-with-text') {
+      if (commentPaths === undefined) {
+        commentPaths = new Map()
+        for (const entry of walk.walked) {
+          if (entry.node.type !== 'comment' || entry.node.form !== 'block' || entry.node.pos === undefined) continue
+          for (let line = entry.node.pos.startLine; line <= entry.node.pos.endLine; line++) commentPaths.set(line, entry.path)
+        }
+      }
+      path = commentPaths.get(context.offsetLines[start] ?? 1) ?? path
+    }
+    context.report(id, start, end, path, values, message)
+  }
+  const reportingContext = { ...context, report }
   // The hand-written node rules report during the visit, before the line rules: findings at one offset keep that order.
-  runBlocks(model, context)
-  runInline(walk, rules, context)
-  runLines(model, rules, context)
+  runBlocks(model, reportingContext)
+  runInline(walk, rules, reportingContext)
+  runLines(model, rules, reportingContext)
 }
