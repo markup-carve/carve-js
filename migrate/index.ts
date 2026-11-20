@@ -1,7 +1,7 @@
 // C2-A-176 to C2-A-180: stored 1.x and retired draft trees are upgraded outside the reader.
 import { type DocumentNode, type Envelope, type ExtensionDeclaration } from '../src/ast.ts'
 import { parseWithLayout } from '../src/api.ts'
-import { validateTree } from '../src/ast-validate.ts'
+import { CarveTreeError, validateTree } from '../src/ast-validate.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { type SourceLayout } from '../src/layout.ts'
 import { fieldRules, renamedType, ruleExists } from './rules.ts'
@@ -200,8 +200,18 @@ function stubs(state: MigrationState): ExtensionDefinition[] {
     .map((entry) => ({ name: entry.name, version: entry.version, props: {}, slots: {} }))
 }
 
+function migrationInput(json: unknown): unknown {
+  if (typeof json !== 'string') return json
+  try {
+    return JSON.parse(json)
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new CarveTreeError('', error.message)
+    throw error
+  }
+}
+
 export function migrateTree(json: unknown, options: MigrateOptions = {}): MigrationResult {
-  const input: unknown = typeof json === 'string' ? JSON.parse(json) : json
+  const input = migrationInput(json)
   const envelope = object(input) && input['type'] === undefined ? input : undefined
   const value = envelope === undefined ? input : envelope['document']
   const old = record(value)
