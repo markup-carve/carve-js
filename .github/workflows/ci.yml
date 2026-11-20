@@ -19,6 +19,31 @@ concurrency:
 # rather than inheriting the 360-minute GitHub default.
 
 jobs:
+  git-consumer:
+    name: git dependency consumer on Node ${{ matrix.node-version }}
+    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - name: Install and import from a git dependency
+        run: |
+          consumer="$(mktemp -d)"
+          cd "$consumer"
+          printf '{"private":true,"type":"module"}\n' > package.json
+          npm install --no-audit --no-fund "git+file://${GITHUB_WORKSPACE}"
+          node --input-type=module -e "import { render } from '@markup-carve/carve'; if (!render('hello').includes('hello')) process.exit(1)"
+
   mutation:
     name: parser and HTML mutation gate
     if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
