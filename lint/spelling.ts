@@ -505,6 +505,7 @@ function descriptionColumn(line: Line, context: LintContext): void {
 }
 
 const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'directive', 'admonition', 'figure_group', 'line_block', 'block_quote'])
+const COLON_OWNER_BARRIERS: ReadonlySet<string> = new Set(['block_quote', 'list_item', 'definition_description', 'footnote'])
 
 function colonKind(type: string, opener: string): string {
   if (type === 'admonition') return 'admonition'
@@ -580,19 +581,28 @@ function colonContainer(path: string, layout: NodeLayout, start: number, context
   return { width: run.length, start: opener!.start, kind: colonKind(type, opener!.raw) }
 }
 
-function colonContainers(start: number, context: LintContext): { width: number, start: number, kind: string }[] {
-  const open: { width: number, start: number, kind: string }[] = []
+function ownerBarrier(path: string, layout: NodeLayout, start: number, end: number, context: LintContext): boolean {
+  const type = context.nodeTypes.get(path)
+  if (type === undefined || !COLON_OWNER_BARRIERS.has(type)) return false
+  return (context.chars[layout.startByte] ?? 0) <= start && (context.chars[layout.endByte] ?? 0) >= end
+}
+
+function colonContainers(start: number, end: number, context: LintContext): { width: number, start: number, kind: string }[] {
+  const open: { path: string, width: number, start: number, kind: string }[] = []
+  let boundary = ''
   for (const [path, layout] of context.layouts) {
+    if (path.length > boundary.length && ownerBarrier(path, layout, start, end, context)) boundary = path
     const container = colonContainer(path, layout, start, context)
-    if (container !== undefined) open.push(container)
+    if (container !== undefined) open.push({ ...container, path })
   }
-  return open.sort((a, b) => b.start - a.start)
+  return open.filter(({ path }) => boundary === '' || path === boundary || path.startsWith(`${boundary}/`))
+    .sort((a, b) => b.start - a.start)
 }
 
 function colonFenceLength(line: Line, context: LintContext): void {
   const { text, start } = contentLine(line)
-  if (!/^:{3,}$/.test(text)) return
-  const open = colonContainers(start, context)
+  if (line.paragraph || !/^:{3,}$/.test(text)) return
+  const open = colonContainers(start, start + text.length, context)
   const opener = open[0]
   if (opener === undefined || opener.width === text.length) return
   const openedAt = context.offsetLines[opener.start] ?? 1

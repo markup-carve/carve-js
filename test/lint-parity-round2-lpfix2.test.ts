@@ -41,6 +41,16 @@ describe('round two lint parity ticket inputs', () => {
     expect(ranges(`{.c}\n:::: note\n::: figure\n${panels}::::\n`, 'colon-fence-length-mismatch')).toHaveLength(1)
   })
 
+  it('limits colon candidates to the owning quote or item under carve#6194', () => {
+    expect(ranges('::::\n> :::', 'colon-fence-length-mismatch')).toEqual([])
+    expect(ranges('::::\n- a\n\n  :::  ', 'colon-fence-length-mismatch')).toEqual([])
+    expect(ranges('::::\n2) - > :::\n     :::', 'colon-fence-length-mismatch')).toEqual([])
+  })
+
+  it('does not lint a colon run that remains paragraph text under carve#6201', () => {
+    expect(ranges('::::\npara\n> :::', 'colon-fence-length-mismatch')).toEqual([])
+  })
+
   it('keeps heading continuations out of the definition warning', () => {
     for (const mark of ['#', '##', '=']) {
       expect(ranges(`${mark} H\n [a]: u`, 'definition-in-container')).toEqual([])
