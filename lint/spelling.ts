@@ -252,12 +252,20 @@ function quoteContinues(line: Line, previous: Line, context: LintContext): boole
   return previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')
 }
 
+function openerCandidate(line: Line, context: LintContext): { text: string, start: number } {
+  // A lazy quote marker is part of the candidate even when the leaf content starts after it.
+  if (line.text[0] !== '>' && line.text[0] !== ' ' && line.text[0] !== '\t') return lineText(line)
+  const original = context.lines[line.number - 1] ?? line
+  return original.text.trimStart().startsWith('> ') && !hasAncestor(line.path, context, 'block_quote')
+    ? trimmed(original) : lineText(line)
+}
+
 function openerWithoutBlank(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || previous.path !== line.path || previous.text.trim() === '') return
   const owner = context.nodeTypes.get(line.path)
   if (owner !== 'paragraph' && owner !== 'caption' && owner !== 'cell_paragraph') return
-  const { text, start } = lineText(line)
+  const { text, start } = openerCandidate(line, context)
   if (!startsBlock(text)) return
   if (text.startsWith('{') && !text.endsWith('}')) return
   if (text.startsWith('[') && hasAncestor(line.path, context, 'footnote')) return
@@ -290,7 +298,7 @@ function indentedCode(line: Line, context: LintContext): void {
 /** A line outside paragraph text that starts with a bracket is a link, abbreviation or citation definition. */
 function isDefinitionLine(text: string): boolean {
   const start = text.trimStart()
-  return start.startsWith('[') || start.startsWith('*[')
+  return (start.startsWith('[') && !start.startsWith('[^')) || start.startsWith('*[')
 }
 
 function unattachedCaption(line: Line, context: LintContext): void {
@@ -300,6 +308,7 @@ function unattachedCaption(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   // C2-B-149: below any other block the line is text; below a definition, which is no block, it is left alone.
   if (previous !== undefined && !previous.paragraph && isDefinitionLine(previous.text)
+    && !line.text.trimStart().startsWith('> ')
     && !/^\[\^[^\]]+\]:[ \t]*%%/.test(previous.text)) return
   context.report('unattached-caption', start, start + text.length, line.path)
 }
@@ -361,9 +370,10 @@ function djotPlus(line: Line, context: LintContext): void {
 
 function definitionInContainer(line: Line, context: LintContext): void {
   // C2-B-081: the line's text behind every container mark, a list marker or description mark included.
-  const { text, start } = lineText(line)
+  const { text, start } = quoteDepth(line.path, context) > 0 ? contentLine(line) : lineText(line)
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
+  if (textOwner(line.path, context) === 'heading') return
   if (hasAncestor(line.path, context, 'footnote')) return
   if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) !== line.number
     && line.text[0] !== ' ' && line.text[0] !== '\t') return
@@ -383,11 +393,18 @@ function foldedTerm(line: Line, context: LintContext): void {
 }
 
 function githubAlert(line: Line, context: LintContext): void {
-  const match = /^\s*(?:>[ \t]*)+(?:\[[^\]\n]+\]:[ \t]*>[ \t]*)?\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
+  const match = GITHUB_ALERT.exec(line.text)
   if (match === null || !line.paragraph) return
   const at = match[0].lastIndexOf('[!')
   context.report('github-alert-marker', line.start + at, line.end, line.path)
 }
+
+const GITHUB_ALERT = new RegExp(
+  '^\\s*(?:>[ \\t]*)+'
+  + '(?:(?:[-*]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]*>[ \\t]*)?'
+  + '(?:\\[[^\\]\\n]+\\]:[ \\t]*>[ \\t]*)?'
+  + '\\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\]',
+)
 
 function djotHeadingContinuation(line: Line, context: LintContext): void {
   const previous = prior(line, context)
@@ -468,8 +485,8 @@ function listColumnAbove(line: Line, context: LintContext): number | undefined {
 interface BelowColumn { text: string, start: number, column: number, hostColumn: number }
 
 function belowListColumn(line: Line, context: LintContext): BelowColumn | undefined {
-  if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) !== line.number
-    && line.text.trimStart().startsWith('>')) return undefined
+  // A quote-shaped lazy line outside a quote starts with `>`, not with the colon behind it.
+  if (quoteDepth(line.path, context) === 0 && line.text.trimStart().startsWith('>')) return undefined
   if (context.state.descriptionStarts.has(line.number)) return undefined
   const { text, start } = contentLine(line)
   if (!/^::?(?:[ \t]|$)/.test(text) || opensEntry(line, context)) return undefined
@@ -488,6 +505,7 @@ function descriptionColumn(line: Line, context: LintContext): void {
 }
 
 const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'directive', 'admonition', 'figure_group', 'line_block', 'block_quote'])
+const COLON_OWNER_BARRIERS: ReadonlySet<string> = new Set(['block_quote', 'list_item', 'definition_description', 'footnote'])
 
 function colonKind(type: string, opener: string): string {
   if (type === 'admonition') return 'admonition'
@@ -527,28 +545,64 @@ function closedBeforeRun(path: string, layout: NodeLayout, width: number, contex
   return layout.closerRaw === undefined ? hasOwnEarlierCloser(path, layout, width, context) : layout.closerRaw !== ''
 }
 
-function colonContainers(start: number, context: LintContext): { width: number, start: number, kind: string }[] {
-  const open: { width: number, start: number, kind: string }[] = []
-  for (const [path, layout] of context.layouts) {
-    const from = context.chars[layout.startByte] ?? 0
-    const to = context.chars[layout.endByte] ?? 0
-    if (from >= start || to < start - 1) continue
-    const run = /^:{3,}/.exec(context.source.slice(from))?.[0]
-    if (run === undefined) continue
-    if (to < start && closedBeforeRun(path, layout, run.length, context)) continue
-    const type = context.nodeTypes.get(path)
-    if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) continue
-    const line = context.lines[(context.offsetLines[from] ?? 1) - 1]
-    const openerText = line?.text.slice(from - line.start) ?? ''
-    open.push({ width: run.length, start: from, kind: colonKind(type, openerText) })
+function colonOpener(type: string, layout: NodeLayout, context: LintContext): { raw: string, start: number } | undefined {
+  const from = context.chars[layout.startByte] ?? 0
+  if (layout.openerRaw !== undefined) {
+    const start = context.source.indexOf(layout.openerRaw, from)
+    return start < 0 ? undefined : { raw: layout.openerRaw, start }
   }
-  return open.sort((a, b) => b.start - a.start)
+  if (type !== 'figure_group') return undefined
+  const to = context.chars[layout.endByte] ?? from
+  const first = context.offsetLines[from] ?? 1
+  const last = context.offsetLines[to] ?? first
+  for (let number = first; number <= last; number++) {
+    const line = context.lines[number - 1]
+    if (line === undefined) break
+    const candidate = contentLine(line)
+    if (/^:{3,}/.test(candidate.text)) return { raw: candidate.text, start: candidate.start }
+  }
+  return undefined
+}
+
+function colonContainer(path: string, layout: NodeLayout, start: number, context: LintContext):
+  { width: number, start: number, kind: string } | undefined {
+  const type = context.nodeTypes.get(path)
+  if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) return undefined
+  const opener = colonOpener(type, layout, context)
+  const run = opener === undefined ? undefined : /^:{3,}/.exec(opener.raw)?.[0]
+  if (run === undefined) return undefined
+  const to = context.chars[layout.endByte] ?? 0
+  if (opener!.start >= start) return undefined
+  if (to < start) {
+    const parent = context.layouts.get(path.slice(0, path.lastIndexOf('/children/')))
+    const parentEnd = parent === undefined ? -1 : context.chars[parent.endByte] ?? -1
+    if (closedBeforeRun(path, layout, run.length, context) || parentEnd < start) return undefined
+  }
+  return { width: run.length, start: opener!.start, kind: colonKind(type, opener!.raw) }
+}
+
+function ownerBarrier(path: string, layout: NodeLayout, start: number, end: number, context: LintContext): boolean {
+  const type = context.nodeTypes.get(path)
+  if (type === undefined || !COLON_OWNER_BARRIERS.has(type)) return false
+  return (context.chars[layout.startByte] ?? 0) <= start && (context.chars[layout.endByte] ?? 0) >= end
+}
+
+function colonContainers(start: number, end: number, context: LintContext): { width: number, start: number, kind: string }[] {
+  const open: { path: string, width: number, start: number, kind: string }[] = []
+  let boundary = ''
+  for (const [path, layout] of context.layouts) {
+    if (path.length > boundary.length && ownerBarrier(path, layout, start, end, context)) boundary = path
+    const container = colonContainer(path, layout, start, context)
+    if (container !== undefined) open.push({ ...container, path })
+  }
+  return open.filter(({ path }) => boundary === '' || path === boundary || path.startsWith(`${boundary}/`))
+    .sort((a, b) => b.start - a.start)
 }
 
 function colonFenceLength(line: Line, context: LintContext): void {
   const { text, start } = contentLine(line)
-  if (!/^:{3,}$/.test(text)) return
-  const open = colonContainers(start, context)
+  if (line.paragraph || !/^:{3,}$/.test(text)) return
+  const open = colonContainers(start, start + text.length, context)
   const opener = open[0]
   if (opener === undefined || opener.width === text.length) return
   const openedAt = context.offsetLines[opener.start] ?? 1
