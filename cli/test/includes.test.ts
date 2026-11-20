@@ -111,6 +111,33 @@ describe('the file resolver', () => {
 })
 
 describe('carve and includes', () => {
+  it('lint names each included file and its outermost-first include sites in text and JSON', () => {
+    const root = tree({
+      'book/main.crv': '**top**\n\n{{ parts/a.crv }}\n\n{{ parts/a.crv }}\n',
+      'book/parts/a.crv': 'ok\n**child**\n\n{{ nested/b.crv }}\n',
+      'book/parts/nested/b.crv': 'before\n**nested**\n',
+    })
+    const text = cli(['lint', '--include-root', root, 'book/main.crv'], root)
+    expect(text.status).toBe(1)
+    expect(text.stdout).toContain('book/main.crv:1:1: warning markdown-strong-double-star')
+    expect(text.stdout).toContain('book/parts/a.crv:2:1: warning markdown-strong-double-star')
+    expect(text.stdout).toContain('(included from book/main.crv:3:1)')
+    expect(text.stdout).toContain('parts/nested/b.crv:2:1: warning markdown-strong-double-star')
+    expect(text.stdout).toContain('(included from book/main.crv:3:1 > book/parts/a.crv:4:1)')
+    expect(text.stdout.split('\n')[0]).not.toContain('(included from')
+
+    const json = cli(['lint', '--include-root', root, '--json', 'book/main.crv'], root)
+    expect(json.status).toBe(1)
+    const report = JSON.parse(json.stdout) as { files: { diagnostics: {
+      code: string, file?: string, line?: number, column?: number,
+      includedBy?: { file?: string, line: number, column: number }[]
+    }[] }[] }
+    const nested = report.files[0]!.diagnostics.find((entry) => entry.file === 'book/parts/nested/b.crv')!
+    expect(nested).toMatchObject({ code: 'markdown-strong-double-star', line: 2, column: 1,
+      includedBy: [{ line: 3, column: 1 }, { file: 'book/parts/a.crv', line: 4, column: 1 }] })
+    expect(report.files[0]!.diagnostics.find((entry) => entry.file === undefined)!.includedBy).toBeUndefined()
+  })
+
   it('C2-N-004: render expands by default from the directory of the entry file', () => {
     const root = tree({ 'book/main.crv': 'Top.\n\n{{ chapters/one.crv }}\n', 'book/chapters/one.crv': 'One.\n' })
     const result = cli(['render', 'book/main.crv'], root)
