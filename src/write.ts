@@ -1,12 +1,14 @@
 // The canonical writer (spec/0.2/writer.md): a tree, and optionally the sidecar that was returned
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
-import { childNodes, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode } from './ast.ts'
+import {
+  childNodes, type CommentNode, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode,
+} from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
-import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk } from './write-check.ts'
+import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
@@ -21,8 +23,8 @@ export interface LayoutEntry extends WriterFacts {
 
 export interface WriteOptions {
   extensions?: readonly ExtensionDefinition[]
-  /** The sidecar of the tree (C2-L-004). Only its node entries are read. */
-  layout?: { nodes: readonly LayoutEntry[] }
+  /** The sidecar of the tree (C2-L-004). Its node entries are read, and its source for C2-W-144. */
+  layout?: { nodes: readonly LayoutEntry[], source?: string, encoding?: string }
   /** C2-W-068: pads the cells of each column of a pipe table to one display width. */
   alignTables?: boolean
   /**
@@ -891,9 +893,117 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
   w.lines = source.slice(first ? 0 : 1, -1).split('\n')
 }
 
+const NEXT_LINE_CONTROL = /%% carve-lint-disable-next-line(?![^ ,])/
+const BLANK_IN_CONTAINERS = /^[ \t>]*\r?$/
+/** C2-B-215: the keyword starts the comment, and the comment ends or a space or a comma follows it. */
+const CONTROL_VALUE = /^carve-lint-disable-next-line(?![^ ,])/
+/** The parse work of the C2-W-144 check, as a multiple of the document length, so that it stays linear. */
+const CONTROL_CHECK_BUDGET = 16
+
+/** The runs of blank lines, as line ranges, that stand directly below a next-line control comment. */
+function blanksBelowControls(lines: readonly string[]): [number, number][] {
+  const spans: [number, number][] = []
+  for (let at = 0; at + 1 < lines.length; at++) {
+    if (!NEXT_LINE_CONTROL.test(lines[at]!) || !BLANK_IN_CONTAINERS.test(lines[at + 1]!)) continue
+    let end = at + 1
+    while (end < lines.length && BLANK_IN_CONTAINERS.test(lines[end]!)) end++
+    if (end < lines.length - 1) spans.push([at + 1, end])
+    at = end - 1
+  }
+  return spans
+}
+
+/** The next-line control comments of a tree, in a fixed order of its nodes. */
+function controlComments(node: unknown, found: CommentNode[] = []): CommentNode[] {
+  if (Array.isArray(node)) {
+    for (const item of node) controlComments(item, found)
+  } else if (isRecord(node)) {
+    if (node['type'] === 'comment' && node['form'] === 'line' && typeof node['value'] === 'string' &&
+      CONTROL_VALUE.test(node['value'])) found.push(node as unknown as CommentNode)
+    for (const key of Object.keys(node).sort()) if (key !== 'pos') controlComments(node[key], found)
+  }
+  return found
+}
+
+/** Whether the line below `comment` in `lines` holds content, so that the comment suppresses findings on it. */
+function suppressesBelow(comment: CommentNode, lines: readonly string[] | null): boolean {
+  const end = comment.pos?.endLine
+  if (lines === null || end === undefined) return true
+  const below = lines[end]
+  return below !== undefined && !BLANK_IN_CONTAINERS.test(below)
+}
+
+/** Whether `candidate` reads back as `tree` and gives no control comment a line it did not suppress (`live`). */
+function sameControls(w: Writer, candidate: string, tree: readonly Node[], live: readonly boolean[]): boolean {
+  const parsed = parseWritten(w, candidate).children
+  if (parsed.length !== tree.length || !parsed.every((node, index) => treesEqual(node, tree[index]!))) return false
+  const lines = candidate.split('\n')
+  const controls = controlComments(parsed)
+  return controls.length === live.length &&
+    controls.every((comment, index) => live[index] === true || !suppressesBelow(comment, lines))
+}
+
+/** C2-W-144: leaves out the blank lines below each control comment of `live` that suppressed a line of the source. */
+function dropBlanksBelow(w: Writer, source: string, tree: readonly Node[], live: readonly boolean[]): string {
+  const lines = source.split('\n')
+  const below = new Set(controlComments(tree).flatMap((comment, index) =>
+    live[index] === true && comment.pos !== undefined ? [comment.pos.endLine] : []))
+  const spans = blanksBelowControls(lines).filter(([from]) => below.has(from))
+  if (spans.length === 0) return source
+  let budget = CONTROL_CHECK_BUDGET * source.length
+  const holds = (candidate: string): boolean => {
+    budget -= candidate.length
+    return sameControls(w, candidate, tree, live)
+  }
+  const without = (kept: readonly [number, number][]): string => {
+    const dropped = new Set<number>()
+    for (const [from, to] of kept) for (let index = from; index < to; index++) dropped.add(index)
+    return lines.filter((_, index) => !dropped.has(index)).join('\n')
+  }
+  const all = without(spans)
+  if (holds(all)) return all
+  const taken: [number, number][] = []
+  for (const span of spans) {
+    if (budget <= 0) break
+    if (holds(without([...taken, span]))) taken.push(span)
+  }
+  return without(taken)
+}
+
+/** C2-W-144: a blank line below each control comment that suppressed nothing in the source and would now. */
+function restoreBlanksBelow(w: Writer, written: string, tree: readonly Node[], live: readonly boolean[]): string {
+  if (live.every((entry) => entry)) return written
+  const lines = written.split('\n')
+  const at = new Set(controlComments(parseWritten(w, written).children).flatMap((comment, index) =>
+    live[index] !== true && comment.pos !== undefined && suppressesBelow(comment, lines) ? [comment.pos.endLine] : []))
+  if (at.size === 0) return written
+  // The blank line keeps the quote marks of the comment line, so that it stays inside the quote.
+  const candidate = lines.flatMap((line, index) => at.has(index) ? [/^(?:[ \t]*>)*/.exec(lines[index - 1]!)![0], line] : [line])
+    .join('\n')
+  return sameControls(w, candidate, tree, live) ? candidate : written
+}
+
+/**
+ * C2-W-144: a control comment that suppressed a line of `original`, the source of the tree, is written directly above
+ * the next line, and one that suppressed nothing keeps a blank line below it, where the tree reads back the same.
+ */
+function keepControlsAbove(w: Writer, document: DocumentNode, source: string, original: string | null): string {
+  if (!source.includes('carve-lint-disable-next-line')) return source
+  const authored = original?.split('\n') ?? null
+  const live = controlComments(document.children).map((comment) => suppressesBelow(comment, authored))
+  const tree = parseWritten(w, source).children
+  return restoreBlanksBelow(w, dropBlanksBelow(w, source, tree, live), tree, live)
+}
+
+/** C2-L-056: the source of a sidecar, or null where it holds the bytes of a base64 input. */
+function layoutSource(layout: WriteOptions['layout']): string | null {
+  return layout?.encoding === 'base64' ? null : layout?.source ?? null
+}
+
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
-  check = options?.check !== false, linkKeys?: ReadonlySet<string>): { output: WriteOutput, stats: WriterStats } {
+  check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout)):
+  { output: WriteOutput, stats: WriterStats } {
   const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), samples: new Map(), parses: 0, work: [] }
   const run: WriterRun = { path, check, stats }
   const layout = options?.layout
@@ -903,7 +1013,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
     new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
-  const source = writeDocument(w, run, document)
+  const source = keepControlsAbove(w, document, writeDocument(w, run, document), original)
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
   rootMetadataLosses(document, diagnostics)
@@ -912,8 +1022,9 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
 }
 
 /** Writes a tree that is known to be valid. */
-export function writeTree(document: DocumentNode, options: WriteOptions | undefined, check?: boolean): WriteOutput {
-  return writeTreeWithStats(document, options, 'plan', check ?? options?.check !== false).output
+export function writeTree(document: DocumentNode, options: WriteOptions | undefined, check?: boolean,
+  original?: string): WriteOutput {
+  return writeTreeWithStats(document, options, 'plan', check ?? options?.check !== false, undefined, original).output
 }
 
 /** The canonical Carve source of a tree, with what could not be written (C2-W-011). The tree is validated first. */

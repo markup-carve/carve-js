@@ -35,6 +35,12 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   return parsed
 }
 
+/** The tree of the whole written document, for the check of C2-W-144; it is no repair parse of a group. */
+export function parseWritten(w: Writer, src: string): DocumentNode {
+  const extensions = w.extensions
+  return applyExtensions(buildSource(src, true, w.abbreviations, null, extensions.length > 0, w.linkKeys), extensions).document
+}
+
 /** C2-W-133: whether the repair of the group has parsed more than its limit. */
 export function exhausted(w: Writer): boolean {
   return w.work.chars > w.work.limit
