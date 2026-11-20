@@ -1,7 +1,7 @@
 // C2-W-146: the text the escaping procedure wrote is tested with the pair rules of lint, and each
 // mark of a reported opening run takes a backslash, so canonical output does not fail them.
 import { forEachSlot, INLINE_PARENTS, type Node, type TextNode } from './ast.ts'
-import { pairedMarks } from '../lint/structure.ts'
+import { pairedMarks } from './pair-marks.ts'
 import { isAsciiPunctuation } from './unicode.ts'
 
 const PAIR_RULES = [

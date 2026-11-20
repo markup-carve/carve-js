@@ -5,6 +5,7 @@ import { type LintContext, type Rule } from './types.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
 import { columnOf, readPrefix } from '../src/layout-lines.ts'
 import { advanceColumn } from '../src/source.ts'
+import { escaped, isWord, pairedMarks } from '../src/pair-marks.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -38,66 +39,6 @@ function reportAttribute(id: Rule['id'], node: Node, path: string, context: Lint
   const range = attributeRange(node, context, key, whole)
   if (range !== null) context.report(id, range[0], range[1], path, values)
   else reportNode(id, node, path, context, values)
-}
-
-function isWord(ch: string | undefined): boolean {
-  return ch !== undefined && /[\p{L}\p{N}]/u.test(ch)
-}
-
-// 0.1 read U+FEFF as content, which String.prototype.trim would strip.
-const EDGE_SPACE = /^[\p{Zs}\t\n\r\f\v]|[\p{Zs}\t\n\r\f\v]$/u
-
-/** Whether the character at `at` stands behind an odd run of backslashes, so 0.1 read it as text. */
-function escaped(text: string, at: number): boolean {
-  let slashes = 0
-  while (text[at - 1 - slashes] === '\\') slashes++
-  return slashes % 2 === 1
-}
-
-// C2-I-050: a bare mark followed by a combining mark, a variation selector or a zero-width joiner opens no pair.
-const JOINED = /^[\p{M}\u200D\uFE00-\uFE0F\u{E0100}-\u{E01EF}]/u
-
-function joined(text: string, mark: string, id: Rule['id'], at: number): boolean {
-  return id.startsWith('deprecated-bare-') && JOINED.test(text.slice(at + mark.length, at + mark.length + 2))
-}
-
-function nextCloser(text: string, mark: string, from: number): number {
-  let end = text.indexOf(mark, from)
-  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end))) {
-    end = text.indexOf(mark, end + mark.length)
-  }
-  return end
-}
-
-function validDjotPair(text: string, mark: string, start: number, end: number): boolean {
-  return text[start - 1] !== '{' && text[end + mark.length] !== '}'
-    && text[start - 1] !== mark && text[start + 1] !== mark
-}
-
-function validPair(text: string, mark: string, id: Rule['id'], start: number, end: number): boolean {
-  const inside = text.slice(start + mark.length, end)
-  if (escaped(text, start) || inside === '' || EDGE_SPACE.test(inside)) return false
-  if (inside[0] === mark[0] || inside.at(-1) === mark[0]) return false
-  if (mark === '**' && inside.includes('*')) return false
-  if (id === 'djot-subscript-tilde' || id === 'djot-superscript-caret') return validDjotPair(text, mark, start, end)
-  if (id === 'markdown-strong-double-star' || id === 'markdown-strikethrough-double-tilde') return true
-  return !isWord(text[start - 1]) && !isWord(text[end + mark.length])
-}
-
-export function pairedMarks(text: string, mark: string, id: Rule['id'], visit: (start: number, end: number) => void): void {
-  let at = 0
-  while (at < text.length) {
-    const start = text.indexOf(mark, at)
-    if (start < 0) return
-    if (joined(text, mark, id, start)) {
-      at = start + mark.length
-      continue
-    }
-    const end = nextCloser(text, mark, start + mark.length + 1)
-    if (end < 0) return
-    if (validPair(text, mark, id, start, end)) visit(start, end + mark.length)
-    at = end + mark.length
-  }
 }
 
 function textPair(mark: string, id: Rule['id']): (node: Node, path: string, context: LintContext) => void {
