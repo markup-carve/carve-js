@@ -21,9 +21,9 @@ function joined(text: string, mark: string, id: string, at: number): boolean {
   return id.startsWith('deprecated-bare-') && JOINED.test(text.slice(at + mark.length, at + mark.length + 2))
 }
 
-function nextCloser(text: string, mark: string, from: number): number {
+function nextCloser(text: string, mark: string, id: string, from: number): number {
   let end = text.indexOf(mark, from)
-  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end))) {
+  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end) || joined(text, mark, id, end))) {
     end = text.indexOf(mark, end + mark.length)
   }
   return end
@@ -54,7 +54,7 @@ export function pairedMarks(text: string, mark: string, id: string, visit: (star
       at = start + mark.length
       continue
     }
-    const end = nextCloser(text, mark, start + mark.length + 1)
+    const end = nextCloser(text, mark, id, start + mark.length + 1)
     if (end < 0) return
     if (validPair(text, mark, id, start, end)) visit(start, end + mark.length)
     at = end + mark.length
