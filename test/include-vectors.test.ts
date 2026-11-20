@@ -143,10 +143,10 @@ function lineColumn(text: string, byte: number): { line: number, column: number 
 }
 
 describe('the 0.1 include vectors under 0.2', () => {
-  it('_VECTORS.md: 212 vectors, 127 unchanged and 60 changed, of which a clause changes 21 more, and 25 dropped', () => {
+  it('_VECTORS.md: 212 vectors, 102 unchanged and 85 changed, of which a clause changes 21 more, and 25 dropped', () => {
     expect([manifest.total, manifest.unchanged + manifest.reclassified.length, manifest.changed - manifest.reclassified.length,
-      manifest.dropped.length]).toEqual([212, 127, 60, 25])
-    expect([manifest.unchanged, manifest.changed]).toEqual([106, 81])
+      manifest.dropped.length]).toEqual([212, 102, 85, 25])
+    expect([manifest.unchanged, manifest.changed]).toEqual([81, 106])
     expect(VECTORS.length).toBe(187)
   })
 

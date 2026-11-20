@@ -1,7 +1,7 @@
 {
   "name": "i01b-region-outer-retains-inner-markers",
   "description": "Selecting an outer region retains nested marker lines as source content.",
-  "verdict": "unchanged",
+  "verdict": "changed",
   "clauses": [
     "C2-N-037",
     "C2-N-038",
@@ -16,7 +16,7 @@
   "resolver": "virtual",
   "expected": {
     "html": "<pre><code class=\"language-js\">Before.\n// #region inner\nInside.\n// #endregion inner\nAfter.\n</code></pre>",
-    "fmt": "{{ child @region:outer @code:js }}\n",
+    "fmt": "{{ child @code:js @region:outer }}\n",
     "warnings": [],
     "dependencies": [
       {

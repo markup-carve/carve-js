@@ -1,7 +1,7 @@
 {
   "name": "i01c-code-bom-selection-from-line-1",
   "description": "A leading byte order mark is dropped when an `@lines` selection includes line 1.",
-  "verdict": "unchanged",
+  "verdict": "changed",
   "clauses": [
     "C2-N-024",
     "C2-N-026",
@@ -15,7 +15,7 @@
   "resolver": "virtual",
   "expected": {
     "html": "<pre><code>first\nsecond\n</code></pre>",
-    "fmt": "{{ a.txt @lines:1-2 @code }}\n",
+    "fmt": "{{ a.txt @code @lines:1-2 }}\n",
     "warnings": [],
     "dependencies": [
       {

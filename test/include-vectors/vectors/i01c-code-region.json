@@ -10,7 +10,7 @@
   "resolver": "virtual",
   "expected": {
     "html": "<pre><code class=\"language-js\">const server = http.createServer(handler)\nserver.listen(3000)\n</code></pre>",
-    "fmt": "{{ src/server.js @region:start @code:js }}\n",
+    "fmt": "{{ src/server.js @code:js @region:start }}\n",
     "warnings": [],
     "dependencies": [
       {

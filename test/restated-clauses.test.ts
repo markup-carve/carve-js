@@ -185,7 +185,7 @@ describe('the include directive', () => {
     ['C2-H-133, C2-W-058: an unexpanded directive is written with one space between its parts, and a path is quoted where the bare form does not hold it',
       '{{ "my file.crv"   #Intro @shift:1 @lines:1-5 }}', '<p>{{ "my file.crv" #Intro @lines:1-5 @shift:1 }}</p>'],
     ['C2-H-133: an option with no value is its key, a list of names keeps its quotes, and an invalid option follows as written',
-      '{{ a.crv @code @cols:"a,b" @rows:"1 2" }}', '<p>{{ a.crv @cols:"a,b" @code @rows:"1 2" }}</p>'],
+      '{{ a.crv @code @cols:"a,b" @rows:"1 2" }}', '<p>{{ a.crv @code @cols:"a,b" @rows:"1 2" }}</p>'],
     ['C2-B-206, C2-H-133: a directive with invalid options is an include, and renders them as the tree holds them',
       '{{ a.crv @shift:x @size:2 }}', '<p>{{ a.crv @shift:x @size:2 }}</p>'],
     ['C2-B-203: a line with a second section is no directive, and its at-sign reads as a mention',
