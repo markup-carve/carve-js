@@ -91,3 +91,18 @@ it('carve#6194: a div inside a footnote is not compared with a run that the docu
 it('C2-B-090: a colon container with an attached attribute line is an open colon container', () => {
   expect(findings('{.c}\n::: note\n::::\n', 'data')).toEqual(findings('{.c}\n::: note\n::::\n', 'code'))
 })
+
+it('carve#6206: an overindented opener in a div inside a list item belongs to the item', () => {
+  expect(findings('1. ::::\n    >\n', 'data')).toEqual(['list-item-block-overindented@12-13'])
+  expect(findings('- ::: note\n  ::: tip\n     # H\n  :::\n  :::\n', 'data')).toEqual(findings('- ::: note\n  ::: tip\n     # H\n  :::\n  :::\n', 'code'))
+})
+
+it('the data rules follow the hand-written fixes of carve-js#5183, #5186 and #5187', () => {
+  const only = (source, code) => findings(source, 'data').filter((found) => found.startsWith(`${code}@`))
+  expect(only('c\n> %%%', 'block-opener-without-blank-line')).toEqual(['block-opener-without-blank-line@2-3'])
+  expect(only('c\n>%% x', 'block-opener-without-blank-line')).toEqual([])
+  expect(only('   :::\n     :::: warning\n   :::', 'colon-fence-length-mismatch')).toEqual(['colon-fence-length-mismatch@28-31'])
+  expect(only('# H\n [a]: u', 'definition-in-container')).toEqual([])
+  expect(only(':: t\n: ````\n      ````\n  > *[x1]:\n>   [^n]: : text', 'definition-in-container'))
+    .toEqual(['definition-in-container@38-43'])
+})

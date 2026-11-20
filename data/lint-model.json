@@ -194,6 +194,16 @@
       ]
     },
     {
+      "name": "raw_body",
+      "type": "text",
+      "base": "body_start",
+      "means": "body as written in the source, without the U+0000 that text and body read for hidden characters",
+      "clauses": [
+        "C2-B-027",
+        "C2-I-002"
+      ]
+    },
+    {
       "name": "shape",
       "type": "name",
       "means": "the name of the line shape of line-shapes.json that body has, read without the requires and at conditions of a shape, so a closer, frontmatter and a continuation row are not told apart from the shapes they share a first character with; text when no other shape matches, blank for an empty body",
@@ -214,7 +224,7 @@
       "name": "text",
       "type": "text",
       "base": "start",
-      "means": "the whole line without its terminator",
+      "means": "the whole line without its terminator, each character of an autolink, a code, math, raw or literal span, an inline comment, an include, a link reference or abbreviation definition, and each escaped punctuation character with its backslash, read as U+0000",
       "clauses": [
         "C2-B-010"
       ]
@@ -268,6 +278,15 @@
       "means": "the position of the block among the blocks of its owner, from 0",
       "clauses": [
         "C2-B-025"
+      ]
+    },
+    {
+      "name": "item_owner",
+      "type": "block",
+      "means": "the list item that is owner, or that holds owner through colon containers only (a div, admonition, directive or figure group); the document when there is none. Its content_column and marker_column are those of owner",
+      "clauses": [
+        "C2-B-025",
+        "C2-B-027"
       ]
     },
     {
@@ -427,6 +446,14 @@
                   "row_leaves"
                 ]
               }
+            ]
+          },
+          {
+            "contains": [
+              {
+                "f": "text"
+              },
+              "<"
             ]
           },
           {
@@ -775,14 +802,6 @@
       "when": {
         "all": [
           {
-            "ne": [
-              {
-                "f": "owner.type"
-              },
-              "list_item"
-            ]
-          },
-          {
             "not": {
               "f": "after_quote_mark"
             }
@@ -795,6 +814,14 @@
               {
                 "f": "owner.content_column"
               }
+            ]
+          },
+          {
+            "ne": [
+              {
+                "f": "item_owner.type"
+              },
+              "list_item"
             ]
           }
         ]
@@ -974,11 +1001,23 @@
           "when": {
             "all": [
               {
-                "matches": [
+                "all": [
                   {
-                    "f": "body"
+                    "matches": [
+                      {
+                        "f": "raw_body"
+                      },
+                      "^>(?: |$)"
+                    ]
                   },
-                  "^(?<mark>>)(?: |$)"
+                  {
+                    "matches": [
+                      {
+                        "f": "body"
+                      },
+                      "^(?<mark>>)(?:[ \\x00]|$)"
+                    ]
+                  }
                 ]
               },
               {
@@ -1337,6 +1376,14 @@
       "when": {
         "all": [
           {
+            "starts": [
+              {
+                "f": "body"
+              },
+              ":::"
+            ]
+          },
+          {
             "eq": [
               {
                 "f": "shape"
@@ -1591,18 +1638,48 @@
               [
                 "caption",
                 "definition_term",
-                "heading",
                 "line",
                 "paragraph"
               ]
             ]
           },
           {
-            "matches": [
+            "all": [
               {
-                "f": "body"
+                "matches": [
+                  {
+                    "f": "body"
+                  },
+                  "^(?:>[ \\t]+)*(?<label>\\[.+?\\]:)."
+                ]
               },
-              "^(?<label>\\[.+?\\]:)."
+              {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "f": "lazy"
+                      },
+                      {
+                        "contains": [
+                          {
+                            "f": "ancestors"
+                          },
+                          "block_quote"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matches": [
+                      {
+                        "f": "body"
+                      },
+                      "^(?<label>\\[.+?\\]:)."
+                    ]
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1729,6 +1806,14 @@
       },
       "when": {
         "all": [
+          {
+            "matches": [
+              {
+                "f": "body"
+              },
+              "^[-*_]"
+            ]
+          },
           {
             "any": [
               {
@@ -2203,11 +2288,29 @@
       "when": {
         "all": [
           {
-            "eq": [
+            "all": [
               {
-                "f": "parent.type"
+                "eq": [
+                  {
+                    "f": "item_owner.type"
+                  },
+                  "list_item"
+                ]
               },
-              "list_item"
+              {
+                "in": [
+                  {
+                    "f": "parent.type"
+                  },
+                  [
+                    "list_item",
+                    "admonition",
+                    "directive",
+                    "div",
+                    "figure_group"
+                  ]
+                ]
+              }
             ]
           },
           {
@@ -2247,7 +2350,7 @@
                 "f": "opener_column"
               },
               {
-                "f": "parent.content_column"
+                "f": "item_owner.content_column"
               }
             ]
           }
@@ -2265,7 +2368,7 @@
             "contentColumn": {
               "add": [
                 {
-                  "f": "parent.content_column"
+                  "f": "item_owner.content_column"
                 },
                 1
               ]

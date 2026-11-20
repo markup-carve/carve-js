@@ -1,4 +1,4 @@
-import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
+import { type Node } from '../src/ast.ts'
 import { columnOf } from '../src/layout-lines.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { shapeOf } from './data-shape.ts'
@@ -22,6 +22,7 @@ export interface ModelLine {
   readonly ancestors: string[]
   readonly shape: string
   readonly quote_prefix: boolean
+  readonly raw_body: string
   readonly lazy: boolean
   readonly open_colon: ColonContainer[]
   readonly prev: ModelLine | undefined
@@ -51,6 +52,7 @@ export interface ModelBlock {
   readonly end: number
   readonly text: string
   readonly owner: Container
+  readonly item_owner: Container
   readonly parent: Container
 }
 
@@ -67,10 +69,11 @@ export interface ModelInline {
 
 export interface Container { readonly type: string, readonly content_column: number, readonly marker_column: number | undefined }
 
-export interface LineModel {
+export interface LineModel<T> {
   lines: ModelLine[]
   blocks: ModelBlock[]
-  walked: readonly Walked[]
+  /** The runs of each block, by the same index. */
+  runs: (readonly T[])[]
 }
 
 const INLINE_HOLDERS: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line',
@@ -131,27 +134,6 @@ function colonKind(type: string, opener: string): string {
 
 export interface Walked { node: Node, path: string, parent: string, index: number }
 
-function walk(document: Node): Walked[] {
-  const out: Walked[] = []
-  const visit = (node: Node, path: string, parent: string, index: number): void => {
-    out.push({ node, path, parent, index })
-    // Inline content holds no block and no line of its own.
-    if (INLINE_HOLDERS.has(node.type)) return
-    forEachSlot(node, (nodes, step, single) => {
-      if (single) {
-        const child = nodes[0]
-        if (child !== undefined) visit(child, `${path}/${step}`, path, 0)
-      } else {
-        for (let at = 0; at < nodes.length; at++) {
-          const child = nodes[at]
-          if (child !== undefined) visit(child, `${path}/${step}/${at}`, path, at)
-        }
-      }
-    }, SOURCE_ORDER)
-  }
-  visit(document, '', '', 0)
-  return out
-}
 
 interface Leaves { type: string[], id: string[], first: boolean[], head: number[], last: number[], start: number[] }
 
@@ -245,6 +227,11 @@ class LineRecord {
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
   get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
+  get raw_body(): string {
+    const raw = this.context.source.slice(this.start, this.start + this.text.length)
+    const from = this.body_start - this.start
+    return raw.slice(from, trimEndAt(raw, from))
+  }
   get quote_prefix(): boolean { return this.text.slice(0, this.body_start - this.start).includes('>') }
   get shape(): string { return (this.shapeCache ??= shapeOf(this.body)) }
   get lazy(): boolean { return (this.lazyCache ??= isLazy(this, this.context)) }
@@ -314,6 +301,19 @@ function ownerOf(parent: string, types: Map<string, string>): { path: string, ty
   return { path, type }
 }
 
+const COLON_CONTAINERS: ReadonlySet<string> = new Set(['admonition', 'directive', 'div', 'figure_group'])
+
+/** carve#6206: the list item that is the owner, or holds it through colon containers only; else the document. */
+function itemOwnerOf(owner: { path: string, type: string }, types: Map<string, string>): { path: string, type: string } {
+  let { path, type } = owner
+  while (COLON_CONTAINERS.has(type) && path !== '') {
+    const split = path.lastIndexOf('/children/')
+    path = split < 0 ? '' : path.slice(0, split)
+    type = types.get(path) ?? 'document'
+  }
+  return type === 'list_item' ? { path, type } : { path: '', type: 'document' }
+}
+
 /** A container as a block record sees it; its content column is computed on first read and shared per path. */
 class ContainerRecord implements Container {
   readonly type: string
@@ -348,6 +348,7 @@ class BlockRecord {
   private quotes: number | undefined = undefined
   private columnCache: number | undefined = undefined
   private ownerCache: Container | undefined = undefined
+  private itemOwnerCache: Container | undefined = undefined
   private parentCache: Container | undefined = undefined
   readonly type: string
   readonly path: string
@@ -403,6 +404,14 @@ class BlockRecord {
     }
     return this.ownerCache
   }
+  get item_owner(): Container {
+    if (this.itemOwnerCache === undefined) {
+      const types = this.context.nodeTypes as Map<string, string>
+      const found = itemOwnerOf(ownerOf(this.parentPath, types), types)
+      this.itemOwnerCache = this.container(found.path, found.type)
+    }
+    return this.itemOwnerCache
+  }
   get parent(): Container {
     return (this.parentCache ??= this.container(this.parentPath, this.context.nodeTypes.get(this.parentPath) ?? 'document'))
   }
@@ -433,47 +442,60 @@ class InlineRecord implements ModelInline {
   get text(): string { return this.source.slice(this.start, this.end) }
 }
 
-/** The inline nodes of `types` in the inline contents of the walked leaves, in source order. */
-export function inlineRecords(walked: readonly Walked[], types: ReadonlySet<string>, context: LintContext): ModelInline[] {
-  const out: ModelInline[] = []
-  const visit = (node: Node, path: string, leaf: string, parent: string): void => {
-    if (types.has(node.type) && node.pos !== undefined) out.push(new InlineRecord(node, path, leaf, parent, context))
-    forEachSlot(node, (nodes, step, single) => {
-      for (let at = 0; at < nodes.length; at++) {
-        const child = nodes[at]
-        if (child !== undefined) visit(child, single ? `${path}/${step}` : `${path}/${step}/${at}`, leaf, node.type)
-      }
-    }, SOURCE_ORDER)
+/**
+ * The block records and inline records, collected during the lint visit so the tree is walked once: `child` is called
+ * for every node in visit order, a parent before its children.
+ */
+export class DataWalk {
+  readonly walked: Walked[] = []
+  readonly inline: ModelInline[] = []
+  private holder: { path: string, type: string, inline: boolean } | undefined = undefined
+  private readonly types: ReadonlySet<string>
+  private readonly context: LintContext
+
+  constructor(document: Node, types: ReadonlySet<string>, context: LintContext) {
+    this.types = types
+    this.context = context
+    this.walked.push({ node: document, path: '', parent: '', index: 0 })
   }
-  for (const { node, path } of walked) {
-    if (!INLINE_LEAVES.has(node.type)) continue
-    forEachSlot(node, (nodes, step, single) => {
-      for (let at = 0; at < nodes.length; at++) {
-        const child = nodes[at]
-        if (child !== undefined) visit(child, single ? `${path}/${step}` : `${path}/${step}/${at}`, node.type, node.type)
+
+  child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
+    const holder = this.holder
+    // Inline content holds no block and no line of its own.
+    if (holder !== undefined && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
+      if (holder.inline && this.types.has(node.type) && node.pos !== undefined) {
+        this.inline.push(new InlineRecord(node, path, holder.type, parent.type, this.context))
       }
-    }, SOURCE_ORDER)
+      return
+    }
+    this.walked.push({ node, path, parent: parentPath, index })
+    this.holder = INLINE_HOLDERS.has(node.type) ? { path, type: node.type, inline: INLINE_LEAVES.has(node.type) } : undefined
   }
-  return out
 }
 
-export function buildModel(document: Node, context: LintContext): LineModel {
+/** The model; a block record is made only where `runsFor` gives runs for its type and its parent's type. */
+export function buildModel<T>(walked: readonly Walked[], context: LintContext,
+  runsFor: (type: string, parent: string) => readonly T[]): LineModel<T> {
   const { source, lines } = context
-  const walked = walk(document)
   const found = leaves(walked, lines.length, context.chars)
   // C2-B-010: the empty rest after the last line terminator is no line.
   const count = lines.length > 1 && lines[lines.length - 1]!.text === '' && source.endsWith('\n') ? lines.length - 1 : lines.length
   const model: ModelLine[] = []
   for (let index = 0; index < count; index++) model.push(lineRecord(lines[index]!, index, model, found, context))
   const blocks: ModelBlock[] = []
+  const runs: (readonly T[])[] = []
   const containers = new Map<string, number>()
   for (const item of walked) {
     if (item.path === '' || item.node.pos === undefined) continue
+    const blockRuns = runsFor(blockType(item.node), context.nodeTypes.get(item.parent) ?? 'document')
+    if (blockRuns.length === 0) continue
     const start = context.chars[item.node.pos.startOffset] ?? 0
     const line = model[(context.offsetLines[start] ?? 1) - 1]
-    if (line !== undefined) blocks.push(new BlockRecord(item, line, start, context, containers, model))
+    if (line === undefined) continue
+    blocks.push(new BlockRecord(item, line, start, context, containers, model))
+    runs.push(blockRuns)
   }
-  return { lines: model, blocks, walked }
+  return { lines: model, blocks, runs }
 }
 
 function ownerContent(type: string, layout: NodeLayout | undefined, quotes: number, context: LintContext): number {
@@ -541,10 +563,11 @@ function openerStart(source: string, from: number): number {
   return at
 }
 
-function colonOpener(colon: ColonLayout, at: number, context: LintContext): ColonContainer | undefined {
+function colonOpener(colon: ColonLayout, at: number, lineStart: number, context: LintContext): ColonContainer | undefined {
   const { path, layout, type, from, to, width } = colon
-  if (from >= at || to < at - 1) return undefined
-  if (to < at && earlierCloser(path, layout, width, context)) return undefined
+  // A container that ends where an indented line starts is still open at its run.
+  if (from >= at || to < lineStart - 1) return undefined
+  if (to < lineStart && earlierCloser(path, layout, width, context)) return undefined
   return colonEntry(type, from, width, context)
 }
 
@@ -583,7 +606,7 @@ function openColon(line: ModelLine, context: LintContext): ColonContainer[] {
   const boundary = ownerBoundary(line.body_start, context)
   for (const colon of colonLayoutsOf(context)) {
     if ((colon.owner ??= ownerBoundary(colon.from, context) ?? '') !== (boundary ?? '')) continue
-    const found = colonOpener(colon, line.body_start, context)
+    const found = colonOpener(colon, line.body_start, line.start, context)
     if (found !== undefined) open.push(found)
   }
   return open.sort((a, b) => b.start - a.start)

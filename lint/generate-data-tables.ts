@@ -33,6 +33,8 @@ const local = (name: string): string => `v_${name.replace(/\W/g, '_')}`
 /** Compiles the expressions of one model into TypeScript, hoisting its patterns and sets. */
 class Compiler {
   readonly hoisted: string[] = []
+  /** The compiled value of each `let` of the rule being compiled, read lazily where a rule names it. */
+  lets = new Map<string, string>()
   private readonly sets: Record<string, readonly string[]>
 
   constructor(model: Model) {
@@ -56,6 +58,13 @@ class Compiler {
     return this.hoist(`new RegExp(${literal(source)}, ${literal(flags)})`)
   }
 
+  // A let costs nothing until a condition reads it: most lines fail a cheaper test first.
+  letValue(name: string): string {
+    const code = this.lets.get(name)
+    if (code === undefined) return local(name)
+    return `(${local(name)} === UNSET ? (${local(name)} = aside(() => ${code})) : ${local(name)})`
+  }
+
   base(expr: Expr): string {
     const operator = operatorOf(expr)
     if (operator?.[0] === 'f' && typeof operator[1] === 'string') {
@@ -63,7 +72,7 @@ class Compiler {
       const split = path.lastIndexOf('.')
       const head = split < 0 ? '' : path.slice(0, split + 1)
       const last = split < 0 ? path : path.slice(split + 1)
-      if (last === 'body') return `num(${this.field(`${head}body_start`)})`
+      if (last === 'body' || last === 'raw_body') return `num(${this.field(`${head}body_start`)})`
       if (last === 'text') return `num(${this.field(`${head}start`)})`
     }
     if (operator?.[0] === 'text_from') return this.number(operator[1])
@@ -129,7 +138,7 @@ type Make = (c: Compiler, arg: Expr, args: Expr[], node: Record<string, Expr>) =
 
 const VALUES: Record<string, Make> = {
   f: (c, arg) => c.field(String(arg)),
-  v: (_c, arg) => local(String(arg)),
+  v: (c, arg) => c.letValue(String(arg)),
   len: (c, arg) => `${c.text(arg)}.length`,
   add: (c, _arg, args) => `(${args.map((item) => c.number(item)).join(' + ')})`,
   sub: (c, _arg, args) => `(${c.number(args[0])} - ${c.number(args[1])})`,
@@ -163,7 +172,7 @@ const TESTS: Record<string, Make> = {
   matches: (c, arg) => c.matches(arg),
   some: (c, arg) => c.some(arg),
   f: (c, arg) => `Boolean(${c.field(String(arg))})`,
-  v: (_c, arg) => `Boolean(${local(String(arg))})`,
+  v: (c, arg) => `Boolean(${c.letValue(String(arg))})`,
 }
 
 const SELF = { line: 'ModelLine', block: 'ModelBlock', inline: 'ModelInline' } as const
@@ -186,7 +195,12 @@ function reportLines(rule: DataRule, compiler: Compiler, indent: string): string
 
 function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string {
   const body: string[] = ['  groups = undefined']
-  for (const [name, expr] of Object.entries(rule.let ?? {})) body.push(`  const ${local(name)} = ${compiler.value(expr)}`)
+  compiler.lets = new Map()
+  for (const [name, expr] of Object.entries(rule.let ?? {})) {
+    const code = compiler.value(expr)
+    body.push(`  let ${local(name)}: unknown = UNSET`)
+    compiler.lets.set(name, code)
+  }
   if (rule.when !== undefined) body.push(`  if (!${compiler.test(rule.when)}) return`)
   if (rule.each === undefined) body.push(...reportLines(rule, compiler, '  '))
   else {
@@ -209,6 +223,17 @@ import { type LintContext } from './types.ts'
 
 let groups: Record<string, [number, number]> | undefined
 let base = 0
+const UNSET: unique symbol = Symbol('unset')
+
+// A let read late must not replace the match that the condition reading it has just made.
+function aside(compute: () => unknown): unknown {
+  const keptGroups = groups
+  const keptBase = base
+  const value = compute()
+  groups = keptGroups
+  base = keptBase
+  return value
+}
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '')
 const num = (value: unknown): number => Number(value)
@@ -285,23 +310,51 @@ function scan(line: ModelLine, from: number, chars: string, step: -1 | 1): numbe
 }
 `
 
+/**
+ * The values that `when` admits for one field, where every match needs one of them: an `eq` or `in` on the field,
+ * a conjunct of `all`, or every branch of `any`. The runner skips a rule on a record whose field has another value.
+ */
+function admitted(expr: Expr, field: string, sets: Record<string, readonly string[]>): readonly string[] | undefined {
+  const operator = operatorOf(expr)
+  if (operator === undefined) return undefined
+  const [name, arg] = operator
+  const args = argsOf(arg)
+  if (name === 'eq' || name === 'in') return fieldValues(name, args, field, sets)
+  if (name === 'all') return args.map((item) => admitted(item, field, sets)).find((found) => found !== undefined)
+  if (name !== 'any' || args.length === 0) return undefined
+  const branches = args.map((item) => admitted(item, field, sets))
+  return branches.every((found) => found !== undefined) ? [...new Set(branches.flat())] : undefined
+}
+
+function fieldValues(name: string, args: Expr[], field: string, sets: Record<string, readonly string[]>): readonly string[] | undefined {
+  const read = operatorOf(args[0])
+  if (read?.[0] !== 'f' || read[1] !== field) return undefined
+  if (name === 'eq') return typeof args[1] === 'string' ? [args[1]] : undefined
+  const list = typeof args[1] === 'string' ? sets[args[1]] : args[1]
+  return Array.isArray(list) && list.every((item) => typeof item === 'string') ? list as string[] : undefined
+}
+
 /** The rules of data/lint-model.json compiled to TypeScript, one function per rule. */
 export function generateDataTables(json: string): string {
   const model = JSON.parse(json) as Model
   const compiler = new Compiler(model)
+  const sets = { text_leaves: model.text_leaves, verbatim_leaves: model.verbatim_leaves, row_leaves: model.row_leaves }
   const functions = model.rules.map((rule, index) => ruleFunction(rule, index, compiler))
   const entries = model.rules.map((rule, index) => {
     const types = rule.types === undefined ? 'undefined' : literal(rule.types)
+    const field = rule.over === 'line' ? 'leaf' : rule.over === 'block' ? 'parent.type' : 'parent'
+    const only = rule.when === undefined ? undefined : admitted(rule.when, field, sets)
     return `  { id: ${literal(rule.id)}, over: ${literal(rule.over)}, types: ${types}, verbatim: new Set(${literal(rule.verbatim ?? [])}), `
-      + `run: rule${index} },`
+      + `only: ${only === undefined ? 'undefined' : `new Set(${literal([...only].sort())})`}, run: rule${index} },`
   })
   return ['// Generated from data/lint-model.json by lint/generate-data-tables.ts. Do not edit.', PRELUDE,
     ...compiler.hoisted.map((code, index) => `const K${index} = ${code}`), '', ...functions.flatMap((code) => [code, '']),
+    '/** `only`: the leaf of a line, the parent type of a block or the parent of an inline record that the rule can match. */',
     'export type DataRule =',
-    '  | { id: RuleId, over: \'line\', types: undefined, verbatim: ReadonlySet<string>, run: (self: ModelLine, path: string, context: LintContext) => void }',
-    '  | { id: RuleId, over: \'block\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, '
+    '  | { id: RuleId, over: \'line\', types: undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, run: (self: ModelLine, path: string, context: LintContext) => void }',
+    '  | { id: RuleId, over: \'block\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, '
       + 'run: (self: ModelBlock, path: string, context: LintContext) => void }',
-    '  | { id: RuleId, over: \'inline\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, '
+    '  | { id: RuleId, over: \'inline\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, '
       + 'run: (self: ModelInline, path: string, context: LintContext) => void }',
     '',
     `export const VERBATIM_LEAVES: ReadonlySet<string> = new Set(${literal(model.verbatim_leaves)})`,
