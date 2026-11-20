@@ -37,7 +37,9 @@ function textAbove(ctx: Context, line: number): Above | null {
   if (leaf.parent!.node.type.startsWith('figure') && !BLOCK_LEAVES.has(leaf.node.type)) return 'caption'
   const caption = leaf.node.caption
   // C2-B-148: a caption is paragraph-like.
-  return Array.isArray(caption) && caption.length > 0 && leaf.node.pos!.endLine === line ? 'caption' : null
+  if (Array.isArray(caption) && caption.length > 0 && leaf.node.pos!.endLine === line) return 'caption'
+  // C2-B-157: a block image stays a paragraph while its lines are read.
+  return leaf.node.type === 'image' ? 'paragraph' : null
 }
 
 /** The container of the type `type` that opens on `line` and holds `below` but not `above`. */

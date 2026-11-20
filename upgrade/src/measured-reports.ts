@@ -52,7 +52,7 @@ function taskLabelBoundary(input: string, expected: string, actual: string): boo
 function tableTab(input: string, expected: string, actual: string): boolean {
   if (expected === actual || !input.includes('\t')) return false
   for (const line of input.split('\n')) {
-    if (line.trimStart().startsWith('|') && line.includes('\t')) return true
+    if (line.replace(/^[ \t>]*/u, '').startsWith('|') && line.includes('\t')) return true
   }
   return false
 }
