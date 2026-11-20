@@ -36,6 +36,14 @@ describe('C2-W-144: a next-line control comment keeps its line', () => {
     expect(format(`:: t\n: d\n\n${CONTROL}\n\n: [a]()\n`)).toBe(`:: t\n: d\n\n  ${CONTROL}\n\n: [a]()\n`)
   })
 
+  it('keeps a CRLF blank line below the comment', () => {
+    expect(format(`x\r\n\r\n${CONTROL}\r\n\r\n## See [a]()\r\n`)).toBe(`x\n\n${CONTROL}\n\n== See [a]()\n`)
+  })
+
+  it('reads a comment that holds the keyword later as no control (C2-B-215)', () => {
+    expect(format(`x\n\n%% foo ${CONTROL}\n## H\n`)).toBe(`x\n\n%% foo ${CONTROL}\n\n== H\n`)
+  })
+
   it('writes a supplied tree with the comment directly above the next block', () => {
     const tree = parse(`x\n\n${CONTROL}\n\n## See [a]()\n`)
     expect(write(tree)).toBe(`x\n\n${CONTROL}\n== See [a]()\n`)

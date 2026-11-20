@@ -894,7 +894,9 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
 }
 
 const NEXT_LINE_CONTROL = /%% carve-lint-disable-next-line(?![^ ,])/
-const BLANK_IN_CONTAINERS = /^[ \t>]*$/
+const BLANK_IN_CONTAINERS = /^[ \t>]*\r?$/
+/** C2-B-215: the keyword starts the comment, and the comment ends or a space or a comma follows it. */
+const CONTROL_VALUE = /^carve-lint-disable-next-line(?![^ ,])/
 /** The parse work of the C2-W-144 check, as a multiple of the document length, so that it stays linear. */
 const CONTROL_CHECK_BUDGET = 16
 
@@ -917,7 +919,7 @@ function controlComments(node: unknown, found: CommentNode[] = []): CommentNode[
     for (const item of node) controlComments(item, found)
   } else if (isRecord(node)) {
     if (node['type'] === 'comment' && node['form'] === 'line' && typeof node['value'] === 'string' &&
-      NEXT_LINE_CONTROL.test(`%% ${node['value']}`)) found.push(node as unknown as CommentNode)
+      CONTROL_VALUE.test(node['value'])) found.push(node as unknown as CommentNode)
     for (const key of Object.keys(node).sort()) if (key !== 'pos') controlComments(node[key], found)
   }
   return found
