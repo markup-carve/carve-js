@@ -23,7 +23,7 @@ function tex(node: BlockExtensionNode | InlineExtensionNode): string {
 
 function open(node: Node, host: ExtensionRenderHost): string {
   const keyValues: [string, string][] = [
-    ['role', 'math'], ...(node.attrs?.keyValues ?? []).filter(([name]) => name.toLowerCase() !== 'role'),
+    ...(node.attrs?.keyValues ?? []).filter(([name]) => name.toLowerCase() !== 'role'), ['role', 'math'],
   ]
   return `<div${host.attributes({ ...node, attrs: { ...node.attrs, classes: ['math', 'display', ...(node.attrs?.classes ?? [])],
     keyValues } } as Node,
