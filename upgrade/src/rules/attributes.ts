@@ -17,6 +17,8 @@ function nextText(ctx: Context, line: number): number {
  * blank lines between it and its block go, and a line that reaches no block goes itself.
  */
 function detached(ctx: Context, line: number): void {
+  // The repairs read past comment lines, which 0.2 removes in place (C2-B-138).
+  if (ctx.repairs === true) while (line < ctx.lines.count && insideQuotes(lineText(ctx.lines, line + 1)).trim().startsWith('%%')) line++
   if (!isBlankInQuotes(lineText(ctx.lines, line + 1)) && line < ctx.lines.count) return
   const next = nextText(ctx, line)
   if (next === 0) {
@@ -63,8 +65,11 @@ function wrapped(ctx: Context, line: number): number {
 
 export function attributeLines(ctx: Context): void {
   for (let line = 1; line <= ctx.lines.count; line++) {
-    if (isAttributeGap(ctx, line)) detached(ctx, line)
-    else line = wrapped(ctx, line)
+    if (isAttributeGap(ctx, line)) { detached(ctx, line); continue }
+    const last = wrapped(ctx, line)
+    // A joined block is detached from its block like a one-line block.
+    if (ctx.repairs === true && last > line) detached(ctx, last)
+    line = last
   }
 }
 

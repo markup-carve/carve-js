@@ -452,6 +452,7 @@ function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
 function danglingPlus(ctx: Context, used: Set<number>): void {
   for (let line = 1; line <= ctx.lines.count; line++) {
     if (used.has(line) || !isGap(ctx, line) || lineText(ctx.lines, line).trim() !== '+') continue
+    if (ctx.repairs === true && endsItem(ctx, line)) continue
     change(
       ctx,
       'U-014',
@@ -461,6 +462,23 @@ function danglingPlus(ctx: Context, used: Set<number>): void {
       '+ line that attaches no block removed, 0.1 rendered nothing for it'
     )
   }
+}
+
+/**
+ * A `+` line between an item and a block 0.1 put after the list becomes a blank line, which keeps the
+ * block out of the item; U-109 moves an indented block to column 0.
+ */
+function endsItem(ctx: Context, line: number): boolean {
+  const above = ctx.blocks.leaf[line - 1]
+  const below = ctx.blocks.leaf[line + 1]
+  if (above == null || below == null || below.node.pos?.startLine !== line + 1) return false
+  const item = ancestor(above, 'list_item')
+  if (item === null || isInside(below, item) || ancestor(below, 'list_item') !== null) return false
+  const message = '+ line that attaches no block written as a blank line, the block after it kept after the list'
+  const text = lineText(ctx.lines, line)
+  const start = lineStart(ctx.lines, line)
+  change(ctx, 'U-014', start + indentOf(text), lineEnd(ctx.lines, line), '', message)
+  return true
 }
 
 export function lists(ctx: Context): void {
