@@ -379,33 +379,39 @@ function excludeCause(sites: readonly Site[], excluded: Set<string>, chosen: rea
   return grew
 }
 
-function fixClosedPass(source: string, options: LintOptions): FixResult {
+interface ClosedPassResult extends FixResult { settled: boolean, findings: readonly Diagnostic[] }
+
+function fixClosedPass(source: string, options: LintOptions, previous?: readonly Diagnostic[]): ClosedPassResult {
   const settings: LintOptions = { ...fixOptions(options) }
   delete settings.includes
-  const original = lint(source, settings)
+  const original = previous ?? lint(source, settings)
   const sourceBytes = encoder.encode(source)
   const baseline = counts(original)
   const originalSites = sites(original, sourceBytes)
   const excluded = new Set<string>()
   for (let attempt = 0; attempt <= sourceBytes.length; attempt++) {
     const result = runPasses(source, settings, excluded, original)
-    if (result.applied.size === 0) return { output: source, applied: new Map() }
+    if (result.applied.size === 0) return { output: source, applied: new Map(), settled: true, findings: original }
     const bad = addedSites(result.findings, result.output, baseline, originalSites)
-    if (bad === null) return { output: result.output, applied: result.applied }
+    if (bad === null) return { output: result.output, applied: result.applied,
+      settled: candidates(encoder.encode(result.output), result.findings).length === 0, findings: result.findings }
     if (!excludeCause(bad, excluded, result.chosen)) break
   }
-  return { output: source, applied: new Map() }
+  return { output: source, applied: new Map(), settled: true, findings: original }
 }
 
 /** The source with every fix applied that verifies, pass after pass until a pass changes nothing. */
 export function fixSource(source: string, options: LintOptions): FixResult {
   const applied = new Map<string, number>()
   let output = source
+  let findings: readonly Diagnostic[] | undefined
   for (let pass = 0; pass < MAX_PASSES; pass++) {
-    const result = fixClosedPass(output, options)
+    const result = fixClosedPass(output, options, findings)
     if (result.output === output) break
     output = result.output
+    findings = result.findings
     for (const [rule, count] of result.applied) applied.set(rule, (applied.get(rule) ?? 0) + count)
+    if (result.settled) break
   }
   return { output, applied }
 }
