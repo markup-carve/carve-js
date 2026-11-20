@@ -167,7 +167,7 @@
     {
       "name": "open_colon",
       "type": "list",
-      "means": "the colon containers open where the line starts, innermost first: each a div of any name (a directive, an admonition and a figure group included), a line block or a hard-break block, with width (the length of its opener run), line and column (1-based, of the opener) and kind (div, admonition, figure group, line block or hard-break block)",
+      "means": "the colon containers open where the line starts, innermost first: each a div of any name (a directive, an admonition and a figure group included), a line block or a hard-break block, with width (the length of its opener run), line and column (1-based, of the opener) and kind (div, admonition, figure group, line block or hard-break block); only those opened inside the innermost quote, list item, footnote or description that holds the line, since a run cannot close a container outside its owner (C2-B-109)",
       "clauses": [
         "C2-B-108",
         "C2-B-109",
@@ -1992,7 +1992,7 @@
               {
                 "f": "text"
               },
-              "^---\\n"
+              "^---[ \\t]*\\n"
             ]
           },
           {
@@ -2002,23 +2002,16 @@
                   {
                     "f": "text"
                   },
-                  "^---\\n[ \\t]*(?:\\n|$)"
+                  "^---[ \\t]*\\n[ \\t]*(?:\\n|$)"
                 ]
               },
               {
-                "not": {
-                  "contains": [
-                    {
-                      "slice": [
-                        {
-                          "f": "text"
-                        },
-                        4
-                      ]
-                    },
-                    ":"
-                  ]
-                }
+                "matches": [
+                  {
+                    "f": "text"
+                  },
+                  "^---[ \\t]*\\n[^:]*$"
+                ]
               }
             ]
           }

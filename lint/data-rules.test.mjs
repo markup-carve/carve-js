@@ -73,3 +73,17 @@ it('carve#6192: block-opener-overindented reports the whole opening mark', () =>
   expect(findings('# H\n\n   ::::\n   x\n   ::::\n', 'data')).toEqual(['block-opener-overindented@8-12'])
   expect(findings('  ### H\n', 'data')).toEqual(['block-opener-overindented@2-5'])
 })
+
+it('carve#6194: a colon run inside a quote or item is not compared with a div outside it', () => {
+  expect(findings('::::\n> :::\n', 'data')).toEqual([])
+  expect(findings('::::\n- a\n\n  :::  \n', 'data')).toEqual([])
+  expect(findings('> ::::\n> :::\n', 'data')).toEqual(['colon-fence-length-mismatch@9-12'])
+})
+
+it('C2-B-161: frontmatter-shaped-thematic-break reads an opener with trailing spaces', () => {
+  expect(findings('---  \n\n', 'data')).toEqual(['frontmatter-shaped-thematic-break@0-6'])
+})
+
+it('carve#6194: a div inside a footnote is not compared with a run that the document owns', () => {
+  expect(findings('[^n]: :::: warning\n      ---\n:::\n', 'data').filter((f) => f.startsWith('colon'))).toEqual([])
+})

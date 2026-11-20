@@ -508,7 +508,7 @@ function earlierCloser(path: string, layout: NodeLayout, width: number, context:
   return false
 }
 
-interface ColonLayout { path: string, layout: NodeLayout, type: string, from: number, to: number, width: number }
+interface ColonLayout { path: string, layout: NodeLayout, type: string, from: number, to: number, width: number, owner?: string }
 
 const colonLayouts = new WeakMap<LintContext['layouts'], ColonLayout[]>()
 
@@ -543,9 +543,26 @@ function colonEntry(type: string, from: number, width: number, context: LintCont
     kind: colonKind(type, opened?.text.slice(from - opened.start) ?? '') }
 }
 
+const OWNER_BOUNDARIES: ReadonlySet<string> = new Set(['block_quote', 'list_item', 'footnote', 'definition_description'])
+
+/** The path of the innermost quote, item, footnote or description whose source covers `at`, or `undefined`. */
+function ownerBoundary(at: number, context: LintContext): string | undefined {
+  let found: string | undefined
+  for (const [path, layout] of context.layouts) {
+    if (!OWNER_BOUNDARIES.has(context.nodeTypes.get(path) ?? '')) continue
+    const from = context.chars[layout.startByte] ?? 0
+    const to = context.chars[layout.endByte] ?? 0
+    if (from <= at && at < to && (found === undefined || path.length > found.length)) found = path
+  }
+  return found
+}
+
+/** carve#6194: a run is compared only with the colon containers of its own innermost owner (C2-B-109). */
 function openColon(line: ModelLine, context: LintContext): ColonContainer[] {
   const open: ColonContainer[] = []
+  const boundary = ownerBoundary(line.body_start, context)
   for (const colon of colonLayoutsOf(context)) {
+    if ((colon.owner ??= ownerBoundary(colon.from, context) ?? '') !== (boundary ?? '')) continue
     const found = colonOpener(colon, line.body_start, context)
     if (found !== undefined) open.push(found)
   }
