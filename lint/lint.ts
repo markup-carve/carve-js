@@ -411,6 +411,24 @@ const LINE_ORDER: ReadonlyMap<string, number> = new Map([
   ['table-row-without-closing-pipe', 28],
 ])
 
+const DIAGNOSTIC_KIND: ReadonlyMap<string, number> = new Map([
+  ...DATA_RULES.map((rule): [string, number] => [rule.id, rule.over === 'line' ? 2 : 1]),
+  ...NODE_RULES.map((rule): [string, number] => [rule.id, 1]),
+  ...LINE_RULES.map((rule): [string, number] => [rule.id, 2]),
+])
+
+function diagnosticOrigin(diagnostic: Diagnostic): string {
+  const path = diagnostic.path ?? ''
+  if (diagnostic.code !== 'table-row-cell-count') return path
+  const row = path.lastIndexOf('/children/')
+  const group = path.lastIndexOf('/children/', row - 1)
+  return group < 0 ? path : path.slice(0, group)
+}
+
+function diagnosticKind(diagnostic: Diagnostic): number {
+  return diagnostic.channel === 'lint' ? (DIAGNOSTIC_KIND.get(diagnostic.code) ?? 1) : 0
+}
+
 function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnostic[] {
   const buckets = new Map<number, Diagnostic[]>()
   for (const diagnostic of diagnostics) {
@@ -420,37 +438,26 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
     else bucket.push(diagnostic)
   }
   const output: Diagnostic[] = []
-  const kind = new Map<string, number>([
-    ...DATA_RULES.map((rule): [string, number] => [rule.id, rule.over === 'line' ? 2 : 1]),
-    ...NODE_RULES.map((rule): [string, number] => [rule.id, 1]),
-    ...LINE_RULES.map((rule): [string, number] => [rule.id, 2]),
-  ])
-  const visitOrder = new Map([...context.nodeTypes.keys()].map((path, index) => [path, index]))
+  let visitOrder: Map<string, number> | undefined
   const length = context.bytes[context.source.length] ?? 0
   for (let at = 0; at <= length; at++) {
     const bucket = buckets.get(at)
-    if (bucket !== undefined) {
+    if (bucket !== undefined && bucket.length > 1) {
       bucket.sort((a, b) => {
-        const aKind = a.channel === 'lint' ? (kind.get(a.code) ?? 1) : 0
-        const bKind = b.channel === 'lint' ? (kind.get(b.code) ?? 1) : 0
+        const aKind = diagnosticKind(a)
+        const bKind = diagnosticKind(b)
         if (aKind !== bKind) return aKind - bKind
         if (aKind === 1) {
-          const origin = (diagnostic: Diagnostic): string => {
-            const path = diagnostic.path ?? ''
-            if (diagnostic.code !== 'table-row-cell-count') return path
-            const row = path.lastIndexOf('/children/')
-            const group = path.lastIndexOf('/children/', row - 1)
-            return group < 0 ? path : path.slice(0, group)
-          }
-          const visit = (visitOrder.get(origin(a)) ?? 0) - (visitOrder.get(origin(b)) ?? 0)
+          visitOrder ??= new Map([...context.nodeTypes.keys()].map((path, index) => [path, index]))
+          const visit = (visitOrder.get(diagnosticOrigin(a)) ?? 0) - (visitOrder.get(diagnosticOrigin(b)) ?? 0)
           if (visit !== 0) return visit
           return (NODE_ORDER.get(a.code) ?? 999) - (NODE_ORDER.get(b.code) ?? 999)
         }
         if (aKind === 2) return (LINE_ORDER.get(a.code) ?? 999) - (LINE_ORDER.get(b.code) ?? 999)
         return 0
       })
-      append(output, bucket)
     }
+    if (bucket !== undefined) append(output, bucket)
   }
   return output
 }
