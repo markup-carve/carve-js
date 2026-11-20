@@ -172,15 +172,16 @@ function collectKeys(node: Node, path: string, context: LintContext): void {
 function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
   context.nodeTypes.set(path, node.type)
   collectKeys(node, path, context)
+  // C2-A-039: of two nodes with one id, the first is its anchor.
   if (node.attrs?.id !== undefined) {
     context.state.ids.add(node.attrs.id)
-    context.state.idOwners.set(node.attrs.id, node.type)
+    if (!context.state.idOwners.has(node.attrs.id)) context.state.idOwners.set(node.attrs.id, node.type)
   }
   if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
   if (node.type === 'paragraph') markSpanStarts(node.children, context)
   if (node.type === 'heading' && node.generatedId !== undefined) {
     context.state.ids.add(node.generatedId)
-    context.state.idOwners.set(node.generatedId, node.type)
+    if (!context.state.idOwners.has(node.generatedId)) context.state.idOwners.set(node.generatedId, node.type)
   }
   const pos = node.pos
   markDescriptionAndCloser(node, context)

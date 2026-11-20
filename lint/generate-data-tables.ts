@@ -18,7 +18,8 @@ interface DataRule {
 interface Model { text_leaves: string[], verbatim_leaves: string[], row_leaves: string[], rules: DataRule[] }
 
 const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right', 'count', 'index_of'])
-const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from', 'json_escape'])
+const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from', 'json_escape', 'lower', 'join',
+  'percent_decode'])
 
 // C2-W-142: a pattern with a Unicode property class or a `\u{...}` escape reads code points.
 const unicodeFlags = (source: string, flags: string): string => (/\\[pu]\{/.test(source) ? `${flags}u` : flags)
@@ -128,18 +129,27 @@ class Compiler {
   }
 
   lookup(arg: Expr): string {
-    const spec = arg as { over: 'block' | 'inline', types: string[], key?: Expr, value?: Expr, before?: boolean, after?: boolean, field: string }
-    for (const type of spec.types) this.needs[spec.over].add(type)
-    const types = this.hoist(`new Set<string>(${literal(spec.types)})`)
+    const spec = arg as { over: 'block' | 'inline' | 'id', types?: string[], key?: Expr, value?: Expr, before?: boolean, after?: boolean,
+      all?: boolean, field: string }
+    const kinds = spec.over === 'id' ? ['id'] : spec.types ?? []
+    if (spec.over !== 'id') for (const type of kinds) this.needs[spec.over].add(type)
+    const types = this.hoist(`new Set<string>(${literal(kinds)})`)
     const key = spec.key === undefined ? 'undefined' : `(item: unknown): unknown => ${this.value(spec.key)}`
     const value = spec.key === undefined ? 'undefined' : this.value(spec.value)
     // Lookups over the same records by the same key share one index.
     const signature = `${spec.over} ${types} ${key}`
     let site = this.lookupSites.get(signature)
     if (site === undefined) this.lookupSites.set(signature, site = this.lookupSites.size)
+    const keys = spec.field.split('.').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')
+    if (spec.all === true) return `lookupAll(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}).map((record) => at(record${keys}))`
     const side = spec.before === true ? -1 : spec.after === true ? 1 : 0
     const found = `lookupAt(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, self.start, ${side})`
     return `at(${found}${spec.field.split('.').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')})`
+  }
+
+  find(arg: Expr): string {
+    const spec = arg as { in: Expr, where: Expr }
+    return `findIn(${this.value(spec.in)}, (item) => ${this.test(spec.where)})`
   }
 
   count(arg: Expr): string {
@@ -183,6 +193,11 @@ const VALUES: Record<string, Make> = {
   lookup: (c, arg) => c.lookup(arg),
   index_of: (c, _arg, args) => `${c.text(args[0])}.indexOf(${c.text(args[1])})`,
   json_escape: (c, arg) => `JSON.stringify(${c.text(arg)}).slice(1, -1)`,
+  lower: (c, arg) => `${c.text(arg)}.toLowerCase()`,
+  join: (c, _arg, args) => `joinOf(${c.value(args[0])}, ${c.text(args[1])})`,
+  find: (c, arg) => c.find(arg),
+  percent_decode: (c, arg) => `percentDecode(${c.text(arg)})`,
+  run: (_c, arg) => `runValue(context, ${literal(String(arg))})`,
   extend_left: (c, _arg, args) => `scan(line, ${c.number(args[0])}, ${c.text(args[1])}, -1)`,
   skip_right: (c, _arg, args) => `scan(line, ${c.number(args[0])}, ${c.text(args[1])}, 1)`,
 }
@@ -402,19 +417,19 @@ function countFrom(list: unknown, from: number, where: (item: unknown) => boolea
 
 interface Located { readonly start: number }
 
-let lookupRecords: { block: readonly Located[], inline: readonly Located[] } = { block: [], inline: [] }
+let lookupRecords: { block: readonly Located[], inline: readonly Located[], id: readonly Located[] } = { block: [], inline: [], id: [] }
 let lookupSites = new Map<number, Map<unknown, Located[]>>()
 
 /** The records of one document that the lookups read, in document order. */
-export function useRecords(block: readonly Located[], inline: readonly Located[]): void {
-  lookupRecords = { block, inline }
+export function useRecords(block: readonly Located[], inline: readonly Located[], id: readonly Located[] = []): void {
+  lookupRecords = { block, inline, id }
   lookupSites = new Map()
 }
 
 // C2-W-141: the first record of the types whose key equals the value, the last one that starts before the record
 // (side -1) or the first one that starts after it (side 1).
-function lookupAt(site: number, over: 'block' | 'inline', types: ReadonlySet<string>, key: ((item: unknown) => unknown) | undefined,
-  value: unknown, start: number, side: -1 | 0 | 1): Located | undefined {
+function lookupIndex(site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string>,
+  key: ((item: unknown) => unknown) | undefined): Map<unknown, Located[]> {
   let index = lookupSites.get(site)
   if (index === undefined) {
     index = new Map()
@@ -427,7 +442,16 @@ function lookupAt(site: number, over: 'block' | 'inline', types: ReadonlySet<str
     }
     lookupSites.set(site, index)
   }
-  const list = index.get(value)
+  return index
+}
+
+// C2-W-150: with all, every record of the types whose key equals the value, in document order.
+const lookupAll = (site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string>,
+  key: ((item: unknown) => unknown) | undefined, value: unknown): readonly Located[] => lookupIndex(site, over, types, key).get(value) ?? []
+
+function lookupAt(site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string>, key: ((item: unknown) => unknown) | undefined,
+  value: unknown, start: number, side: -1 | 0 | 1): Located | undefined {
+  const list = lookupIndex(site, over, types, key).get(value)
   if (list === undefined) return undefined
   if (side === 0) return list[0]
   let low = 0
@@ -438,6 +462,24 @@ function lookupAt(site: number, over: 'block' | 'inline', types: ReadonlySet<str
     else high = middle
   }
   return side < 0 ? (low === 0 ? undefined : list[low - 1]) : list[low]
+}
+
+function findIn(list: unknown, where: (item: unknown) => boolean): unknown {
+  if (!Array.isArray(list)) return undefined
+  for (const item of list) if (where(item)) return item
+  return undefined
+}
+
+const joinOf = (list: unknown, glue: string): string => (Array.isArray(list) ? list.map((item) => String(item)).join(glue) : '')
+
+// C2-W-150: %HH decoded as UTF-8; a text in which that fails stays as written.
+function percentDecode(text: string): string {
+  try { return decodeURIComponent(text) }
+  catch { return text }
+}
+
+function runValue(context: LintContext, name: string): unknown {
+  return name === 'extensions' ? context.options.extensions ?? [] : undefined
 }
 
 const lenOf = (value: unknown): number => (typeof value === 'string' || Array.isArray(value) ? value.length : 0)

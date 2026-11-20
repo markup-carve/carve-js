@@ -74,6 +74,7 @@ export interface ModelInline {
   leaf: string
   parent: string
   readonly node: Node | undefined
+  readonly raw_ref?: string
 }
 
 export interface Container { readonly type: string, readonly content_column: number, readonly marker_column: number | undefined }
@@ -476,9 +477,11 @@ class InlineRecord implements ModelInline {
   readonly parent: string
   readonly node: Node
   private readonly source: string
+  private readonly layouts: LintContext['layouts']
 
   constructor(node: Node, path: string, leaf: string, parent: string, context: LintContext) {
     this.node = node
+    this.layouts = context.layouts
     this.type = node.type
     this.path = path
     this.start = context.chars[node.pos?.startOffset ?? 0] ?? 0
@@ -489,6 +492,19 @@ class InlineRecord implements ModelInline {
   }
 
   get text(): string { return this.source.slice(this.start, this.end) }
+
+  /** C2-L-022: the reference of a link or an image, read without the container prefixes of the lines it crosses. */
+  get raw_ref(): string { return this.layouts.get(this.path)?.rawRef ?? this.text }
+}
+
+/** An id record: one distinct id that the tree carries, in order of first occurrence. */
+export interface ModelId {
+  readonly type: 'id'
+  readonly id: string
+  /** C2-A-039: the type of the first node that carries the id, the one it anchors. */
+  readonly owner: string
+  readonly index: number
+  readonly start: number
 }
 
 /** A text run record: the text and soft breaks that stand next to each other among the children of one inline parent. */
@@ -523,6 +539,8 @@ class TextRunRecord implements ModelInline {
 export class DataWalk {
   readonly walked: Walked[] = []
   readonly inline: ModelInline[] = []
+  readonly ids: ModelId[] = []
+  private readonly idIndex = new Map<string, ModelId>()
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
   private readonly types: ReadonlySet<string>
   private readonly context: LintContext
@@ -532,6 +550,22 @@ export class DataWalk {
     this.types = types
     this.context = context
     this.walked.push({ node: document, path: '', parent: '', index: 0 })
+    this.id(document)
+  }
+
+  /** The ids a node carries: an authored id, then a generated heading id. */
+  private id(node: Node): void {
+    const authored = node.attrs?.id
+    if (authored !== undefined) this.addId(authored, node)
+    if (node.type === 'heading' && node.generatedId !== undefined) this.addId(node.generatedId, node)
+  }
+
+  private addId(id: string, node: Node): void {
+    if (this.idIndex.has(id)) return
+    const start = node.pos === undefined ? 0 : this.context.chars[node.pos.startOffset] ?? 0
+    const record: ModelId = { type: 'id', id, owner: node.type, index: this.ids.length, start }
+    this.idIndex.set(id, record)
+    this.ids.push(record)
   }
 
   /** C2-W-140: a text or soft break child of an inline parent joins the run of its previous sibling, or starts one. */
@@ -560,6 +594,7 @@ export class DataWalk {
   }
 
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
+    if (node.attrs?.id !== undefined || node.type === 'heading') this.id(node)
     const holder = this.holder
     // Inline content holds no block and no line of its own.
     if (holder !== undefined && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
