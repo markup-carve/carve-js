@@ -73,7 +73,6 @@ function quotesOfLine(text: string): number {
   return count
 }
 
-/** U-016: in a quote the `+` line becomes a marked blank line and the block takes the marks. */
 /** The `>` marks at the start of `text`. */
 function quoteMarks(text: string): number {
   let count = 0
@@ -88,8 +87,18 @@ function afterMarks(text: string, count: number): number {
   return at
 }
 
+/** U-016: in a quote the `+` line becomes a marked blank line and the block takes the marks. */
 function plusInQuote(ctx: Context, quote: Visit, child: Node01, line: number): void {
   const message = '+ line replaced by a quoted blank line, the block given the quote mark'
+  if (ctx.repairs !== true) {
+    const marks = '>'.repeat(quotesOf(quote).length + 1)
+    change(ctx, 'U-016', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), marks, message)
+    for (let at = child.pos!.startLine; at <= child.pos!.endLine; at++) {
+      const start = lineStart(ctx.lines, at)
+      change(ctx, 'U-016', start, start, isBlank(lineText(ctx.lines, at)) ? marks : marks + ' ', message)
+    }
+    return
+  }
   const depth = quotesOf(quote).length + 1
   const marks = '>'.repeat(depth)
   // A quote inside a body keeps the body's indent on the lines it is given.
@@ -148,6 +157,7 @@ function leavesHost(ctx: Context, host: Visit, line: number): boolean {
   if (line >= ctx.lines.count || isBlank(lineText(ctx.lines, line + 1))) return false
   const next = ctx.blocks.leaf[line + 1]
   if (next === null || next === undefined) {
+    if (ctx.repairs !== true) return true
     // An item of the host whose first block starts below its marker line holds no leaf there.
     return !ctx.visits.some((visit) => visit.node.type === 'list_item' && visit.node.pos?.startLine === line + 1
       && isInside(visit, host))

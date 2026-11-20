@@ -213,7 +213,7 @@ function tableReports(ctx: Context, table: Node01): void {
 function blockedSpanMarkers(ctx: Context, table: Node01): void {
   rowsOf(table).forEach((row, rowIndex) => {
     // The column counts the cells a continuation row formed too, which have no position.
-    const all = Array.isArray(row.cells) ? row.cells as Node01[] : []
+    const all = !Array.isArray(row.cells) ? [] : ctx.repairs === true ? row.cells as Node01[] : cellsOf(row)
     all.forEach((cell, column) => {
       if (cell.pos === undefined || cell.span !== 'rowspan' && cell.span !== 'colspan') return
       const text = ctx.src.slice(cell.pos!.startOffset, cell.pos!.endOffset)

@@ -181,7 +181,7 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const id = entryOf(ctx, span, depth)
   const end = Math.max(containerEnd(ctx, span, depth, cut, ends), enclosing.get(span)?.last ?? 0)
   ends.set(span.first, end)
-  const quote = top === false ? emptyNestedQuote(ctx, span) : ''
+  const quote = top === false && ctx.repairs === true ? emptyNestedQuote(ctx, span) : ''
   if (quote !== '') moveAfter(ctx, id, span, cut, end, message, quote)
   else if (end === span.last) hoistLast(ctx, id, span, cut, message)
   else moveAfter(ctx, id, span, cut, end, message)

@@ -95,7 +95,7 @@ function blockEntry(ctx: Context, above: Visit, below: Visit, line: number, note
   if (below.node.type === 'heading') return underItem(above, below, 'U-001', 'U-006')
   // A definition in the middle of a block of the document is moved out whole (U-038), not set off.
   if (DEFINITIONS.has(below.node.type) || notes.has(line)) {
-    return ctx.blocks.within[line]! > line || emptyQuoteInQuote(ctx, line) ? null : 'U-005'
+    return ctx.blocks.within[line]! > line || ctx.repairs === true && emptyQuoteInQuote(ctx, line) ? null : 'U-005'
   }
   if (term) return isInside(above, below.parent!) ? null : underItem(above, below, 'U-004', 'U-009')
   if (quoteOpens(ctx, above, below, line)) return underItem(above, below, 'U-002', 'U-006')
@@ -178,12 +178,12 @@ export function isAttributeLine(text: string): boolean {
 }
 
 /** U-003, U-033: an attribute line is no leaf of the 0.1 tree, so it is read off the line. */
-function attributeLine(ctx: Context, above: Visit, line: number): void {
+function attributeLine(ctx: Context, above: Visit, line: number): boolean {
   const text = lineText(ctx.lines, line)
   const prefix = quotePrefix(text, quotesOf(above).length)
   const inner = text.slice(prefix.length).trimStart()
   // A gap line that starts with a brace is an attribute block, also when it wraps (U-032).
-  if (!inner.startsWith('{') || inner.startsWith('{{') || inner.startsWith('{%') || inner.length < 3) return
+  if (!inner.startsWith('{') || inner.startsWith('{{') || inner.startsWith('{%') || inner.length < 3) return false
   const entry = ancestor(above, 'list_item') === null ? 'U-003' : 'U-033'
   const at = lineStart(ctx.lines, line)
   change(
@@ -194,6 +194,7 @@ function attributeLine(ctx: Context, above: Visit, line: number): void {
     prefix + '\n',
     'blank line put above the attribute line, which 0.2 reads as text directly under text'
   )
+  return true
 }
 
 export function blankLines(ctx: Context): void {
@@ -204,7 +205,10 @@ export function blankLines(ctx: Context): void {
     const above = ctx.blocks.leaf[line - 1]!
     const below = ctx.blocks.leaf[line]
     if (below === null || below === undefined) {
-      attributeLine(ctx, above, line)
+      const next = ctx.blocks.leaf[line + 1]
+      if (attributeLine(ctx, above, line) && ctx.repairs === true && next !== null && next !== undefined && next.node.pos!.startLine === line + 1) {
+        outOfDescription(ctx, ancestor(above, 'list_item') === null ? 'U-003' : 'U-033', above, next, line, line + 1)
+      }
       continue
     }
     if (below === above || below.node.pos!.startLine !== line) continue
@@ -220,5 +224,25 @@ export function blankLines(ctx: Context): void {
       prefix + '\n',
       'blank line put above a block that 0.2 reads as a lazy line directly under text'
     )
+    if (ctx.repairs === true && !DEFINITIONS.has(below.node.type) && !notes.has(line)) outOfDescription(ctx, entry, above, below, line, line)
+  }
+}
+
+/**
+ * A block that 0.1 put after a description list, indented past the list's column, would be a later
+ * block of the description after the blank line in 0.2, so it moves to the list's column.
+ */
+function outOfDescription(ctx: Context, entry: string, above: Visit, below: Visit, from: number, to: number): void {
+  const list = ancestor(above, 'definition_list')
+  if (list === null || list.parent !== below.parent || list.node.pos === undefined) return
+  const column = list.node.pos.startColumn - 1
+  for (let line = from; line <= to; line++) {
+    const text = lineText(ctx.lines, line)
+    const marks = quotePrefix(text, quotesOf(above).length).length
+    const content = marks + indentOf(text.slice(marks))
+    const keep = Math.max(column, marks + (marks > 0 ? 1 : 0))
+    if (content <= keep || text.slice(keep, content).trim() !== '') continue
+    const start = lineStart(ctx.lines, line)
+    change(ctx, entry, start + keep, start + content, '', 'block moved to the column of the description list it follows')
   }
 }

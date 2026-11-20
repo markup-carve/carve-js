@@ -1,4 +1,4 @@
-import { type Rule } from '../context.ts'
+import { type Context, type Rule } from '../context.ts'
 import { attributeLines, openers } from './attributes.ts'
 import { blankLines } from './blank-lines.ts'
 import {
@@ -12,6 +12,11 @@ import { lists } from './lists.ts'
 import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
 import { includes, tables, tablesHeadStyles } from './tables.ts'
+
+/** Starts the repairs of the replay rows (carve#6183) for the rules after it. */
+function repairs(ctx: Context): void {
+  ctx.repairs = true
+}
 
 /** Every rule, in the order of the contract's groups. The order does not decide which edit wins. */
 export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks, taskBoxSpacing, attributeLines, openers, definitions,
@@ -34,4 +39,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
   [...RULES, ...LATE_RULES, itemParagraphBreaks],
   [...RULES.map((rule) => rule === tables ? tablesHeadStyles : rule), ...LATE_RULES],
   [...RULES.map((rule) => rule === definitions ? definitionsKeptAfter : rule), ...LATE_RULES],
+  [repairs, ...RULES, ...LATE_RULES],
 ]
