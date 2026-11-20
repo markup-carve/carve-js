@@ -31,6 +31,15 @@ describe('public imgFence extension', () => {
     expect(render('![x](data:image/svg+xml,%3Csvg%2F%3E)\n')).toBe('<img src="" alt="x">')
   })
 
+  it.each([
+    ['<svg><script>bad</script></svg>', '<svg xmlns="http://www.w3.org/2000/svg"/>'],
+    ['<svg><g><script/></g></svg>', '<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>'],
+    ['<svg></svg>', '<svg xmlns="http://www.w3.org/2000/svg"/>'],
+  ])('self-closes every childless sanitized element: %s', (input, expected) => {
+    expect(decoded(render(fence(input), imgFence()))).toBe(expected)
+    expect(sanitizeSvg(input)).toEqual({ svg: expected, ok: true })
+  })
+
   it('keeps the claimed attributes on the fallback wrapper only', () => {
     const source = fence('<svg></svg>', 'img', '{#pic .x}')
     const result = renderWithDiagnostics(source, { extensions: imgFenceExtensions })

@@ -43,6 +43,13 @@ describe('scope and input', () => {
       ['field-unspellable', undefined],
     ])
   })
+
+  it('C2-M-005: a parser-implied empty head is not dropped content', () => {
+    const headless = '<html><body><p>x</p></body></html>'
+    expect(source(headless)).toBe('x\n')
+    expect(codes(headless)).toEqual([])
+    expect(codes('<html><head></head><body><p>x</p></body></html>')).toEqual(['import-element-dropped'])
+  })
 })
 
 describe('whitespace', () => {

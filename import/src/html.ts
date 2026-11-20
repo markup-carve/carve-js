@@ -175,7 +175,7 @@ function divChildren(node: Html.Element, context: HtmlContext): Block[] {
 
 /** C2-M-005: the head and everything in it are dropped and reported once; the parser's implied empty head is no fact. */
 function head(node: Html.Element, context: HtmlContext): Block[] {
-  if (node.sourceCodeLocation === undefined && content(node).length === 0) return []
+  if (!node.sourceCodeLocation && content(node).length === 0) return []
   return dropElement(node, context)
 }
 
