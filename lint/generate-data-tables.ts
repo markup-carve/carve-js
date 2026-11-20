@@ -223,6 +223,7 @@ const TESTS: Record<string, Make> = {
   contains: (c, _arg, args) => `contains(${c.value(args[0])}, ${c.value(args[1])})`,
   starts: (c, _arg, args) => `starts(${c.value(args[0])}, ${c.text(args[1])})`,
   matches: (c, arg) => c.matches(arg),
+  attribute_line: (c, arg) => `isAttributeLine(${c.text(arg)}, 0, ${c.text(arg)}.length)`,
   some: (c, arg) => c.some(arg),
   f: (c, arg) => `Boolean(${c.field(String(arg))})`,
   v: (c, arg) => `Boolean(${c.letValue(String(arg))})`,
@@ -277,6 +278,7 @@ function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string
 }
 
 const PRELUDE = `import { type RuleId } from './catalog.ts'
+import { isAttributeLine } from '../src/lines.ts'
 import { type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
 import { type LintContext } from './types.ts'
 
@@ -438,7 +440,9 @@ function lookupIndex(site: number, over: 'block' | 'inline' | 'id', types: Reado
   if (index === undefined) {
     index = new Map()
     for (const record of lookupRecords[over]) {
-      if (types !== undefined && !types.has((record as { type?: string }).type ?? '')) continue
+      const type = (record as { type?: string }).type ?? ''
+      // C2-W-150: a lookup with no types reads every block or every inline node; a text run is no node.
+      if (types === undefined ? type === 'text_run' : !types.has(type)) continue
       const found = key === undefined ? undefined : key(record)
       const list = index.get(found)
       if (list === undefined) index.set(found, [record])

@@ -609,7 +609,7 @@ export class DataWalk {
     const holder = this.holder
     // Inline content holds no block and no line of its own.
     if (holder !== undefined && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
-      if (holder.inline && this.types.has(node.type) && node.pos !== undefined) {
+      if (holder.inline && (this.types.has(node.type) || this.types.has('*')) && node.pos !== undefined) {
         this.inline.push(new InlineRecord(node, path, holder.type, parent.type, this.context))
       }
       if (holder.inline && this.types.has('text_run')) this.run(node, parent, parentPath, index, holder.type)
