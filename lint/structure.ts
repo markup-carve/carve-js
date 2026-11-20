@@ -289,11 +289,25 @@ function tableRows(node: Node, path: string, context: LintContext): void {
       if (row?.type !== 'table_row') continue
       if (width < 0) width = row.children.length
       else if (row.children.length !== width) {
-        reportNode('table-row-cell-count', row, `${path}/children/${outer}/children/${inner}`, context,
-          { cells: String(row.children.length), width: String(width) })
+        const rowPath = `${path}/children/${outer}/children/${inner}`
+        const values = { cells: String(row.children.length), width: String(width) }
+        const range = row.pos === undefined ? continuedRowRange(rowPath, context) : null
+        if (range === null) reportNode('table-row-cell-count', row, rowPath, context, values)
+        else context.report('table-row-cell-count', range[0], range[1], rowPath, values)
       }
     }
   }
+}
+
+/** C2-A-158: a continued row has no pos; its range runs from the `+` of its last continuation row to the end of its layout entry. */
+function continuedRowRange(path: string, context: LintContext): [number, number] | null {
+  const layout = context.layouts.get(path)
+  if (layout === undefined) return null
+  const start = context.chars[layout.startByte] ?? 0
+  const end = context.chars[layout.endByte] ?? context.source.length
+  const line = context.lines[(context.offsetLines[Math.max(start, end - 1)] ?? 1) - 1]
+  const plus = line === undefined ? -1 : context.source.indexOf('+', line.start)
+  return plus < 0 || plus >= end ? null : [plus, end]
 }
 
 /** C2-A-084: a child of a group that carries a caption; C2-B-127: a nested figure group is a group of its own, no panel. */

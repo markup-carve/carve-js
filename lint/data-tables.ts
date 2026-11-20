@@ -357,12 +357,14 @@ const K124 = new RegExp("^\\s*(?<block>\\{[^}]+\\})(?<marker>[<>~])", "")
 const K125 = new RegExp("^\\s*(?<block>\\{[^}]+\\})(?<marker>[<>~])", "d")
 const K126 = new Set<string>(["table_row"])
 const K127 = new Set<unknown>(["table_body","table_foot","table_head"])
-const K128 = new RegExp("\\|(?:[ \\t]*\\{[^{}]*\\})?[ \\t\\x00]*$", "")
-const K129 = new RegExp("^(?:-{3,}|_{3,})$", "")
-const K130 = new RegExp("^(?:\\[[^^]|\\[$|\\*\\[)", "")
-const K131 = new RegExp("^\\s*> ", "")
-const K132 = new Set<string>(["footnote_ref"])
-const K133 = new Set<string>(["image","link"])
+const K128 = new RegExp("^[ \\t]*(?<plus>\\+)", "")
+const K129 = new RegExp("^[ \\t]*(?<plus>\\+)", "d")
+const K130 = new RegExp("\\|(?:[ \\t]*\\{[^{}]*\\})?[ \\t\\x00]*$", "")
+const K131 = new RegExp("^(?:-{3,}|_{3,})$", "")
+const K132 = new RegExp("^(?:\\[[^^]|\\[$|\\*\\[)", "")
+const K133 = new RegExp("^\\s*> ", "")
+const K134 = new Set<string>(["footnote_ref"])
+const K135 = new Set<string>(["image","link"])
 
 function rule0(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
@@ -1046,20 +1048,24 @@ function rule65(self: ModelBlock, path: string, context: LintContext): void {
   let v_head_start: unknown = UNSET
   let v_head_cells: unknown = UNSET
   if (!(K127.has(self.parent?.["type"]) && !same((v_head_start === UNSET ? (v_head_start = aside(() => at(lookupAt(14, "block", K126, (item: unknown): unknown => (K127.has(at(item, "parent", "type")) ? at(item, "ancestor_ids", 1) : ""), self.ancestor_ids?.[1], self.start, 0), "start"))) : v_head_start), self.start) && !same(lenOf(at(self.node, "children")), lenOf((v_head_cells === UNSET ? (v_head_cells = aside(() => at(lookupAt(14, "block", K126, (item: unknown): unknown => (K127.has(at(item, "parent", "type")) ? at(item, "ancestor_ids", 1) : ""), self.ancestor_ids?.[1], self.start, 0), "node", "children"))) : v_head_cells))))) return
+  if ((!(at(self.node, "pos") !== undefined) && (hit(K128, K129, self.last_line?.["body"]) && mark(num(self.last_line?.["body_start"]))))) {
+    context.report("table-row-cell-count", num(group("plus", 0)), num(self.end), path, { "cells": String(lenOf(at(self.node, "children"))), "width": String(lenOf((v_head_cells === UNSET ? (v_head_cells = aside(() => at(lookupAt(14, "block", K126, (item: unknown): unknown => (K127.has(at(item, "parent", "type")) ? at(item, "ancestor_ids", 1) : ""), self.ancestor_ids?.[1], self.start, 0), "node", "children"))) : v_head_cells))) }, 0)
+    return
+  }
   context.report("table-row-cell-count", num(self.start), num(self.end), path, { "cells": String(lenOf(at(self.node, "children"))), "width": String(lenOf((v_head_cells === UNSET ? (v_head_cells = aside(() => at(lookupAt(14, "block", K126, (item: unknown): unknown => (K127.has(at(item, "parent", "type")) ? at(item, "ancestor_ids", 1) : ""), self.ancestor_ids?.[1], self.start, 0), "node", "children"))) : v_head_cells))) }, 0)
   return
 }
 
 function rule66(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(K60.has(self.leaf) && starts(self.body, "|") && !same(self.body, "|") && !test(K128, self.body))) return
+  if (!(K60.has(self.leaf) && starts(self.body, "|") && !same(self.body, "|") && !test(K130, self.body))) return
   context.report("table-shaped-paragraph", num(self.body_start), num(self.body_end), path, { "owner": String((same(self.leaf, "definition_term") ? "term" : (same(self.leaf, "line") ? "line-block line" : self.leaf))) }, 0)
   return
 }
 
 function rule67(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(test(K129, self.body) && !(starts(self.body, "-") && same(self.prev?.["leaf"], "paragraph") && !Boolean(self.prev?.["blank"])) && !(same(self.number, 1) && same(self.body_start, self.start) && same(self.body, "---")))) return
+  if (!(test(K131, self.body) && !(starts(self.body, "-") && same(self.prev?.["leaf"], "paragraph") && !Boolean(self.prev?.["blank"])) && !(same(self.number, 1) && same(self.body_start, self.start) && same(self.body, "---")))) return
   context.report("thematic-break-spelling", num(self.body_start), num(self.body_end), path, { "raw": String(self.body) }, 0)
   return
 }
@@ -1077,7 +1083,7 @@ function rule68(self: ModelLine, path: string, context: LintContext): void {
 
 function rule69(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(K60.has(self.leaf) && starts(self.body, "^ ") && !contains(self.ancestors, "caption") && !((self.prev !== undefined) && !K60.has(self.prev?.["leaf"]) && test(K130, self.prev?.["raw_body"]) && test(K66, str(self.prev?.["text"]).slice(0, (num(self.prev?.["body_start"]) - num(self.prev?.["start"])))) && !test(K131, self.text)))) return
+  if (!(K60.has(self.leaf) && starts(self.body, "^ ") && !contains(self.ancestors, "caption") && !((self.prev !== undefined) && !K60.has(self.prev?.["leaf"]) && test(K132, self.prev?.["raw_body"]) && test(K66, str(self.prev?.["text"]).slice(0, (num(self.prev?.["body_start"]) - num(self.prev?.["start"])))) && !test(K133, self.text)))) return
   context.report("unattached-caption", num(self.body_start), num(self.body_end), path, {  }, 0)
   return
 }
@@ -1126,14 +1132,14 @@ function rule72(self: ModelInline, path: string, context: LintContext): void {
 function rule73(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   let v_at: unknown = UNSET
-  if (!(!(num(at(lookupAt(17, "inline", K132, (item: unknown): unknown => at(item, "node", "key"), at(self.node, "key"), self.start, 0), "start")) >= 0) && (num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(at(self.node, "key")) + "]")))) : v_at)) >= 0))) return
+  if (!(!(num(at(lookupAt(17, "inline", K134, (item: unknown): unknown => at(item, "node", "key"), at(self.node, "key"), self.start, 0), "start")) >= 0) && (num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(at(self.node, "key")) + "]")))) : v_at)) >= 0))) return
   context.report("unused-footnote-definition", (num(self.start) + num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(at(self.node, "key")) + "]")))) : v_at))), (num(self.start) + num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(at(self.node, "key")) + "]")))) : v_at)) + lenOf(("[^" + str(at(self.node, "key")) + "]"))), path, { "label": String(at(self.node, "key")) }, 0)
   return
 }
 
 function rule74(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!!(num(at(lookupAt(18, "inline", K133, (item: unknown): unknown => at(item, "node", "key"), at(self.node, "key"), self.start, 0), "start")) >= 0)) return
+  if (!!(num(at(lookupAt(18, "inline", K135, (item: unknown): unknown => at(item, "node", "key"), at(self.node, "key"), self.start, 0), "start")) >= 0)) return
   context.report("unused-link-reference-definition", num(self.start), num(self.end), path, {  }, 0)
   return
 }

@@ -417,9 +417,14 @@ class BlockRecord {
   get identity(): string { return this.path }
   /** C2-L-009: the layout entry of the block, absent where the layout has none. */
   get layout(): NodeLayout | undefined { return this.context.layouts.get(this.path) }
-  get end(): number { return this.context.chars[this.node.pos?.endOffset ?? 0] ?? this.context.source.length }
+  get end(): number {
+    return this.context.chars[this.node.pos?.endOffset ?? this.layout?.endByte ?? 0] ?? this.context.source.length
+  }
   get text(): string { return this.context.source.slice(this.start, this.end) }
-  get last_line(): ModelLine { return this.lines[(this.node.pos?.endLine ?? 1) - 1] ?? this.line }
+  get last_line(): ModelLine {
+    const number = this.node.pos?.endLine ?? this.context.offsetLines[Math.max(this.start, this.end - 1)] ?? 1
+    return this.lines[number - 1] ?? this.line
+  }
   get prev_type(): string | undefined {
     const split = this.path.lastIndexOf('/')
     return this.index === 0 || split < 0 ? undefined : this.context.nodeTypes.get(`${this.path.slice(0, split)}/${this.index - 1}`)
@@ -629,10 +634,12 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   const runs: (readonly T[])[] = []
   const containers = new Map<string, number>()
   for (const item of walked) {
-    if (item.path === '' || item.node.pos === undefined) continue
+    // C2-W-150: a block that omits pos (C2-A-158) is bounded by its layout entry, where it has one.
+    const startByte = item.node.pos?.startOffset ?? context.layouts.get(item.path)?.startByte
+    if (item.path === '' || startByte === undefined) continue
     const blockRuns = runsFor(blockType(item.node), context.nodeTypes.get(item.parent) ?? 'document')
     if (blockRuns.length === 0 && !needed.has(blockType(item.node))) continue
-    const start = context.chars[item.node.pos.startOffset] ?? 0
+    const start = context.chars[startByte] ?? 0
     const line = model[(context.offsetLines[start] ?? 1) - 1]
     if (line === undefined) continue
     blocks.push(new BlockRecord(item, line, start, context, containers, model))
