@@ -524,14 +524,48 @@ function colonKind(type: string, opener: string): string {
   return /^:{3,}[ \t]+\\(?:[ \t]|$)/.test(opener) ? 'hard-break block' : 'div'
 }
 
-function childCoversColonRun(path: string, start: number, end: number, context: LintContext): boolean {
+interface CoverIndex { starts: number[], maxEnds: number[] }
+const colonChildIndexes = new WeakMap<LintContext, Map<string, CoverIndex>>()
+
+function colonChildIndex(context: LintContext): Map<string, CoverIndex> {
+  const cached = colonChildIndexes.get(context)
+  if (cached !== undefined) return cached
+  const index = new Map<string, CoverIndex>()
   for (const [childPath, child] of context.layouts) {
-    if (!childPath.startsWith(`${path}/`)) continue
-    const childStart = context.chars[child.startByte] ?? 0
-    const childEnd = context.chars[child.endByte] ?? 0
-    if (childStart <= start && childEnd >= end) return true
+    const split = childPath.lastIndexOf('/children/')
+    if (split < 0) continue
+    const path = childPath.slice(0, split)
+    const start = context.chars[child.startByte] ?? 0
+    const end = context.chars[child.endByte] ?? 0
+    let entry = index.get(path)
+    if (entry === undefined) {
+      entry = { starts: [], maxEnds: [] }
+      index.set(path, entry)
+    }
+    entry.starts.push(start)
+    entry.maxEnds.push(end)
   }
-  return false
+  for (const entry of index.values()) {
+    const sorted = entry.starts.map((start, at) => ({ start, end: entry.maxEnds[at]! })).sort((a, b) => a.start - b.start)
+    entry.starts = sorted.map((span) => span.start)
+    let maxEnd = -1
+    entry.maxEnds = sorted.map((span) => (maxEnd = Math.max(maxEnd, span.end)))
+  }
+  colonChildIndexes.set(context, index)
+  return index
+}
+
+function childCoversColonRun(path: string, start: number, end: number, context: LintContext): boolean {
+  const entry = colonChildIndex(context).get(path)
+  if (entry === undefined) return false
+  let low = 0
+  let high = entry.starts.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (entry.starts[middle]! <= start) low = middle + 1
+    else high = middle
+  }
+  return (entry.maxEnds[low - 1] ?? -1) >= end
 }
 
 /** A layout without closerRaw may still have consumed a bare run before this line (C2-L-054). */
@@ -573,39 +607,82 @@ function colonOpener(type: string, layout: NodeLayout, context: LintContext): { 
   return undefined
 }
 
-function colonContainer(path: string, layout: NodeLayout, start: number, context: LintContext):
-  { width: number, start: number, kind: string } | undefined {
-  const type = context.nodeTypes.get(path)
-  if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) return undefined
-  const opener = colonOpener(type, layout, context)
-  const run = opener === undefined ? undefined : /^:{3,}/.exec(opener.raw)?.[0]
-  if (run === undefined) return undefined
-  const to = context.chars[layout.endByte] ?? 0
-  if (opener!.start >= start) return undefined
-  if (to < start) {
-    const parent = context.layouts.get(path.slice(0, path.lastIndexOf('/children/')))
-    const parentEnd = parent === undefined ? -1 : context.chars[parent.endByte] ?? -1
-    if (closedBeforeRun(path, layout, run.length, context) || parentEnd < start) return undefined
+interface ColonInterval { path: string, start: number, end: number, width?: number, kind?: string }
+
+/** An interval tree skips layout nodes that cannot own the line being checked. */
+class ColonIntervals {
+  private readonly entries: ColonInterval[]
+  private readonly maxEnd: number[]
+
+  constructor(entries: ColonInterval[]) {
+    this.entries = entries.sort((a, b) => a.start - b.start)
+    this.maxEnd = new Array<number>(entries.length * 4).fill(-1)
+    if (entries.length > 0) this.build(1, 0, entries.length)
   }
-  return { width: run.length, start: opener!.start, kind: colonKind(type, opener!.raw) }
+
+  private build(node: number, from: number, to: number): number {
+    if (to - from === 1) return (this.maxEnd[node] = this.entries[from]!.end)
+    const middle = (from + to) >>> 1
+    return (this.maxEnd[node] = Math.max(this.build(node * 2, from, middle), this.build(node * 2 + 1, middle, to)))
+  }
+
+  covering(start: number, end: number, strictStart = false): ColonInterval[] {
+    const result: ColonInterval[] = []
+    const visit = (node: number, from: number, to: number): void => {
+      if (this.maxEnd[node]! < end || this.entries[from]!.start > start) return
+      if (to - from === 1) {
+        const entry = this.entries[from]!
+        if (strictStart ? entry.start < start : entry.start <= start) result.push(entry)
+        return
+      }
+      const middle = (from + to) >>> 1
+      visit(node * 2, from, middle)
+      visit(node * 2 + 1, middle, to)
+    }
+    if (this.entries.length > 0) visit(1, 0, this.entries.length)
+    return result
+  }
 }
 
-function ownerBarrier(path: string, layout: NodeLayout, start: number, end: number, context: LintContext): boolean {
-  const type = context.nodeTypes.get(path)
-  if (type === undefined || !COLON_OWNER_BARRIERS.has(type)) return false
-  return (context.chars[layout.startByte] ?? 0) <= start && (context.chars[layout.endByte] ?? 0) >= end
+const colonIndexes = new WeakMap<LintContext, { containers: ColonIntervals, barriers: ColonIntervals }>()
+
+function colonLayoutInterval(path: string, layout: NodeLayout, type: string, context: LintContext): ColonInterval | undefined {
+  if (!COLON_CONTAINER_KINDS.has(type)) return undefined
+  const opener = colonOpener(type, layout, context)
+  const run = opener === undefined ? undefined : /^:{3,}/.exec(opener.raw)?.[0]
+  if (opener === undefined || run === undefined) return undefined
+  const to = context.chars[layout.endByte] ?? 0
+  const parent = context.layouts.get(path.slice(0, path.lastIndexOf('/children/')))
+  const parentEnd = parent === undefined ? -1 : context.chars[parent.endByte] ?? -1
+  const effectiveEnd = closedBeforeRun(path, layout, run.length, context) ? to : Math.max(to, parentEnd)
+  return { path, start: opener.start, end: effectiveEnd, width: run.length, kind: colonKind(type, opener.raw) }
+}
+
+function colonIndex(context: LintContext): { containers: ColonIntervals, barriers: ColonIntervals } {
+  const cached = colonIndexes.get(context)
+  if (cached !== undefined) return cached
+  const containers: ColonInterval[] = []
+  const barriers: ColonInterval[] = []
+  for (const [path, layout] of context.layouts) {
+    const type = context.nodeTypes.get(path)
+    if (type === undefined) continue
+    if (COLON_OWNER_BARRIERS.has(type)) barriers.push({ path,
+      start: context.chars[layout.startByte] ?? 0, end: context.chars[layout.endByte] ?? 0 })
+    const interval = colonLayoutInterval(path, layout, type, context)
+    if (interval !== undefined) containers.push(interval)
+  }
+  const index = { containers: new ColonIntervals(containers), barriers: new ColonIntervals(barriers) }
+  colonIndexes.set(context, index)
+  return index
 }
 
 function colonContainers(start: number, end: number, context: LintContext): { width: number, start: number, kind: string }[] {
-  const open: { path: string, width: number, start: number, kind: string }[] = []
-  let boundary = ''
-  for (const [path, layout] of context.layouts) {
-    if (path.length > boundary.length && ownerBarrier(path, layout, start, end, context)) boundary = path
-    const container = colonContainer(path, layout, start, context)
-    if (container !== undefined) open.push({ ...container, path })
-  }
-  return open.filter(({ path }) => boundary === '' || path === boundary || path.startsWith(`${boundary}/`))
+  const index = colonIndex(context)
+  const boundary = index.barriers.covering(start, end).reduce((best, item) => item.path.length > best.length ? item.path : best, '')
+  return index.containers.covering(start, start, true)
+    .filter(({ path }) => boundary === '' || path === boundary || path.startsWith(`${boundary}/`))
     .sort((a, b) => b.start - a.start)
+    .map(({ width, start: opened, kind }) => ({ width: width!, start: opened, kind: kind! }))
 }
 
 function colonFenceLength(line: Line, context: LintContext): void {

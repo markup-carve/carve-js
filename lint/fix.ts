@@ -9,6 +9,16 @@ import { type LintOptions } from './types.ts'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
+const replacements = new Map<string, Uint8Array>()
+
+function replacement(text: string): Uint8Array {
+  let bytes = replacements.get(text)
+  if (bytes === undefined) {
+    bytes = encoder.encode(text)
+    replacements.set(text, bytes)
+  }
+  return bytes
+}
 
 interface Edit {
   start: number
@@ -109,10 +119,6 @@ function sameEdits(left: Plan, right: Plan): boolean {
       edit.text === right.edits[index]?.text)
 }
 
-function overlaps(edit: Edit, taken: readonly Edit[]): boolean {
-  return taken.some((other) => edit.start < other.end && other.start < edit.end)
-}
-
 /** Two rules that report one range with different replacements leave it to the author. */
 function candidates(bytes: Uint8Array, entries: readonly Diagnostic[]): Candidate[] {
   const byRange = new Map<string, Candidate[]>()
@@ -139,12 +145,40 @@ function candidates(bytes: Uint8Array, entries: readonly Diagnostic[]): Candidat
   return result
 }
 
+function lowerBound(sorted: readonly number[], value: number): number {
+  let low = 0
+  let high = sorted.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (sorted[middle]! < value) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
 function select(found: readonly Candidate[]): Candidate[] {
-  const taken: Edit[] = []
+  const starts = [...new Set(found.flatMap((candidate) => candidate.plan.edits.map((edit) => edit.start)))].sort((a, b) => a - b)
+  const greatestEnd = new Array<number>(starts.length + 1).fill(0)
+  const prefixEnd = (before: number): number => {
+    let at = lowerBound(starts, before)
+    let end = 0
+    while (at > 0) {
+      end = Math.max(end, greatestEnd[at]!)
+      at -= at & -at
+    }
+    return end
+  }
+  const take = (edit: Edit): void => {
+    let at = lowerBound(starts, edit.start) + 1
+    while (at < greatestEnd.length) {
+      greatestEnd[at] = Math.max(greatestEnd[at]!, edit.end)
+      at += at & -at
+    }
+  }
   const chosen: Candidate[] = []
   for (const candidate of [...found].sort((a, b) => a.plan.at - b.plan.at)) {
-    if (candidate.plan.edits.some((edit) => overlaps(edit, taken))) continue
-    taken.push(...candidate.plan.edits)
+    if (candidate.plan.edits.some((edit) => prefixEnd(edit.end) > edit.start)) continue
+    for (const edit of candidate.plan.edits) take(edit)
     chosen.push(candidate)
   }
   return chosen
@@ -155,7 +189,7 @@ function apply(bytes: Uint8Array, chosen: readonly Candidate[]): Uint8Array {
   const parts: Uint8Array[] = []
   let at = 0
   for (const edit of edits) {
-    parts.push(bytes.subarray(at, edit.start), encoder.encode(edit.text))
+    parts.push(bytes.subarray(at, edit.start), replacement(edit.text))
     at = edit.end
   }
   parts.push(bytes.subarray(at))
@@ -168,14 +202,24 @@ function apply(bytes: Uint8Array, chosen: readonly Candidate[]): Uint8Array {
   return result
 }
 
-function mapped(offset: number, chosen: readonly Candidate[]): number {
+function offsetMap(chosen: readonly Candidate[]): (offset: number) => number {
+  const edits = chosen.flatMap((candidate) => candidate.plan.edits).sort((a, b) => a.end - b.end)
+  const shifts: number[] = []
   let shift = 0
-  for (const candidate of chosen) {
-    for (const edit of candidate.plan.edits) {
-      if (edit.end <= offset && edit.start < offset) shift += encoder.encode(edit.text).length - (edit.end - edit.start)
-    }
+  for (const edit of edits) {
+    shift += replacement(edit.text).length - (edit.end - edit.start)
+    shifts.push(shift)
   }
-  return offset + shift
+  return (offset) => {
+    let low = 0
+    let high = edits.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (edits[middle]!.end <= offset && edits[middle]!.start < offset) low = middle + 1
+      else high = middle
+    }
+    return offset + (shifts[low - 1] ?? 0)
+  }
 }
 
 interface Span { type: string, start: number, end: number }
@@ -198,10 +242,36 @@ function verified(bytes: Uint8Array, chosen: readonly Candidate[]): Candidate[] 
   let kept = [...chosen]
   for (let round = 0; round < 4 && kept.length > 0; round++) {
     const found = spans(apply(bytes, kept))
+    const byType = new Map<string, { spans: Span[], maxEnds: number[] }>()
+    for (const span of found) {
+      let group = byType.get(span.type)
+      if (group === undefined) {
+        group = { spans: [], maxEnds: [] }
+        byType.set(span.type, group)
+      }
+      group.spans.push(span)
+    }
+    for (const group of byType.values()) {
+      group.spans.sort((a, b) => a.start - b.start)
+      let maxEnd = -1
+      for (const span of group.spans) {
+        maxEnd = Math.max(maxEnd, span.end)
+        group.maxEnds.push(maxEnd)
+      }
+    }
+    const map = offsetMap(kept)
     const holding = kept.filter((candidate) => {
-      const at = mapped(candidate.plan.at, kept)
-      return found.some((span) => span.type === candidate.plan.node &&
-        (candidate.plan.starts ? span.start === at : span.start <= at && at <= span.end))
+      const at = map(candidate.plan.at)
+      const group = byType.get(candidate.plan.node)
+      if (group === undefined) return false
+      let low = 0
+      let high = group.spans.length
+      while (low < high) {
+        const middle = (low + high) >>> 1
+        if (group.spans[middle]!.start <= at) low = middle + 1
+        else high = middle
+      }
+      return candidate.plan.starts ? group.spans[low - 1]?.start === at : (group.maxEnds[low - 1] ?? -1) >= at
     })
     if (holding.length === kept.length) return kept
     kept = holding
@@ -226,42 +296,47 @@ function counts(entries: readonly Diagnostic[]): Map<string, number> {
   return result
 }
 
+function evaluated(bytes: Uint8Array, plans: readonly Candidate[], before: Map<string, number>, settings: LintOptions):
+  { excess: number, commentShaped: boolean, findings: Diagnostic[] } {
+  const findings = lint(decoder.decode(apply(bytes, plans)), settings)
+  let excess = 0
+  let commentShaped = false
+  for (const [code, count] of counts(findings)) {
+    const increase = count - (before.get(code) ?? 0)
+    if (increase > 0) {
+      excess += increase
+      if (code === 'comment-shaped-emphasis') commentShaped = true
+    }
+  }
+  return { excess, commentShaped, findings }
+}
+
 /** Keep the fix pass from introducing a lint finding at a meeting of independent edits. */
 function quiet(
-  bytes: Uint8Array, chosen: Candidate[], original: readonly Diagnostic[], settings: LintOptions, allowTransient = false,
-): Candidate[] {
-  if (chosen.length === 0) return []
+  bytes: Uint8Array, chosen: Candidate[], original: readonly Diagnostic[], settings: LintOptions,
+): { chosen: Candidate[], findings: Diagnostic[] } | null {
+  if (chosen.length === 0) return null
   const before = counts(original)
-  const introduced = (plans: readonly Candidate[]): Map<string, number> => {
-    const after = counts(lint(decoder.decode(apply(bytes, plans)), settings))
-    const extra = new Map<string, number>()
-    for (const [code, count] of after) {
-      const increase = count - (before.get(code) ?? 0)
-      if (increase > 0) extra.set(code, increase)
-    }
-    return extra
-  }
-  const additions = (plans: readonly Candidate[]): number =>
-    [...introduced(plans).values()].reduce((sum, count) => sum + count, 0)
   let current = chosen
-  let excess = additions(current)
-  if (excess === 0) return current
+  let result = evaluated(bytes, current, before, settings)
+  if (result.excess === 0) return { chosen: current, findings: result.findings }
+  // Bracing an inline delimiter can resolve a comment-shaped span, not a block or line finding.
+  if (!result.commentShaped) return { chosen: current, findings: result.findings }
   // Try the inner delimiter class first. One batch covers many repeated collisions without a lint and parse per span.
   for (const node of ['emphasis', 'strong'] as const) {
     const trial = current.map((candidate) => candidate.plan.node === node ? braced(candidate) ?? candidate : candidate)
     if (trial.every((candidate, index) => candidate === current[index])) continue
     if (verified(bytes, trial).length !== trial.length) continue
-    const remaining = additions(trial)
-    if (remaining < excess) {
+    const next = evaluated(bytes, trial, before, settings)
+    if (next.excess < result.excess) {
       current = trial
-      excess = remaining
+      result = next
     }
-    if (excess === 0) return current
+    if (result.excess === 0) return { chosen: current, findings: result.findings }
+    if (!result.commentShaped) break
   }
   // A later pass can resolve a warning exposed by an earlier replacement.
-  if (allowTransient) return current
-  // A replacement without a quiet, parse-equivalent spelling stays for the author.
-  return []
+  return { chosen: current, findings: result.findings }
 }
 
 /** The options of the lint run that finds what to fix: every fixable rule is on unless `rules` turns it off. */
@@ -284,23 +359,24 @@ function sites(entries: readonly Diagnostic[], bytes: Uint8Array): Map<string, n
   return result
 }
 
-interface RunResult extends FixResult { chosen: Candidate[] }
+interface RunResult extends FixResult { chosen: Candidate[], findings: readonly Diagnostic[] }
 
 function runPasses(source: string, settings: LintOptions, excluded: ReadonlySet<string>, original: readonly Diagnostic[]): RunResult {
   const applied = new Map<string, number>()
   const selected: Candidate[] = []
   let bytes: Uint8Array = encoder.encode(source)
+  let findings: readonly Diagnostic[] = original
   for (let pass = 0; pass < MAX_PASSES; pass++) {
-    const findings = pass === 0 ? original : lint(decoder.decode(bytes), settings)
     const found = candidates(bytes, findings).filter((candidate) => !excluded.has(candidate.key))
     if (found.length === 0) break
-    const chosen = quiet(bytes, verified(bytes, select(found)), findings, settings, true)
-    if (chosen.length === 0) break
-    bytes = apply(bytes, chosen)
-    selected.push(...chosen)
-    for (const candidate of chosen) applied.set(candidate.rule, (applied.get(candidate.rule) ?? 0) + 1)
+    const batch = quiet(bytes, verified(bytes, select(found)), findings, settings)
+    if (batch === null) break
+    bytes = apply(bytes, batch.chosen)
+    findings = batch.findings
+    selected.push(...batch.chosen)
+    for (const candidate of batch.chosen) applied.set(candidate.rule, (applied.get(candidate.rule) ?? 0) + 1)
   }
-  return { output: decoder.decode(bytes), applied, chosen: selected }
+  return { output: decoder.decode(bytes), applied, chosen: selected, findings }
 }
 
 interface Site { line: number, column: number }
@@ -342,33 +418,39 @@ function excludeCause(sites: readonly Site[], excluded: Set<string>, chosen: rea
   return grew
 }
 
-function fixClosedPass(source: string, options: LintOptions): FixResult {
+interface ClosedPassResult extends FixResult { settled: boolean, findings: readonly Diagnostic[] }
+
+function fixClosedPass(source: string, options: LintOptions, previous?: readonly Diagnostic[]): ClosedPassResult {
   const settings: LintOptions = { ...fixOptions(options) }
   delete settings.includes
-  const original = lint(source, settings)
+  const original = previous ?? lint(source, settings)
   const sourceBytes = encoder.encode(source)
   const baseline = counts(original)
   const originalSites = sites(original, sourceBytes)
   const excluded = new Set<string>()
   for (let attempt = 0; attempt <= sourceBytes.length; attempt++) {
     const result = runPasses(source, settings, excluded, original)
-    if (result.applied.size === 0) return { output: source, applied: new Map() }
-    const bad = addedSites(lint(result.output, settings), result.output, baseline, originalSites)
-    if (bad === null) return { output: result.output, applied: result.applied }
+    if (result.applied.size === 0) return { output: source, applied: new Map(), settled: true, findings: original }
+    const bad = addedSites(result.findings, result.output, baseline, originalSites)
+    if (bad === null) return { output: result.output, applied: result.applied,
+      settled: candidates(encoder.encode(result.output), result.findings).length === 0, findings: result.findings }
     if (!excludeCause(bad, excluded, result.chosen)) break
   }
-  return { output: source, applied: new Map() }
+  return { output: source, applied: new Map(), settled: true, findings: original }
 }
 
 /** The source with every fix applied that verifies, pass after pass until a pass changes nothing. */
 export function fixSource(source: string, options: LintOptions): FixResult {
   const applied = new Map<string, number>()
   let output = source
+  let findings: readonly Diagnostic[] | undefined
   for (let pass = 0; pass < MAX_PASSES; pass++) {
-    const result = fixClosedPass(output, options)
+    const result = fixClosedPass(output, options, findings)
     if (result.output === output) break
     output = result.output
+    findings = result.findings
     for (const [rule, count] of result.applied) applied.set(rule, (applied.get(rule) ?? 0) + count)
+    if (result.settled) break
   }
   return { output, applied }
 }
