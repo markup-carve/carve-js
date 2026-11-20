@@ -2,6 +2,7 @@ import { type Node } from '../src/ast.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { type RuleId } from './catalog.ts'
+import { type DataWalk } from './data-model.ts'
 import { type ExtensionDefinition } from '../src/extensions/types.ts'
 import { type HeadingIds } from '../src/options.ts'
 
@@ -40,6 +41,8 @@ export interface LintContext {
   options: LintOptions
   diagnostics: Diagnostic[]
   findingLines: number[]
+  /** The records of the data rules, filled during the visit when they are on. */
+  dataWalk?: DataWalk
   state: {
     headingLevel: number
     headingKinds: Set<string>

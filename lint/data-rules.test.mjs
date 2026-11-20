@@ -1,0 +1,156 @@
+import { afterEach, expect, it } from 'vitest'
+import { lint } from './lint.ts'
+import { DATA_RULE_IDS } from './data-rules.ts'
+
+function findings(source, mode) {
+  if (mode === 'data') process.env.CARVE_LINT_RULES = 'data'
+  else delete process.env.CARVE_LINT_RULES
+  return lint(source).filter((entry) => DATA_RULE_IDS.has(entry.code))
+    .map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset}`)
+}
+
+afterEach(() => { delete process.env.CARVE_LINT_RULES })
+
+const SAME = [
+  'a\n\n---\n', '- - -\n', 'a. - - -\n', '>a\n', '---\n>a\n---\n', 'a\n# b\n', 'a\n> b\n', 'a\n:: t\n',
+  'a\n{.c}\n', 'a\n[x]: /u\n', '{.c}\n\nb\n', '| a |\n\nTable: cap\n', '::: a\n:::: b\nx\n:::\n',
+  '> # a\n', '- a\n\n    # b\n', '1. a\n\n  b\n', '  # a\n', '::: note\na\n::::\n',
+]
+
+it('the data rules report what the hand-written rules report on their triggers', () => {
+  for (const source of SAME) expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+})
+
+it('C2-B-108 and the ruling of carve#6175: a directive is an open colon container', () => {
+  expect(findings(':::: references\n:::\n', 'data')).toEqual(['colon-fence-length-mismatch@16-19'])
+  expect(findings('::::\n::: glossary\n:::\n::::\n', 'data')).toEqual([])
+})
+
+it('C2-B-090: an attribute line with a space after its brace is an attribute line', () => {
+  expect(findings('{ #id }\n', 'data')).toEqual(['unattached-block-attribute@0-7'])
+  expect(findings('a\n{ #id }\n', 'data')).toEqual(['block-opener-without-blank-line@2-9'])
+})
+
+it('C2-B-031: a quote mark followed by a tab is text', () => {
+  expect(findings('>\t\n', 'data')).toEqual(['blockquote-marker-without-space@0-1'])
+})
+
+it('C2-B-146: a lone pipe is no table row next to a caption-looking line', () => {
+  expect(findings('Table: x\n|\n', 'data')).toEqual([])
+})
+
+it('the data rules of the second batch report what the hand-written rules report on their triggers', () => {
+  for (const source of ['x [^ ] y\n', '[a][ ]\n', '[ ]: u\n', 'a <b> c\n', '> a\n>\n> [x]: y\n', ' [x]: y\n', 'a\n- b\n',
+    '# H {.c}\n', '%%%\n%%% x\n%%%\n', '```\ncode\n ```\n']) {
+    expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  }
+})
+
+it('C2-B-011: indented-code-block skips a paragraph whose previous block is a list', () => {
+  expect(findings('\t1. w.\n\n    :\n', 'data')).toEqual([])
+})
+
+it('C2-B-109: fence-closer-indented reports no unclosed fence and reads the source column in a quote', () => {
+  expect(findings('````\n  ```\n', 'data')).toEqual([])
+  expect(findings('> ```\n>   ```\n', 'data')).toEqual(['fence-closer-indented@10-13'])
+})
+
+it('C2-B-110: comment-fence-closer-with-text reads a quoted line behind its quote mark only', () => {
+  expect(findings('> %%%%\n> %%%% x\n', 'data')).toEqual(['comment-fence-closer-with-text@7-15'])
+  expect(findings('>   %%%%\n> >   %%%% x\n', 'data')).toEqual([])
+})
+
+it('C2-B-069: description-term-multi-line starts behind the prefixes of the line', () => {
+  expect(findings('> :: w\n> w\n', 'data')).toEqual(['description-term-multi-line@9-10'])
+})
+
+it('bare-html-tag reads paragraph, heading and table row lines, not term lines', () => {
+  expect(findings(':: a <b>\n', 'data')).toEqual([])
+  expect(findings('| <i> |\n', 'data')).toEqual(['bare-html-tag@2-5'])
+})
+
+it('carve#6192: block-opener-overindented reports the whole opening mark', () => {
+  expect(findings('# H\n\n   ::::\n   x\n   ::::\n', 'data')).toEqual(['block-opener-overindented@8-12'])
+  expect(findings('  ### H\n', 'data')).toEqual(['block-opener-overindented@2-5'])
+})
+
+it('carve#6194: a colon run inside a quote or item is not compared with a div outside it', () => {
+  expect(findings('::::\n> :::\n', 'data')).toEqual([])
+  expect(findings('::::\n- a\n\n  :::  \n', 'data')).toEqual([])
+  expect(findings('> ::::\n> :::\n', 'data')).toEqual(['colon-fence-length-mismatch@9-12'])
+})
+
+it('C2-B-161: frontmatter-shaped-thematic-break reads an opener with trailing spaces', () => {
+  expect(findings('---  \n\n', 'data')).toEqual(['frontmatter-shaped-thematic-break@0-6'])
+})
+
+it('carve#6194: a div inside a footnote is not compared with a run that the document owns', () => {
+  expect(findings('[^n]: :::: warning\n      ---\n:::\n', 'data').filter((f) => f.startsWith('colon'))).toEqual([])
+})
+
+it('C2-B-090: a colon container with an attached attribute line is an open colon container', () => {
+  expect(findings('{.c}\n::: note\n::::\n', 'data')).toEqual(findings('{.c}\n::: note\n::::\n', 'code'))
+})
+
+it('carve#6206: an overindented opener in a div inside a list item belongs to the item', () => {
+  expect(findings('1. ::::\n    >\n', 'data')).toEqual(['list-item-block-overindented@12-13'])
+  expect(findings('- ::: note\n  ::: tip\n     # H\n  :::\n  :::\n', 'data')).toEqual(findings('- ::: note\n  ::: tip\n     # H\n  :::\n  :::\n', 'code'))
+})
+
+it('the data rules follow the hand-written fixes of carve-js#5183, #5186 and #5187', () => {
+  const only = (source, code) => findings(source, 'data').filter((found) => found.startsWith(`${code}@`))
+  expect(only('c\n> %%%', 'block-opener-without-blank-line')).toEqual(['block-opener-without-blank-line@2-3'])
+  expect(only('c\n>%% x', 'block-opener-without-blank-line')).toEqual([])
+  expect(only('   :::\n     :::: warning\n   :::', 'colon-fence-length-mismatch')).toEqual(['colon-fence-length-mismatch@28-31'])
+  expect(only('# H\n [a]: u', 'definition-in-container')).toEqual([])
+  expect(only(':: t\n: ````\n      ````\n  > *[x1]:\n>   [^n]: : text', 'definition-in-container'))
+    .toEqual(['definition-in-container@38-43'])
+})
+
+it('C2-B-031: a quote mark followed by a space and an inline comment is no marker without a space', () => {
+  expect(findings('a\n> %% x\n', 'data').filter((found) => found.startsWith('blockquote'))).toEqual([])
+  expect(findings('a\n>%% x\n', 'data').filter((found) => found.startsWith('blockquote'))).toEqual(['blockquote-marker-without-space@2-7'])
+})
+
+it('the third batch reports what the hand-written rules report on their triggers', () => {
+  for (const source of ['a\n===\n', 'a\n---\n', '> a\n> ---\n', '+ b\n', '[a]:\n', '[^a]:\n', '[ ]:\n', '| a\n', '| a |\n', '+\n',
+    '- +\n', '- a\n\n  +\n', '> [!NOTE]\n', '# H ##\n', '= ##\n', '# H\\##\n']) {
+    expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  }
+})
+
+it('C2-B-109: a container closed with its parent stays open for the parent closer after a blank line', () => {
+  expect(findings('  :::\n:::: note\n\n:::\n', 'data').filter((found) => found.startsWith('colon-fence')))
+    .toEqual(['colon-fence-length-mismatch@17-20'])
+})
+
+it('C2-B-090: the opener of an attributed quote is its own mark, not the text behind it', () => {
+  expect(findings('{#id}\n>\n', 'data').filter((found) => found.startsWith('block-opener-overindented'))).toEqual([])
+  expect(findings('{#id}\n > a\n', 'data').filter((found) => found.startsWith('block-opener-overindented')))
+    .toEqual(['block-opener-overindented@7-8'])
+})
+
+it('C2-B-025: an attribute line past the item content column is reported when a paragraph takes it', () => {
+  expect(findings('- a\n\n    {.c}\n  b\n', 'data')).toEqual(['list-item-block-overindented@9-13'])
+})
+
+it('the fourth batch reports what the hand-written rules report on their triggers', () => {
+  for (const source of ['*.c,*.h*\n', 'a /* b */ c\n', '*/x/*\n', '{% if x %}\n', 'a {%endif%} b\n', '{% if %}\n',
+    '::: |\nab\n%% x\n:::\n', ':: - x\n: d\n', ':: > q\n: d\n', ':: -x\n: d\n', 'a {{ }} b\n', '{{ "" }}\n', '{{a}}\n',
+    '![](a.png)\n', '![x](a.png)\n', '[a]()\n', '[a](){.c}\n', '[a](<>)\n', '> ::: footnotes\n> :::\n', '::: footnotes\n:::\n',
+    '::: figure "T"\n:::\n', '::: figure\n:::\n', '{loose=1}\n- a\n', '{k="a loose=b"}\n- a\n', '{.loose}\n- a\n']) {
+    expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  }
+  const on = { rules: { 'djot-subscript-tilde-braced': 'on', 'djot-highlight-braces': 'on' } }
+  for (const source of ['a {~b~} c\n', '{=x=}\n', '\\{~x~}\n']) {
+    process.env.CARVE_LINT_RULES = 'data'
+    const data = lint(source, on).map((entry) => entry.code)
+    delete process.env.CARVE_LINT_RULES
+    expect(data, JSON.stringify(source)).toEqual(lint(source, on).map((entry) => entry.code))
+  }
+})
+
+it('C2-B-109: a quoted backtick run inside a fence outside the quote is content, not an indented closer', () => {
+  expect(findings('```\n> ```\n', 'data').filter((found) => found.startsWith('fence-closer'))).toEqual([])
+  expect(findings('> ```\n>   ```\n', 'data').filter((found) => found.startsWith('fence-closer'))).toEqual(['fence-closer-indented@10-13'])
+})

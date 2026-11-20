@@ -9,6 +9,7 @@ import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 import { append } from '../src/append.ts'
+import { DATA_RULE_IDS, dataRulesOn, runDataRules, startDataWalk } from './data-rules.ts'
 
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
@@ -113,8 +114,9 @@ function runNodeRules(node: Node, path: string, context: LintContext): void {
 
 function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
   const byType = new Map<Node['type'], Rule[]>()
+  const data = dataRulesOn()
   for (const rule of NODE_RULES) {
-    if (!active(rule.id, options)) continue
+    if (!active(rule.id, options) || data && DATA_RULE_IDS.has(rule.id)) continue
     for (const type of rule.nodes ?? []) {
       const rules = byType.get(type)
       if (rules === undefined) byType.set(type, [rule])
@@ -128,11 +130,17 @@ function visitChildren(node: Node, path: string, context: LintContext, controls:
   forEachSlot(node, (nodes, step, single) => {
     if (single) {
       const child = nodes[0]
-      if (child !== undefined) visit(child, `${path}/${step}`, context, controls)
+      if (child === undefined) return
+      const childPath = `${path}/${step}`
+      context.dataWalk?.child(child, childPath, node, path, 0)
+      visit(child, childPath, context, controls)
     } else {
       for (let index = 0; index < nodes.length; index++) {
         const child = nodes[index]
-        if (child !== undefined) visit(child, `${path}/${step}/${index}`, context, controls)
+        if (child === undefined) continue
+        const childPath = `${path}/${step}/${index}`
+        context.dataWalk?.child(child, childPath, node, path, index)
+        visit(child, childPath, context, controls)
       }
     }
   }, SOURCE_ORDER)
@@ -351,14 +359,20 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
     ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
+  const data = dataRulesOn()
+  // The default rule set is the same on every call, so its compiled rule lists are kept.
+  const defaults = options.rules === undefined && options.platforms === undefined
+  const walk = data ? startDataWalk(parsed.document, context, (id) => active(id, options), defaults) : undefined
+  if (walk !== undefined) context.dataWalk = walk
   visit(parsed.document, '', context, controls)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
-  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options))
+  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !(data && DATA_RULE_IDS.has(rule.id)))
   for (const line of scanLines) {
     if (line.opaque) continue
     for (const rule of activeLineRules) rule.checkLine?.(line, context)
   }
+  if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, (id) => active(id, options), defaults)
   const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
   return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
 }
