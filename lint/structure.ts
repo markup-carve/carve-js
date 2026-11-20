@@ -2,7 +2,6 @@ import { forEachSlot, INLINE_PARENTS, type Node, type TableCellNode, type TableC
 import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
-import { openerStart } from './data-model.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
 import { columnOf, readPrefix } from '../src/layout-lines.ts'
 import { advanceColumn } from '../src/source.ts'
@@ -278,24 +277,6 @@ function isSeparatorCell(value: string): boolean {
   return hyphens >= 1
 }
 
-function tableRows(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table') return
-  let width = -1
-  for (let outer = 0; outer < node.children.length; outer++) {
-    const section = node.children[outer]
-    if (section?.type !== 'table_head' && section?.type !== 'table_body' && section?.type !== 'table_foot') continue
-    for (let inner = 0; inner < section.children.length; inner++) {
-      const row = section.children[inner]
-      if (row?.type !== 'table_row') continue
-      if (width < 0) width = row.children.length
-      else if (row.children.length !== width) {
-        reportNode('table-row-cell-count', row, `${path}/children/${outer}/children/${inner}`, context,
-          { cells: String(row.children.length), width: String(width) })
-      }
-    }
-  }
-}
-
 /** C2-A-084: a child of a group that carries a caption; C2-B-127: a nested figure group is a group of its own, no panel. */
 function isPanel(child: Node): boolean {
   return child.type === 'table' || (child.type !== 'figure_group' && 'caption' in child && child.caption !== undefined)
@@ -400,18 +381,6 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   const quotes = quoteDepth(path, context)
   const indent = headingLineColumn(second, quotes, context)
   if (indent > marker) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
-}
-
-/** C2-B-127: a bare `::: figure` in the body of a figure group, which opens a plain div. */
-function figureNested(node: Node, path: string, context: LintContext): void {
-  const range = bounds(node, context)
-  if (node.type !== 'div' || range === null) return
-  // C2-B-127: the opener line, behind an attached attribute line.
-  const from = node.attrs === undefined ? range[0] : openerStart(context.source, range[0])
-  if (!/^\s*:{3,}\s*figure\s*$/.test(context.source.slice(from, range[1]).split('\n', 1)[0] ?? '')) return
-  for (let split = path.lastIndexOf('/children/'); split > 0; split = path.lastIndexOf('/children/', split - 1)) {
-    if (context.nodeTypes.get(path.slice(0, split)) === 'figure_group') return reportNode('figure-group-nested', node, path, context)
-  }
 }
 
 function hasCaptionNumber(node: Node): boolean {
@@ -845,19 +814,6 @@ function jsonText(value: string): string {
   return JSON.stringify(value).slice(1, -1)
 }
 
-function footnoteWhitespace(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'footnote') return
-  const source = raw(node, context)
-  const close = source.indexOf(']')
-  if (!source.startsWith('[^') || close < 0) return
-  const label = source.slice(2, close)
-  const twin = context.state.footnoteLabels.get(node.key)
-  if (twin !== undefined && twin !== label) {
-    reportNode('footnote-labels-differ-only-in-whitespace', node, path, context,
-      { label, twin, key: jsonText(node.key) })
-  } else if (twin === undefined) context.state.footnoteLabels.set(node.key, label)
-}
-
 /** C2-B-213: a head mark and an `aligns` or `valigns` entry that set the same axis of a column. */
 function tableColumnOverlap(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table') return
@@ -952,26 +908,6 @@ function blankReferenceLabel(node: Node, path: string, context: LintContext): vo
   for (const match of source.matchAll(BLANK_LABEL)) {
     const end = match.index + match[0].length
     context.report('blank-reference-label', range[0] + match.index, range[0] + end, path, { text: match[0] })
-  }
-}
-
-const ROMAN_LETTER = /^[ivxlcdmIVXLCDM][.)]/
-const LETTER_STYLES = new Map([['i', 'a'], ['a', 'i'], ['I', 'A'], ['A', 'I']])
-
-/** C2-B-044: a one-item list of a one-roman-letter marker, then a list of the other letter style, fewer than three blank lines apart. */
-function orderedKindSplit(node: Node, path: string, context: LintContext): void {
-  if (!('children' in node) || !Array.isArray(node.children)) return
-  const children = node.children as Node[]
-  for (let at = 1; at < children.length; at++) {
-    const before = children[at - 1]
-    const after = children[at]
-    if (before?.type !== 'list' || after?.type !== 'list' || before.children.length !== 1) continue
-    if (after.marker.style !== LETTER_STYLES.get(before.marker.style ?? '')) continue
-    const first = bounds(before, context)
-    const next = bounds(after, context)
-    if (first === null || next === null || !ROMAN_LETTER.test(context.source.slice(first[0]).trimStart())) continue
-    if (context.source.slice(first[1], next[0]).split('\n').length - 2 >= 3) continue
-    reportNode('ordered-list-kind-split', before, `${path}/children/${at - 1}`, context)
   }
 }
 
@@ -1499,7 +1435,6 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('heading-trailing-attribute', ['heading'], headingTrailing),
   nodeRule('duplicate-reference-url', ['link_reference_definition'], duplicateReferenceUrl),
   nodeRule('deprecated-separator-row', ['table_row'], separatorRow),
-  nodeRule('table-row-cell-count', ['table'], tableRows),
   nodeRule('figure-group-empty', ['figure_group'], figureEmpty),
   nodeRule('figure-group-single-panel', ['figure_group'], figureSingle),
   nodeRule('deprecated-substitution-arrow', ['strike'], substitutionArrow),
@@ -1509,7 +1444,6 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('bidi-control-in-source', ['text', 'code', 'code_block', 'math'], bidiControl),
   nodeRule('description-term-multi-line', ['definition_term'], multilineTerm),
   nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
-  nodeRule('figure-group-nested', ['div'], figureNested),
   nodeRule('figure-group-panel-number', ['figure_group'], figurePanelNumber),
   nodeRule('footnotes-placement-in-container', ['directive'], footnotePlacement),
   nodeRule('references-placement-in-container', ['directive'], referencesPlacement),
@@ -1544,14 +1478,12 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('blank-reference-label', ['text'], blankReferenceLabel),
   nodeRule('comment-fence-closer-with-text', ['comment'], commentFenceCloserText),
   nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
-  nodeRule('footnote-labels-differ-only-in-whitespace', ['footnote'], footnoteWhitespace),
   nodeRule('table-column-overlap', ['table'], tableColumnOverlap),
   nodeRule('tight-list-item-with-blank-line', ['list'], tightBlankLine),
   nodeRule('braced-comment-in-a-template-source', ['comment'], templateComment),
   nodeRule('region-marker-renders-as-text', ['comment'], regionComment),
   nodeRule('unclosed-braced-comment', ['text'], unclosedBracedComment),
   nodeRule('unclosed-inline-emphasis', ['text'], unclosedEmphasis),
-  nodeRule('ordered-list-kind-split', ['document', 'block_quote', 'list_item', 'div', 'footnote', 'admonition'], orderedKindSplit),
   nodeRule('sigil-after-letter', ['text'], sigilAfterLetter),
   nodeRule('list-item-body-below-content-column', ['list_item'], listItemBodyColumn),
   nodeRule('list-item-block-overindented', ['list_item'], listItemBlockIndent),

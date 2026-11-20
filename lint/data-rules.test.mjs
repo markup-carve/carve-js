@@ -223,7 +223,8 @@ it('C2-W-141: lookups after a record and ancestor fields give what the hand-writ
   const sources = ['[^a]: x\n\n[^ a]: y\n\nUse [^a].\n', '{.c}\n[^a]: x\n\n[^ a]: y\n', '[^a  b]: x\n\n[^a b]: y\n',
     '| a | b |\n| c |\n|---|\n| d | e | f |\n', '> | a |\n> | b | c |\n', 'i. one\n\na. two\n', 'i. one\n\n\n\n\na. two\n',
     'I. one\n- x\n\nA. two\n', '> i) one\n>\n> a) two\n', '::: figure\npara\n:::\n', '::: figure\n> ::: figure\n> x\n> :::\n:::\n']
-  for (const source of sources) expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  // The rows of DATA_ONLY run from data in both modes, so findings at one start may come in another order.
+  for (const source of sources) expect(findings(source, 'data').sort(), JSON.stringify(source)).toEqual(findings(source, 'code').sort())
   expect(findings('[^a]: x\n\n[^ a]: y\n\nUse [^a].\n', 'data')).toEqual(['footnote-labels-differ-only-in-whitespace@9-17'])
   expect(findings('i. one\n\na. two\n', 'data')).toEqual(['ordered-list-kind-split@0-6'])
 })
