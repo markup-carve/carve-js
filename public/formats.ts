@@ -24,6 +24,8 @@ export interface ImportOptions {
   from: ImportFormat
   /** HTML only (C2-M-065, C2-M-066): keeps comments and raw elements as raw nodes. Markdown and Djot keep raw HTML always. */
   rawHtml?: boolean
+  /** HTML only (C2-M-102): the editor that wrote the HTML; default `generic`. */
+  adapter?: 'generic' | 'tiptap' | 'prosemirror' | 'ckeditor' | 'tinymce' | 'word' | 'google-docs'
   /** C2-M-082: makes each loss of the import an error. */
   strictLosses?: boolean
 }
@@ -35,7 +37,7 @@ export interface ImportOptions {
  */
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   if (options === undefined) throw new CarveOptionError('from', 'required')
-  checkOptions(options, { from: 'string', rawHtml: 'boolean', strictLosses: 'boolean' })
+  checkOptions(options, { from: 'string', rawHtml: 'boolean', adapter: 'string', strictLosses: 'boolean' })
   if (!FORMATS.includes(options.from)) throw new CarveOptionError('from', `unknown value ${JSON.stringify(options.from)}`)
   if (typeof input !== 'string') throw new ImportInputError('the input is not text', options.from)
   return importAny(input, options)

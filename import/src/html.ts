@@ -13,6 +13,7 @@ import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } 
 import { TASK_NO_STATE, TASK_STATUS } from '../../src/tree-tables.ts'
 import { htmlImage, inline, inlineChildren, normalizeBreaks, trimInlineEdges } from './html-inline.ts'
 import { collectNotes, isFootnoteSection } from './html-notes.ts'
+import { applyAdapter, type Adapter } from './html-adapter.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
 import { resolveAlignments } from './html-table-align.ts'
 import { cell, coalesce, complete, documentOf, ensureForeignDepth, paragraph, row, softText, type ImportResult } from './kit.ts'
@@ -982,11 +983,13 @@ export interface HubHooks {
 
 export function importHtml(
   input: string, rawHtml = false, hooks: HubHooks = {}, sourceLocations = true, labels: Readonly<Record<string, string>> = {},
+  adapter: Adapter = 'generic',
 ): ImportResult {
   const full = isFullDocument(input)
   const foreign = full ? parse(input, { sourceCodeLocationInfo: sourceLocations }) : parseFragment(input, sourceLocations)
   ensureForeignDepth(foreign, 'html')
   hooks.prepare?.(foreign.childNodes)
+  applyAdapter(foreign, adapter)
   const context: HtmlContext = { format: 'html', input, rawHtml, labels: { ...DEFAULT_LABELS, ...labels }, diagnostics: [], deferred: [],
     notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),
     anchorKeys: new Set() }

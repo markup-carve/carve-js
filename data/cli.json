@@ -95,6 +95,27 @@
   ],
   "flags": [
     {
+      "name": "adapter",
+      "commands": [
+        "import"
+      ],
+      "kind": "enum",
+      "values": [
+        "generic",
+        "tiptap",
+        "prosemirror",
+        "ckeditor",
+        "tinymce",
+        "word",
+        "google-docs"
+      ],
+      "option": "adapter",
+      "clauses": [
+        "C2-T-010",
+        "C2-M-102"
+      ]
+    },
+    {
       "name": "align-tables",
       "commands": [
         "fmt"

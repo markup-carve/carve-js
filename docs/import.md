@@ -16,6 +16,7 @@ const { document, source, diagnostics } = importDocument('# Hello *world*\n', { 
 | `from` | `markdown`, `gfm`, `djot`, `bbcode`, `html` | The input format. Required. |
 | `rawHtml` | boolean, default `false` | HTML only: keeps comments and raw elements as raw nodes (C2-M-065). |
 | `labels` | map of label keys to text | HTML only: identifies generated accessible names from the renderer (C2-M-101). |
+| `adapter` | `generic` (default), `tiptap`, `prosemirror`, `ckeditor`, `tinymce`, `word`, `google-docs` | HTML only: the editor that wrote the HTML (C2-M-102). `word` and `google-docs` read a word processor's notes, a reference and a note linked to each other, as footnotes; the other values read the HTML as `generic` does. |
 | `strictLosses` | boolean, default `false` | Makes each loss of the import an error (C2-M-082). |
 
 The result holds `document` (the validated tree), `source` (the writer's Carve text) and `diagnostics`. An input
@@ -29,6 +30,7 @@ On the command line:
 carve import --from markdown README.md > README.crv
 carve import --from djot notes.dj > notes.crv
 carve import --from bbcode post.txt > post.crv
+carve import --from html --adapter word export.html > export.crv
 ```
 
 ## How it works
