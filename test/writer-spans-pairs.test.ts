@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { format, lint, parse, render, treesEqual, writeWithDiagnostics } from '../src/index.ts'
 import { importDocument } from '../public/index.ts'
-import { type TableCellNode } from '../src/ast.ts'
+import { type DocumentNode, type TableBodyNode, type TableCellNode, type TableNode, type TableRowNode } from '../src/ast.ts'
 import { documentOf } from './support/tree.ts'
 
 const PAIR_RULES = ['deprecated-bare-underline', 'deprecated-bare-strike', 'deprecated-bare-highlight',
@@ -57,6 +57,27 @@ describe('C2-W-145: a span count that no mark cell covers is written with span m
     expect(render(source)).toBe(render(parse(source)))
     expect(render(source)).toContain('<td colspan="2">m</td>')
     expect(render(source)).toContain('<td rowspan="2">a</td>')
+  })
+})
+
+describe('C2-W-145: in a table that already holds marks, only the counts without marks take them', () => {
+  const plain = (source: string): DocumentNode => JSON.parse(JSON.stringify(parse(source), (key, value: unknown) =>
+    (key === 'pos' ? undefined : value))) as DocumentNode
+  const rowsOf = (tree: DocumentNode): TableRowNode[] => ((tree.children[0] as TableNode).children[0] as TableBodyNode)
+    .children as TableRowNode[]
+
+  it('adds the < of a colspan below a row whose span is marked', () => {
+    const tree = plain('| a | < | b |\n| c | d | e |\n')
+    const row = rowsOf(tree)[1]!
+    row.children = [{ ...row.children[0]!, colspan: 2 }, row.children[2]!]
+    expect(writeWithDiagnostics(tree)).toEqual({ source: '| a | < | b |\n| c | < | e |\n', diagnostics: [] })
+  })
+
+  it('adds the ^ of a rowspan below rows whose row span is marked', () => {
+    const tree = plain('| a | b |\n| ^ | c |\n| d | e |\n| f |\n')
+    const row = rowsOf(tree)[2]!
+    row.children = [row.children[0]!, { ...row.children[1]!, rowspan: 2 }]
+    expect(writeWithDiagnostics(tree)).toEqual({ source: '| a | b |\n| ^ | c |\n| d | e |\n| f | ^ |\n', diagnostics: [] })
   })
 })
 

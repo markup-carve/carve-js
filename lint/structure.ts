@@ -54,17 +54,16 @@ function escaped(text: string, at: number): boolean {
   return slashes % 2 === 1
 }
 
-// C2-I-050: a bare mark followed by a combining mark, a variation selector or a zero-width joiner takes no part.
+// C2-I-050: a bare mark followed by a combining mark, a variation selector or a zero-width joiner opens no pair.
 const JOINED = /^[\p{M}\u200D\uFE00-\uFE0F\u{E0100}-\u{E01EF}]/u
 
 function joined(text: string, mark: string, id: Rule['id'], at: number): boolean {
   return id.startsWith('deprecated-bare-') && JOINED.test(text.slice(at + mark.length, at + mark.length + 2))
 }
 
-function nextCloser(text: string, mark: string, from: number, id?: Rule['id']): number {
+function nextCloser(text: string, mark: string, from: number): number {
   let end = text.indexOf(mark, from)
-  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end) ||
-    (id !== undefined && joined(text, mark, id, end)))) {
+  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end))) {
     end = text.indexOf(mark, end + mark.length)
   }
   return end
@@ -94,7 +93,7 @@ export function pairedMarks(text: string, mark: string, id: Rule['id'], visit: (
       at = start + mark.length
       continue
     }
-    const end = nextCloser(text, mark, start + mark.length + 1, id)
+    const end = nextCloser(text, mark, start + mark.length + 1)
     if (end < 0) return
     if (validPair(text, mark, id, start, end)) visit(start, end + mark.length)
     at = end + mark.length
