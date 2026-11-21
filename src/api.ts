@@ -122,12 +122,15 @@ function combinedFacts(top: ParseFacts, files: readonly ParseFacts[], found: Fin
  * C2-N-003, C2-N-006: the parse of a top-level source, with its includes expanded when the options give a resolver.
  * Without one every include is reported, and a source without includes is returned as it was parsed.
  */
-function parseSource(src: string, settings: Settings, positions: boolean, trace: LayoutTrace | null = null): ParsedTree {
+function parseSource(src: string, settings: Settings, positions: boolean, trace: LayoutTrace | null = null,
+  byteLength: number | null = null): ParsedTree {
   const names = settings.extensions.length > 0
-  const parse = (text: string, outer: ParseFacts['scope'] | null, forced = false, frontmatterOpens = true): ParsedTree => applyExtensions(
-    buildSource(text, positions || forced, null, outer === null ? trace : null, names, null, outer, frontmatterOpens), settings.extensions,
+  const parse = (text: string, outer: ParseFacts['scope'] | null, forced = false, frontmatterOpens = true,
+    bytes: number | null = null): ParsedTree => applyExtensions(
+    buildSource(text, positions || forced, null, outer === null ? trace : null, names, null, outer, frontmatterOpens, bytes),
+    settings.extensions,
   )
-  const parsed = parse(src, null)
+  const parsed = parse(src, null, false, true, byteLength)
   const facts = parsed.facts
   const includes = settings.includes
   // C2-N-006: expansion runs where a resolver is given, also over a document that holds no include.
@@ -145,8 +148,8 @@ function parseSource(src: string, settings: Settings, positions: boolean, trace:
 
 /** C2-B-218: the parse of a string or of bytes; the positions of bytes count the source bytes. */
 function parseInput(source: SourceText, settings: Settings, positions: boolean, trace: LayoutTrace | null = null): ParsedTree {
-  const parsed = parseSource(source.text, settings, positions, trace)
   const bytes = source.bytes
+  const parsed = parseSource(source.text, settings, positions, trace, bytes?.length ?? null)
   if (bytes !== null) {
     mapPositions(source, parsed.document)
     parsed.document.srcByteLength = bytes.length

@@ -58,3 +58,19 @@ describe('C2-I-098: copied abbreviation expansions use one parse budget', () => 
     expect(toAnsi(document).output).toContain(expansion)
   })
 })
+
+describe('C2-I-098: a byte input sizes the budget by its own bytes', () => {
+  it('counts an invalid byte once, not as the three bytes of its U+FFFD', () => {
+    const head = new TextEncoder().encode(`*[A]: ${'x'.repeat(100_000)}\n\n${'A '.repeat(20)}\n\n`)
+    const bytes = new Uint8Array(head.length + 100_001)
+    bytes.set(head)
+    bytes.fill(0xff, head.length, bytes.length - 1)
+    bytes[bytes.length - 1] = 0x0a
+    // About 200 KB of input: 8 times that permits 16 copies, where the decoded text would permit all 20.
+    const paragraph = parse(bytes).children.find((node) => node.type === 'paragraph')
+    if (paragraph?.type !== 'paragraph') throw new Error('expected a paragraph')
+    const copies = paragraph.children.filter((node): node is Abbreviation => node.type === 'abbreviation')
+      .filter((node) => node.expansion !== undefined)
+    expect(copies).toHaveLength(16)
+  })
+})

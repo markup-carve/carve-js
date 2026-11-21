@@ -714,19 +714,25 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string, source
   return { document, facts }
 }
 
+/** C2-I-098: a byte input counts its own bytes, not those of its decoded text. */
+function sourceBytes(src: string, byteLength: number | null | undefined): number {
+  return byteLength ?? utf8Length(src)
+}
+
 /**
  * The public tree of `src` before resolution, built from the events of the block pass and of the
  * inline pass of each content. `abbreviations` replaces the terms the source defines, for a source
  * that is one block of a larger document (C2-W-089). `trace` takes what the source-layout record reads (C2-A-003).
+ * `byteLength` is the length of a byte input the text was decoded from.
  */
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
   collectSourceNames = false, linkKeys: ReadonlySet<string> | null = null, outer: OuterScope | null = null,
-  frontmatterOpens = true,
+  frontmatterOpens = true, byteLength?: number | null,
 ): ParsedTree {
   // C2-B-218: U+0000 and an unpaired surrogate are read as U+FFFD. All are one UTF-16 unit, so every string offset stays.
   const text = withoutUnpairedSurrogates(src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src)
-  const sourceByteLength = utf8Length(src)
+  const sourceByteLength = sourceBytes(src, byteLength)
   const blocks = acquireState()
   blocks.frontmatterOpens = frontmatterOpens
   const inline = acquireInlineState()
