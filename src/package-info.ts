@@ -6,7 +6,7 @@ export const VERSION = "0.1.17"
 /** The specification this engine implements, and the commit of markup-carve/carve it pins. */
 export const SPEC_VERSION: { readonly version: string, readonly commit: string } = Object.freeze({
   version: '0.2',
-  commit: "37701a056a4041b58cd949eb12347e4fc0c12708",
+  commit: "d828b33a194cdbce98fe16eceb668072ca46a851",
 })
 
 /** The node types of the pinned tree schema: those a document holds as blocks, and those a paragraph holds. */
