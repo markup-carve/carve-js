@@ -67,6 +67,18 @@ const written: [string, string, string][] = [
   // U-430 reads the line of the difference where the rewrite's added lines moved it.
   ['U-038 U-430', '- a\n  [^f]: note\n    more\n\ntail\nsee[^    -  xf]\n',
     '- a\n\n[^f]: note\n  more\n\ntail\nsee\\[^    -  xf]\n'],
+  // U-435 also reads a quote inside the description it leaves.
+  ['U-435', ':: t\n:  > a\n   > + b ||\n\n tail\n',
+    ':: t\n:  > a\n   > + b ||\n\ntail\n'],
+  // A nested list that opens under the text of a footnote body is read by the list that holds it (U-008).
+  ['U-039 U-008', ' [^f]: x\n[^1]: n\n- - a\n',
+    '[^f]: x\n[^1]: n\n\n- - a\n'],
+  // U-180 in a quote moves the term past its marks.
+  ['U-038 U-180', '> :: t\n>   [r]: /u\n>  : d\ntail\n',
+    '>  :: t\n>  : d\ntail\n\n[r]: /u\n'],
+  // A list after a `+` line that ends an item moves to the column of the `+`.
+  ['U-014', '1. ordered\n+  \n - item\n',
+    '1. ordered\n\n- item\n'],
 ]
 
 describe('the replay repairs', () => {

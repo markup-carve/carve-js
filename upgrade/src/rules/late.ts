@@ -208,6 +208,12 @@ function movedBlock(below: Visit, above: Visit, line: number): Visit {
   return block
 }
 
+/** The repairs also read a quote that stands inside the description list `below` leaves. */
+function quotesInList(ctx: Context, above: Visit, below: Visit): boolean {
+  const left = ctx.repairs === true ? leftList(above, below) : null
+  return left !== null && quotesOf(above).every((quote) => isInside(quote, left)) && quotesOf(below).length === 0
+}
+
 /** The line above `line`; the repairs also read a block after blank lines, which 0.2 keeps in the description too. */
 function lineAbove(ctx: Context, line: number): number {
   let up = line - 1
@@ -221,7 +227,7 @@ function leftOfDescription(ctx: Context, line: number): { block: Visit; shift: n
   if (below == null || below.node.pos!.startLine !== line) return null
   const above = ctx.blocks.leaf[lineAbove(ctx, line)]
   if (above == null || below == null || below === above || below.node.pos!.startLine !== line) return null
-  const left = quotesOf(above).length > 0 ? null : leftList(above, below)
+  const left = quotesOf(above).length > 0 && !quotesInList(ctx, above, below) ? null : leftList(above, below)
   if (left === null) return null
   const owner = below.parent?.node.type === 'definition_list' ? below.parent : left
   const shift = indentOf(lineText(ctx.lines, line)) - columnOf(ctx, owner)
