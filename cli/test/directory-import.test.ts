@@ -367,3 +367,19 @@ it('refuses a directory import that misses its output or mixes in single-file fl
   const missing = cli(['import', '--from', 'gfm', '--directory', join(root, 'none'), '--output', output])
   expect(missing).toMatchObject({ status: 2, stderr: `carve[usage]: source is not a directory: ${join(root, 'none')}\n` })
 })
+
+it('respells a case-only fragment to a heading whose own text ends in a number, not to a repeated slug', () => {
+  const root = tree({
+    'a.md': '[c](b.md#chapter-2) [s](b.md#step-2) [t](b.md#step-3) [d](b.md#twin-2)\n',
+    'b.md': '# Chapter 2\n\n# Step\n\n# Step 2\n\n# Step\n\n# Twin\n\n# Twin\n',
+  })
+  expect(cli(['import', '--from', 'gfm', '--directory', join(root, 'SRC'), '--output', join(root, 'DST')]).status).toBe(0)
+  expect(readFileSync(join(root, 'DST', 'a.crv'), 'utf8')).toBe('[c](b.crv#Chapter-2) [s](b.crv#Step-2) [t](b.md#step-3) [d](b.md#twin-2)\n')
+  const report = reportOf(join(root, 'DST', 'migration-report.json'))
+  expect(fileOf(report, 'a.md').links).toEqual([
+    { target: 'b.md#chapter-2', status: 'rewritten' },
+    { target: 'b.md#step-2', status: 'rewritten' },
+    { target: 'b.md#step-3', status: 'unresolved', reason: 'fragment missing from target' },
+    { target: 'b.md#twin-2', status: 'unresolved', reason: 'fragment missing from target' },
+  ])
+})

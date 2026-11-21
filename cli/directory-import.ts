@@ -6,8 +6,10 @@ import { chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdi
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
 import { parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { importDocument, type ImportDiagnostic } from '../import/src/index.ts'
-import { render, write } from '../src/index.ts'
-import type { DocumentNode } from '../src/ast-nodes.ts'
+import { render, resolveTree, write } from '../src/index.ts'
+import { plainText } from '../src/ast-text.ts'
+import { slugify } from '../src/slug.ts'
+import type { DocumentNode, Node } from '../src/ast-nodes.ts'
 
 export type DirectoryFormat = 'markdown' | 'gfm'
 
@@ -43,12 +45,6 @@ function elements(html: string): Html.Element[] {
   return found
 }
 
-function attribute(element: Html.Element, name: string): string | undefined {
-  return element.attrs.find((attr) => attr.name === name)?.value
-}
-
-const HEADING = /^h[1-6]$/
-
 /** The ids a link fragment may name in a rendered file, raw HTML included. */
 function htmlIds(html: string): Set<string> {
   const ids = new Set<string>()
@@ -58,18 +54,38 @@ function htmlIds(html: string): Set<string> {
   return ids
 }
 
-/** The Carve heading ids a case-only fragment may stand for, read from a render without raw HTML. */
-function headingAliases(html: string): Map<string, string | null> {
+/** Calls `visit` on each node below `root`, the skipped fields left out. */
+function forEachNode(root: unknown, visit: (node: Node) => void): void {
+  const pending: unknown[] = [root]
+  for (let value = pending.pop(); value !== undefined; value = pending.pop()) {
+    if (Array.isArray(value)) pending.push(...(value as unknown[]))
+    else if (value !== null && typeof value === 'object') {
+      visit(value as Node)
+      for (const [name, child] of Object.entries(value)) if (!SKIPPED_FIELDS.has(name)) pending.push(child)
+    }
+  }
+}
+
+/**
+ * The id of a heading that a case-only fragment may stand for. A generated id that differs from the slug of its
+ * heading carries the suffix of a repeated slug (C2-H-022); a case-only fragment never stands for it.
+ */
+function aliasOf(node: Node, mode: Parameters<typeof slugify>[1]): string | undefined {
+  if (node.type !== 'heading') return undefined
+  if (node.attrs?.id !== undefined) return node.attrs.id === '' ? undefined : node.attrs.id
+  const id = node.generatedId
+  return id !== undefined && id === slugify(plainText(node.children), mode) ? id : undefined
+}
+
+function headingAliases(document: DocumentNode): Map<string, string | null> {
   const aliases = new Map<string, string | null>()
-  for (const element of elements(html)) {
-    const id = attribute(element, 'id')
-    const first = element.childNodes.find((child): child is Html.Element => 'tagName' in child)
-    const heading = HEADING.test(element.tagName) || (element.tagName === 'section' && first !== undefined && HEADING.test(first.tagName))
-    // A suffixed id is the second heading of its text; a case-only fragment never stands for it.
-    if (!heading || id === undefined || id === '' || /-(?:[2-9]|[1-9]\d+)$/.test(id)) continue
+  const resolved = resolveTree(document)
+  forEachNode(resolved.document, (node) => {
+    const id = aliasOf(node, resolved.settings.headingIds)
+    if (id === undefined) return
     const key = id.toLowerCase()
     aliases.set(key, aliases.has(key) && aliases.get(key) !== id ? null : id)
-  }
+  })
   return aliases
 }
 
@@ -424,7 +440,7 @@ function writeFiles(tree: ImportedTree, temporary: string): string[] {
   }
   for (const item of tree.imported) {
     targets.ids.set(item.file.output, htmlIds(render(item.document, { rawHtml: true })))
-    targets.aliases.set(item.file.output, headingAliases(render(item.document)))
+    targets.aliases.set(item.file.output, headingAliases(item.document))
   }
   const review: string[] = []
   for (const item of tree.imported) {
