@@ -82,6 +82,7 @@
     "check:extension-migration": "tsc -p extensions/tsconfig.json && eslint --config extensions/eslint.config.mjs 'extensions/**/*.ts' 'test/extension-migration/**/*.ts' --max-warnings=0 && vitest run test/extension-migration",
     "test:stress": "CARVE_STRESS=1 vitest run test/writer.stress.test.ts",
     "test:proptest": "tsx --test proptest/*.test.ts",
+    "fuzz": "node proptest/fuzz.ts",
     "test:cli": "vitest run --config cli/vitest.config.ts",
     "test:lint": "vitest run --config lint/vitest.config.mjs",
     "test:migrate": "tsx --test migrate/*.test.mts && tsc -p migrate/tsconfig.json",

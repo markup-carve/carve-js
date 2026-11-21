@@ -78,7 +78,8 @@ class Checker {
       // C2-W-089: the writer may need several repair passes for one group.
       const writerTarget = this.target === 'render' || this.target === 'format' || this.target === 'diagnostics' ||
         this.target === 'extensions' || this.target === 'import'
-      const timeout = Math.max(writerTarget ? 30000 : 3000, Buffer.byteLength(source) / 10240 * 500)
+      const base = this.target === 'scaling' ? 180000 : writerTarget ? 30000 : 3000
+      const timeout = Math.max(base, Buffer.byteLength(source) / 10240 * 500)
       const timer = setTimeout(() => {
         worker.removeAllListeners('message')
         worker.removeAllListeners('error')
@@ -114,6 +115,7 @@ function signature(finding: Finding | null): string {
   }
   if (finding.kind === 'parse-invalid-tree') return `${finding.kind}:${finding.detail.split('\n')[0]}`
   if (finding.kind.startsWith('option-')) return `${finding.kind}:${finding.detail.split(':')[0]}`
+  if (finding.kind.startsWith('scaling-')) return `${finding.kind}:${finding.detail.split('\n')[0]}`
   return finding.kind
 }
 
@@ -223,7 +225,8 @@ async function save(checker: Checker, target: Target, source: string, seed: numb
   const path = join('proptest/findings', target)
   mkdirSync(path, { recursive: true })
   const wanted = signature(finding)
-  const deadline = Date.now() + 20_000
+  // A scaling case is fully decided by its seed; its source is empty and there is nothing to shrink.
+  const deadline = target === 'scaling' ? Date.now() : Date.now() + 20_000
   const witness = await singleCharacterWitness(checker, source, seed, wanted, deadline)
   const lines = await removeLines(checker, witness, seed, wanted, deadline)
   const shrunk = await removeBytes(checker, lines, seed, wanted, deadline)
@@ -290,7 +293,7 @@ async function main(): Promise<number> {
   const seen = new Set<string>()
   let cases = 0
   for (; cases < options.count && Date.now() < deadline; cases++) {
-    const source = options.target === 'decode' || options.target === 'migrate' ?
+    const source = options.target === 'scaling' ? '' : options.target === 'decode' || options.target === 'migrate' ?
       generateJson(rng, options.target === 'migrate') : generate(rng, corpus, options.maxBytes)
     const caseSeed = rng.int(0x7fffffff)
     const found = await checker.check(source, caseSeed)
