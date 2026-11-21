@@ -132,7 +132,8 @@ function runBlocks(model: LineModel<BlockRun>, context: LintContext): void {
 
 function runInline(walk: DataWalk, rules: Active, context: LintContext): void {
   for (const record of walk.inline) {
-    for (const run of rules.inline.get(record.type) ?? []) run(record, record.path, context)
+    const runs = rules.inline.get(record.type)
+    if (runs !== undefined) for (const run of runs) run(record, record.path, context)
   }
 }
 

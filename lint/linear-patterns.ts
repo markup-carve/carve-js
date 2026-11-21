@@ -8,6 +8,8 @@ export interface Pattern {
   test(text: string): boolean
   exec(text: string): RegExpExecArray | null
   matchAll(text: string): Iterable<RegExpExecArray>
+  /** The group spans of the first match, where a matcher has them without building the match. */
+  spans?(text: string): Groups | null
 }
 
 type Groups = Record<string, [number, number]>
@@ -202,7 +204,41 @@ function firstBareTag(source: string): Matcher {
   return new Matcher(source, (text) => (from) => (from > 0 ? null : new TagSteps(text).first()))
 }
 
+// `.*?` before `[ \t]*$` rescans a run of spaces from each of its positions. With no line break to stop `.`, the greedy
+// prefix and the trimmed rest always match, so no other split is ever taken.
+function contentSpan(text: string): [number, number] | null {
+  if (LINE_END.test(text)) return null
+  let at = 0
+  while (text[at] === ' ' || text[at] === '\t') at++
+  while (text[at] === '>' && text[at + 1] === ' ') {
+    at += 2
+    while (text[at] === ' ' || text[at] === '\t') at++
+  }
+  let end = text.length
+  while (end > at && (text[end - 1] === ' ' || text[end - 1] === '\t')) end--
+  return [at, end]
+}
+
+class QuotedContent extends Matcher {
+  constructor(source: string) {
+    super(source, (text) => {
+      let done = false
+      return (from) => {
+        const span = done || from > 0 ? null : contentSpan(text)
+        done = true
+        return span === null ? null : found(text, 0, text.length, { c: span })
+      }
+    })
+  }
+
+  spans(text: string): Groups | null {
+    const span = contentSpan(text)
+    return span === null ? null : { c: span }
+  }
+}
+
 const MATCHERS: Record<string, (source: string) => Matcher> = {
+  '^[ \\t]*(?:> [ \\t]*)*(?<c>.*?)[ \\t]*$': (source) => new QuotedContent(source),
   '^(?:[^<]|<!--.*?-->|<[^!<A-Za-z/]|<[A-Za-z/]|<<|<!(?:[^-]|$)|<!-(?:[^-]|$)|<$)*?<*(?<tag></?[A-Za-z][A-Za-z0-9_:-]*(?:\\s[^<>]*)?/?>)': firstBareTag,
   '\\([^)\\n]*[^)\\s][^)\\n]*\\)$': spokenParenthesisAtEnd,
   '(?<link>\\[[^\\]\\n]+\\][ \\t]+\\([^)\\n]*\\))': linkGap,

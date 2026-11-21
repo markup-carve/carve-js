@@ -127,15 +127,22 @@ function trimEndAt(text: string, from: number): number {
   return end
 }
 
-const depths = new WeakMap<Map<string, string>, Map<string, number>>()
+// Per tree, the depth of each path asked for, or undefined for a tree that holds no quote.
+const depths = new WeakMap<Map<string, string>, Map<string, number> | undefined>()
+
+function depthsOf(types: Map<string, string>): Map<string, number> | undefined {
+  if (depths.has(types)) return depths.get(types)
+  let quoted = false
+  for (const type of types.values()) if (type === 'block_quote') { quoted = true; break }
+  const cache = quoted ? new Map<string, number>() : undefined
+  depths.set(types, cache)
+  return cache
+}
 
 /** The number of quotes that hold the node at `path`, the node itself left out. */
 export function quoteDepth(path: string, types: Map<string, string>): number {
-  let cache = depths.get(types)
-  if (cache === undefined) {
-    cache = new Map<string, number>()
-    depths.set(types, cache)
-  }
+  const cache = depthsOf(types)
+  if (cache === undefined) return 0
   const known = cache.get(path)
   if (known !== undefined) return known
   const split = path.lastIndexOf('/children/')
@@ -155,10 +162,10 @@ function colonKind(type: string, opener: string): string {
 }
 
 /** `format`: for a table, a row or a cell, the source format of the table (C2-W-149). */
-export interface Walked { node: Node, path: string, parent: string, index: number, format?: string | undefined }
+export interface Walked { node: Node, path: string, parent: string, index: number, format?: string | undefined, quotes?: number }
 
 
-interface Leaves { type: string[], id: string[], first: boolean[], head: number[], last: number[], start: number[] }
+interface Leaves { type: string[], id: string[], first: boolean[], head: number[], last: number[], start: number[], quotes: number[] }
 
 const blockType = (node: Node): string => (node.type === 'comment' && node.form === 'block' ? 'comment_block' : node.type)
 
@@ -166,8 +173,8 @@ const blockType = (node: Node): string => (node.type === 'comment' && node.form 
 function leaves(walked: readonly Walked[], count: number, chars: Uint32Array): Leaves {
   const out: Leaves = { type: new Array<string>(count).fill('none'), id: new Array<string>(count).fill(''),
     first: new Array<boolean>(count).fill(false), head: new Array<number>(count).fill(0), last: new Array<number>(count).fill(0),
-    start: new Array<number>(count).fill(-1) }
-  for (const { node, path } of walked) {
+    start: new Array<number>(count).fill(-1), quotes: new Array<number>(count).fill(0) }
+  for (const { node, path, quotes } of walked) {
     const type = blockType(node)
     if (!LEAF_TYPES.has(type) || node.pos === undefined) continue
     for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
@@ -177,6 +184,7 @@ function leaves(walked: readonly Walked[], count: number, chars: Uint32Array): L
       out.head[number - 1] = node.pos.startLine
       out.start[number - 1] = chars[node.pos.startOffset] ?? 0
       out.last[number - 1] = node.pos.endLine
+      out.quotes[number - 1] = quotes ?? 0
     }
   }
   return out
@@ -207,7 +215,7 @@ function ancestorPaths(path: string): string[] {
 interface LineFields {
   number: number, start: number, end: number, text: string, body: string, body_start: number, body_end: number
   blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, closes_container: boolean
-  leaf_head: number, leaf_last: number, leaf_start: number
+  leaf_head: number, leaf_last: number, leaf_start: number, quote_depth: number
 }
 
 class LineRecord {
@@ -225,7 +233,10 @@ class LineRecord {
   readonly attached_here: boolean
   readonly closes_container: boolean
   readonly leaf_start: number
+  /** The number of quotes that hold the line's leaf. */
+  readonly quote_depth: number
   private ancestorsCache: string[] | undefined = undefined
+  private idsCache: string[] | undefined = undefined
   private colonCache: ColonContainer[] | undefined = undefined
   private shapeCache: string | undefined = undefined
   private lazyCache: boolean | undefined = undefined
@@ -253,6 +264,7 @@ class LineRecord {
     this.attached_here = fields.attached_here
     this.closes_container = fields.closes_container
     this.leaf_start = fields.leaf_start
+    this.quote_depth = fields.quote_depth
     this.leafHead = fields.leaf_head
     this.leafLast = fields.leaf_last
     this.path = path
@@ -264,9 +276,8 @@ class LineRecord {
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
   /** The identities of the blocks of `ancestors`, item by item. */
-  get ancestor_ids(): string[] { return this.path === '' ? [] : ancestorPaths(this.path) }
+  get ancestor_ids(): string[] { return (this.idsCache ??= this.path === '' ? [] : ancestorPaths(this.path)) }
   get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
-  get quote_depth(): number { return this.leaf_id === '' ? 0 : quoteDepth(this.leaf_id, this.context.nodeTypes as Map<string, string>) }
   get quote_marks(): number {
     let marks = 0
     let at = 0
@@ -328,7 +339,7 @@ function lineRecord(line: Line, index: number, model: LineList, found: Leaves, c
   tables: TableLines): ModelLine {
   const leaf = found.type[index]!
   // A verbatim body line keeps quote marks past the quotes that hold its leaf: they are content.
-  const marks = VERBATIM_LEAVES.has(leaf) ? quoteDepth(found.id[index]!, context.nodeTypes as Map<string, string>) : Infinity
+  const marks = VERBATIM_LEAVES.has(leaf) ? found.quotes[index]! : Infinity
   const bodyStart = line.content !== undefined && line.content >= line.start && line.content <= line.end
     ? line.content : quotedStart(line, marks)
   const from = bodyStart - line.start
@@ -340,7 +351,7 @@ function lineRecord(line: Line, index: number, model: LineList, found: Leaves, c
     blank: leaf === 'none' && body === '', leaf, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
     attached_here: context.state.attachedLines.has(line.number),
     closes_container: context.state.containerClosers.has(line.number),
-    leaf_head: found.head[index]!, leaf_last: found.last[index]!, leaf_start: found.start[index]!,
+    leaf_head: found.head[index]!, leaf_last: found.last[index]!, leaf_start: found.start[index]!, quote_depth: found.quotes[index]!,
   }, line.path, index, model, context, tables)
 }
 
@@ -360,9 +371,8 @@ function quoteMarks(line: ModelLine): number {
 /** C2-B-024: a later line of a text leaf that lacks a quote mark or the indent of a container that holds the leaf. */
 function isLazy(line: ModelLine, context: LintContext): boolean {
   if (!TEXT_LEAVES.has(line.leaf) || line.leaf_first) return false
-  const types = context.nodeTypes as Map<string, string>
   const marks = quoteMarks(line)
-  if (marks < quoteDepth(line.leaf_id, types)) return true
+  if (marks < line.quote_depth) return true
   for (let path = line.leaf_id, split = path.lastIndexOf('/children/'); split >= 0; split = path.lastIndexOf('/children/')) {
     path = path.slice(0, split)
     const content = context.layouts.get(path)?.contentColumn
@@ -621,6 +631,9 @@ export class DataWalk {
   readonly ids: ModelId[] = []
   private readonly idIndex = new Map<string, ModelId>()
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
+  // The blocks the walk is inside, with the quotes that hold each: it visits a parent before its children.
+  private readonly openBlocks: Node[] = []
+  private readonly openQuotes: number[] = []
   private tableFormat: string | undefined = undefined
   private readonly types: ReadonlySet<string>
   private readonly context: LintContext
@@ -703,6 +716,17 @@ export class DataWalk {
     if (this.textRuns) this.run(node, parent, parentPath, index, leaf)
   }
 
+  private quotesOf(node: Node, parent: Node): number {
+    while (this.openBlocks.length > 0 && this.openBlocks[this.openBlocks.length - 1] !== parent) {
+      this.openBlocks.pop()
+      this.openQuotes.pop()
+    }
+    const quotes = (this.openQuotes[this.openQuotes.length - 1] ?? 0) + (parent.type === 'block_quote' ? 1 : 0)
+    this.openBlocks.push(node)
+    this.openQuotes.push(quotes)
+    return quotes
+  }
+
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
     if (this.attributes) this.attribute(node, path, parent)
     if (!this.model) return
@@ -714,7 +738,7 @@ export class DataWalk {
       return
     }
     if (this.textRuns) this.run(node, parent, parentPath, index, blockType(parent))
-    this.walked.push({ node, path, parent: parentPath, index, format: this.formatOf(node, path) })
+    this.walked.push({ node, path, parent: parentPath, index, format: this.formatOf(node, path), quotes: this.quotesOf(node, parent) })
     this.holder = INLINE_HOLDERS.has(node.type) ? { path, type: node.type, inline: INLINE_LEAVES.has(node.type) } : undefined
   }
 }

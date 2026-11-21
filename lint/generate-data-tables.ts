@@ -34,6 +34,8 @@ const operatorOf = (expr: Expr): [string, Expr, Record<string, Expr>] | undefine
 const argsOf = (arg: Expr): Expr[] => (Array.isArray(arg) ? arg : [])
 const literal = (value: unknown): string => (value === undefined ? 'undefined' : JSON.stringify(value))
 const local = (name: string): string => `v_${name.replace(/\W/g, '_')}`
+// The groups and base a let saves while it computes, so the condition that reads it keeps its own.
+const kept = (name: string): [string, string] => [`g_${name.replace(/\W/g, '_')}`, `b_${name.replace(/\W/g, '_')}`]
 
 /** Compiles the expressions of one model into TypeScript, hoisting its patterns and sets. */
 class Compiler {
@@ -83,7 +85,9 @@ class Compiler {
   letValue(name: string): string {
     const code = this.lets.get(name)
     if (code === undefined) return local(name)
-    return `(${local(name)} === UNSET ? (${local(name)} = aside(() => ${code})) : ${local(name)})`
+    const [keptGroups, keptBase] = kept(name)
+    const value = local(name)
+    return `(${value} === UNSET ? (${keptGroups} = groups, ${keptBase} = base, ${value} = (${code}), groups = ${keptGroups}, base = ${keptBase}, ${value}) : ${value})`
   }
 
   base(expr: Expr): string {
@@ -145,6 +149,13 @@ class Compiler {
     return /\bitem\b/.test(code) ? `(item) => ${code}` : `() => ${code}`
   }
 
+  // The index is built once per document, so a key that reads only its item is one function, not one per call.
+  lookupKey(expr: Expr | undefined): string {
+    if (expr === undefined) return 'undefined'
+    const key = `(item: unknown): unknown => ${this.value(expr)}`
+    return /\b(?:self|line|context|v_\w+|path)\b/.test(key.replace(/"(?:[^"\\]|\\.)*"/g, '""')) ? key : this.hoist(key)
+  }
+
   lookup(arg: Expr): string {
     const spec = arg as { over: 'block' | 'inline' | 'id' | 'line', types?: string[], key?: Expr, value?: Expr, before?: boolean, after?: boolean,
       all?: boolean, from?: Expr, field?: string }
@@ -152,7 +163,7 @@ class Compiler {
     // C2-W-150: a block lookup that names no types reads every block.
     if (spec.over === 'block' || spec.over === 'inline') for (const type of kinds ?? ['*']) this.needs[spec.over].add(type)
     const types = kinds === undefined ? 'undefined' : this.hoist(`new Set<string>(${literal(kinds)})`)
-    const key = spec.key === undefined ? 'undefined' : `(item: unknown): unknown => ${this.value(spec.key)}`
+    const key = this.lookupKey(spec.key)
     const value = spec.key === undefined ? 'undefined' : this.value(spec.value)
     // Lookups over the same records by the same key share one index.
     const signature = `${spec.over} ${types} ${key}`
@@ -280,7 +291,7 @@ function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string
   compiler.lets = new Map()
   for (const [name, expr] of Object.entries(rule.let ?? {})) {
     const code = compiler.value(expr)
-    body.push(`  let ${local(name)}: unknown = UNSET`)
+    body.push(`  let ${local(name)}: unknown = UNSET`, `  let ${kept(name)[0]}: Record<string, [number, number]> | undefined`, `  let ${kept(name)[1]} = 0`)
     compiler.lets.set(name, code)
   }
   if (rule.when !== undefined) body.push(`  if (!${compiler.test(rule.when)}) return`)
@@ -319,16 +330,6 @@ let groups: Record<string, [number, number]> | undefined
 let base = 0
 const UNSET: unique symbol = Symbol('unset')
 
-// A let read late must not replace the match that the condition reading it has just made.
-function aside(compute: () => unknown): unknown {
-  const keptGroups = groups
-  const keptBase = base
-  const value = compute()
-  groups = keptGroups
-  base = keptBase
-  return value
-}
-
 const str = (value: unknown): string => (typeof value === 'string' ? value : '')
 const num = (value: unknown): number => Number(value)
 const same = (a: unknown, b: unknown): boolean => a === b
@@ -351,26 +352,34 @@ function spansOf(found: RegExpExecArray | RegExpMatchArray): Record<string, [num
   return spans
 }
 
-let lastRegex: RegExp | Pattern | undefined
-let lastValue = ''
-let lastSpans: Record<string, [number, number]> | undefined
+// The last text each pattern tested, with its spans: the rules of one line test its text against their patterns in turn.
+const lastHits = new Map<RegExp | Pattern, { value: string, spans: Record<string, [number, number]> | undefined }>()
 
 // The lines of one leaf often test the same text against the same pattern, as a block's opener line.
 function hit(regex: RegExp | Pattern, spans: RegExp | Pattern, value: unknown): boolean {
   if (typeof value !== 'string') return false
-  if (regex === lastRegex && value === lastValue) {
-    if (lastSpans === undefined) return false
-    groups = lastSpans
+  let last = lastHits.get(regex)
+  if (last !== undefined && last.value === value) {
+    if (last.spans === undefined) return false
+    groups = last.spans
     return true
   }
-  lastRegex = regex
-  lastValue = value
-  lastSpans = undefined
-  if (!regex.test(value)) return false
-  const found = spans.exec(value)
-  if (found === null) return false
-  lastSpans = spansOf(found)
-  groups = lastSpans
+  if (last === undefined) lastHits.set(regex, last = { value, spans: undefined })
+  else {
+    last.value = value
+    last.spans = undefined
+  }
+  // spans is regex with indices, so one exec tells both.
+  if (!(spans instanceof RegExp) && spans.spans !== undefined) {
+    const found = spans.spans(value)
+    if (found === null) return false
+    last.spans = found
+  } else {
+    const found = spans.exec(value)
+    if (found === null) return false
+    last.spans = spansOf(found)
+  }
+  groups = last.spans
   return true
 }
 
@@ -466,6 +475,8 @@ type Over = 'block' | 'inline' | 'id' | 'line'
 let lookupRecords: Record<Over, readonly Located[]> = { block: [], inline: [], id: [], line: [] }
 let lookupSites = new Map<number, Map<unknown, Located[]>>()
 let lineRecords: () => readonly Located[] = () => []
+// Per kind of record, the positions of the records of each type, in document order.
+let typePositions = new Map<Over, Map<string, number[]>>()
 
 /** The records of one document that the lookups read, in document order; the line records are made when a lookup reads them. */
 export function useRecords(block: readonly Located[], inline: readonly Located[], id: readonly Located[] = [],
@@ -473,6 +484,25 @@ export function useRecords(block: readonly Located[], inline: readonly Located[]
   lookupRecords = { block, inline, id, line: [] }
   lineRecords = line
   lookupSites = new Map()
+  typePositions = new Map()
+}
+
+function recordsOf(over: Over, types: ReadonlySet<string>): readonly Located[] {
+  const records = lookupRecords[over]
+  let byType = typePositions.get(over)
+  if (byType === undefined) {
+    const positions = byType = new Map<string, number[]>()
+    records.forEach((record, at) => {
+      const type = (record as { type?: string }).type ?? ''
+      const list = positions.get(type)
+      if (list === undefined) positions.set(type, [at])
+      else list.push(at)
+    })
+    typePositions.set(over, byType)
+  }
+  const lists = [...types].map((type) => byType.get(type) ?? [])
+  const positions = lists.length === 1 ? lists[0]! : lists.flat().sort((a, b) => a - b)
+  return positions.map((at) => records[at]!)
 }
 
 // C2-W-141: the first record of the types whose key equals the value, the last one that starts before the record
@@ -483,10 +513,9 @@ function lookupIndex(site: number, over: Over, types: ReadonlySet<string> | unde
   if (index === undefined) {
     index = new Map()
     if (over === 'line' && lookupRecords.line.length === 0) lookupRecords.line = lineRecords()
-    for (const record of lookupRecords[over]) {
-      const type = (record as { type?: string }).type ?? ''
+    for (const record of types === undefined ? lookupRecords[over] : recordsOf(over, types)) {
       // C2-W-150: a lookup with no types reads every block or every inline node; a text run is no node.
-      if (types === undefined ? type === 'text_run' : !types.has(type)) continue
+      if (types === undefined && (record as { type?: string }).type === 'text_run') continue
       const found = key === undefined ? undefined : key(record)
       const list = index.get(found)
       if (list === undefined) index.set(found, [record])
