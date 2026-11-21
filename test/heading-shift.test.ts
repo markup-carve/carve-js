@@ -105,6 +105,7 @@ describe('headingShift', () => {
     } }], { headingShift: 1, roundtrip: true, sections: false, headingIds: 'off' })
     expect(lower.html).toBe('<h2 data-carve-source-level="1">A</h2>')
     expect(lower.diagnostics.map(d => d.code)).toEqual(['heading-shift-above-6'])
+    expect(lower.diagnostics[0]?.message).toBe('The heading shift of 1 raises a heading above level 6.')
     const raise = renderWithDocumentTransforms('= A\n', [{ name: 'sample.raise', transform(view) {
       const heading = view.children[0]!
       if (heading.type === 'heading') heading.level = 7
