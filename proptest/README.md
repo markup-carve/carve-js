@@ -20,7 +20,7 @@ Without a sidecar, `--replay` reads the `.crv` file directly. Run `npm run test:
 
 The CI job uses a fixed seed. Every finding fails the job and keeps its minimized input.
 
-`--no-nesting` leaves the fifth family out and draws the same inputs as before it existed; the engine gate uses it while carve-js#5259 is open.
+`--no-nesting` leaves the fifth family out and draws the same inputs as before it existed.
 
 The `scaling` target does not use a generated source. Each case picks a nesting family, an operation (`parse`, `render`, `format` or `lint`) and a base size n, runs the operation once at depth or width 8n (at most 5,000), and then times it at n, 2n, 4n and 8n. A stack overflow or untyped exception is a finding, as is a time ratio over the three doublings above twice the ratio of the input lengths that a second measurement repeats. The finding detail names the family and the timings; replay it by its case seed.
 
