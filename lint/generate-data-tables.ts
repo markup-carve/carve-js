@@ -57,9 +57,12 @@ class Compiler {
 
   field(path: string): string {
     const [head, ...rest] = path.split('.')
-    const keys = rest.map((part) => literal(/^\d+$/.test(part) ? Number(part) : part))
-    // A list item or an AST node has no static type here: its fields are read by name.
-    if (head === 'item' || head === 'node') return `at(${head === 'item' ? 'item' : 'self.node'}${keys.map((key) => `, ${key}`).join('')})`
+    const keys = rest.map((part) => literal(/^-?\d+$/.test(part) ? Number(part) : part))
+    // A list item or an AST node has no static type here: its fields are read by name. A negative index counts from the end.
+    if (head === 'item' || head === 'node' || rest.some((part) => part.startsWith('-'))) {
+      const from = head === 'item' ? 'item' : head === 'node' ? 'self.node' : `self.${head}`
+      return `at(${from}${keys.map((key) => `, ${key}`).join('')})`
+    }
     // The node of an attribute record's owner is a tree node too (C2-W-148).
     const node = rest.indexOf('node') + 1
     if (node > 0 && node < rest.length) {
@@ -132,7 +135,13 @@ class Compiler {
 
   some(arg: Expr): string {
     const spec = arg as { in: string, from?: number, where: Expr }
-    return `someFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
+    return `someFrom(${this.field(spec.in)}, ${spec.from ?? 0}, ${this.where(spec.where)})`
+  }
+
+  // A test that reads no item, as a count of all items, takes no parameter.
+  where(expr: Expr): string {
+    const code = this.test(expr)
+    return /\bitem\b/.test(code) ? `(item) => ${code}` : `() => ${code}`
   }
 
   lookup(arg: Expr): string {
@@ -147,12 +156,12 @@ class Compiler {
     if (site === undefined) this.lookupSites.set(signature, site = this.lookupSites.size)
     const side = spec.before === true ? -1 : spec.after === true ? 1 : 0
     const found = `lookupAt(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, self.start, ${side})`
-    return `at(${found}${spec.field.split('.').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')})`
+    return `at(${found}${spec.field.split('.').map((part) => `, ${literal(/^-?\d+$/.test(part) ? Number(part) : part)}`).join('')})`
   }
 
   count(arg: Expr): string {
     const spec = arg as { in: string, from?: number, where: Expr }
-    return `countFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
+    return `countFrom(${this.field(spec.in)}, ${spec.from ?? 0}, ${this.where(spec.where)})`
   }
 
   member(arg: Expr): string {
@@ -465,7 +474,8 @@ function at(value: unknown, ...keys: (string | number)[]): unknown {
   let current = value
   for (const key of keys) {
     if (current === null || typeof current !== 'object') return undefined
-    current = (current as Record<string | number, unknown>)[key]
+    current = typeof key === 'number' && key < 0 && Array.isArray(current) ? current[current.length + key]
+      : (current as Record<string | number, unknown>)[key]
   }
   return current
 }
