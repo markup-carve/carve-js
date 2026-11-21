@@ -170,7 +170,7 @@ export function attrs(context: HtmlContext, node: Html.Element, omit: readonly s
   const entries: [string, string][] = []
   for (const item of node.attrs) {
     if (CARRIERS.has(item.name) && !readsCarrier(node, item.name)) {
-      ignoredCarrier(context, node, item.name, 'the element does not read this carrier')
+      ignoredCarrier(context, node, item.name, item.name === SOURCE_LEVEL ? 'the element is no heading' : 'the element does not read this carrier')
     }
     if (!isAuthored(item, omit)) continue
     if (styled && item.name === 'align') {
