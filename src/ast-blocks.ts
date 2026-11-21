@@ -686,11 +686,11 @@ export function inlineContent(text: string): Inline[] {
 }
 
 /** `source` is the source as given, of which offsets count the bytes; `ctx.src` is the text that was read. */
-function buildDocument(ctx: TreeContext, root: BlockNode, source: string): ParsedTree {
+function buildDocument(ctx: TreeContext, root: BlockNode, source: string, sourceByteLength: number): ParsedTree {
   const src = ctx.src
   const children = buildChildren(ctx, root.children!, FLOW_PLAIN, DOCUMENT_BUILDERS)
   const document: DocumentNode = { type: 'document', astVersion: AST_VERSION, children }
-  document.srcByteLength = utf8Length(source)
+  document.srcByteLength = sourceByteLength
   if (ctx.positions) {
     finishPositions(document, source)
   }
@@ -726,6 +726,7 @@ export function buildSource(
 ): ParsedTree {
   // C2-B-218: U+0000 and an unpaired surrogate are read as U+FFFD. All are one UTF-16 unit, so every string offset stays.
   const text = withoutUnpairedSurrogates(src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src)
+  const sourceByteLength = utf8Length(src)
   const blocks = acquireState()
   blocks.frontmatterOpens = frontmatterOpens
   const inline = acquireInlineState()
@@ -739,12 +740,12 @@ export function buildSource(
     if (outer !== null) for (const [term, expansion] of outer.abbreviations) if (!terms.has(term)) terms.set(term, expansion)
     const ctx: TreeContext = {
       src: text, positions, inline, abbreviations: terms,
-      abbreviationBytesLeft: Math.max(DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR * utf8Length(src)),
+      abbreviationBytesLeft: Math.max(DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR * sourceByteLength),
       abbreviationCosts: new Map(), markup: new Map(),
       resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
       sourceNames: collectSourceNames ? new Map() : null, includes: [],
     }
-    return buildDocument(ctx, root, src)
+    return buildDocument(ctx, root, src, sourceByteLength)
   } finally {
     releaseInlineState(inline)
     releaseState(blocks)
