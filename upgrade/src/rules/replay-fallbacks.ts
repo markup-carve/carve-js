@@ -1,4 +1,4 @@
-import { change, type Context } from '../context.ts'
+import { change, type Context, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { lineEnd, lineStart, lineText } from '../source.ts'
 
@@ -97,4 +97,30 @@ export function duplicateItemDefinitions(ctx: Context): void {
     groups.set(visit.parent.node, list)
   }
   for (const [list, items] of groups) rewriteDuplicateGroup(ctx, list, items)
+}
+
+function escapeLiteralLinkText(ctx: Context, visit: Visit): void {
+  const node = visit.node
+  if (node.type !== 'text' || node.pos === undefined || visit.parent?.node.type !== 'paragraph') return
+  const { startOffset: start, endOffset: end, startLine } = node.pos
+  const source = ctx.src.slice(start, end)
+  const next = visit.siblings[visit.index + 1]
+  if (next?.type === 'code' && next.pos?.startOffset === end) {
+    const opener = /\[[^\]\n]+\]\([^\)\n]*$/u.exec(source)
+    if (opener?.index !== undefined) change(ctx, 'U-258', start + opener.index, start + opener.index, '\\',
+      'literal link opener escaped so the old code run stays visible')
+  }
+  const line = lineText(ctx.lines, startLine)
+  const prefix = line.match(/^[ \t]*/u)?.[0].length ?? 0
+  if (start !== lineStart(ctx.lines, startLine) + prefix || !/^\[[^\]^\n]+\]:/u.test(source)) return
+  change(ctx, 'U-258', start, start, '\\',
+    'definition-shaped text escaped so 0.2 keeps the 0.1 paragraph')
+}
+
+/** Old paragraph text before an unclosed code span can resemble a 0.2 link opener. */
+export function literalLinkBeforeCode(ctx: Context): void {
+  const unclosed = ctx.visits.some(({ node }) => node.type === 'code' && node.pos !== undefined
+    && ctx.src[node.pos.endOffset - 1] !== '`')
+  if (!unclosed) return
+  for (const visit of ctx.visits) escapeLiteralLinkText(ctx, visit)
 }

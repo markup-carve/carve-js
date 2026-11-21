@@ -27,4 +27,14 @@ describe('replay fallback families', () => {
     expect(result.output).toBe('[d]: u\n\n> - {% %}\n> - {% %}\n\n[go][d]\n')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
+
+  it('keeps a code opener out of a link and a literal definition out of the registry', () => {
+    const input = '[okref]: https://e.com/path\n\n[t](u``` v) and [ok](u-v)\n\n'
+      + '[r]: https://e.com /path\n\t[text][r] and [text][okref]\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toContain('\\[t](u```')
+    expect(result.output).toContain('\\[r]: https://e.com /path')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
 })
