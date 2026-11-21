@@ -83,8 +83,12 @@ export interface Writer {
   standIns: Map<Node, Map<string, TextNode>>
   /** Whether a content line written alone opens a block, by its text (write-check.ts). */
   lineOpens: Map<string, boolean>
-  /** C2-W-133: the characters every parse of the writer read, probes included, which share this record, and its limit. */
-  work: { chars: number, limit: number }
+  /**
+   * C2-W-133: the characters every parse of the writer read, probes included, which share this record, and its limit.
+   * The repairs of all groups draw on one budget: `spent` is what they read, `source` the length of the document
+   * where the writer has it, `written` the characters of the groups written so far.
+   */
+  work: { chars: number, limit: number, spent: number, source: number, written: number }
 }
 
 /** What one probe of the repair found: its result and the escapes it asked of the comparison, in order. */
@@ -103,7 +107,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
     prewrittenAttributes: null, bareAlts: false, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
-    probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(), work: { chars: 0, limit: Infinity },
+    probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
+    work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0 },
   }
 }
 
