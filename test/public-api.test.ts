@@ -35,8 +35,8 @@ describe('the public 0.2 entry', () => {
   it('exports exactly the public values', () => {
     expect(Object.keys(api).sort()).toEqual([
       'AST_VERSION', 'CarveInputError', 'CarveLayoutError', 'CarveOptionError', 'CarvePatchError', 'CarveRenderError', 'CarveTreeError',
-      'CarveWriteError', 'DEFAULT_DENIED_SCHEMES', 'ImportInputError', 'LAYOUT_VERSION', 'MAX_TREE_DEPTH', 'NODE_TYPES',
-      'RESERVED_WRITER_TARGETS', 'SMART_PUNCTUATION', 'SPEC_VERSION', 'VERSION', 'applyPatch', 'createWriterRegistry', 'decodeTree',
+      'CarveWriteError', 'DEFAULT_DENIED_SCHEMES', 'EditorChangeError', 'ImportInputError', 'LAYOUT_VERSION', 'MAX_TREE_DEPTH', 'NODE_TYPES',
+      'RESERVED_WRITER_TARGETS', 'SMART_PUNCTUATION', 'SPEC_VERSION', 'VERSION', 'applyPatch', 'createEditorSession', 'createWriterRegistry', 'decodeTree',
       'diffTree', 'encodeEnvelope', 'encodeTree', 'fix', 'fixEdits', 'fixableRules', 'flatten', 'format', 'formatWithDiagnostics',
       'headingId', 'importDocument', 'includeDependencies',
       'includeRegion', 'isUrlAllowed', 'lint', 'migrateTree', 'parse', 'parseWithDiagnostics', 'parseWithLayout', 'positionOf',

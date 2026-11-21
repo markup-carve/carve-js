@@ -23,6 +23,7 @@ HTML importer uses.
 | `parseWithLayout` | as `parse` | the same and `layout`, the source-layout sidecar | `CarveOptionError` |
 | `render` | source or a tree, `RenderOptions` | HTML | `CarveOptionError`, `CarveInputError`, `CarveRenderError`, `CarveTreeError` |
 | `renderWithDiagnostics` | as `render` | `{ html, diagnostics, suppressedDiagnostics }` | as `render` |
+| `createEditorSession` | source, `ParseOptions` | a revisioned UTF-16 editor session | `EditorChangeError` for invalid edits |
 | `format` | source, `{ alignTables, normalize, extensions }` | canonical source | `CarveOptionError`, `CarveWriteError` |
 | `formatWithDiagnostics` | as `format` | `{ source, diagnostics }` | `CarveOptionError` |
 | `write` | a tree, `{ layout, alignTables, extensions, check }` | canonical source | `CarveOptionError`, `CarveTreeError`, `CarveWriteError` |
@@ -67,6 +68,23 @@ if (tree.children[0]?.type !== 'paragraph') throw new Error('no paragraph')
 
 const result = renderWithDiagnostics('`x`{=latex}')
 if (result.diagnostics[0]?.channel !== 'render-loss') throw new Error('no loss reported')
+```
+
+## Editor sessions
+
+`createEditorSession(source, options?)` returns a source-authoritative session. `snapshot()` gives a revision, the
+source and its resolved 0.2 tree, UTF-16 node ranges, stable IDs for unchanged nodes, and the number of source bytes
+parsed. `update(changes)` applies sorted, nonoverlapping `{ from, to, insert }` edits in the previous snapshot's UTF-16
+coordinates. It returns the new snapshot plus `changedPaths`. An invalid range or a range that splits a Unicode scalar
+throws `EditorChangeError` without changing the session. A plain paragraph edit reuses untouched paragraphs; other
+edits parse the whole document again.
+
+```ts
+import { createEditorSession } from '@markup-carve/carve'
+
+const session = createEditorSession('first\n\nsecond')
+const update = session.update([{ from: 7, to: 13, insert: 'revised' }])
+if (update.source !== 'first\n\nrevised') throw new Error('edit failed')
 ```
 
 ## Options and errors
@@ -364,7 +382,7 @@ old and new host HTML. The command line spelling is `carve upgrade --registered-
 | `glossary`, `index`, `citations` | same names from `@markup-carve/carve/extensions` | provisional; each returns `{ extensions, renderers, transforms }`, see [glossary, index and citations](extensions-reference.md) |
 | `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingNumbers`, `headingLevelShift`, `externalLinks`, `autolink` | `@markup-carve/carve/extensions` | provisional; see [Standard extensions: navigation](extensions-navigation.md) |
 | `parseWithProvenance`, `astNodePaths`, `readNodeIdentity`, `toNodeIdentity`, `readAnnotationRanges`, `toAnnotationRanges`, `readProvenance`, `toProvenance`, `toAuthoredProvenance`, `AstSidecarError` | gone | `validateTree` and `decodeTree` accept an optional annotation-range sidecar as `annotations`; node identity and provenance have no 0.2 call or schema; a diagnostic names its node by an RFC 6901 `path` |
-| `createEditorSession`, `EditorChangeError` | gone | no incremental session in 0.2; parse again |
+| `createEditorSession`, `EditorChangeError` | same names | snapshots hold the 0.2 tree; plain paragraph edits reuse unchanged nodes |
 | `tryRenderHtmlStreaming` | `tryRenderHtmlStreaming` | calls the sink once after rendering the whole HTML document |
 | `diffAst`, `createAstPatch` | `diffTree` | a JSON Patch over the encoded tree |
 | `applyAstPatch` | `applyPatch` | with `fingerprint` to bind the patch to its tree |
