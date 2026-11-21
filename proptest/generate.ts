@@ -168,12 +168,12 @@ function grammar(rng: Random, maxBytes: number): string {
   return lines.join('\n')
 }
 
-export function generate(rng: Random, corpus: Corpus, maxBytes: number): string {
+export function generate(rng: Random, corpus: Corpus, maxBytes: number, nesting = true): string {
   const base = corpus.documents[rng.int(corpus.documents.length)] ?? ''
   const other = corpus.documents[rng.int(corpus.documents.length)] ?? ''
   let value: string
   if (corpus.focused.length > 0 && rng.int(16) === 0) value = corpus.focused[rng.int(corpus.focused.length)] ?? ''
-  else switch (rng.int(5)) {
+  else switch (rng.int(nesting ? 5 : 4)) {
     case 0: value = raw(rng, maxBytes); break
     case 4: value = fitted(family(rng), 50 + rng.int(4951), maxBytes, rng); break
     case 1: value = mutate(base, other, rng); break

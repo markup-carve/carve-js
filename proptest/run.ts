@@ -305,7 +305,7 @@ async function main(): Promise<number> {
   let cases = 0
   for (; cases < options.count && Date.now() < deadline; cases++) {
     const source = options.target === 'scaling' ? '' : options.target === 'decode' || options.target === 'migrate' ?
-      generateJson(rng, options.target === 'migrate') : generate(rng, corpus, options.maxBytes)
+      generateJson(rng, options.target === 'migrate') : generate(rng, corpus, options.maxBytes, !process.argv.includes('--no-nesting'))
     const caseSeed = rng.int(0x7fffffff)
     const found = await checker.check(source, caseSeed)
     if (found === null) continue
