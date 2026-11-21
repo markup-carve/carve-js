@@ -4,7 +4,7 @@ import { foldLabel } from '../../../src/ast-attributes.ts'
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01, probe02 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
-import { isGap, trimmedEnd } from './lines.ts'
+import { insideQuotes, isGap, trimmedEnd } from './lines.ts'
 import { headingTexts, plainText } from './references.ts'
 
 const EQUALS = 0x3d
@@ -92,15 +92,21 @@ function leafAbove(ctx: Context, line: number): Visit | null {
  * indented past (C2-B-025); 0.1 kept it only from the content column on. A block of the document
  * that stands indented under an item or a footnote moves to column 0.
  */
+/** Whether the leaf above `line` stands in the body of a footnote. */
+function underNote(ctx: Context, line: number): boolean {
+  let above = leafAbove(ctx, line)
+  // The repairs also read a footnote body whose last block is a container.
+  if (ctx.repairs === true) while (above?.parent != null && above.parent.node !== ctx.doc) above = above.parent
+  return above !== null && above.siblings !== ctx.doc.children && above.parent!.node === ctx.doc
+}
+
 function shortIndent(ctx: Context, visit: Visit): void {
   const pos = visit.node.pos!
   const indent = indentOf(lineText(ctx.lines, pos.startLine))
   if (indent === 0 || visit.parent!.node !== ctx.doc || visit.siblings !== ctx.doc.children) return
   // Under a list of the document, also an empty one, or under the body of a footnote.
   const list = visit.index > 0 && visit.siblings[visit.index - 1]!.type === 'list'
-  const above = leafAbove(ctx, pos.startLine)
-  const body = above !== null && above.siblings !== ctx.doc.children && above.parent!.node === ctx.doc
-  if (!list && !body) return
+  if (!list && !underNote(ctx, pos.startLine)) return
   const message = 'block moved to column 0, where it stays outside the item or footnote above'
   // The later lines of a paragraph are lazy lines wherever they stand; another block moves whole.
   const last = visit.node.type === 'paragraph' ? pos.startLine : pos.endLine
@@ -262,7 +268,7 @@ function flagRuns(ctx: Context, node: Node01): void {
   if (typeof value !== 'string' || !value.includes('--')) return
   const end = node.pos!.endOffset
   const start = end - value.length
-  if (start < 0 || ctx.src.slice(start, end) !== value) return
+  if (start < 0 || ctx.src.slice(start, end) !== value || onDirectiveLine(ctx, node)) return
   for (let at = 0; at < value.length;) {
     let run = at
     while (run < value.length && value.charCodeAt(run) === HYPHEN) run++
@@ -278,6 +284,12 @@ function flagRuns(ctx: Context, node: Node01): void {
     }
     at = run > at ? run : at + 1
   }
+}
+
+/** U-011: 0.2 writes a line that reads as an include directive as typed, so its hyphens need no escape. */
+function onDirectiveLine(ctx: Context, node: Node01): boolean {
+  const text = insideQuotes(lineText(ctx.lines, node.pos!.startLine)).trim()
+  return text.startsWith('{{') && text.endsWith('}}')
 }
 
 /**

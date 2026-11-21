@@ -11,11 +11,15 @@ export interface Edit {
   diagnosed?: boolean
 }
 
+const isLineBreaks = (text: string): boolean => text !== '' && /^\n+$/u.test(text)
+
 function before(a: Edit, b: Edit): number {
   if (a.start !== b.start) return a.start - b.start
   // An insertion stands before a span replaced at the same offset, or the replacement would take it.
   const aInserts = a.start === a.end
   if (aInserts !== (b.start === b.end)) return aInserts ? -1 : 1
+  // A blank line inserted at a line start stands above the text another insertion puts on that line.
+  if (aInserts && isLineBreaks(a.text) !== isLineBreaks(b.text)) return isLineBreaks(a.text) ? -1 : 1
   if (a.entry !== b.entry) return a.entry < b.entry ? -1 : 1
   return a.sequence - b.sequence
 }
@@ -31,8 +35,8 @@ function collide(a: Edit, b: Edit): boolean {
  * The edits that apply together, in source order. Two edits collide when their spans share a
  * character, or when one inserts inside the span of the other. The edits are read in source
  * order against the last span kept: of two that collide, the entry with the lower id stays, and
- * the other is left out for good. Two insertions at one offset both apply, the lower entry id
- * first, and both before a span replaced from that offset on.
+ * the other is left out for good. Two insertions at one offset both apply, an inserted blank line
+ * first, then the lower entry id, and both before a span replaced from that offset on.
  */
 export function selectEdits(edits: Edit[]): Edit[] {
   const ordered = [...edits].sort(before)

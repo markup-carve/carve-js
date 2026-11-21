@@ -4,7 +4,7 @@ import { ancestor } from '../blocks.ts'
 import { change, type Context } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, isBlank, lineStart, lineText } from '../source.ts'
-import { quotePrefix } from './blank-lines.ts'
+import { emptyQuoteChain, quotePrefix } from './blank-lines.ts'
 import { insideQuotes, isBlankInQuotes, isGap, quoteDepth, removeLine } from './lines.ts'
 
 interface Span {
@@ -146,9 +146,9 @@ function moveToTop(ctx: Context, id: string, span: Span, cut: number, message: s
 }
 
 /** Cuts the definition of `span` and writes it at column 0 after the line `end`, set off by blank lines. */
-function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
+function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: number, message: string, keep = ''): void {
   if (top === 'moved' || top === 'kept') { moveToTop(ctx, id, span, cut, message); return }
-  const kept = top === 'keptAfter' && cut > 0 ? lineText(ctx.lines, span.first).slice(0, cut) + '{%%}\n' : ''
+  const kept = top === 'keptAfter' && cut > 0 ? lineText(ctx.lines, span.first).slice(0, cut) + '{%%}\n' : keep
   change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), kept, message)
   const after = lineText(ctx.lines, end + 1)
   const tail = end < ctx.lines.count && !isBlank(after) ? '\n' : ''
@@ -181,8 +181,30 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const id = entryOf(ctx, span, depth)
   const end = Math.max(containerEnd(ctx, span, depth, cut, ends), enclosing.get(span)?.last ?? 0)
   ends.set(span.first, end)
-  if (end === span.last) hoistLast(ctx, id, span, cut, message)
+  place(ctx, id, span, cut, end, message)
+}
+
+/** Writes the definition of `span` after the line `end` of its container. */
+function place(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
+  const quote = top === false && ctx.repairs === true ? emptyNestedQuote(ctx, span) : ''
+  if (quote !== '') moveAfter(ctx, id, span, cut, end, message, quote)
+  else if (end === span.last) hoistLast(ctx, id, span, cut, message)
   else moveAfter(ctx, id, span, cut, end, message)
+}
+
+/**
+ * The quote marks that keep the empty quote 0.1 opened for a definition inside another quote, with a
+ * quoted blank line above them where text stands there, or 0.2 reads the marks as a lazy line.
+ */
+function emptyNestedQuote(ctx: Context, span: Span): string {
+  const first = lineText(ctx.lines, span.first)
+  const depth = quoteDepth(first)
+  if (depth < 2) return ''
+  const chain = emptyQuoteChain(ctx, span.first)
+  if (chain === 0) return ''
+  const marks = quotePrefix(first, depth).trimEnd()
+  const above = span.first > 1 && !isBlankInQuotes(lineText(ctx.lines, span.first - 1))
+  return (above ? quotePrefix(first, depth - chain).trimEnd() + '\n' : '') + marks + '\n'
 }
 
 /** The definition is the last thing in its container. */

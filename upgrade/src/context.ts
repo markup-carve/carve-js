@@ -31,6 +31,8 @@ export interface Context {
   findings: Finding[]
   /** Set on the late passes, which run only when the first pass leaves a difference. */
   late: boolean
+  /** Set by the last late variant only, whose repairs would change results that earlier passes reach. */
+  repairs?: boolean
 }
 
 export type Rule = (ctx: Context) => void
