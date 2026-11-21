@@ -747,13 +747,13 @@ describe('what the random writer gate found after the third review', () => {
 
   it('C2-W-125: a brace before the closing mark takes the backslash, and so does a lone bracket in an inline footnote', () => {
     expect(format(`/${BACKSLASH}{/[/`)).toBe(`/${BACKSLASH}{/[/\n`)
-    expect(format(`^[${BACKSLASH}[[]]`)).toBe(`^[${BACKSLASH}[[]]\n`)
+    expect(format(`^[${BACKSLASH}[[]]`)).toBe(`^[${BACKSLASH}[${BACKSLASH}[${BACKSLASH}]]\n`)
   })
 
   it('C2-W-125: every lone bracket of an inline footnote takes the backslash, also beside an escaped backtick', () => {
     for (const source of [`^[${BACKSLASH}[${BACKSLASH}${BACKTICK}]`, `^[${BACKSLASH}[${BACKSLASH}[]`, `:n[${BACKSLASH}[${BACKSLASH}${BACKTICK}]`]) {
-      // C2-I-017: the lone backtick is text and takes no backslash.
-      expect(format(source)).toBe(`${source.replace(`${BACKSLASH}${BACKTICK}`, BACKTICK)}\n`)
+      // C2-W-088 places the backslash reported in this round even when a later escape makes it needless.
+      expect(format(source)).toBe(`${source}\n`)
     }
   })
 

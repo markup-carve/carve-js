@@ -1345,14 +1345,18 @@ function resync(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor):
  * text joins the next node in the read-back parse. Continue at the surviving suffix so later
  * constructs and fields are still compared (C2-W-117).
  */
+function hasAuthoredTextFields(node: TextNode): boolean {
+  return node.lang !== undefined || node.dir !== undefined || node.metadata !== undefined ||
+    node.attrs !== undefined || node.data !== undefined
+}
+
 function stepOverLostText(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
   const expected = es[at.i]
   const actual = as[at.j]
   if (expected?.type !== 'text' || actual?.type !== 'text' || at.vi !== 0) return false
   const kept = expected.value.replace(/^[ \t]+/, '')
   if (kept.length === expected.value.length || !actual.value.startsWith(kept, at.aj)) return false
-  if (expected.lang !== undefined || expected.dir !== undefined || expected.metadata !== undefined ||
-    expected.attrs !== undefined || expected.data !== undefined) {
+  if (hasAuthoredTextFields(expected)) {
     const last = c.losses.length - 1
     if (c.losses[last]?.[0] === expected) c.losses[last] = [expected, '']
   }
@@ -1366,11 +1370,14 @@ function stepOverLostText(c: Check, es: readonly Node[], as: readonly Node[], at
 }
 
 /** A failed comparison on one line cannot hide constructs on following lines of the same paragraph. */
+function nextBreak(nodes: readonly Node[], from: number): number {
+  for (let at = from; at < nodes.length; at++) if (isBreak(nodes[at])) return at
+  return nodes.length
+}
+
 function resyncNextLine(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
-  let i = at.i + 1
-  while (i < es.length && !isBreak(es[i])) i++
-  let j = at.j
-  while (j < as.length && !isBreak(as[j])) j++
+  const i = nextBreak(es, at.i + 1)
+  const j = nextBreak(as, at.j)
   if (i === es.length || j === as.length || es[i]?.type !== as[j]?.type) return false
   const expected = es[i]?.pos
   const actual = as[j]?.pos
@@ -1494,16 +1501,21 @@ function compareBlock(c: Check, e: Node, a: Node): boolean {
 }
 
 /** The places at which the parse `node` has a paragraph, and the lines at which it has a block, from the blocks below it. */
-function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: Set<number>): void {
+function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: Set<number>,
+  columns: Map<number, Set<number>>): void {
   for (const block of childNodes(node)) {
     const pos = block.pos
     if (pos !== undefined) {
-      lines.add(pos.startLine - offset)
+      const line = pos.startLine - offset
+      lines.add(line)
+      const starts = columns.get(line) ?? new Set<number>()
+      starts.add(pos.startColumn - 1)
+      columns.set(line, starts)
       if (block.type === 'paragraph') paragraphs.add((pos.startLine - offset) * PLACE_COLUMNS + pos.startColumn - 1)
     }
-    if (!isInlineParent(block)) readStarts(block, offset, paragraphs, lines)
+    if (!isInlineParent(block)) readStarts(block, offset, paragraphs, lines, columns)
     const caption = captionOf(block)
-    if (caption !== undefined) readStarts(caption, offset, paragraphs, lines)
+    if (caption !== undefined) readStarts(caption, offset, paragraphs, lines, columns)
   }
 }
 
@@ -1523,10 +1535,22 @@ function isPending(c: Check, node: Node | undefined): boolean {
  * Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a
  * block. A line can start inside an inline node, such as emphasis or an inline footnote over two lines.
  */
-function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>): void {
+function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>,
+  columns: Map<number, Set<number>>): void {
   const top = e.children
   if (!paragraphs.has(place) && hasOpenerShape(top[0]) && !isPending(c, top[0])) escapeLineStart(c, top, 0, e)
   let line = Math.floor(place / PLACE_COLUMNS)
+  const nested = (node: Node | undefined): void => {
+    if (node?.type !== 'text') return
+    const written = c.w.lines[line] ?? ''
+    const start = written.indexOf(node.value)
+    if (start < 0) return
+    for (const column of columns.get(line) ?? []) {
+      const at = column - start
+      if (at >= 0 && at < node.value.length) escapeAt(c, node, at)
+    }
+  }
+  nested(top[0])
   const visit = (nodes: readonly Node[]): void => {
     for (let at = 0; at < nodes.length; at++) {
       const node = nodes[at]!
@@ -1534,6 +1558,7 @@ function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs
       if (!isBreak(node)) continue
       line++
       if (lines.has(line) && hasOpenerShape(nodes[at + 1]) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
+      nested(nodes[at + 1])
     }
   }
   visit(top)
@@ -1549,9 +1574,10 @@ export function escapeOpeners(c: Check, parsed: DocumentNode, offset: number): v
   if (!c.misaligned) return
   const paragraphs = new Set<number>()
   const lines = new Set<number>()
-  readStarts(parsed, offset, paragraphs, lines)
+  const columns = new Map<number, Set<number>>()
+  readStarts(parsed, offset, paragraphs, lines, columns)
   for (const [node, place] of c.w.starts) {
-    if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, paragraphs, lines)
+    if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, paragraphs, lines, columns)
   }
 }
 

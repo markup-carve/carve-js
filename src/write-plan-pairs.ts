@@ -447,19 +447,27 @@ function isPunctuation(code: number): boolean {
   return (code >= 33 && code <= 47) || (code >= 58 && code <= 64) || (code >= 91 && code <= 96) || (code >= 123 && code <= 126)
 }
 
-/** C2-W-093: every pair the reader forms is a node of the tree, and the marks of every delimited node pair. */
-export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
+/** Pair text marks in successive scans, placing all openers from one scan together. */
+function settledPairs(leaf: Leaf, escaped: Uint8Array): { tokens: Token[], stack: Stack } | null {
   let tokens = scan(leaf, escaped)
   let s = pairAll(tokens)
   for (let round = 0; ; round++) {
     const openers = textPairOpeners(leaf, tokens)
-    if (openers === null) return undecide(leaf, 'text pairs')
+    if (openers === null) return null
     if (openers.length === 0) break
-    if (round === TEXT_PAIR_ROUNDS) return undecide(leaf, 'text pairs')
+    if (round === TEXT_PAIR_ROUNDS) return null
     for (const opener of openers) escaped[opener] = 1
     tokens = scan(leaf, escaped)
     s = pairAll(tokens)
   }
+  return { tokens, stack: s }
+}
+
+/** C2-W-093: every pair the reader forms is a node of the tree, and the marks of every delimited node pair. */
+export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
+  const settled = settledPairs(leaf, escaped)
+  if (settled === null) return undecide(leaf, 'text pairs')
+  const { tokens, stack: s } = settled
   // C2-I-118, C2-B-190: the depth counts from zero in each content, whatever blocks stand around it.
   if (s.demoted || escapedBracketFrom(leaf, escaped, s.fullAt) || beyondCap(leaf, tokens, s)) {
     return undecide(leaf, 'depth cap')

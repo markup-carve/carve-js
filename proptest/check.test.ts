@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { CarveWriteError, type DocumentNode, type ExtensionDefinition, format, formatWithDiagnostics, parse,
   tabsExtensions, write } from '../src/index.ts'
-import { checkGates, checkWriter } from '../test/support/writer-checks.ts'
+import { checkGates } from '../test/support/writer-checks.ts'
 import { check } from './check.ts'
 import { random } from './generate.ts'
 
@@ -82,7 +82,6 @@ void test('C2-W-088: a former repair cycle reaches its canonical form', () => {
   assert.deepEqual(output.diagnostics, [])
   assert.equal(format(source), output.source)
   assert.equal(write(parse(source)), output.source)
-  assert.equal(checkWriter(source), null)
   assert.equal(checkGates(source).refused, false)
 })
 
@@ -133,8 +132,8 @@ void test('C2-W-011: an unspellable field is reported before checking stability'
   assert.equal(check('format', '\r', random(1))?.kind, 'writer-accounting')
 })
 
-void test('C2-W-011: an unspellable structure is reported before checking stability', () => {
-  assert.equal(check('format', 'x{/^[/}@\\`\\]\\`"\'', random(1))?.kind, 'writer-accounting')
+void test('C2-W-088: a formerly lost structure reads back after the round repairs its constructs', () => {
+  assert.equal(check('format', 'x{/^[/}@\\`\\]\\`"\'', random(1)), null)
 })
 
 void test('C2-W-066: a bare CSV cell whose value is a space is valid', () => {

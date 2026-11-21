@@ -478,7 +478,7 @@ function mergeLinkEscapes(escapes: readonly number[], positions: readonly number
 /** C2-W-125 case five: a bracket without a partner in link text would take the link's own closer. */
 function escapeLoneLinkBrackets(w: Writer, link: LinkNode): void {
   let cache = linkEscapePositions.get(w)
-  if (cache === undefined) linkEscapePositions.set(w, cache = new Map())
+  if (cache === undefined) linkEscapePositions.set(w, cache = new Map<LinkNode, Map<TextNode, number[]>>())
   let byNode = cache.get(link)
   if (byNode === undefined) {
     const scan: BracketScan = { open: [], size: 0, lone: [], loneCount: 0 }
