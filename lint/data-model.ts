@@ -475,7 +475,10 @@ class BlockRecord {
     const source = this.context.source
     const from = this.opener_start
     const end = source.indexOf('\n', from)
-    return source.slice(from, end < 0 ? source.length : end).replace(/[ \t\r]+$/, '')
+    // A scan from the end: /[ \t\r]+$/ retries from every character of a run that text follows, which is quadratic.
+    let to = end < 0 ? source.length : end
+    while (to > from && (source[to - 1] === ' ' || source[to - 1] === '\t' || source[to - 1] === '\r')) to--
+    return source.slice(from, to)
   }
   get after_quote_mark(): boolean {
     const at = this.opener_start
