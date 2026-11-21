@@ -67,26 +67,24 @@ function repeatedItems(items: EmptyDefinitionItem[]): EmptyDefinitionItem[] {
   return items.filter((item) => (counts.get(keyOf(item)) ?? 0) > 1)
 }
 
-function rewriteDuplicateGroup(ctx: Context, list: Node01, items: EmptyDefinitionItem[]): void {
-  if (list.pos === undefined) return
+function rewriteDuplicateGroup(ctx: Context, list: Node01, items: EmptyDefinitionItem[]): { from: number; to: number } | null {
+  if (list.pos === undefined) return null
   const duplicates = repeatedItems(items)
-  if (duplicates.length < 2) return
+  if (duplicates.length < 2) return null
   const from = lineStart(ctx.lines, list.pos.startLine)
   const to = lineEnd(ctx.lines, list.pos.endLine)
-  for (let index = ctx.findings.length - 1; index >= 0; index--) {
-    const edit = ctx.findings[index]!.edit
-    if (edit !== null && edit.start >= from && edit.start <= to) ctx.findings.splice(index, 1)
-  }
   const message = 'duplicate definitions consumed by empty list items lifted above their list'
   change(ctx, 'U-038', from, from, `${duplicates[0]!.body}\n\n`, message)
   for (const item of duplicates) change(ctx, 'U-038', item.start, item.end, '{% %}', message)
   if (list.pos.endLine < ctx.lines.count && lineText(ctx.lines, list.pos.endLine + 1).trim() !== '') {
     change(ctx, 'U-038', to, to, '\n', message)
   }
+  return { from, to }
 }
 
 /** Duplicate definitions consumed by empty sibling items in 0.1 move outside their list. */
 export function duplicateItemDefinitions(ctx: Context): void {
+  const prior = ctx.findings.length
   const groups = new Map<Node01, EmptyDefinitionItem[]>()
   for (const visit of ctx.visits) {
     if (visit.parent?.node.type !== 'list') continue
@@ -96,7 +94,16 @@ export function duplicateItemDefinitions(ctx: Context): void {
     list.push(item)
     groups.set(visit.parent.node, list)
   }
-  for (const [list, items] of groups) rewriteDuplicateGroup(ctx, list, items)
+  const ranges: { from: number; to: number }[] = []
+  for (const [list, items] of groups) {
+    const range = rewriteDuplicateGroup(ctx, list, items)
+    if (range !== null) ranges.push(range)
+  }
+  if (ranges.length === 0) return
+  const masked = new Uint8Array(ctx.src.length + 1)
+  for (const { from, to } of ranges) masked.fill(1, from, to + 1)
+  ctx.findings = [...ctx.findings.slice(0, prior).filter(({ edit }) => edit === null || masked[edit.start] !== 1),
+    ...ctx.findings.slice(prior)]
 }
 
 function escapeLiteralLinkText(ctx: Context, visit: Visit): void {
@@ -123,4 +130,38 @@ export function literalLinkBeforeCode(ctx: Context): void {
     && ctx.src[node.pos.endOffset - 1] !== '`')
   if (!unclosed) return
   for (const visit of ctx.visits) escapeLiteralLinkText(ctx, visit)
+}
+
+function wrappedCodeRow(row: Node01): boolean {
+  const cells = row.cells as Node01[] | undefined
+  return row.type === 'table_row' && typeof row.continuationLines === 'number' && row.continuationLines > 0
+    && cells?.some((cell) => cell.children?.some((child) => child.type === 'code'
+      && Array.isArray(child.cellWraps) && child.cellWraps.length > 0)) === true
+}
+
+function flattenRow(ctx: Context, row: Node01): void {
+  const pos = row.pos!
+  const count = (row.cells as Node01[]).length
+  const first = lineText(ctx.lines, pos.startLine)
+  const pipe = first.indexOf('|')
+  if (pipe < 0) return
+  const prefix = first.slice(0, pipe)
+  const chunks: string[][] = Array.from({ length: count }, () => [])
+  for (let line = pos.startLine; line <= pos.endLine; line++) {
+    const text = lineText(ctx.lines, line)
+    const body = line === pos.startLine ? text.slice(pipe + 1) : text.slice(prefix.length).replace(/^\s*\+\s*/u, '')
+    const parts = body.split('|').slice(0, count)
+    if (parts.length < count) return
+    for (let index = 0; index < count; index++) chunks[index]!.push(parts[index]!.trim())
+  }
+  const from = lineStart(ctx.lines, pos.startLine)
+  const to = lineEnd(ctx.lines, pos.endLine)
+  const cells = chunks.map((parts) => parts.join(' '))
+  change(ctx, 'U-258', from, to, `${prefix}| ${cells.join(' | ')} |`,
+    'code across a continuation row kept on one pipe-table row')
+}
+
+/** C2-B-223 ends inline content at a continuation fragment; one row keeps the old code span. */
+export function wrappedCodeTableRow(ctx: Context): void {
+  for (const { node } of ctx.visits) if (node.pos !== undefined && wrappedCodeRow(node)) flattenRow(ctx, node)
 }

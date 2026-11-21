@@ -37,4 +37,12 @@ describe('replay fallback families', () => {
     expect(result.output).toContain('\\[r]: https://e.com /path')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
+
+  it('keeps a code span across a continuation row on one pipe-table row', () => {
+    const input = '\n> | x | a `b |\n> + y | c` ||\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('\n> | x y | a `b c` |\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
 })
