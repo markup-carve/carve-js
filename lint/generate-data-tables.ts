@@ -57,13 +57,16 @@ class Compiler {
 
   field(path: string): string {
     const [head, ...rest] = path.split('.')
-    const keys = rest.map((part) => literal(/^\d+$/.test(part) ? Number(part) : part))
-    // A list item or an AST node has no static type here: its fields are read by name.
-    if (head === 'item' || head === 'node') return `at(${head === 'item' ? 'item' : 'self.node'}${keys.map((key) => `, ${key}`).join('')})`
+    const keys = rest.map((part) => literal(/^-?\d+$/.test(part) ? Number(part) : part))
+    // A list item or an AST node has no static type here: its fields are read by name. A negative index counts from the end.
+    if (head === 'item' || head === 'node' || rest.some((part) => part.startsWith('-'))) {
+      const from = head === 'item' ? 'item' : head === 'node' ? 'self.node' : `self.${head}`
+      return this.at(from, keys)
+    }
     // The node of an attribute record's owner is a tree node too (C2-W-148).
     const node = rest.indexOf('node') + 1
     if (node > 0 && node < rest.length) {
-      return `at(self.${head}${keys.slice(0, node).map((key) => `?.[${key}]`).join('')}${keys.slice(node).map((key) => `, ${key}`).join('')})`
+      return this.at(`self.${head}${keys.slice(0, node).map((key) => `?.[${key}]`).join('')}`, keys.slice(node))
     }
     return `self.${head}` + keys.map((key) => `?.[${key}]`).join('')
   }
@@ -132,7 +135,13 @@ class Compiler {
 
   some(arg: Expr): string {
     const spec = arg as { in: string, from?: number, where: Expr }
-    return `someFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
+    return `someFrom(${this.field(spec.in)}, ${spec.from ?? 0}, ${this.where(spec.where)})`
+  }
+
+  // A test that reads no item, as a count of all items, takes no parameter.
+  where(expr: Expr): string {
+    const code = this.test(expr)
+    return /\bitem\b/.test(code) ? `(item) => ${code}` : `() => ${code}`
   }
 
   lookup(arg: Expr): string {
@@ -147,12 +156,20 @@ class Compiler {
     if (site === undefined) this.lookupSites.set(signature, site = this.lookupSites.size)
     const side = spec.before === true ? -1 : spec.after === true ? 1 : 0
     const found = `lookupAt(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, self.start, ${side})`
-    return `at(${found}${spec.field.split('.').map((part) => `, ${literal(/^\d+$/.test(part) ? Number(part) : part)}`).join('')})`
+    return this.at(found, spec.field.split('.').map((part) => literal(/^-?\d+$/.test(part) ? Number(part) : part)))
+  }
+
+  // Each step of a path is its own property read, so each read site sees few node shapes; `obj` reads nothing from a
+  // value that is no object, as `at` did, and a negative index counts from the end of a list.
+  at(from: string, keys: readonly string[]): string {
+    let code = from
+    for (const key of keys) code = /^-\d+$/.test(key) ? `atEnd(${code}, ${key})` : `obj(${code})?.[${key}]`
+    return code
   }
 
   count(arg: Expr): string {
     const spec = arg as { in: string, from?: number, where: Expr }
-    return `countFrom(${this.field(spec.in)}, ${spec.from ?? 0}, (item) => ${this.test(spec.where)})`
+    return `countFrom(${this.field(spec.in)}, ${spec.from ?? 0}, ${this.where(spec.where)})`
   }
 
   member(arg: Expr): string {
@@ -461,14 +478,10 @@ function lookupAt(site: number, over: 'block' | 'inline', types: ReadonlySet<str
 
 const lenOf = (value: unknown): number => (typeof value === 'string' || Array.isArray(value) ? value.length : 0)
 
-function at(value: unknown, ...keys: (string | number)[]): unknown {
-  let current = value
-  for (const key of keys) {
-    if (current === null || typeof current !== 'object') return undefined
-    current = (current as Record<string | number, unknown>)[key]
-  }
-  return current
-}
+const obj = (value: unknown): Record<string | number, unknown> | undefined =>
+  (value !== null && typeof value === 'object' ? value as Record<string | number, unknown> : undefined)
+
+const atEnd = (value: unknown, index: number): unknown => (Array.isArray(value) ? value[value.length + index] : obj(value)?.[index])
 
 const textFrom = (line: ModelLine, from: number): string => trimEnd(line.text.slice(from - line.start))
 

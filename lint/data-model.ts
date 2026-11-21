@@ -3,6 +3,7 @@ import { columnOf } from '../src/layout-lines.ts'
 import { type Attributed } from './data-attributes.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { shapeOf } from './data-shape.ts'
+import { groupOf, pipeTables, rowIndexOf, TableLines } from './data-table.ts'
 import { type Line, type LintContext } from './types.ts'
 
 /** The shared line model of `data/lint-model.json`: one record per source line and per block. */
@@ -35,6 +36,9 @@ export interface ModelLine {
   readonly leaf_next: ModelLine | undefined
   readonly leaf_head: ModelLine | undefined
   leaf_start: number
+  readonly table_above: ModelLine | undefined
+  readonly table_below: ModelLine | undefined
+  readonly table_path: string | undefined
 }
 
 export interface ColonContainer { width: number, line: number, column: number, kind: string, start: number }
@@ -61,6 +65,9 @@ export interface ModelBlock {
   readonly item_owner: Container
   readonly parent: Container
   readonly node: Node
+  readonly source_format: string | undefined
+  readonly group: string | undefined
+  readonly row_index: number | undefined
   readonly ancestors: string[]
   readonly ancestor_ids: string[]
 }
@@ -143,7 +150,8 @@ function colonKind(type: string, opener: string): string {
   return /^:{3,}[ \t]+\\(?:[ \t]|$)/.test(opener) ? 'hard-break block' : 'div'
 }
 
-export interface Walked { node: Node, path: string, parent: string, index: number }
+/** `format`: for a table, a row or a cell, the source format of the table (C2-W-149). */
+export interface Walked { node: Node, path: string, parent: string, index: number, format?: string | undefined }
 
 
 interface Leaves { type: string[], id: string[], first: boolean[], head: number[], last: number[], start: number[] }
@@ -224,7 +232,9 @@ class LineRecord {
   private readonly model: LineList
   private readonly context: LintContext
 
-  constructor(fields: LineFields, path: string, index: number, model: LineList, context: LintContext) {
+  private readonly tables: TableLines
+
+  constructor(fields: LineFields, path: string, index: number, model: LineList, context: LintContext, tables: TableLines) {
     this.number = fields.number
     this.start = fields.start
     this.end = fields.end
@@ -245,6 +255,7 @@ class LineRecord {
     this.index = index
     this.model = model
     this.context = context
+    this.tables = tables
   }
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
@@ -274,25 +285,30 @@ class LineRecord {
   get next2(): ModelLine | undefined { return this.model.at(this.index + 2) }
   get leaf_next(): ModelLine | undefined { return this.leafLast === 0 ? this.next : this.model.at(this.leafLast) }
   get leaf_head(): ModelLine | undefined { return this.leafHead === 0 ? undefined : this.model.at(this.leafHead - 1) }
+  get table_above(): ModelLine | undefined { return this.model.at(this.tables.aboveOf(this.index)) }
+  get table_below(): ModelLine | undefined { return this.model.at(this.tables.belowOf(this.index)) }
+  get table_path(): string | undefined { return this.tables.pathOf(this.index) }
 }
 
 /** The line records of a document, each made on first read: a document whose rules read few lines makes few. */
 class LineList {
+  readonly count: number
   private readonly made: (ModelLine | undefined)[]
-  private readonly count: number
   private readonly found: Leaves
   private readonly context: LintContext
+  private readonly tables: TableLines
 
-  constructor(count: number, found: Leaves, context: LintContext) {
+  constructor(count: number, found: Leaves, context: LintContext, walked: readonly Walked[]) {
     this.made = new Array<ModelLine | undefined>(count)
     this.count = count
     this.found = found
     this.context = context
+    this.tables = new TableLines(pipeTables(walked, context), this)
   }
 
   at(index: number): ModelLine | undefined {
     if (index < 0 || index >= this.count) return undefined
-    return (this.made[index] ??= lineRecord(this.context.lines[index]!, index, this, this.found, this.context))
+    return (this.made[index] ??= lineRecord(this.context.lines[index]!, index, this, this.found, this.context, this.tables))
   }
 
   all(): ModelLine[] {
@@ -302,7 +318,8 @@ class LineList {
   }
 }
 
-function lineRecord(line: Line, index: number, model: LineList, found: Leaves, context: LintContext): ModelLine {
+function lineRecord(line: Line, index: number, model: LineList, found: Leaves, context: LintContext,
+  tables: TableLines): ModelLine {
   const leaf = found.type[index]!
   // A verbatim body line keeps quote marks past the quotes that hold its leaf: they are content.
   const marks = VERBATIM_LEAVES.has(leaf) ? quoteDepth(found.id[index]!, context.nodeTypes as Map<string, string>) : Infinity
@@ -318,7 +335,7 @@ function lineRecord(line: Line, index: number, model: LineList, found: Leaves, c
     attached_here: context.state.attachedLines.has(line.number),
     closes_container: context.state.containerClosers.has(line.number),
     leaf_head: found.head[index]!, leaf_last: found.last[index]!, leaf_start: found.start[index]!,
-  }, line.path, index, model, context)
+  }, line.path, index, model, context, tables)
 }
 
 const TEXT_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'table_cell'])
@@ -408,6 +425,7 @@ class BlockRecord {
   private columnCache: number | undefined = undefined
   private ownerCache: Container | undefined = undefined
   private itemOwnerCache: Container | undefined = undefined
+  private readonly format: string | undefined
   private parentCache: Container | undefined = undefined
   readonly type: string
   readonly path: string
@@ -432,6 +450,7 @@ class BlockRecord {
     this.node = item.node
     this.type = blockType(item.node)
     this.path = item.path
+    this.format = item.format
     this.parentPath = item.parent
     this.start = start
     this.index = item.index
@@ -501,6 +520,9 @@ class BlockRecord {
     }
     return this.itemOwnerCache
   }
+  get source_format(): string | undefined { return this.format }
+  get group(): string | undefined { return groupOf(this.type, this.path, this.context) }
+  get row_index(): number | undefined { return rowIndexOf(this.type, this.path, this.context) }
   get parent(): Container {
     return (this.parentCache ??= this.container(this.parentPath, this.context.nodeTypes.get(this.parentPath) ?? 'document'))
   }
@@ -570,6 +592,7 @@ export class DataWalk {
   /** The nodes that carry `attrs`, when an attribute rule is on (C2-W-148), with their paths and whether they are inline. */
   readonly attributed: Attributed = { nodes: [], paths: [], inline: [] }
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
+  private tableFormat: string | undefined = undefined
   private readonly types: ReadonlySet<string>
   private readonly context: LintContext
   private readonly textRuns: boolean
@@ -622,6 +645,12 @@ export class DataWalk {
     this.attributed.inline.push(INLINE_PARENT_TYPES.has(parent.type))
   }
 
+  // A table's rows and cells follow it in the walk, and a cell holds no table.
+  private formatOf(node: Node, path: string): string | undefined {
+    if (node.type === 'table') return (this.tableFormat = this.context.layouts.get(path)?.sourceFormat)
+    return node.type === 'table_row' || node.type === 'table_cell' ? this.tableFormat : undefined
+  }
+
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
     if (this.attributes) this.attribute(node, path, parent)
     if (!this.model) return
@@ -635,7 +664,7 @@ export class DataWalk {
       return
     }
     if (this.textRuns) this.run(node, parent, parentPath, index, blockType(parent))
-    this.walked.push({ node, path, parent: parentPath, index })
+    this.walked.push({ node, path, parent: parentPath, index, format: this.formatOf(node, path) })
     this.holder = INLINE_HOLDERS.has(node.type) ? { path, type: node.type, inline: INLINE_LEAVES.has(node.type) } : undefined
   }
 }
@@ -655,7 +684,7 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   const found = leaves(walked, lines.length, context.chars)
   // C2-B-010: the empty rest after the last line terminator is no line.
   const count = lines.length > 1 && lines[lines.length - 1]!.text === '' && source.endsWith('\n') ? lines.length - 1 : lines.length
-  const model = new LineList(count, found, context)
+  const model = new LineList(count, found, context, walked)
   const blocks: ModelBlock[] = []
   const runs: (readonly T[])[] = []
   const containers = new Map<string, number>()
