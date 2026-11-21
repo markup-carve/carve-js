@@ -496,11 +496,9 @@ interface RepairHistory {
   recent: string[]
   seen: Set<string>
   rounds: number
-  remainingChars: number
+  /** The budget of the document when this repair started (C2-W-133). */
+  budget: number
 }
-
-const MAX_REPAIR_CHARS = 20_000_000
-const MIN_REPAIR_ROUNDS = 32
 // C2-W-133: the parses of all repairs, their probes included, read at most this many characters per character of
 // the document, or the floor for a short one, so the repairs take time linear in the document however many groups
 // it has. The floor is above the 20 million characters that the slowest of 20,000 property documents needs (four
@@ -513,14 +511,14 @@ function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistor
   const chars = w.lines.reduce((total, line) => total + line.length + 1, 0)
   let spent = false
   if (history.rounds === 0) {
-    history.remainingChars = Math.max(history.remainingChars, chars * MIN_REPAIR_ROUNDS)
-    const budget = Math.max(WORK_FLOOR, Math.max(w.work.source, w.work.written + chars) * WORK_FACTOR)
-    w.work.limit = w.work.chars + budget - w.work.spent
-    spent = w.work.spent >= budget
+    history.budget = Math.max(WORK_FLOOR, Math.max(w.work.source, w.work.written + chars) * WORK_FACTOR)
+    w.work.limit = w.work.chars + history.budget - w.work.spent
+    spent = w.work.spent >= history.budget
   }
   history.rounds++
-  history.remainingChars -= chars
-  if (spent || history.rounds > 8192 || history.remainingChars < 0 || exhausted(w)) {
+  // The writes of the rounds draw on a pool of the same size, so a round whose parse is cached still counts.
+  w.work.rewritten += chars
+  if (spent || history.rounds > 8192 || w.work.rewritten > history.budget || exhausted(w)) {
     const host = group[0]
     if (host !== undefined) refuseRepair(w, host)
     return true
@@ -987,7 +985,7 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
 
 function repairRounds(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
   const nodes = document.children
-  const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0, remainingChars: MAX_REPAIR_CHARS }
+  const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0, budget: 0 }
   for (;;) {
     const end = groupEnd(w, nodes, from)
     const group = nodes.slice(from, end)
