@@ -192,15 +192,10 @@ function lookupAt(site: number, over: 'block' | 'inline', types: ReadonlySet<str
 
 const lenOf = (value: unknown): number => (typeof value === 'string' || Array.isArray(value) ? value.length : 0)
 
-function at(value: unknown, ...keys: (string | number)[]): unknown {
-  let current = value
-  for (const key of keys) {
-    if (current === null || typeof current !== 'object') return undefined
-    current = typeof key === 'number' && key < 0 && Array.isArray(current) ? current[current.length + key]
-      : (current as Record<string | number, unknown>)[key]
-  }
-  return current
-}
+const obj = (value: unknown): Record<string | number, unknown> | undefined =>
+  (value !== null && typeof value === 'object' ? value as Record<string | number, unknown> : undefined)
+
+const atEnd = (value: unknown, index: number): unknown => (Array.isArray(value) ? value[value.length + index] : obj(value)?.[index])
 
 const textFrom = (line: ModelLine, from: number): string => trimEnd(line.text.slice(from - line.start))
 
@@ -467,7 +462,7 @@ function rule8(self: ModelLine, path: string, context: LintContext): void {
     context.report("colon-fence-length-mismatch", num(self.body_start), num(self.body_end), path, { "authoredWidth": String(lenOf(self.body)), "expectedWidth": String(self.open_colon?.[0]?.["width"]), "kind": String(self.open_colon?.[0]?.["kind"]), "line": String(self.open_colon?.[0]?.["line"]), "column": String(self.open_colon?.[0]?.["column"]) }, 2)
     return
   }
-  if (someFrom(self.open_colon, 1, (item) => (num(at(item, "width")) <= lenOf(self.body)))) {
+  if (someFrom(self.open_colon, 1, (item) => (num(obj(item)?.["width"]) <= lenOf(self.body)))) {
     context.report("colon-fence-length-mismatch", num(self.body_start), num(self.body_end), path, { "authoredWidth": String(lenOf(self.body)), "expectedWidth": String(self.open_colon?.[0]?.["width"]), "kind": String(self.open_colon?.[0]?.["kind"]), "line": String(self.open_colon?.[0]?.["line"]), "column": String(self.open_colon?.[0]?.["column"]) }, 1)
     return
   }
@@ -517,14 +512,14 @@ function rule12(self: ModelLine, path: string, context: LintContext): void {
 
 function rule13(self: ModelAttribute, path: string, context: LintContext): void {
   groups = undefined
-  if (!(K35.has(at(self.owner?.["node"], "syntax")) && same(self.kind, "key") && Boolean(self.last_key) && same(self.value, "") && !same(self.key, "table") && test(K36, self.key))) return
+  if (!(K35.has(obj(self.owner?.["node"])?.["syntax"]) && same(self.kind, "key") && Boolean(self.last_key) && same(self.value, "") && !same(self.key, "table") && test(K36, self.key))) return
   context.report("consumed-key-near-miss", num(self.owner?.["opener_start"]), num(self.owner?.["end"]), path, { "word": String(self.key), "key": String("table") }, 0)
   return
 }
 
 function rule14(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(K37.has(self.leaf) && ((hit(K38, K39, self.body) && mark(num(self.body_start))) && ((Boolean(self.lazy) && contains(self.ancestors, "block_quote")) || (hit(K40, K41, self.body) && mark(num(self.body_start))))) && !contains(self.ancestors, "footnote") && !(same(self.leaf, "definition_term") && !Boolean(self.leaf_first) && !test(K42, self.text)) && (test(K42, self.text) || someFrom(self.ancestors, 0, (item) => K43.has(at(item)))))) return
+  if (!(K37.has(self.leaf) && ((hit(K38, K39, self.body) && mark(num(self.body_start))) && ((Boolean(self.lazy) && contains(self.ancestors, "block_quote")) || (hit(K40, K41, self.body) && mark(num(self.body_start))))) && !contains(self.ancestors, "footnote") && !(same(self.leaf, "definition_term") && !Boolean(self.leaf_first) && !test(K42, self.text)) && (test(K42, self.text) || someFrom(self.ancestors, 0, (item) => K43.has(item))))) return
   context.report("definition-in-container", num(group("label", 0)), num(group("label", 1)), path, {  }, 0)
   return
 }
@@ -541,7 +536,7 @@ function rule15(self: ModelLine, path: string, context: LintContext): void {
 function rule16(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   let v_width: unknown = UNSET
-  if (!(K35.has(self.source_format) && someFrom(at(self.node, "children"), 0, (item) => someFrom(at(item, "children"), 0, (item) => (countFrom(at(item, "children"), 0, () => true) > num((v_width === UNSET ? (v_width = aside(() => countFrom(at(self.node, "children", 0, "children", 0, "children"), 0, () => true))) : v_width))))))) return
+  if (!(K35.has(self.source_format) && someFrom(obj(self.node)?.["children"], 0, (item) => someFrom(obj(item)?.["children"], 0, (item) => (countFrom(obj(item)?.["children"], 0, () => true) > num((v_width === UNSET ? (v_width = aside(() => countFrom(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["children"], 0, () => true))) : v_width))))))) return
   context.report("delimited-table-wide-row", num(self.start), num(self.end), path, {  }, 0)
   return
 }
@@ -596,7 +591,7 @@ function rule19(self: ModelInline, path: string, context: LintContext): void {
 
 function rule20(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.source_format, "pipe") && (!starts(self.text, "=") || Boolean(at(self.node, "header"))) && (hit(K52, K53, self.text) && mark(num(self.start))))) return
+  if (!(same(self.source_format, "pipe") && (!starts(self.text, "=") || Boolean(obj(self.node)?.["header"])) && (hit(K52, K53, self.text) && mark(num(self.start))))) return
   if (!same(group("block", 0), group("block", 1))) {
     context.report("deprecated-cell-alignment", num(group("prefix", 0)), num(group("prefix", 1)), path, { "prefix": String(str(self.text).slice((num(group("prefix", 0)) - num(self.start)), (num(group("prefix", 1)) - num(self.start)))), "braced": String(("{" + str(self.text).slice((num(group("mark", 0)) - num(self.start)), (num(group("mark", 1)) - num(self.start))) + " " + str(self.text).slice((num(group("block", 0)) - num(self.start)), (num(group("block", 1)) - num(self.start))) + "}")) }, 0)
     return
@@ -741,14 +736,14 @@ function rule33(self: ModelInline, path: string, context: LintContext): void {
 
 function rule34(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(num(at(lookupAt(0, "block", K68, (item: unknown): unknown => at(item, "node", "href"), at(self.node, "href"), self.start, 0), "start")) < num(self.start))) return
+  if (!(num(obj(lookupAt(0, "block", K68, (item: unknown): unknown => obj(obj(item)?.["node"])?.["href"], obj(self.node)?.["href"], self.start, 0))?.["start"]) < num(self.start))) return
   context.report("duplicate-reference-url", num(self.start), num(self.end), path, {  }, 0)
   return
 }
 
 function rule35(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(someFrom(at(self.node, "children"), 0, (item) => K69.has(at(item, "type"))) && same(countFrom(at(self.node, "children"), 0, (item) => (!same(at(item, "type"), "comment") && !(same(at(item, "type"), "text") && test(K70, at(item, "value"))))), 1))) return
+  if (!(someFrom(obj(self.node)?.["children"], 0, (item) => K69.has(obj(item)?.["type"])) && same(countFrom(obj(self.node)?.["children"], 0, (item) => (!same(obj(item)?.["type"], "comment") && !(same(obj(item)?.["type"], "text") && test(K70, obj(item)?.["value"])))), 1))) return
   context.report("emphasis-as-heading", num(self.start), num(self.end), path, {  }, 0)
   return
 }
@@ -798,7 +793,7 @@ function rule39(self: ModelBlock, path: string, context: LintContext): void {
 
 function rule40(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!same(countFrom(at(self.node, "children"), 0, (item) => (same(at(item, "type"), "table") || (!same(at(item, "type"), "figure_group") && (at(item, "caption") !== undefined)))), 0)) return
+  if (!same(countFrom(obj(self.node)?.["children"], 0, (item) => (same(obj(item)?.["type"], "table") || (!same(obj(item)?.["type"], "figure_group") && (obj(item)?.["caption"] !== undefined)))), 0)) return
   context.report("figure-group-empty", num(self.start), num(self.end), path, {  }, 0)
   return
 }
@@ -819,7 +814,7 @@ function rule42(self: ModelBlock, path: string, context: LintContext): void {
 
 function rule43(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!same(countFrom(at(self.node, "children"), 0, (item) => (same(at(item, "type"), "table") || (!same(at(item, "type"), "figure_group") && (at(item, "caption") !== undefined)))), 1)) return
+  if (!same(countFrom(obj(self.node)?.["children"], 0, (item) => (same(obj(item)?.["type"], "table") || (!same(obj(item)?.["type"], "figure_group") && (obj(item)?.["caption"] !== undefined)))), 1)) return
   context.report("figure-group-single-panel", num(self.start), num(self.end), path, {  }, 0)
   return
 }
@@ -830,8 +825,8 @@ function rule44(self: ModelBlock, path: string, context: LintContext): void {
   let v_twin_text: unknown = UNSET
   let v_label: unknown = UNSET
   let v_twin_label: unknown = UNSET
-  if (!((hit(K85, K86, self.text) && mark(num(self.start))) && !same((v_twin_start === UNSET ? (v_twin_start = aside(() => at(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, at(item, "text")) ? at(item, "node", "key") : ""), at(self.node, "key"), self.start, 0), "start"))) : v_twin_start), self.start) && !same((v_twin_label === UNSET ? (v_twin_label = aside(() => ((hit(K85, K86, (v_twin_text === UNSET ? (v_twin_text = aside(() => at(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, at(item, "text")) ? at(item, "node", "key") : ""), at(self.node, "key"), self.start, 0), "text"))) : v_twin_text)) && mark(0)) ? str((v_twin_text === UNSET ? (v_twin_text = aside(() => at(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, at(item, "text")) ? at(item, "node", "key") : ""), at(self.node, "key"), self.start, 0), "text"))) : v_twin_text)).slice(2, num(group("label", 1))) : ""))) : v_twin_label), (v_label === UNSET ? (v_label = aside(() => ((hit(K85, K86, self.text) && mark(num(self.start))) ? str(self.text).slice(2, (num(group("label", 1)) - num(self.start))) : ""))) : v_label)))) return
-  context.report("footnote-labels-differ-only-in-whitespace", num(self.start), num(self.end), path, { "label": String((v_label === UNSET ? (v_label = aside(() => ((hit(K85, K86, self.text) && mark(num(self.start))) ? str(self.text).slice(2, (num(group("label", 1)) - num(self.start))) : ""))) : v_label)), "twin": String((v_twin_label === UNSET ? (v_twin_label = aside(() => ((hit(K85, K86, (v_twin_text === UNSET ? (v_twin_text = aside(() => at(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, at(item, "text")) ? at(item, "node", "key") : ""), at(self.node, "key"), self.start, 0), "text"))) : v_twin_text)) && mark(0)) ? str((v_twin_text === UNSET ? (v_twin_text = aside(() => at(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, at(item, "text")) ? at(item, "node", "key") : ""), at(self.node, "key"), self.start, 0), "text"))) : v_twin_text)).slice(2, num(group("label", 1))) : ""))) : v_twin_label)), "key": String(JSON.stringify(str(at(self.node, "key"))).slice(1, -1)) }, 0)
+  if (!((hit(K85, K86, self.text) && mark(num(self.start))) && !same((v_twin_start === UNSET ? (v_twin_start = aside(() => obj(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, obj(item)?.["text"]) ? obj(obj(item)?.["node"])?.["key"] : ""), obj(self.node)?.["key"], self.start, 0))?.["start"])) : v_twin_start), self.start) && !same((v_twin_label === UNSET ? (v_twin_label = aside(() => ((hit(K85, K86, (v_twin_text === UNSET ? (v_twin_text = aside(() => obj(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, obj(item)?.["text"]) ? obj(obj(item)?.["node"])?.["key"] : ""), obj(self.node)?.["key"], self.start, 0))?.["text"])) : v_twin_text)) && mark(0)) ? str((v_twin_text === UNSET ? (v_twin_text = aside(() => obj(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, obj(item)?.["text"]) ? obj(obj(item)?.["node"])?.["key"] : ""), obj(self.node)?.["key"], self.start, 0))?.["text"])) : v_twin_text)).slice(2, num(group("label", 1))) : ""))) : v_twin_label), (v_label === UNSET ? (v_label = aside(() => ((hit(K85, K86, self.text) && mark(num(self.start))) ? str(self.text).slice(2, (num(group("label", 1)) - num(self.start))) : ""))) : v_label)))) return
+  context.report("footnote-labels-differ-only-in-whitespace", num(self.start), num(self.end), path, { "label": String((v_label === UNSET ? (v_label = aside(() => ((hit(K85, K86, self.text) && mark(num(self.start))) ? str(self.text).slice(2, (num(group("label", 1)) - num(self.start))) : ""))) : v_label)), "twin": String((v_twin_label === UNSET ? (v_twin_label = aside(() => ((hit(K85, K86, (v_twin_text === UNSET ? (v_twin_text = aside(() => obj(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, obj(item)?.["text"]) ? obj(obj(item)?.["node"])?.["key"] : ""), obj(self.node)?.["key"], self.start, 0))?.["text"])) : v_twin_text)) && mark(0)) ? str((v_twin_text === UNSET ? (v_twin_text = aside(() => obj(lookupAt(1, "block", K83, (item: unknown): unknown => (test(K84, obj(item)?.["text"]) ? obj(obj(item)?.["node"])?.["key"] : ""), obj(self.node)?.["key"], self.start, 0))?.["text"])) : v_twin_text)).slice(2, num(group("label", 1))) : ""))) : v_twin_label)), "key": String(JSON.stringify(str(obj(self.node)?.["key"])).slice(1, -1)) }, 0)
   return
 }
 
@@ -873,14 +868,14 @@ function rule49(self: ModelBlock, path: string, context: LintContext): void {
 function rule50(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   let v_previous: unknown = UNSET
-  if (!(num(at(self.node, "level")) > (num((v_previous === UNSET ? (v_previous = aside(() => at(lookupAt(2, "block", K100, undefined, undefined, self.start, -1), "node", "level"))) : v_previous)) + 1))) return
-  context.report("heading-level-skip", num(self.start), num(self.end), path, { "previous": String((v_previous === UNSET ? (v_previous = aside(() => at(lookupAt(2, "block", K100, undefined, undefined, self.start, -1), "node", "level"))) : v_previous)), "level": String(at(self.node, "level")) }, 0)
+  if (!(num(obj(self.node)?.["level"]) > (num((v_previous === UNSET ? (v_previous = aside(() => obj(obj(lookupAt(2, "block", K100, undefined, undefined, self.start, -1))?.["node"])?.["level"])) : v_previous)) + 1))) return
+  context.report("heading-level-skip", num(self.start), num(self.end), path, { "previous": String((v_previous === UNSET ? (v_previous = aside(() => obj(obj(lookupAt(2, "block", K100, undefined, undefined, self.start, -1))?.["node"])?.["level"])) : v_previous)), "level": String(obj(self.node)?.["level"]) }, 0)
   return
 }
 
 function rule51(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(at(lookupAt(3, "block", K100, (item: unknown): unknown => test(K101, at(item, "text")), true, self.start, 0), "start"), self.start) && (num(at(lookupAt(4, "block", K100, (item: unknown): unknown => test(K102, at(item, "text")), true, self.start, 0), "start")) >= 0) && (num(at(lookupAt(5, "block", K100, (item: unknown): unknown => test(K103, at(item, "text")), true, self.start, 0), "start")) >= 0))) return
+  if (!(same(obj(lookupAt(3, "block", K100, (item: unknown): unknown => test(K101, obj(item)?.["text"]), true, self.start, 0))?.["start"], self.start) && (num(obj(lookupAt(4, "block", K100, (item: unknown): unknown => test(K102, obj(item)?.["text"]), true, self.start, 0))?.["start"]) >= 0) && (num(obj(lookupAt(5, "block", K100, (item: unknown): unknown => test(K103, obj(item)?.["text"]), true, self.start, 0))?.["start"]) >= 0))) return
   context.report("heading-marker-mixed", num(self.start), num(self.end), path, {  }, 0)
   return
 }
@@ -894,14 +889,14 @@ function rule52(self: ModelBlock, path: string, context: LintContext): void {
 
 function rule53(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!((at(self.node, "attrs") !== undefined) && !(at(self.node, "options", "code") !== undefined))) return
+  if (!((obj(self.node)?.["attrs"] !== undefined) && !(obj(obj(self.node)?.["options"])?.["code"] !== undefined))) return
   context.report("include-attributes-unused", num(self.start), num(self.end), path, {  }, 0)
   return
 }
 
 function rule54(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!((at(self.node, "options", "lines") !== undefined) && K35.has(at(self.node, "options", "code")) && someFrom(at(self.node, "attrs", "keyValues"), 0, (item) => same(at(item, 0), "table")) && (hit(K106, K107, self.text) && mark(num(self.start))))) return
+  if (!((obj(obj(self.node)?.["options"])?.["lines"] !== undefined) && K35.has(obj(obj(self.node)?.["options"])?.["code"]) && someFrom(obj(obj(self.node)?.["attrs"])?.["keyValues"], 0, (item) => same(obj(item)?.[0], "table")) && (hit(K106, K107, self.text) && mark(num(self.start))))) return
   context.report("include-lines-table-rows-hint", num(group("lines", 0)), num(group("lines", 1)), path, {  }, 0)
   return
 }
@@ -994,7 +989,7 @@ function rule62(self: ModelBlock, path: string, context: LintContext): void {
   let v_next_index: unknown = UNSET
   let v_next_style: unknown = UNSET
   let v_next_line: unknown = UNSET
-  if (!(K118.has(self.parent?.["type"]) && same(lenOf(at(self.node, "children")), 1) && same((v_next_index === UNSET ? (v_next_index = aside(() => at(lookupAt(6, "block", K117, (item: unknown): unknown => at(item, "ancestor_ids", 0), self.ancestor_ids?.[0], self.start, 1), "index"))) : v_next_index), (num(self.index) + 1)) && ((same(at(self.node, "marker", "style"), "i") && same((v_next_style === UNSET ? (v_next_style = aside(() => at(lookupAt(6, "block", K117, (item: unknown): unknown => at(item, "ancestor_ids", 0), self.ancestor_ids?.[0], self.start, 1), "node", "marker", "style"))) : v_next_style), "a")) || (same(at(self.node, "marker", "style"), "a") && same((v_next_style === UNSET ? (v_next_style = aside(() => at(lookupAt(6, "block", K117, (item: unknown): unknown => at(item, "ancestor_ids", 0), self.ancestor_ids?.[0], self.start, 1), "node", "marker", "style"))) : v_next_style), "i")) || (same(at(self.node, "marker", "style"), "I") && same((v_next_style === UNSET ? (v_next_style = aside(() => at(lookupAt(6, "block", K117, (item: unknown): unknown => at(item, "ancestor_ids", 0), self.ancestor_ids?.[0], self.start, 1), "node", "marker", "style"))) : v_next_style), "A")) || (same(at(self.node, "marker", "style"), "A") && same((v_next_style === UNSET ? (v_next_style = aside(() => at(lookupAt(6, "block", K117, (item: unknown): unknown => at(item, "ancestor_ids", 0), self.ancestor_ids?.[0], self.start, 1), "node", "marker", "style"))) : v_next_style), "I"))) && test(K119, self.text) && ((num((v_next_line === UNSET ? (v_next_line = aside(() => at(lookupAt(6, "block", K117, (item: unknown): unknown => at(item, "ancestor_ids", 0), self.ancestor_ids?.[0], self.start, 1), "line", "number"))) : v_next_line)) - num(self.last_line?.["number"])) < 4))) return
+  if (!(K118.has(self.parent?.["type"]) && same(lenOf(obj(self.node)?.["children"]), 1) && same((v_next_index === UNSET ? (v_next_index = aside(() => obj(lookupAt(6, "block", K117, (item: unknown): unknown => obj(obj(item)?.["ancestor_ids"])?.[0], self.ancestor_ids?.[0], self.start, 1))?.["index"])) : v_next_index), (num(self.index) + 1)) && ((same(obj(obj(self.node)?.["marker"])?.["style"], "i") && same((v_next_style === UNSET ? (v_next_style = aside(() => obj(obj(obj(lookupAt(6, "block", K117, (item: unknown): unknown => obj(obj(item)?.["ancestor_ids"])?.[0], self.ancestor_ids?.[0], self.start, 1))?.["node"])?.["marker"])?.["style"])) : v_next_style), "a")) || (same(obj(obj(self.node)?.["marker"])?.["style"], "a") && same((v_next_style === UNSET ? (v_next_style = aside(() => obj(obj(obj(lookupAt(6, "block", K117, (item: unknown): unknown => obj(obj(item)?.["ancestor_ids"])?.[0], self.ancestor_ids?.[0], self.start, 1))?.["node"])?.["marker"])?.["style"])) : v_next_style), "i")) || (same(obj(obj(self.node)?.["marker"])?.["style"], "I") && same((v_next_style === UNSET ? (v_next_style = aside(() => obj(obj(obj(lookupAt(6, "block", K117, (item: unknown): unknown => obj(obj(item)?.["ancestor_ids"])?.[0], self.ancestor_ids?.[0], self.start, 1))?.["node"])?.["marker"])?.["style"])) : v_next_style), "A")) || (same(obj(obj(self.node)?.["marker"])?.["style"], "A") && same((v_next_style === UNSET ? (v_next_style = aside(() => obj(obj(obj(lookupAt(6, "block", K117, (item: unknown): unknown => obj(obj(item)?.["ancestor_ids"])?.[0], self.ancestor_ids?.[0], self.start, 1))?.["node"])?.["marker"])?.["style"])) : v_next_style), "I"))) && test(K119, self.text) && ((num((v_next_line === UNSET ? (v_next_line = aside(() => obj(obj(lookupAt(6, "block", K117, (item: unknown): unknown => obj(obj(item)?.["ancestor_ids"])?.[0], self.ancestor_ids?.[0], self.start, 1))?.["line"])?.["number"])) : v_next_line)) - num(self.last_line?.["number"])) < 4))) return
   context.report("ordered-list-kind-split", num(self.start), num(self.end), path, {  }, 0)
   return
 }
@@ -1067,7 +1062,7 @@ function rule70(self: ModelBlock, path: string, context: LintContext): void {
 
 function rule71(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.source_format, "pipe") && !(at(self.node, "children", -1, "attrs") !== undefined) && test(K132, self.text))) return
+  if (!(same(self.source_format, "pipe") && !(obj(atEnd(obj(self.node)?.["children"], -1))?.["attrs"] !== undefined) && test(K132, self.text))) return
   context.report("table-row-attribute-as-cell", num(self.start), num(self.end), path, {  }, 0)
   return
 }
@@ -1076,8 +1071,8 @@ function rule72(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   let v_head_start: unknown = UNSET
   let v_head_cells: unknown = UNSET
-  if (!(K134.has(self.parent?.["type"]) && !same((v_head_start === UNSET ? (v_head_start = aside(() => at(lookupAt(7, "block", K133, (item: unknown): unknown => (K134.has(at(item, "parent", "type")) ? at(item, "ancestor_ids", 1) : ""), self.ancestor_ids?.[1], self.start, 0), "start"))) : v_head_start), self.start) && !same(lenOf(at(self.node, "children")), lenOf((v_head_cells === UNSET ? (v_head_cells = aside(() => at(lookupAt(7, "block", K133, (item: unknown): unknown => (K134.has(at(item, "parent", "type")) ? at(item, "ancestor_ids", 1) : ""), self.ancestor_ids?.[1], self.start, 0), "node", "children"))) : v_head_cells))))) return
-  context.report("table-row-cell-count", num(self.start), num(self.end), path, { "cells": String(lenOf(at(self.node, "children"))), "width": String(lenOf((v_head_cells === UNSET ? (v_head_cells = aside(() => at(lookupAt(7, "block", K133, (item: unknown): unknown => (K134.has(at(item, "parent", "type")) ? at(item, "ancestor_ids", 1) : ""), self.ancestor_ids?.[1], self.start, 0), "node", "children"))) : v_head_cells))) }, 0)
+  if (!(K134.has(self.parent?.["type"]) && !same((v_head_start === UNSET ? (v_head_start = aside(() => obj(lookupAt(7, "block", K133, (item: unknown): unknown => (K134.has(obj(obj(item)?.["parent"])?.["type"]) ? obj(obj(item)?.["ancestor_ids"])?.[1] : ""), self.ancestor_ids?.[1], self.start, 0))?.["start"])) : v_head_start), self.start) && !same(lenOf(obj(self.node)?.["children"]), lenOf((v_head_cells === UNSET ? (v_head_cells = aside(() => obj(obj(lookupAt(7, "block", K133, (item: unknown): unknown => (K134.has(obj(obj(item)?.["parent"])?.["type"]) ? obj(obj(item)?.["ancestor_ids"])?.[1] : ""), self.ancestor_ids?.[1], self.start, 0))?.["node"])?.["children"])) : v_head_cells))))) return
+  context.report("table-row-cell-count", num(self.start), num(self.end), path, { "cells": String(lenOf(obj(self.node)?.["children"])), "width": String(lenOf((v_head_cells === UNSET ? (v_head_cells = aside(() => obj(obj(lookupAt(7, "block", K133, (item: unknown): unknown => (K134.has(obj(obj(item)?.["parent"])?.["type"]) ? obj(obj(item)?.["ancestor_ids"])?.[1] : ""), self.ancestor_ids?.[1], self.start, 0))?.["node"])?.["children"])) : v_head_cells))) }, 0)
   return
 }
 
@@ -1104,25 +1099,25 @@ function rule74(self: ModelLine, path: string, context: LintContext): void {
 
 function rule75(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.source_format, "pipe") && (at(self.node, "span") !== undefined))) return
+  if (!(same(self.source_format, "pipe") && (obj(self.node)?.["span"] !== undefined))) return
   if ((starts(self.text, "{") || starts(self.text, "={"))) {
-    context.report("table-span-marker-attribute", num(self.start), num(self.end), path, { "marker": String((same(at(self.node, "span"), "rowspan") ? "^" : "<")), "direction": String((same(at(self.node, "span"), "rowspan") ? "above it" : "to its left")) }, 0)
+    context.report("table-span-marker-attribute", num(self.start), num(self.end), path, { "marker": String((same(obj(self.node)?.["span"], "rowspan") ? "^" : "<")), "direction": String((same(obj(self.node)?.["span"], "rowspan") ? "above it" : "to its left")) }, 0)
     return
   }
   if ((starts(self.text, "=") && !same(self.group, "table_head"))) {
-    context.report("table-span-marker-attribute", num(self.start), num(self.end), path, { "marker": String((same(at(self.node, "span"), "rowspan") ? "^" : "<")), "direction": String((same(at(self.node, "span"), "rowspan") ? "above it" : "to its left")) }, 1)
+    context.report("table-span-marker-attribute", num(self.start), num(self.end), path, { "marker": String((same(obj(self.node)?.["span"], "rowspan") ? "^" : "<")), "direction": String((same(obj(self.node)?.["span"], "rowspan") ? "above it" : "to its left")) }, 1)
     return
   }
 }
 
 function rule76(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.source_format, "pipe") && !(at(self.node, "span") !== undefined) && same(at(self.node, "children", 0, "type"), "cell_paragraph") && same(countFrom(at(self.node, "children", 0, "children"), 0, () => true), 1) && same(at(self.node, "children", 0, "children", 0, "type"), "text") && K136.has(at(self.node, "children", 0, "children", 0, "value")) && !test(K137, self.text))) return
-  if ((same(at(self.node, "children", 0, "children", 0, "value"), "<") && same(self.index, 0))) {
+  if (!(same(self.source_format, "pipe") && !(obj(self.node)?.["span"] !== undefined) && same(obj(obj(obj(self.node)?.["children"])?.[0])?.["type"], "cell_paragraph") && same(countFrom(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"], 0, () => true), 1) && same(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["type"], "text") && K136.has(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["value"]) && !test(K137, self.text))) return
+  if ((same(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["value"], "<") && same(self.index, 0))) {
     context.report("table-span-marker-blocked", num(self.start), num(self.end), path, {  }, 0)
     return
   }
-  if (same(at(self.node, "children", 0, "children", 0, "value"), "<")) {
+  if (same(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["value"], "<")) {
     context.report("table-span-marker-blocked", num(self.start), num(self.end), path, {  }, 1)
     return
   }
@@ -1168,22 +1163,22 @@ function rule80(self: ModelLine, path: string, context: LintContext): void {
 
 function rule81(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
-  if (!!(at(self.node, "number") !== undefined)) return
-  context.report("unresolved-footnote", num(self.start), num(self.end), path, { "id": String(at(self.node, "key")) }, 0)
+  if (!!(obj(self.node)?.["number"] !== undefined)) return
+  context.report("unresolved-footnote", num(self.start), num(self.end), path, { "id": String(obj(self.node)?.["key"]) }, 0)
   return
 }
 
 function rule82(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   let v_at: unknown = UNSET
-  if (!(!(num(at(lookupAt(8, "inline", K141, (item: unknown): unknown => at(item, "node", "key"), at(self.node, "key"), self.start, 0), "start")) >= 0) && (num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(at(self.node, "key")) + "]")))) : v_at)) >= 0))) return
-  context.report("unused-footnote-definition", (num(self.start) + num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(at(self.node, "key")) + "]")))) : v_at))), (num(self.start) + num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(at(self.node, "key")) + "]")))) : v_at)) + lenOf(("[^" + str(at(self.node, "key")) + "]"))), path, { "label": String(at(self.node, "key")) }, 0)
+  if (!(!(num(obj(lookupAt(8, "inline", K141, (item: unknown): unknown => obj(obj(item)?.["node"])?.["key"], obj(self.node)?.["key"], self.start, 0))?.["start"]) >= 0) && (num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(obj(self.node)?.["key"]) + "]")))) : v_at)) >= 0))) return
+  context.report("unused-footnote-definition", (num(self.start) + num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(obj(self.node)?.["key"]) + "]")))) : v_at))), (num(self.start) + num((v_at === UNSET ? (v_at = aside(() => str(self.text).indexOf(("[^" + str(obj(self.node)?.["key"]) + "]")))) : v_at)) + lenOf(("[^" + str(obj(self.node)?.["key"]) + "]"))), path, { "label": String(obj(self.node)?.["key"]) }, 0)
   return
 }
 
 function rule83(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!!(num(at(lookupAt(9, "inline", K142, (item: unknown): unknown => at(item, "node", "key"), at(self.node, "key"), self.start, 0), "start")) >= 0)) return
+  if (!!(num(obj(lookupAt(9, "inline", K142, (item: unknown): unknown => obj(obj(item)?.["node"])?.["key"], obj(self.node)?.["key"], self.start, 0))?.["start"]) >= 0)) return
   context.report("unused-link-reference-definition", num(self.start), num(self.end), path, {  }, 0)
   return
 }

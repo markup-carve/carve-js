@@ -16,13 +16,6 @@ function rowPath(type: string, path: string): string | undefined {
   return type === 'table_cell' ? parentOf(path) : undefined
 }
 
-/** The source format of the table of a table, row or cell record. */
-export function sourceFormatOf(type: string, path: string, context: LintContext): string | undefined {
-  const row = rowPath(type, path)
-  const table = type === 'table' ? path : row === undefined ? undefined : parentOf(parentOf(row))
-  return table === undefined ? undefined : context.layouts.get(table)?.sourceFormat
-}
-
 /** The type of the group that holds the row of a row or cell record. */
 export function groupOf(type: string, path: string, context: LintContext): string | undefined {
   const row = rowPath(type, path)
@@ -31,14 +24,22 @@ export function groupOf(type: string, path: string, context: LintContext): strin
   return group !== undefined && GROUPS.has(group) ? group : undefined
 }
 
+const rowIndexes = new WeakMap<LintContext['nodeTypes'], Map<string, number[]>>()
+
 /** The position of the row of a row or cell record among the rows of its group, from 0: a comment is no row. */
 export function rowIndexOf(type: string, path: string, context: LintContext): number | undefined {
   const row = rowPath(type, path)
   if (row === undefined) return undefined
   const group = parentOf(row)
-  let rows = 0
-  for (let at = 0; at < indexOf(row); at++) if (context.nodeTypes.get(`${group}/children/${at}`) === 'table_row') rows++
-  return rows
+  let groups = rowIndexes.get(context.nodeTypes)
+  if (groups === undefined) rowIndexes.set(context.nodeTypes, groups = new Map<string, number[]>())
+  // The rows before each child of the group, counted once per group as far as asked.
+  let before = groups.get(group)
+  if (before === undefined) groups.set(group, before = [0])
+  for (let at = before.length - 1, target = indexOf(row); at < target; at++) {
+    before.push(before[at]! + (context.nodeTypes.get(`${group}/children/${at}`) === 'table_row' ? 1 : 0))
+  }
+  return before[indexOf(row)]
 }
 
 /**
@@ -48,6 +49,7 @@ export function rowIndexOf(type: string, path: string, context: LintContext): nu
 export class TableLines {
   private above: Int32Array | undefined = undefined
   private below: Int32Array | undefined = undefined
+  private paths: (string | undefined)[] | undefined = undefined
   private readonly tables: [number, number, string][]
   private readonly lines: { readonly count: number, at(index: number): Body | undefined }
 
@@ -78,8 +80,14 @@ export class TableLines {
 
   /** The path of the pipe table whose source holds the line, which names the node of a finding on it (C2-W-138). */
   pathOf(index: number): string | undefined {
-    for (const [first, last, path] of this.tables) if (index >= first && index <= last) return path
-    return undefined
+    if (this.paths === undefined) {
+      const paths = new Array<string | undefined>(this.lines.count)
+      for (const [first, last, path] of this.tables) {
+        for (let line = first; line <= last && line < paths.length; line++) paths[line] ??= path
+      }
+      this.paths = paths
+    }
+    return this.paths[index]
   }
 
   aboveOf(index: number): number {

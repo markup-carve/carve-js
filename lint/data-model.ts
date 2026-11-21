@@ -3,7 +3,7 @@ import { columnOf } from '../src/layout-lines.ts'
 import { type Attributed } from './data-attributes.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { shapeOf } from './data-shape.ts'
-import { groupOf, pipeTables, sourceFormatOf, rowIndexOf, TableLines } from './data-table.ts'
+import { groupOf, pipeTables, rowIndexOf, TableLines } from './data-table.ts'
 import { type Line, type LintContext } from './types.ts'
 
 /** The shared line model of `data/lint-model.json`: one record per source line and per block. */
@@ -150,7 +150,8 @@ function colonKind(type: string, opener: string): string {
   return /^:{3,}[ \t]+\\(?:[ \t]|$)/.test(opener) ? 'hard-break block' : 'div'
 }
 
-export interface Walked { node: Node, path: string, parent: string, index: number }
+/** `format`: for a table, a row or a cell, the source format of the table (C2-W-149). */
+export interface Walked { node: Node, path: string, parent: string, index: number, format?: string | undefined }
 
 
 interface Leaves { type: string[], id: string[], first: boolean[], head: number[], last: number[], start: number[] }
@@ -424,6 +425,7 @@ class BlockRecord {
   private columnCache: number | undefined = undefined
   private ownerCache: Container | undefined = undefined
   private itemOwnerCache: Container | undefined = undefined
+  private readonly format: string | undefined
   private parentCache: Container | undefined = undefined
   readonly type: string
   readonly path: string
@@ -448,6 +450,7 @@ class BlockRecord {
     this.node = item.node
     this.type = blockType(item.node)
     this.path = item.path
+    this.format = item.format
     this.parentPath = item.parent
     this.start = start
     this.index = item.index
@@ -517,9 +520,7 @@ class BlockRecord {
     }
     return this.itemOwnerCache
   }
-  get source_format(): string | undefined {
-    return sourceFormatOf(this.type, this.path, this.context)
-  }
+  get source_format(): string | undefined { return this.format }
   get group(): string | undefined { return groupOf(this.type, this.path, this.context) }
   get row_index(): number | undefined { return rowIndexOf(this.type, this.path, this.context) }
   get parent(): Container {
@@ -591,6 +592,7 @@ export class DataWalk {
   /** The nodes that carry `attrs`, when an attribute rule is on (C2-W-148), with their paths and whether they are inline. */
   readonly attributed: Attributed = { nodes: [], paths: [], inline: [] }
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
+  private tableFormat: string | undefined = undefined
   private readonly types: ReadonlySet<string>
   private readonly context: LintContext
   private readonly textRuns: boolean
@@ -643,6 +645,12 @@ export class DataWalk {
     this.attributed.inline.push(INLINE_PARENT_TYPES.has(parent.type))
   }
 
+  // A table's rows and cells follow it in the walk, and a cell holds no table.
+  private formatOf(node: Node, path: string): string | undefined {
+    if (node.type === 'table') return (this.tableFormat = this.context.layouts.get(path)?.sourceFormat)
+    return node.type === 'table_row' || node.type === 'table_cell' ? this.tableFormat : undefined
+  }
+
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
     if (this.attributes) this.attribute(node, path, parent)
     if (!this.model) return
@@ -656,7 +664,7 @@ export class DataWalk {
       return
     }
     if (this.textRuns) this.run(node, parent, parentPath, index, blockType(parent))
-    this.walked.push({ node, path, parent: parentPath, index })
+    this.walked.push({ node, path, parent: parentPath, index, format: this.formatOf(node, path) })
     this.holder = INLINE_HOLDERS.has(node.type) ? { path, type: node.type, inline: INLINE_LEAVES.has(node.type) } : undefined
   }
 }
