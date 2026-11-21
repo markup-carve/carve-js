@@ -18,6 +18,7 @@ import { type LeafPlace, lineEscape, UNDECIDED } from './write-plan-lines.ts'
 import { BRACED_CLOSER_MARKS, INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tables.ts'
 import { type Writer } from './write-state.ts'
 import { MAX_DEPTH } from './state.ts'
+import { plainLeaf } from './write-plain.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
 
 /** What one planned write of a group collects. */
@@ -1076,6 +1077,17 @@ function record(plan: Plan, leaf: Leaf, escaped: Uint8Array): void {
   }
 }
 
+/** A leaf of plain words: the model would cover its texts and decide nothing else, so it is recorded so. */
+function recordPlain(
+  w: Writer, plan: Plan, nodes: readonly Node[], flags: number, content: string, end: number, place: LeafPlace | undefined,
+): boolean {
+  if (end === AS_LINE || (flags & IN_CELL) !== 0 || place === undefined || place.line || w.abbreviations.size > 0 ||
+    !plainLeaf(nodes, content)) return false
+  plan.leaves++
+  for (const node of nodes) if (node.type === 'text') plan.covered.add(node)
+  return true
+}
+
 /**
  * The hook of every inline leaf: `content` is what the writer wrote for `nodes`. While a group is
  * planned, the leaf is modelled, compared with `content` and analysed. Returns `content`.
@@ -1083,6 +1095,8 @@ function record(plan: Plan, leaf: Leaf, escaped: Uint8Array): void {
 export function planLeaf(w: Writer, nodes: readonly Node[], flags: number, content: string, end: number, start: number): string {
   const plan = w.plan
   if (plan === null || plan.undecided !== null) return content
+  const place = plan.places.get(nodes)
+  if (recordPlain(w, plan, nodes, flags, content, end, place)) return content
   const leaf = createLeaf()
   if (end === AS_CONTENT) modelContent(w, leaf, nodes, flags)
   else modelInlines(w, leaf, nodes, flags)
@@ -1095,8 +1109,8 @@ export function planLeaf(w: Writer, nodes: readonly Node[], flags: number, conte
     leaf.offsets.push(-1)
   }
   if (leaf.undecided === null && leafText(leaf) !== content) undecide(leaf, 'model')
-  if (!plan.places.has(nodes)) undecide(leaf, 'place')
-  const escaped = leaf.undecided === null ? analyze(w, leaf, start, flags, plan.places.get(nodes)) : new Uint8Array(0)
+  if (place === undefined) undecide(leaf, 'place')
+  const escaped = leaf.undecided === null ? analyze(w, leaf, start, flags, place) : new Uint8Array(0)
   plan.leaves++
   if (leaf.undecided !== null) {
     plan.undecided = leaf.undecided
