@@ -59,7 +59,7 @@ describe('linear matchers for lint-model patterns (carve#6297)', () => {
   const linear = compiled().filter((entry) => hasLinearMatcher(entry.source))
 
   it('stand for the patterns the lint model states', () => {
-    expect(new Set(linear.map((entry) => entry.source)).size).toBe(6)
+    expect(new Set(linear.map((entry) => entry.source)).size).toBe(5)
   })
 
   // Random short lines over the characters and pieces the patterns name.

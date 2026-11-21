@@ -14,14 +14,17 @@ export interface Pattern {
 
 type Groups = Record<string, [number, number]>
 
-function found(text: string, start: number, end: number, groups: Groups): RegExpExecArray {
+function found(text: string, start: number, end: number, groups: Groups, missing: readonly string[] = []): RegExpExecArray {
   const match = [text.slice(start, end)] as unknown as RegExpExecArray
   match.index = start
   match.input = text
   const named: Record<string, string> = {}
   for (const name in groups) named[name] = text.slice(groups[name]![0], groups[name]![1])
+  for (const name of missing) (named as Record<string, string | undefined>)[name] = undefined
   match.groups = named
-  ;(match as { indices?: unknown }).indices = Object.assign([[start, end]], { groups })
+  const indices = { ...groups } as Record<string, [number, number] | undefined>
+  for (const name of missing) indices[name] = undefined
+  ;(match as { indices?: unknown }).indices = Object.assign([[start, end]], { groups: indices })
   return match
 }
 
@@ -51,32 +54,26 @@ class Matcher implements Pattern {
   }
 }
 
+/** One match of the row's three alternatives, starting at its first bracket. */
+function linkGapAt(text: string, open: number): RegExpExecArray {
+  let close = open + 1
+  while (close < text.length && text[close] !== ']' && text[close] !== '\n') close++
+  if (close <= open + 1 || text[close] !== ']') return found(text, open, close, {}, ['link', 'dest'])
+  let paren = close + 1
+  while (text[paren] === ' ' || text[paren] === '\t') paren++
+  if (paren <= close + 1 || text[paren] !== '(') return found(text, open, close, {}, ['link', 'dest'])
+  let end = paren + 1
+  while (end < text.length && text[end] !== ')' && text[end] !== '\n') end++
+  if (text[end] === ')') return found(text, open, end + 1,
+    { link: [open, end + 1], dest: [paren + 1, end] })
+  return found(text, open, end, {}, ['link', 'dest'])
+}
+
 function linkGap(source: string): Matcher {
-  // Every `[` in front of one `]` shares the gap and parenthesis after it, so a failed `]` rules out the whole run.
-  return new Matcher(source, (text) => {
-    let stop = -1
-    // The first `)` or line break at or after `at`, or the text length.
-    const stopAt = (at: number): number => {
-      if (stop < at) for (stop = at; stop < text.length && text[stop] !== ')' && text[stop] !== '\n';) stop++
-      return stop
-    }
-    return (from) => {
-      for (let open = text.indexOf('[', from); open >= 0; open = text.indexOf('[', from)) {
-        let close = open + 1
-        while (close < text.length && text[close] !== ']' && text[close] !== '\n') close++
-        if (close === text.length) return null
-        if (close === open + 1) {
-          from = close
-          continue
-        }
-        let paren = close + 1
-        while (text[paren] === ' ' || text[paren] === '\t') paren++
-        const end = text[close] === ']' && paren > close + 1 && text[paren] === '(' ? stopAt(paren + 1) : -1
-        if (text[end] === ')') return found(text, open, end + 1, { link: [open, end + 1] })
-        from = close + 1
-      }
-      return null
-    }
+  // The row consumes a failed bracket run as well as a link. Each cursor starts after the last consumed run.
+  return new Matcher(source, (text) => (from) => {
+    const open = text.indexOf('[', from)
+    return open < 0 ? null : linkGapAt(text, open)
   })
 }
 
@@ -104,20 +101,6 @@ function definitionWithLabel(source: string): Matcher {
 }
 
 const SPACE = /\s/
-
-function spokenParenthesisAtEnd(source: string): Matcher {
-  // The first `(` after the last `)` or line break before the closing `)` holds every later one's content.
-  return new Matcher(source, (text) => (from) => {
-    const close = text.length - 1
-    if (text[close] !== ')') return null
-    let open = -1
-    for (let at = close - 1; at >= 0 && text[at] !== ')' && text[at] !== '\n'; at--) if (text[at] === '(') open = at
-    if (open < from) return null
-    for (let at = open + 1; at < close; at++) if (!SPACE.test(text[at]!)) return found(text, open, text.length, {})
-    return null
-  })
-}
-
 const LINE_END = /[\n\r\u2028\u2029]/
 const NAME = /[A-Za-z0-9_:-]/
 const LETTER = /[A-Za-z]/
@@ -240,8 +223,7 @@ class QuotedContent extends Matcher {
 const MATCHERS: Record<string, (source: string) => Matcher> = {
   '^[ \\t]*(?:> [ \\t]*)*(?<c>.*?)[ \\t]*$': (source) => new QuotedContent(source),
   '^(?:[^<]|<!--.*?-->|<[^!<A-Za-z/]|<[A-Za-z/]|<<|<!(?:[^-]|$)|<!-(?:[^-]|$)|<$)*?<*(?<tag></?[A-Za-z][A-Za-z0-9_:-]*(?:\\s[^<>]*)?/?>)': firstBareTag,
-  '\\([^)\\n]*[^)\\s][^)\\n]*\\)$': spokenParenthesisAtEnd,
-  '(?<link>\\[[^\\]\\n]+\\][ \\t]+\\([^)\\n]*\\))': linkGap,
+  '(?<link>\\[[^\\]\\n]+\\][ \\t]+\\((?<dest>[^)\\n]*)\\))|\\[[^\\]\\n]+\\][ \\t]+\\([^)\\n]*|\\[[^\\]\\n]*': linkGap,
   '(?:^|[^\\\\])(?:\\\\\\\\)*\\\\$': oddBackslashesAtEnd,
   '^(?<def>\\[(?<label>[^\\]]*[^\\] \\t][^\\]]*)\\]:)$': definitionWithLabel,
 }
