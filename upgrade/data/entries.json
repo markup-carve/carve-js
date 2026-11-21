@@ -2150,6 +2150,12 @@
       "name": "paragraph 0.1 started below list item text, outside the item",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-438",
+      "name": "nested ordered list above one after open item text",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

@@ -78,4 +78,13 @@ describe('replay fallback families', () => {
     expect(result.output).toBe('1. ordered\n1. ordered\n\n*  > > quote\nQ  \n- item\n')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
+
+  it('closes an open item paragraph before a nested ordered list beginning above one', () => {
+    const input = '   1. inner\n1. outer\nlazy\n   2. sibling\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-438')
+    expect(result.output).toBe('   1. inner\n1. outer\nlazy\n\n   2. sibling\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
 })

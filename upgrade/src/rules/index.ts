@@ -13,7 +13,7 @@ import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
 import { includes, tables, tablesHeadStyles } from './tables.ts'
 import { abbreviationSpaces, crossLineStrong, duplicateItemDefinitions, emptyAttributeQuote, flippedStrong, literalLinkBeforeCode, literalTableHeader,
-  siblingListBoundary, wrappedCodeTableRow } from './replay-fallbacks.ts'
+  nestedOrderedStart, siblingListBoundary, wrappedCodeTableRow } from './replay-fallbacks.ts'
 
 /** Starts the repairs of the replay rows (carve#6183) for the rules after it. */
 function repairs(ctx: Context): void {
@@ -43,5 +43,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
   [...RULES.map((rule) => rule === definitions ? definitionsKeptAfter : rule), ...LATE_RULES],
   [repairs, ...RULES.map((rule) => rule === inline ? inlineBraced : rule === tables ? tablesHeadStyles : rule),
     ...LATE_RULES, descriptionColumns, flippedStrong, crossLineStrong, literalTableHeader, duplicateItemDefinitions, literalLinkBeforeCode,
-    wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary],
+    wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary, nestedOrderedStart],
 ]
