@@ -72,12 +72,14 @@ export interface Check {
   chains: [TextNode, number, Node][]
   /** The written group the parse under comparison was made of, or null in a probe of part of it. */
   source: string | null
+  /** The UTF-8 bytes of `source`, read when an offset of the parse is checked against it. */
+  bytes: Uint8Array | null
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
-    spanMarks: false, owner: null, chains: [], source: null,
+    spanMarks: false, owner: null, chains: [], source: null, bytes: null,
   }
 }
 
@@ -1115,7 +1117,10 @@ function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], 
     endedEarly(c, es, at.i, owner)
     return false
   }
-  if (a.type !== e.type || at.aj > 0) return respell(c, es, at.i) && stepOver(c, es, as, at)
+  if (a.type !== e.type || at.aj > 0) {
+    if (respell(c, es, at.i)) return stepOver(c, es, as, at)
+    return stepOverLost(c, e, es, as, at)
+  }
   if (isLostCode(c, es[at.i + 1])) {
     // C2-W-112: the code spans behind this one were written into it and reported.
     at.i++
@@ -1144,13 +1149,51 @@ function stepOverAbsorbed(c: Check, e: Node, es: readonly Node[], as: readonly N
   const own = writeInlines(c.w, [e], c.flags)
   // Container prefixes on later lines would stand between the offsets.
   if (own.includes('\n')) return true
-  const taken: Taken = { offset: a.pos!.startOffset + utf8Length(own), start: 0, spelled: '' }
+  return loseInto(c, es, as, at, { offset: a.pos!.startOffset + utf8Length(own), start: 0, spelled: '' }, end)
+}
+
+/**
+ * C2-W-117, C2-W-124: the verbatim node `e` read back as no node of its kind, and a span of the parse that starts
+ * inside its spelling reads on past it. That span takes the siblings that start before its end, as above.
+ */
+function stepOverLost(c: Check, e: Node, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
+  if (!VERBATIM.has(e.type) || at.anchor !== at.i) return false
+  const own = writeInlines(c.w, [e], c.flags)
+  if (own.includes('\n')) return false
+  // The anchor is where a parse node starts, which a sibling read on before it may have moved off `e`.
+  if (!spelledAt(c, at.anchorByte, own)) return false
+  const offset = at.anchorByte + utf8Length(own)
+  let j = at.j
+  while ((as[j]?.pos?.endOffset ?? Infinity) <= offset) j++
+  const reader = as[j]
+  const from = reader?.pos?.startOffset ?? offset
+  // A span that starts where `e` starts is `e` read with another closer (C2-W-112), not a span inside it.
+  if (from <= at.anchorByte || from >= offset || !VERBATIM.has(reader!.type)) return false
+  at.i++
+  at.j = j + 1
+  at.aj = 0
+  return loseInto(c, es, as, at, { offset, start: 0, spelled: '' }, reader!.pos!.endOffset)
+}
+
+/** Whether the written group holds `spelled` at the byte `offset`. */
+function spelledAt(c: Check, offset: number, spelled: string): boolean {
+  if (c.source === null) return false
+  const bytes = c.bytes ??= ENCODER.encode(c.source)
+  const want = ENCODER.encode(spelled)
+  if (offset + want.length > bytes.length) return false
+  for (let k = 0; k < want.length; k++) if (bytes[offset + k] !== want[k]) return false
+  return true
+}
+
+const ENCODER = new TextEncoder()
+
+function loseInto(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor, taken: Taken, end: number): boolean {
   for (;;) {
     loseBefore(c, es, at, taken, end)
     if (taken.offset < end) return false
     const next = leftoverNode(as, at, taken.offset)
     if (next === null) return true
-    if (next.type === 'text') return stepIntoLeftover(at, next as TextNode, leftover(taken, next.pos!.startOffset))
+    if (next.type === 'text') return stepIntoLeftover(at, next as TextNode, leftover(taken, next.pos!.startOffset), taken.offset)
     end = next.pos!.endOffset
     at.j++
   }
@@ -1199,8 +1242,11 @@ function loseTaken(c: Check, es: readonly Node[], at: Cursor, to: number): void 
 }
 
 /** The parsed text `text` starts with `tail`, the end of a lost node; the comparison goes on behind it. */
-function stepIntoLeftover(at: Cursor, text: TextNode, tail: string): boolean {
+function stepIntoLeftover(at: Cursor, text: TextNode, tail: string, offset: number): boolean {
   if (!text.value.startsWith(tail)) return false
+  // The next sibling starts where the lost one ends, inside the parsed text.
+  at.anchor = at.i
+  at.anchorByte = offset
   at.aj = tail.length
   if (at.aj === text.value.length) {
     at.j++

@@ -56,4 +56,17 @@ describe('glued backtick runs', () => {
     expect(source).toBe('$`a``<b>`{=html}`<b>`{=html}x\\``r`{=html}\n')
     expect(parse(source).children[0]).toMatchObject({ children: [{}, {}, {}, { type: 'text', value: 'x`' }, { type: 'raw_inline', value: 'r' }] })
   })
+
+  it('a span that starts inside a lost span reads on and takes the siblings before its end (carve-js#5322)', () => {
+    const first = documentOf(paragraph(math('q`'), code('m')))
+    expect(written(first)).toBe('$`` q` ```m`\n')
+    expect(losses(first)).toEqual([`structure-unspellable ${at(0)}`, `structure-unspellable ${at(1)}`])
+    const second = documentOf(paragraph(raw('`q'), math('`q'), code('r')))
+    expect(written(second)).toBe('`` `q ``{=html}$`` `q ```r`\n')
+    expect(losses(second)).toEqual([`structure-unspellable ${at(1)}`, `structure-unspellable ${at(2)}`])
+    const third = documentOf(paragraph(math('` `'), code('a``b'), raw('q`'), raw('m'), code('x`')))
+    expect(written(third)).toBe('$`` ` ` ```a``b``` q` ``{=html}`m`{=html}`` x` ``\n')
+    expect(losses(third)).toEqual([`field-unspellable ${at(0)}/value`, `structure-unspellable ${at(1)}`,
+      `structure-unspellable ${at(2)}`, `structure-unspellable ${at(3)}`, `structure-unspellable ${at(4)}`])
+  })
 })
