@@ -598,7 +598,7 @@ function upgradeSourceInSession(input: string): UpgradeResult {
 }
 
 function upgradeSource(input: string): UpgradeResult {
-  return withUpgradeSession(input, () => upgradeSourceInSession(input))
+  return withUpgradeSession(() => upgradeSourceInSession(input))
 }
 
 /** The rules, then the first rescue whose spelling keeps the 0.1 HTML. */
