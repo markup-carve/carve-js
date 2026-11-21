@@ -52,10 +52,10 @@ it('C2-W-011: field losses name the field path', () => {
   expect(xref.codes).toContain('field-unspellable /children/0/children/1/display')
 })
 
-it('C2-W-011: a field gained on readback reports the supplied node path', () => {
+it('C2-W-011: a structure lost after round escapes reports the supplied child path', () => {
   const output = formatWithDiagnostics('//</\\**{#}#}{/\\/{c}`*/')
   expect(output.diagnostics.map((entry) => `${entry.code} ${entry.path}`)).toContain(
-    'field-unspellable /children/0/children/1',
+    'structure-unspellable /children/0/children/1/children/1',
   )
 })
 

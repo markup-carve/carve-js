@@ -27,6 +27,11 @@ it('C2-W-088 repairs every reported construct from one parse of a capped fence g
   expect(treesEqual(parse(result.output.source), parse(input))).toBe(true)
 })
 
+it('C2-W-088 escapes nested block openers reported by the same read-back parse', () => {
+  expect(formatWithDiagnostics('[^a]: x\n- > a')).toEqual({ source: '[^a]: x\n  \\- \\> a\n', diagnostics: [] })
+  expect(formatWithDiagnostics('[^a]: x\n- ```')).toEqual({ source: '[^a]: x\n  \\- \\```\n', diagnostics: [] })
+})
+
 it('C2-W-088 repairs the superscript paragraph in rounds bounded by its nesting depth', () => {
   const { input, expected } = caseOf('CC-1566')
   const result = writeTreeWithStats(parse(input), undefined, 'repair', true, undefined, input)
