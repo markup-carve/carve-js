@@ -17,11 +17,11 @@ function cpuMs(work: () => unknown): number {
 }
 
 describe('deep nesting without a walk per level', () => {
-  it('lints 186 KB of nested fences within the smoke budget', () => {
-    const source = nestedFences(64)
-    expect(source.length).toBeGreaterThan(180_000)
+  it('lints 372 KB of nested fences within the smoke budget', () => {
+    const source = nestedFences(128)
+    expect(source.length).toBeGreaterThan(360_000)
     let found = 0
-    // CPU time keeps the guard useful on a shared runner; the walk per line took over 7 s here.
+    // CPU time keeps the guard useful on a shared runner; the walk per line took 7 s here, the memoized one under 1 s.
     expect(cpuMs(() => { found = lint(source).length })).toBeLessThan(3000)
     expect(found).toBeGreaterThan(0)
   }, 60_000)
