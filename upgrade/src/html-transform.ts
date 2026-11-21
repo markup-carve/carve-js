@@ -59,7 +59,9 @@ export function followTaskLabels(old: string, next: string): Result {
     if (!before.startsWith('<input ') || !before.includes('type="checkbox"')) continue
     const left = LABEL.exec(before)?.[1]
     const right = LABEL.exec(after)?.[1]
-    if (left === undefined || right === undefined || !right.startsWith(`${left} `)) continue
+    // The 0.2 plain text keeps both spaces around a removed comment, `x  y` for 0.1 `x y`.
+    const spaced = (text: string): string => text.replace(/\s+/gu, ' ')
+    if (left === undefined || right === undefined || !right.startsWith(`${left} `) && spaced(right) !== spaced(left)) continue
     if (before.replace(LABEL, '') !== after.replace(LABEL, '')) continue
     source[at] = after
     changed = true
