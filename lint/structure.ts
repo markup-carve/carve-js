@@ -23,50 +23,6 @@ function raw(node: Node, context: LintContext): string {
   return range === null ? '' : context.source.slice(range[0], range[1])
 }
 
-/** The offset of a line comment behind the closing pipe of a row line, or -1. */
-function trailingComment(text: string): number {
-  const at = text.indexOf('%%', text.lastIndexOf('|') + 1)
-  return at > 0 && (text[at - 1] === ' ' || text[at - 1] === '\t') ? at : -1
-}
-
-/** The comments read since the last row line of a table, and whether a row line stands above them. */
-interface RowWalk {
-  pending: [number, number][]
-  afterRow: boolean
-}
-
-/** One line of a table for `comment-splits-table-row`: `start` is its offset, `text` its text behind the container prefixes. */
-function walkRowLine(walk: RowWalk, start: number, text: string, path: string, context: LintContext): void {
-  const end = start + text.trimEnd().length
-  if (text.startsWith('%%')) {
-    if (walk.afterRow) walk.pending.push([start, end])
-    return
-  }
-  const row = text.startsWith('|') || text.startsWith('+')
-  if (text.startsWith('+') && walk.afterRow) {
-    for (const [from, to] of walk.pending) context.report('comment-splits-table-row', from, to, path)
-  }
-  walk.pending = []
-  walk.afterRow = row
-  const comment = row ? trailingComment(text) : -1
-  if (comment >= 0) walk.pending.push([start + comment - 1, end])
-}
-
-/**
- * C2-W-137: a comment between a table row and its continuation row (C2-B-175), as a comment-only line or as the
- * trailing comment of the row, belongs after the whole row.
- */
-function commentSplitsRow(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table' || node.pos === undefined) return
-  const walk: RowWalk = { pending: [], afterRow: false }
-  for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
-    const line = context.lines[number - 1]
-    if (line === undefined) continue
-    const offset = line.text.length - line.text.replace(/^[\t >]*/u, '').length
-    walkRowLine(walk, line.start + offset, line.text.slice(offset), path, context)
-  }
-}
-
 /** C2-A-084: a child of a group that carries a caption; C2-B-127: a nested figure group is a group of its own, no panel. */
 function isPanel(child: Node): boolean {
   return child.type === 'table' || (child.type !== 'figure_group' && 'caption' in child && child.caption !== undefined)
@@ -154,20 +110,6 @@ function referencesPlacement(node: Node, path: string, context: LintContext): vo
   if (node.kind === 'references') reportNode('references-placement-in-container', node, path, context)
 }
 
-function rowAttributeCell(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table_row') return
-  if (node.children.at(-1)?.attrs !== undefined) return
-  const source = raw(node, context)
-  const last = source.lastIndexOf('|')
-  const before = source.lastIndexOf('|', last - 1)
-  if (last < 0 || before < 0) return
-  const cell = source.slice(before + 1, last).trim()
-  // C2-I-028: `{}` and a braced comment are no attribute block.
-  if (cell.startsWith('{') && cell.endsWith('}') && !/^\{\s*%/.test(cell) && cell.slice(1, -1).trim() !== '') {
-    reportNode('table-row-attribute-as-cell', node, path, context)
-  }
-}
-
 function multilineHtmlComment(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'paragraph') return
   const range = bounds(node, context)
@@ -231,18 +173,6 @@ function opensCell(context: LintContext, start: number): boolean {
   return context.source[at] === '|'
 }
 
-function deprecatedCellAlignment(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table_cell') return
-  let source = raw(node, context)
-  // C2-B-171: the header mark stands before the prefix.
-  if (node.header && source.startsWith('=')) source = source.slice(1)
-  const run = oldAlignmentRun(source.trimStart())
-  const range = bounds(node, context)
-  if (run === null || range === null) return
-  const at = raw(node, context).indexOf(run.prefix)
-  context.report('deprecated-cell-alignment', range[0] + at, range[0] + at + run.prefix.length, path, run)
-}
-
 function brokenCrossref(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'xref' || node.namespace !== 'heading' || node.href !== undefined) return
   context.state.crossrefs.push({ node, path })
@@ -288,31 +218,6 @@ function platformMention(node: Node, path: string, context: LintContext): void {
     context.report('platform-mention-token', range[0] + at, range[0] + end, path,
       { host: 'GitHub', text: source.slice(at, end) })
     at = end - 1
-  }
-}
-
-function delimitedWideRow(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table') return
-  const format = context.layouts.get(path)?.sourceFormat
-  if (format !== 'csv' && format !== 'tsv') return
-  const state = { width: -1, wide: false }
-  for (let sectionIndex = 0; sectionIndex < node.children.length; sectionIndex++) {
-    const section = node.children[sectionIndex]
-    if (section !== undefined) checkWideSection(section, state)
-  }
-  if (!state.wide) return
-  const range = bounds(node, context)
-  if (range === null) return
-  context.report('delimited-table-wide-row', range[0], range[1], path)
-}
-
-function checkWideSection(section: Node, state: { width: number, wide: boolean }): void {
-  if (section.type !== 'table_body' && section.type !== 'table_head' && section.type !== 'table_foot') return
-  for (let rowIndex = 0; rowIndex < section.children.length; rowIndex++) {
-    const row = section.children[rowIndex]
-    if (row?.type !== 'table_row') continue
-    if (state.width < 0) state.width = row.children.length
-    else if (row.children.length > state.width) state.wide = true
   }
 }
 
@@ -570,48 +475,6 @@ function orderedRightAligned(node: Node, path: string, context: LintContext): vo
   }
 }
 
-/** C2-B-173: a span mark that joins nothing is the text of its cell, whatever prefix the cell has. */
-function blockedSpanVariant(marker: string, cellIndex: number, rowIndex: number): number {
-  if (marker === '<') return cellIndex === 0 ? 0 : 1
-  return rowIndex === 0 ? 2 : 3
-}
-
-function spanMarkerBlocked(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table_cell' || node.span !== undefined) return
-  const content = node.children[0]
-  const only = content?.type === 'cell_paragraph' && content.children.length === 1 ? content.children[0] : undefined
-  const marker = only?.type === 'text' ? only.value : ''
-  if (marker !== '<' && marker !== '^') return
-  // An escaped mark is text by the author's choice.
-  if (raw(node, context).trimEnd().endsWith(`\\${marker}`)) return
-  const parts = path.split('/children/')
-  const cellIndex = Number(parts.at(-1) ?? 0)
-  const rowIndex = Number(parts.at(-2) ?? 0)
-  const variant = blockedSpanVariant(marker, cellIndex, rowIndex)
-  reportNode('table-span-marker-blocked', node, path, context, {}, variant)
-}
-
-/**
- * C2-B-174: the brace block in the prefix of a span mark that joins a cell applies to no cell, and fmt drops it; so does
- * a header mark on it whose row is no head row.
- */
-function spanMarkerAttribute(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table_cell' || node.span === undefined) return
-  const prefix = raw(node, context)
-  const header = prefix.startsWith('=')
-  const braced = (header ? prefix.slice(1) : prefix).startsWith('{')
-  if (!braced && (!header || context.nodeTypes.get(groupPath(path)) === 'table_head')) return
-  const marker = node.span === 'rowspan' ? '^' : '<'
-  const values = { marker, direction: marker === '^' ? 'above it' : 'to its left' }
-  reportNode('table-span-marker-attribute', node, path, context, values, braced ? 0 : 1)
-}
-
-/** The path of the group of the cell at `path`: head, body or foot. */
-function groupPath(path: string): string {
-  const row = path.slice(0, path.lastIndexOf('/children/'))
-  return row.slice(0, row.lastIndexOf('/children/'))
-}
-
 function unevenListIndent(node: Node, path: string, context: LintContext): void {
   leftMarkers(node, path, context, (at, column, _deeper, outer) => {
     const item = node.type === 'list' ? node.children[at] : undefined
@@ -736,15 +599,11 @@ export const NODE_RULES: readonly Rule[] = [
     nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
   nodeRule('figure-group-panel-number', ['figure_group'], figurePanelNumber),
     nodeRule('references-placement-in-container', ['directive'], referencesPlacement),
-  nodeRule('comment-splits-table-row', ['table'], commentSplitsRow),
-  nodeRule('table-row-attribute-as-cell', ['table_row'], rowAttributeCell),
             nodeRule('unattached-inline-attribute', ['text'], unattachedInline),
-  nodeRule('deprecated-cell-alignment', ['table_cell'], deprecatedCellAlignment),
           nodeRule('broken-crossref', ['xref'], brokenCrossref),
   nodeRule('broken-fragment-link', ['link'], collectFragment),
   nodeRule('platform-issue-reference', ['text'], platformIssue),
   nodeRule('platform-mention-token', ['text', 'mention'], platformMention),
-  nodeRule('delimited-table-wide-row', ['table'], delimitedWideRow),
   nodeRule('djot-intraword-underscore', ['text'], intrawordUnderscore),
   nodeRule('emphasis-marker-before-attributes', ['text'], emphasisBeforeAttrs),
   nodeRule('emphasis-marker-before-attributes', ['strong', 'emphasis'], spanMarkerBeforeAttrs),
@@ -758,8 +617,6 @@ export const NODE_RULES: readonly Rule[] = [
       nodeRule('list-marker-below-content-column', ['list'], listMarkerBelowColumn),
     nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
   nodeRule('ordered-marker-right-aligned', ['list'], orderedRightAligned),
-  nodeRule('table-span-marker-blocked', ['table_cell'], spanMarkerBlocked),
-  nodeRule('table-span-marker-attribute', ['table_cell'], spanMarkerAttribute),
   nodeRule('uneven-list-indent', ['list'], unevenListIndent),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
   nodeRule('unresolved-reference-link', ['link', 'image'], unresolvedReference),
