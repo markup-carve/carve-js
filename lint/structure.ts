@@ -127,19 +127,32 @@ function rowCountClamped(node: Node, path: string, context: LintContext): void {
   const below = groupRows(node, 'table_body') + groupRows(node, 'table_foot')
   const limits: [string, number][] = [['footer-rows', below]]
   if (context.layouts.get(path)?.sourceFormat !== 'pipe') limits.unshift(['header-rows', head + below])
-  const line = context.lines[node.pos.startLine - 1]
+  const line = firstLine(node, context)
   for (const [key, limit] of limits) {
     const value = attributeValue(node, context, key)
-    if (line === undefined || value === undefined || !/^\d+$/.test(value) || Number(value) <= limit) continue
-    const at = line.text.indexOf(`${key}=`)
-    context.report('table-row-count-clamped', line.start + at, line.start + at + key.length + 1 + value.length, path,
-      { key, count: value, effective: String(limit) })
+    if (line === undefined || value === undefined || !/^\d*$/.test(value)) continue
+    // C2-B-210: an empty value counts as 1.
+    const count = value === '' ? '1' : value
+    if (Number(count) <= limit) continue
+    const at = line.text.indexOf(key)
+    const equals = line.text[at + key.length] === '=' ? 1 : 0
+    // C2-W-138: the range is the key and its value as written, quotes included.
+    const written = line.text[at + key.length + equals] === '"' ? value.length + 2 : value.length
+    context.report('table-row-count-clamped', line.start + at, line.start + at + key.length + equals + written, path,
+      { key, count, effective: String(limit) })
   }
 }
 
+/** The first line of a block from where the block starts, behind its container prefixes. */
+function firstLine(node: Node, context: LintContext): { start: number, text: string } | undefined {
+  const range = bounds(node, context)
+  const line = node.pos === undefined ? undefined : context.lines[node.pos.startLine - 1]
+  if (range === null || line === undefined) return undefined
+  return { start: range[0], text: context.source.slice(range[0], line.end) }
+}
+
 function attributeValue(node: Node, context: LintContext, key: string): string | undefined {
-  if (node.pos === undefined) return undefined
-  const line = context.lines[node.pos.startLine - 1]?.text.trim()
+  const line = firstLine(node, context)?.text.trim()
   if (line === undefined || !line.startsWith('{') || !line.endsWith('}')) return undefined
   const at = line.indexOf(key)
   if (at < 0 || (at > 0 && line[at - 1] !== '{' && line[at - 1] !== ' ')) return undefined
@@ -299,7 +312,10 @@ function rowAttributeCell(node: Node, path: string, context: LintContext): void 
   const before = source.lastIndexOf('|', last - 1)
   if (last < 0 || before < 0) return
   const cell = source.slice(before + 1, last).trim()
-  if (cell.startsWith('{') && cell.endsWith('}')) reportNode('table-row-attribute-as-cell', node, path, context)
+  // C2-I-028: `{}` and a braced comment are no attribute block.
+  if (cell.startsWith('{') && cell.endsWith('}') && !/^\{\s*%/.test(cell) && cell.slice(1, -1).trim() !== '') {
+    reportNode('table-row-attribute-as-cell', node, path, context)
+  }
 }
 
 function multilineHtmlComment(node: Node, path: string, context: LintContext): void {

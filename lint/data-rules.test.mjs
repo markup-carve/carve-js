@@ -233,3 +233,39 @@ it('C2-B-127: figure-group-nested reads the opener of a div behind its attribute
   const source = '::: figure\n{.x}\n::: figure\nin\n:::\n![i](j)\n^ c\n:::\n'
   for (const mode of ['code', 'data']) expect(findings(source, mode)).toContain('figure-group-nested@11-33')
 })
+
+it('C2-W-149: the table fields give what the hand-written table rules report', () => {
+  const sources = ['| a | b |\n%% c\n+ d |\n', '| a | %% t\n+ d |\n', '{table}\n```csv\na,b\nc,d,e\n```\n', '| < a | b |\n',
+    '|= ~^{ .x } a |= b |\n', '| a | {.x} |\n', '| a |{.x} |\n', '| a |{<} |\n', '| a | b |\n| < | ^ |\n',
+    '|= a |= b |\n|={.x} ^ | c |\n', '| a | b |\n| c | d |\n| = ^ | e |\n', '| a | b |\n| c | \\< |\n', '| a | {} |\n', '| a | {% c %} |\n', '{table}\n```csv\na,<\n^,> abc\n```\n']
+  for (const source of sources) expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
+  expect(findings('| a | b |\n%% c\n+ d |\n', 'data')).toEqual(['comment-splits-table-row@10-14'])
+  expect(findings('| a |{<} |\n', 'data')).toEqual(['table-row-attribute-as-cell@0-10'])
+  expect(findings('| a | {} |\n', 'data')).toEqual([])
+})
+
+it('C2-W-138, C2-B-210: the hand-written table attribute rules read behind container prefixes', () => {
+  const codes = (source) => lint(source).map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset}`)
+  expect(codes('> {footer-rows=5}\n> | a |\n')).toContain('table-row-count-clamped@3-16')
+  expect(codes('{footer-rows="5"}\n| a |\n')).toContain('table-row-count-clamped@1-16')
+  expect(codes('{footer-rows}\n|= a |\n')).toContain('table-row-count-clamped@1-12')
+  expect(codes('> {header-rows=1}\n> | a |\n')).toContain('deprecated-table-attribute@2-25')
+  for (const mode of ['code', 'data']) expect(findings('| a |\n%% c  \n+ b |\n', mode)).toEqual(['comment-splits-table-row@6-10'])
+})
+
+it('C2-W-138: a data finding on a comment line of a table names the table', () => {
+  const paths = (mode) => {
+    if (mode === 'data') process.env.CARVE_LINT_RULES = 'data'
+    else delete process.env.CARVE_LINT_RULES
+    return lint('> | a |\n> %% c\n> + d |\n').filter((entry) => entry.code === 'comment-splits-table-row').map((entry) => entry.path)
+  }
+  expect(paths('data')).toEqual(paths('code'))
+  expect(paths('data')).toEqual(['/children/0/children/0'])
+})
+
+it('C2-W-149: row_index counts rows, not the comments among them', () => {
+  for (const mode of ['code', 'data']) {
+    expect(findings('| a | b |\n| c | d |\n%% x\n| ^ | e |\n', mode)).toEqual([])
+    expect(findings('|= a |\n%% x\n| ^ |\n', mode)).toEqual(['table-span-marker-blocked@13-16'])
+  }
+})

@@ -121,7 +121,7 @@ function runLines(model: LineModel<BlockRun>, rules: Active, context: LintContex
   for (const line of model.lines.all()) {
     const runs = lineRuns(rules, line.leaf)
     if (runs.length === 0) continue
-    const path = context.lines[line.number - 1]?.path ?? ''
+    const path = context.lines[line.number - 1]?.path || line.table_path || ''
     for (const run of runs) run(line, path, context)
   }
 }
