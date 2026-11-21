@@ -4,7 +4,8 @@
 // capped path is measured too.
 import { CarveInputError, formatWithDiagnostics, lint, parse, render } from '../src/index.ts'
 import { type Random } from './generate.ts'
-import { type Finding } from './check.ts'
+// A type import only: check.ts reads data files relative to the working directory when it loads.
+import type { Finding } from './check.ts'
 
 export interface Family { name: string, build: (n: number) => string }
 
