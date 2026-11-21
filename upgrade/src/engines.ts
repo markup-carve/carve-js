@@ -24,14 +24,35 @@ export interface Node01 {
 
 export const ENGINE_01_VERSION: string = LIB_VERSION
 
+interface UpgradeSession {
+  input: string
+  tree?: Node01
+  html?: string
+}
+
+let activeSession: UpgradeSession | null = null
+
+/** The upgrade is synchronous; repeated passes share the original 0.1 read for one call only. */
+export function withUpgradeSession<T>(input: string, run: () => T): T {
+  const previous = activeSession
+  activeSession = { input }
+  try { return run() } finally { activeSession = previous }
+}
+
 /** The 0.1 tree of `src` with positions. Offsets are string offsets. */
 export function parse01(src: string): Node01 {
-  return parse(src, { positions: true }) as unknown as Node01
+  if (activeSession?.input === src && activeSession.tree !== undefined) return activeSession.tree
+  const tree = parse(src, { positions: true }) as unknown as Node01
+  if (activeSession?.input === src) activeSession.tree = tree
+  return tree
 }
 
 /** The HTML the 0.1 engine gives for `src` under its default options. */
 export function html01(src: string): string {
-  return carveToHtml(src)
+  if (activeSession?.input === src && activeSession.html !== undefined) return activeSession.html
+  const html = carveToHtml(src)
+  if (activeSession?.input === src) activeSession.html = html
+  return html
 }
 
 /** The HTML the 0.2 engine gives for `src`, with the source line of every block for the report. */

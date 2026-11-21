@@ -1,7 +1,7 @@
 import { compareHtml, compareHtmlExact, dropOnlyItemParagraphs } from './compare.ts'
 import { type Context, type Finding, makeContext, type Rule } from './context.ts'
 import { applyEdits, type Edit, offsetAfter, offsetBefore, selectEdits } from './edits.ts'
-import { ENGINE_01_VERSION, html01, html02, type Node01 } from './engines.ts'
+import { ENGINE_01_VERSION, html01, html02, withUpgradeSession, type Node01 } from './engines.ts'
 import { ENTRIES, needsPerson, recordOf, type ReportRecord } from './report.ts'
 import { rescuePlus } from './plus-rescue.ts'
 import { rescueQuote } from './quote-rescue.ts'
@@ -54,8 +54,9 @@ interface Rewritten {
  * One pass: every rule reads the 0.1 tree of the input, and the edits apply together. An edit
  * that collides with one of a lower entry id is left out and named in the report.
  */
-function rewrite(input: string, rules: readonly Rule[] = RULES, late = false): Rewritten {
-  const ctx: Context = makeContext(input, late)
+function rewrite(input: string, rules: readonly Rule[] = RULES, late = false, parsed?: Context): Rewritten {
+  const ctx: Context = parsed === undefined ? makeContext(input, late)
+    : { ...parsed, findings: [], late }
   const failures: ReportRecord[] = []
   for (const rule of rules) runRule(ctx, rule, failures)
   const collected: Edit[] = []
@@ -528,11 +529,28 @@ function triedBefore(tried: Set<string>, done: Rewritten): boolean {
   return tried.has(done.output) && done.context.repairs !== true
 }
 
+/** A late variant can change the first pass only when its distinct rule has a host in the 0.1 tree. */
+function lateHosts(input: string, parsed: Context): boolean[] {
+  const types = new Set(parsed.visits.map(({ node }) => node.type))
+  const definitions = input.includes(']:')
+  const list = types.has('list_item')
+  const inline = types.has('strong') || types.has('emphasis') || types.has('underline')
+  return [
+    true,
+    definitions, definitions, input.includes('%%'),
+    input.includes('/*'), inline, definitions,
+    types.has('definition_list'), list, list, types.has('table'), definitions,
+    true,
+  ]
+}
+
 /** The first late variant whose output clears the self-check. */
-function latePass(input: string, first: string): UpgradeResult | null {
+function latePass(input: string, first: string, parsed: Context): UpgradeResult | null {
   const tried = new Set([first])
-  for (const rules of LATE_VARIANTS) {
-    const done = rewrite(input, rules, true)
+  const hosts = lateHosts(input, parsed)
+  for (const [index, rules] of LATE_VARIANTS.entries()) {
+    if (!hosts[index]) continue
+    const done = rewrite(input, rules, true, parsed)
     if (triedBefore(tried, done)) continue
     tried.add(done.output)
     const mathClass = mathClassReport(done.context)
@@ -556,7 +574,7 @@ function latePass(input: string, first: string): UpgradeResult | null {
   return null
 }
 
-function upgradeSource(input: string): UpgradeResult {
+function upgradeSourceInSession(input: string): UpgradeResult {
   const mapped = mappedRewrite(input)
   if (mapped !== null) return preservingMappedResult(input, mapped)
   const manual = mappedReport(input)
@@ -567,10 +585,14 @@ function upgradeSource(input: string): UpgradeResult {
   }
   const { done, check } = firstPass(input)
   if (check === 'mismatch') {
-    const late = latePass(input, done.output)
+    const late = latePass(input, done.output, done.context)
     if (late !== null) return late
   }
   return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+}
+
+function upgradeSource(input: string): UpgradeResult {
+  return withUpgradeSession(input, () => upgradeSourceInSession(input))
 }
 
 /** The rules, then the first rescue whose spelling keeps the 0.1 HTML. */
