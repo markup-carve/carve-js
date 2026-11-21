@@ -315,3 +315,22 @@ export function itemParagraphBreaks(ctx: Context): void {
     change(ctx, 'U-437', at, at, quotePrefix(text, shared) + '\n', 'blank line put between the list item text and the paragraph below it')
   }
 }
+
+/**
+ * U-438, C2-B-015: an ordered marker starting above 1 does not interrupt the paragraph of an open item in 0.2,
+ * so a list that 0.1 nested directly below the item's text gets a blank line above it.
+ */
+export function nestedOrderedBreaks(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    if (node.type !== 'list' || node.ordered !== true || typeof node.start !== 'number' || node.start <= 1) continue
+    if (visit.parent?.node.type !== 'list_item' || node.pos === undefined) continue
+    const above = visit.siblings[visit.index - 1]
+    const line = node.pos.startLine
+    if (above?.type !== 'paragraph' || above.pos?.endLine !== line - 1) continue
+    const text = lineText(ctx.lines, line)
+    const at = lineStart(ctx.lines, line)
+    change(ctx, 'U-438', at, at, quotePrefix(text, quotesOf(visit).length) + '\n',
+      'blank line put above a nested ordered list that starts above 1')
+  }
+}

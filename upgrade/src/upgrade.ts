@@ -27,7 +27,7 @@ import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
 import { rescueEscape } from './escape-rescue.ts'
 import { rescueDashRun } from './dash-run-rescue.ts'
 import { LATE_VARIANTS, RULES } from './rules/index.ts'
-import { itemColumns, itemParagraphBreaks } from './rules/late.ts'
+import { itemColumns, itemParagraphBreaks, nestedOrderedBreaks } from './rules/late.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
 import { applyTabs, planTabs, sameHost } from './tabs.ts'
@@ -546,7 +546,8 @@ function lateHosts(input: string, parsed: Context): boolean[] {
     definitions, definitions, input.includes('%%'),
     input.includes('/*'), inline, definitions,
     types.has('definition_list'), list && hasLateEdits(parsed, itemColumns),
-    list && hasLateEdits(parsed, itemParagraphBreaks), types.has('table'), definitions,
+    list && hasLateEdits(parsed, itemParagraphBreaks), list && hasLateEdits(parsed, nestedOrderedBreaks), types.has('table'),
+    definitions,
     true,
   ]
 }
