@@ -237,9 +237,17 @@ export function parseTree(src: string | Uint8Array, options?: ParseOptions): Par
  */
 export function resolveTree(input: ParsedTree | DocumentNode, options?: RenderOptions): ResolvedTree {
   const settings = readOptions(options, 'render')
-  const parsed = 'type' in input ? inputStage(input, settings) : input
-  return shiftedResolve(parsed, settings, 'type' in input, settings.headingShift)
+  if ('type' in input) return shiftedResolve(inputStage(input, settings), settings, true, settings.headingShift)
+  // A parsed tree is resolved in place and its facts hold its nodes, so it is not copied: a second call shifts by the difference.
+  const applied = PARSED_SHIFT.get(input.document) ?? 0
+  const resolved = resolveStage(input, settings)
+  if (settings.headingShift !== applied) shiftHeadings(resolved.document, settings.headingShift - applied)
+  PARSED_SHIFT.set(input.document, settings.headingShift)
+  return resolved
 }
+
+/** The heading shift `resolveTree` has applied to each parsed tree it resolved in place. */
+const PARSED_SHIFT = new WeakMap<DocumentNode, number>()
 
 /** C2-H-208: resolution, then the heading shift. A supplied tree is the caller's, so it shifts on a copy. */
 function shiftedResolve(parsed: ParsedTree, settings: Settings, supplied: boolean, shift: number): ResolvedTree {
@@ -587,7 +595,10 @@ export function renderWithDocumentTransforms(
   input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], options?: RenderOptions,
 ): RenderOutput {
   const settings = readOptions(options, 'render')
-  return transformedRender(input, withShift([...registeredTransforms(settings), ...transforms], settings), settings)
+  const all = [...registeredTransforms(settings), ...transforms]
+  // With no transform the shift runs in place, as in renderWithDiagnostics.
+  if (all.length === 0 && settings.headingShift !== 0) return plainRender(input, settings)
+  return transformedRender(input, withShift(all, settings), settings)
 }
 
 /** Reuse the resolved view when no transform changed it and its output has no positional loss. */

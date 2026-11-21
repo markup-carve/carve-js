@@ -54,6 +54,15 @@ describe('headingShift', () => {
     expect(render(tree, options)).toBe(render(DOC, options))
     expect(render(tree, options)).toBe(render(DOC, options))
     expect(JSON.stringify(tree)).toBe(before)
+    const parsed = parseTree(DOC)
+    expect(renderTree(resolveTree(parsed, options))).toBe(render(DOC, options))
+    expect(renderTree(resolveTree(parsed, options))).toBe(render(DOC, options))
+    expect(renderTree(resolveTree(parsed, { headingShift: 3 }))).toBe(render(DOC, { headingShift: 3 }))
+    expect(renderTree(resolveTree(parsed))).toBe(render(DOC))
+  })
+
+  it('renderWithDocumentTransforms shifts with no transform at all', () => {
+    expect(renderWithDocumentTransforms('===== A\n', [], { headingShift: 2 })).toEqual(renderWithDiagnostics('===== A\n', { headingShift: 2 }))
   })
 
   it('runs before a host transform passed to renderWithDocumentTransforms', () => {
