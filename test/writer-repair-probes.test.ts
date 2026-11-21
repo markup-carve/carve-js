@@ -65,6 +65,23 @@ describe('the probes of the repair', () => {
     expect(sorted).toBeLessThan(100 * source.length)
   })
 
+  it('C2-W-125: the lone-bracket scan of nested links keeps the brackets of a nested link as one count (#5262)', () => {
+    const source = `${'^*[*[[*'.repeat(400)}^*[*x](u)${'^]]](u)'.repeat(400)}\n`
+    const push = Array.prototype.push
+    let pushed = 0
+    Array.prototype.push = function (this: unknown[], ...items: unknown[]) {
+      pushed++
+      return push.apply(this, items)
+    }
+    try {
+      expect(formatWithDiagnostics(source).diagnostics).toEqual([])
+    } finally {
+      Array.prototype.push = push
+    }
+    // One stack entry per bracket of every nested link made 33,607,254 pushes here; runs of them make 4,237,059.
+    expect(pushed).toBeLessThan(1500 * source.length)
+  })
+
   it('C2-W-133: the HTML import of unclosed unknown elements of proptest case 4e78df2a673d1efc is written', () => {
     const fixtures = join(root, 'test/fixtures/writer-slow')
     const tree = JSON.parse(readFileSync(join(fixtures, '4e78df2a673d1efc.json'), 'utf8')) as DocumentNode

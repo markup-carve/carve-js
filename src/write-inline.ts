@@ -377,14 +377,40 @@ function escapeLeadingCaret(w: Writer, children: readonly Inline[], flags: numbe
   }
 }
 
-type BracketPlace = { node: TextNode, at: number } | null
+type BracketPlace = { node: TextNode, at: number }
 
-function textBracketPlaces(node: TextNode, open: BracketPlace[], lone: BracketPlace[]): void {
+/**
+ * The open brackets of a link's text, bottom first, and its lone closers. The brackets of a nested link stand as
+ * counts, a run of them as one number, so that a scan of a deep nest of links takes one step per run, not per bracket.
+ */
+interface BracketScan { open: (BracketPlace | number)[], size: number, lone: BracketPlace[], loneCount: number }
+
+function popBrackets(scan: BracketScan, count: number): void {
+  let left = Math.min(count, scan.size)
+  scan.size -= left
+  while (left > 0) {
+    const top = scan.open[scan.open.length - 1]!
+    if (typeof top !== 'number' || top <= left) {
+      scan.open.pop()
+      left -= typeof top === 'number' ? top : 1
+    } else {
+      scan.open[scan.open.length - 1] = top - left
+      left = 0
+    }
+  }
+}
+
+function textBracketPlaces(node: TextNode, scan: BracketScan): void {
   for (let at = 0; at < node.value.length; at++) {
-    if (node.value[at] === '[') open.push({ node, at })
-    else if (node.value[at] === ']') {
-      if (open.length > 0) open.pop()
-      else lone.push({ node, at })
+    if (node.value[at] === '[') {
+      scan.open.push({ node, at })
+      scan.size++
+    } else if (node.value[at] === ']') {
+      if (scan.size > 0) popBrackets(scan, 1)
+      else {
+        scan.lone.push({ node, at })
+        scan.loneCount++
+      }
     }
   }
 }
@@ -402,27 +428,29 @@ function nestedLinkBrackets(w: Writer, node: LinkNode): BracketCounts {
   if (cache === undefined) linkBrackets.set(w, cache = new Map<LinkNode, BracketCounts>())
   let counts = cache.get(node)
   if (counts === undefined) {
-    const open: BracketPlace[] = [], lone: BracketPlace[] = []
-    loneLinkBrackets(w, node.children, open, lone)
-    cache.set(node, counts = { closers: lone.length, openers: open.length })
+    const scan: BracketScan = { open: [], size: 0, lone: [], loneCount: 0 }
+    loneLinkBrackets(w, node.children, scan)
+    cache.set(node, counts = { closers: scan.loneCount, openers: scan.size })
   }
   return counts
 }
 
-function countedBrackets({ closers, openers }: BracketCounts, open: BracketPlace[], lone: BracketPlace[]): void {
-  for (let at = 0; at < closers; at++) {
-    if (open.length > 0) open.pop()
-    else lone.push(null)
-  }
-  for (let at = 0; at < openers; at++) open.push(null)
+function countedBrackets({ closers, openers }: BracketCounts, scan: BracketScan): void {
+  scan.loneCount += Math.max(0, closers - scan.size)
+  popBrackets(scan, closers)
+  if (openers === 0) return
+  const top = scan.open[scan.open.length - 1]
+  if (typeof top === 'number') scan.open[scan.open.length - 1] = top + openers
+  else scan.open.push(openers)
+  scan.size += openers
 }
 
-/** Collect brackets that have no partner among the text of this link label; those of a nested link stand as null. */
-function loneLinkBrackets(w: Writer, nodes: readonly Inline[], open: BracketPlace[], lone: BracketPlace[]): void {
+/** Collect brackets that have no partner among the text of this link label; those of a nested link are counts. */
+function loneLinkBrackets(w: Writer, nodes: readonly Inline[], scan: BracketScan): void {
   for (const node of nodes) {
-    if (node.type === 'text') textBracketPlaces(node, open, lone)
-    else if (node.type === 'link') countedBrackets(nestedLinkBrackets(w, node), open, lone)
-    else if ('children' in node && node.type !== 'citation_group') loneLinkBrackets(w, node.children, open, lone)
+    if (node.type === 'text') textBracketPlaces(node, scan)
+    else if (node.type === 'link') countedBrackets(nestedLinkBrackets(w, node), scan)
+    else if ('children' in node && node.type !== 'citation_group') loneLinkBrackets(w, node.children, scan)
   }
 }
 
@@ -440,11 +468,11 @@ function mergeLinkEscapes(escapes: readonly number[], positions: readonly number
 
 /** C2-W-125 case five: a bracket without a partner in link text would take the link's own closer. */
 function escapeLoneLinkBrackets(w: Writer, children: readonly Inline[]): void {
-  const open: BracketPlace[] = [], lone: BracketPlace[] = []
-  loneLinkBrackets(w, children, open, lone)
+  const scan: BracketScan = { open: [], size: 0, lone: [], loneCount: 0 }
+  loneLinkBrackets(w, children, scan)
   const byNode = new Map<TextNode, number[]>()
-  for (const place of [...lone, ...open]) {
-    if (place === null) continue
+  for (const place of [...scan.lone, ...scan.open]) {
+    if (typeof place === 'number') continue
     const positions = byNode.get(place.node) ?? []
     positions.push(place.at)
     byNode.set(place.node, positions)
