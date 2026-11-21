@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formatWithDiagnostics, lint, parse, treesEqual } from '../src/index.ts'
+import { exportDocument } from '../public/export.ts'
 
 // Nested `::: c` fences, each shorter than the one before, as the fuzz round found them: a document nested to
 // the block depth cap, where every line asked its ancestors once per rule.
@@ -29,6 +30,21 @@ describe('deep nesting without a walk per level', () => {
   it('lints a 96 KB line of unclosed image openers within the smoke budget', () => {
     const source = `${'[!'.repeat(48 * 1024)}\n`
     expect(cpuMs(() => lint(source))).toBeLessThan(3000)
+  }, 60_000)
+
+  // `/[ \t]+$/` rescans a long run of spaces and tabs inside a line from each of its characters.
+  it('lints 288 KB of space and tab indentation within the smoke budget', () => {
+    const indent = '  \t'.repeat(32000)
+    const source = `${indent}[^n]\n${indent}[^n]\n${indent}[^n]\n`
+    expect(cpuMs(() => lint(source))).toBeLessThan(3000)
+  }, 60_000)
+
+  it('exports a line with 80 KB of inner spaces and tabs to Markdown within the smoke budget', () => {
+    const source = `a${' \t'.repeat(40000)}b\n`
+    const document = parse(source)
+    let output = ''
+    expect(cpuMs(() => { output = exportDocument('markdown', document).output })).toBeLessThan(3000)
+    expect(output.startsWith('a ')).toBe(true)
   }, 60_000)
 
   // The linear scan of link-gap-before-destination reports what the pattern it replaced matched.
