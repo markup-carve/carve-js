@@ -560,9 +560,9 @@
     "path": "resources/examples/edge-cases/0333-a-continuation-row-s-open-run-and-an-escaped-closing-pipe.md",
     "line": 14,
     "input": "| a `b |\n+ c` |\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-147"
+      "U-258"
     ]
   },
   {

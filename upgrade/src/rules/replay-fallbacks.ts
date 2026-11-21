@@ -25,6 +25,22 @@ export function flippedStrong(ctx: Context): void {
   }
 }
 
+/** An old strong span beginning beside a closer can be nested by the 0.2 bare pairing. */
+export function crossLineStrong(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'strong' || node.pos === undefined || node.attrs === undefined
+      || !node.children?.some((child) => child.type === 'soft_break')) continue
+    const { startOffset: start, endOffset: end } = node.pos
+    const last = node.children.at(-1)
+    const close = last?.pos?.endOffset
+    if (!ctx.src.startsWith('*/', start) || close === undefined || ctx.src[close] !== '*'
+      || ctx.src[close + 1] !== '{' || ctx.src[end - 1] !== '}') continue
+    const message = 'old cross-line strong pairing written as an explicit braced span'
+    change(ctx, 'U-068', start, start + 1, '{*', message)
+    change(ctx, 'U-068', close, close + 1, '*}', message)
+  }
+}
+
 /** A deprecated glued header spelling that 0.1 kept as cell text must stay cell text. */
 export function literalTableHeader(ctx: Context): void {
   for (const { node } of ctx.visits) {
@@ -198,5 +214,21 @@ export function emptyAttributeQuote(ctx: Context): void {
   for (const line of lines) {
     change(ctx, 'U-034', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), '\n> ',
       'an attribute-only quote kept as an empty quote after a paragraph break')
+  }
+}
+
+/** A shifted list marker can still attach to the preceding list across a type boundary. */
+export function siblingListBoundary(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const list = visit.node
+    const above = visit.siblings[visit.index - 1]
+    if (list.type !== 'list' || list.pos === undefined || above?.type !== 'list' || above.pos === undefined
+      || list.ordered === above.ordered || list.pos.startLine !== above.pos.endLine + 1) continue
+    const line = lineText(ctx.lines, list.pos.startLine)
+    const indent = /^ +/u.exec(line)?.[0]
+    if (indent === undefined || !/^(?:[-+*]|[0-9]+[.)]) /u.test(line.slice(indent.length))) continue
+    const start = lineStart(ctx.lines, list.pos.startLine)
+    change(ctx, 'U-023', start, start + indent.length, '\n',
+      'sibling list separated and its marker moved to the list column')
   }
 }

@@ -12,6 +12,14 @@ describe('replay fallback families', () => {
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
+  it('preserves an attributed strong pair across a line beside a bold-italic pair', () => {
+    const input = '/*a // b*/\n //*a*{c_}*/\n //*a*{c_}*/\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toContain('{*/\n //*a*}{c_}')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('combines a braced strong-emphasis span with a literal legacy table cell', () => {
     const input = '/*a*/b c*/\n|=^ Top |=v Bottom |={<^} Paired |=v> Reverse |=~> Middle |\n| a | b | c | d | e |\n'
     const result = upgrade(input)
@@ -60,6 +68,14 @@ describe('replay fallback families', () => {
     const result = upgrade(input)
     expect(result.check).toBe('pass')
     expect(result.output).toBe('[x]{.a!b}\n- > - para\n^ c[d]: uap\n\n> \n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps an indented list as a sibling after an ordered list', () => {
+    const input = '1. ordered\n 1. ordered\n *  > > quote\nQ  \n- item\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('1. ordered\n1. ordered\n\n*  > > quote\nQ  \n- item\n')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 })
