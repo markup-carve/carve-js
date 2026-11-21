@@ -278,7 +278,7 @@ const K3 = new RegExp("^(?:[^<]|(?:<<)*(?:<<(?:[^<]|$)|<(?:[^!<]|$|!(?:[^-]|$)|!
 const K4 = new RegExp("^(?:[^<]|(?:<<)*(?:<<(?:[^<]|$)|<(?:[^!<]|$|!(?:[^-]|$)|!-(?:[^-]|$)|!--(?:[^-\\n\\r\\u{2028}\\u{2029}]|-[^-\\n\\r\\u{2028}\\u{2029}]|--+[^->\\n\\r\\u{2028}\\u{2029}])*--+>)))*?<*(?<tag></?[A-Za-z][A-Za-z0-9_:-]*(?:\\s[^<>]*)?/?>)", "du")
 const K5 = new RegExp("(?<label>\\[(?<caret>\\^)?[ \\t\\n]+\\])", "gd")
 const K6 = linearPattern("^[ \\t]*(?:> [ \\t]*)*(?<c>.*?)[ \\t]*$")
-const K7 = (item: unknown): unknown => ((same(obj(item)?.["parent"], "paragraph") && !same(obj(item)?.["type"], "text")) ? obj(item)?.["start"] : false)
+const K7 = (item: unknown): unknown => (!same(obj(item)?.["type"], "text") ? obj(item)?.["start"] : false)
 const K8 = new Set<unknown>(["caption","definition_term","heading","line","paragraph"])
 const K9 = new RegExp("^:{3,}\\S", "")
 const K10 = new RegExp("^\\{[.#_A-Za-z]", "")
@@ -299,7 +299,7 @@ const K24 = new RegExp("^(?<mark>:) ", "d")
 const K25 = new RegExp("^(?<mark>\\*?\\[.*?\\]:)", "")
 const K26 = new RegExp("^(?<mark>\\*?\\[.*?\\]:)", "d")
 const K27 = new RegExp("^>[^ ]", "")
-const K28 = new RegExp("^>[ \\t]", "")
+const K28 = new RegExp("^> ", "")
 const K29 = new Set<unknown>(["caption","definition_term","heading","line","paragraph","table_cell"])
 const K30 = new RegExp("^\\{%\\s*(?:(?:raw|endraw|endif|endfor|endblock)\\s*|(?:if|for|block)\\s+\\S[\\s\\S]*)%\\}$", "")
 const K31 = new Set<string>(["id"])
@@ -384,7 +384,7 @@ const K109 = new RegExp("^---[ \\t]*\\n", "")
 const K110 = new RegExp("^---[ \\t]*\\n[ \\t]*(?:\\n|$)", "")
 const K111 = new RegExp("^---[ \\t]*\\n[^:]*$", "")
 const K112 = new Set<unknown>(["heading","paragraph","table_cell","table_row"])
-const K113 = new RegExp("^[ \\t]*>(?:[^ \\t\\[]|\\[[^!])", "")
+const K113 = new RegExp("^[ \\t]*>(?:[^ \\t\\[]|\\[(?:[^!]|!(?:[^NTIWC]|N(?:[^O]|O(?:[^T]|T(?:[^E]|E[^\\]])))|T(?:[^I]|I(?:[^P]|P[^\\]]))|I(?:[^M]|M(?:[^P]|P(?:[^O]|O(?:[^R]|R(?:[^T]|T(?:[^A]|A(?:[^N]|N(?:[^T]|T[^\\]]))))))))|W(?:[^A]|A(?:[^R]|R(?:[^N]|N(?:[^I]|I(?:[^N]|N(?:[^G]|G[^\\]]))))))|C(?:[^A]|A(?:[^U]|U(?:[^T]|T(?:[^I]|I(?:[^O]|O(?:[^N]|N[^\\]])))))))))", "")
 const K114 = new RegExp("^[ \\t]*(?:>[ \\t]*)+(?:(?:[-*]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]*>[ \\t]*)?(?:\\[[^\\]]+\\]:[ \\t]*>[ \\t]*)?(?<mark>\\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\])", "")
 const K115 = new RegExp("^[ \\t]*(?:>[ \\t]*)+(?:(?:[-*]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]*>[ \\t]*)?(?:\\[[^\\]]+\\]:[ \\t]*>[ \\t]*)?(?<mark>\\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\])", "d")
 const K116 = new RegExp("^\\*\\.[\\s\\S]*\\*$", "")
@@ -725,7 +725,7 @@ function rule19(self: ModelBlock, path: string, context: LintContext): void {
   let v_width: unknown = UNSET
   let g_width: Record<string, [number, number]> | undefined
   let b_width = 0
-  if (!(K46.has(self.source_format) && someFrom(obj(self.node)?.["children"], 0, (item) => someFrom(obj(item)?.["children"], 0, (item) => (countFrom(obj(item)?.["children"], 0, () => true) > num((v_width === UNSET ? (g_width = groups, b_width = base, v_width = (countFrom(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["children"], 0, () => true)), groups = g_width, base = b_width, v_width) : v_width))))))) return
+  if (!(K46.has(self.source_format) && someFrom(obj(self.node)?.["children"], 0, (item) => someFrom(obj(item)?.["children"], 0, (item) => (countFrom(obj(item)?.["children"], 0, () => true) > num((v_width === UNSET ? (g_width = groups, b_width = base, v_width = (countFrom(obj(obj(obj(findIn(obj(self.node)?.["children"], (item) => (obj(obj(item)?.["children"])?.[0] !== undefined)))?.["children"])?.[0])?.["children"], 0, () => true)), groups = g_width, base = b_width, v_width) : v_width))))))) return
   context.report("delimited-table-wide-row", num(self.start), num(self.end), path, {  }, 0)
   return
 }
