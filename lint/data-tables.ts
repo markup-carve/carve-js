@@ -1152,7 +1152,7 @@ function rule73(self: ModelLine, path: string, context: LintContext): void {
 
 function rule74(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(at(self.node, "spacing"), "tight") && (num(at(lookupAt(17, "block", undefined, (item: unknown): unknown => ((same(at(item, "ancestors", 0), "list_item") && (num(at(item, "layout", "blankLinesAfter")) > 0) && (num(at(lookupAt(16, "block", undefined, (item: unknown): unknown => (!K144.has(at(item, "type")) ? at(item, "ancestor_ids", 0) : false), at(item, "ancestor_ids", 0), num(at(item, "start")), 1), "start")) >= 0) && someFrom(at(lookupAt(11, "block", K120, (item: unknown): unknown => at(item, "identity"), at(item, "ancestor_ids", 0), self.start, 0), "node", "children"), 0, (item) => same(at(item, "type"), "paragraph"))) ? at(item, "ancestor_ids", 1) : false), self.identity, self.start, 0), "start")) >= 0))) return
+  if (!(same(at(self.node, "spacing"), "tight") && (num(at(lookupAt(17, "block", undefined, (item: unknown): unknown => ((same(at(item, "parent", "type"), "list_item") && (num(at(item, "layout", "blankLinesAfter")) > 0) && (num(at(lookupAt(16, "block", undefined, (item: unknown): unknown => (!K144.has(at(item, "type")) ? at(item, "ancestor_ids", 0) : false), at(item, "ancestor_ids", 0), num(at(item, "start")), 1), "start")) >= 0) && someFrom(at(lookupAt(11, "block", K120, (item: unknown): unknown => at(item, "identity"), at(item, "ancestor_ids", 0), self.start, 0), "node", "children"), 0, (item) => same(at(item, "type"), "paragraph"))) ? at(item, "ancestor_ids", 1) : false), self.identity, self.start, 0), "start")) >= 0))) return
   context.report("tight-list-item-with-blank-line", num(self.start), num(self.end), path, {  }, 0)
   return
 }

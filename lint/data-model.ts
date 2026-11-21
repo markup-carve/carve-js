@@ -379,6 +379,8 @@ class ContainerRecord implements Container {
 }
 
 class BlockRecord {
+  private ancestorsCache: string[] | undefined = undefined
+  private ancestorIdsCache: string[] | undefined = undefined
   private quotes: number | undefined = undefined
   private columnCache: number | undefined = undefined
   private ownerCache: Container | undefined = undefined
@@ -411,8 +413,8 @@ class BlockRecord {
   }
 
   get attributed(): boolean { return this.node.attrs !== undefined }
-  get ancestors(): string[] { return ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>) }
-  get ancestor_ids(): string[] { return ancestorPaths(this.path) }
+  get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
+  get ancestor_ids(): string[] { return (this.ancestorIdsCache ??= ancestorPaths(this.path)) }
   /** The identity of the block, as ancestor_ids gives the identities of the blocks that hold it. */
   get identity(): string { return this.path }
   /** C2-L-009: the layout entry of the block, absent where the layout has none. */
