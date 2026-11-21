@@ -109,7 +109,8 @@ describe('replay fallback families', () => {
   })
 
   it('does not duplicate an inline escape when two rules reach the same star', () => {
-    const input = '\\!\\"\\#\\$\\%\\&\\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~ done\n*a {*b**} c*\n{#i}\n'
+    const input = '\\!\\"\\#\\$\\%\\&\\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~ done\n'
+      + '*a {*b**} c*\n{#i}\n'
     const result = upgrade(input)
     expect(result.check).toBe('pass')
     expect(result.output).toBe(input.replace('\n{#i}\n', '\n'))

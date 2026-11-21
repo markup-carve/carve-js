@@ -48,6 +48,13 @@ export function addTaskPresentation(old: string, next: string): Result {
 
 const LABEL = / aria-label="([^"]*)"/u
 
+function labelSpacing(left: string | undefined, right: string | undefined): boolean | null {
+  if (right === undefined) return null
+  if (left === undefined || right.startsWith(`${left} `)) return false
+  const words = (value: string): string => value.replace(/\s+/gu, ' ').trim()
+  return words(left) === words(right) ? true : null
+}
+
 /** C2-H-032: the 0.2 box label takes text from the item's direct paragraphs and headings. */
 export function followTaskLabels(old: string, next: string): Result {
   const source = htmlTokens(old)
@@ -60,12 +67,8 @@ export function followTaskLabels(old: string, next: string): Result {
     if (before === after || !before.startsWith('<input ') || !before.includes('type="checkbox"')) continue
     const left = LABEL.exec(before)?.[1]
     const right = LABEL.exec(after)?.[1]
-    if (right === undefined) continue
-    let differentSpacing = false
-    if (left !== undefined && !right.startsWith(`${left} `)) {
-      if (left.replace(/\s+/gu, ' ').trim() !== right.replace(/\s+/gu, ' ').trim()) continue
-      differentSpacing = true
-    }
+    const differentSpacing = labelSpacing(left, right)
+    if (differentSpacing === null) continue
     if (before.replace(LABEL, '') !== after.replace(LABEL, '')) continue
     source[at] = after
     changed = true
