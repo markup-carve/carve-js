@@ -46,6 +46,8 @@ export interface InlineFrame {
 export interface LayoutTrace {
   blocks: Map<Node, BlockNode>
   inlines: Map<Node, InlineFrame>
+  /** Lint reads the tree without exposing it, so inert table nodes can share storage. */
+  compactTables?: boolean
   /** C2-L-020: per text node of a cell, pairs of the offset in its value and the source offset at which a fragment starts. */
   breaks: Map<Node, number[]>
 }

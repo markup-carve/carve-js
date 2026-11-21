@@ -202,7 +202,13 @@ function visit(walk: Walk, node: Node, path: string, frame: Frame): void {
 }
 
 function visitList(walk: Walk, nodes: readonly Node[], base: string, frame: Frame): void {
-  for (let index = 0; index < nodes.length; index++) visit(walk, nodes[index]!, `${base}/${index}`, frame)
+  for (let index = 0; index < nodes.length; index++) {
+    const node = nodes[index]!
+    if (node.type === 'table_column') continue
+    if (node.type === 'table_cell' && !walk.trace.blocks.has(node) && node.children[0]?.type === 'cell_paragraph'
+      && node.children[0].children.length === 0) continue
+    visit(walk, node, `${base}/${index}`, frame)
+  }
 }
 
 /** The record of `src` for `document`, the tree that was built with `trace`. */

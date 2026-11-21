@@ -26,13 +26,15 @@ export interface BlockNode {
   children: BlockNode[] | null
   /** The content of a leaf; for a table row, the text between the pipes of each span mark it merged (C2-A-149). */
   spans: number[] | null
+  /** Compact lint-only empty span, materialized if a continuation needs the array. */
+  emptySpan?: number
   attributes: number[] | null
   /** C2-B-024: the indexes in `spans` of the lazy comment-only lines of a line block. */
   lazyComments?: number[]
 }
 
 /** Builds the block tree from the first `length` ints of an event array. */
-export function buildTree(events: Int32Array, length: number, src = ''): BlockNode {
+export function buildTree(events: Int32Array, length: number, src = '', compact = false): BlockNode {
   const open: BlockNode[] = []
   let root: BlockNode | null = null
   let top: BlockNode | null = null
@@ -40,9 +42,9 @@ export function buildTree(events: Int32Array, length: number, src = ''): BlockNo
     const type = event.type()
     if (type === SPAN) {
       if (event.kind() === COMMENT) (top!.lazyComments ??= []).push(top!.spans!.length)
-      top!.spans!.push(event.start(), event.end())
+      appendSpan(top!, event.start(), event.end(), compact)
     } else if (type === ENTER) {
-      const node = enterNode(event.kind(), event.flags(), event.start(), event.aux(), top)
+      const node = enterNode(event.kind(), event.flags(), event.start(), event.aux(), top, compact)
       if (top === null) root = node
       else top.children!.push(node)
       open.push(node)
@@ -50,7 +52,7 @@ export function buildTree(events: Int32Array, length: number, src = ''): BlockNo
     } else {
       const node = open.pop()!
       node.end = event.end()
-      node.exitFlags = event.flags()
+      setExitFlags(node, event.flags(), compact)
       top = open.length > 0 ? open[open.length - 1]! : null
       exitNode(node, event.aux(), src)
     }
@@ -58,7 +60,37 @@ export function buildTree(events: Int32Array, length: number, src = ''): BlockNo
   return root!
 }
 
-function enterNode(kind: number, flags: number, start: number, aux: number, parent: BlockNode | null): BlockNode {
+const COMPACT_CELL_DEFAULTS = { kind: CELL, exitFlags: 0, facts: 1, rowFacts: 1, children: null, attributes: null,
+  spans: null }
+
+export function spansOf(node: BlockNode): number[] {
+  if (node.spans !== null) return node.spans
+  const at = node.emptySpan!
+  delete node.emptySpan
+  return (node.spans = [at, at])
+}
+
+function appendSpan(node: BlockNode, start: number, end: number, compact: boolean): void {
+  if (compact && node.kind === CELL && node.spans === null && start === end) {
+    node.emptySpan = start
+    return
+  }
+  if (compact && node.kind === CELL && node.spans === null && node.emptySpan === undefined) {
+    node.spans = [start, end]
+    return
+  }
+  spansOf(node).push(start, end)
+}
+
+function setExitFlags(node: BlockNode, flags: number, compact: boolean): void {
+  if (!compact || flags !== 0) node.exitFlags = flags
+}
+
+function enterNode(kind: number, flags: number, start: number, aux: number, parent: BlockNode | null,
+  compact: boolean): BlockNode {
+  if (compact && kind === CELL && (flags & FLAG_ATTRIBUTES) === 0) {
+    return Object.assign(Object.create(COMPACT_CELL_DEFAULTS) as BlockNode, { start, end: start, aux, flags })
+  }
   const leaf = isLeaf(kind)
   const takes = (flags & FLAG_ATTRIBUTES) !== 0 && kind !== ATTRIBUTES
   return {
@@ -181,14 +213,15 @@ function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode |
   const fragments = row.children!
   for (let column = 0; column < fragments.length; column++) {
     const fragment = fragments[column]!
+    const fragmentSpans = spansOf(fragment)
     if (column >= owners.length) {
       above.children!.push(fragment)
       owners.push(fragment)
-    } else if (fragment.spans![0] !== fragment.spans![1]) {
-      const spans = owners[column]!.spans!
+    } else if (fragmentSpans[0] !== fragmentSpans[1]) {
+      const spans = spansOf(owners[column]!)
       // C2-B-184, C2-L-021: the space stands between the text of the cell and the fragment, so an empty cell takes none.
       if (spans.length === 2 && spans[0] === spans[1]) spans.length = 0
-      spans.push(fragment.spans![0]!, fragment.spans![1]!)
+      spans.push(fragmentSpans[0]!, fragmentSpans[1]!)
     }
   }
   above.end = row.end
