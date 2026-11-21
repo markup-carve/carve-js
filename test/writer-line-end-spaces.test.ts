@@ -81,4 +81,24 @@ describe('C2-W-151: line-end spaces and tabs of text', () => {
     const { ratio, times } = growthRatio(() => writeWithDiagnostics(small), () => writeWithDiagnostics(large))
     expect(ratio, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(48)
   })
+
+  it('takes time linear in the lines when each line ends in a text of only spaces', () => {
+    const lines = (count: number): DocumentNode => documentOf(paragraph(...Array.from({ length: count }, (_, i): Inline[] => [text(`w${i}`), text(' '), SOFT]).flat(), text('end')))
+    const small = lines(500)
+    const large = lines(8000)
+    const { ratio, times } = growthRatio(() => writeWithDiagnostics(small), () => writeWithDiagnostics(large))
+    expect(ratio, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(48)
+  })
+
+  it('gives back a tree whose dropped texts were spread over several lists', () => {
+    const document = documentOf(
+      paragraph(text('a'), text(' '), SOFT, { type: 'emphasis', children: [text('b'), text('\t'), SOFT, text('c')] }, text(' '), SOFT, text('d')),
+      { type: 'heading', level: 1, children: [text('T'), text('  ')] },
+    )
+    const before = JSON.stringify(document)
+    const output = writeWithDiagnostics(document)
+    expect(output.source).toBe('a\n/b\nc/\nd\n\n= T\n')
+    expect(output.diagnostics).toEqual([])
+    expect(JSON.stringify(document)).toBe(before)
+  })
 })
