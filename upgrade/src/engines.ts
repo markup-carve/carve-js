@@ -1,6 +1,6 @@
 // The two engines the tool stands between. The 0.1 engine is the build of `upgrade/engine-0.1/`
 // (`build/engine-0.1/`); the 0.2 engine is `src/`. Nothing here is imported by either.
-import { carveToHtml, LIB_VERSION, parse, renderDocument } from '../../build/engine-0.1/index.js'
+import { carveToHtml, LIB_VERSION, parse } from '../../build/engine-0.1/index.js'
 import { render } from '../../src/index.ts'
 
 export interface Pos {
@@ -50,11 +50,7 @@ export function parse01(src: string): Node01 {
 /** The HTML the 0.1 engine gives for `src` under its default options. */
 export function html01(src: string): string {
   if (activeSession?.input === src && activeSession.html !== undefined) return activeSession.html
-  // Rendering resolves and transforms its AST in place. Copy the original parse so
-  // later upgrade rules keep their source positions and can still inspect it.
-  const html = activeSession?.input === src && activeSession.tree !== undefined
-    ? renderDocument(structuredClone(activeSession.tree) as ReturnType<typeof parse>)
-    : carveToHtml(src)
+  const html = carveToHtml(src)
   if (activeSession?.input === src) activeSession.html = html
   return html
 }
