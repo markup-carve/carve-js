@@ -17,7 +17,8 @@ import {
   abbreviationSpaces, continuedHeaderRow, crossLineStrong, descriptionAfterQuotedTerm, duplicateItemDefinitions,
   emptyAttributeItemAfterDescription, emptyAttributeQuote,
   emptyColonDiv,
-  flippedStrong, footnoteQuoteAfterDescription, innerFenceRun, legacyPlusDash, literalLinkBeforeCode,
+  flippedStrong, footnoteQuoteAfterDescription, inlineEditComposition, innerFenceRun, legacyPlusDash, listAfterFootnote,
+  literalLinkBeforeCode,
   literalQuoteAfterAttributes, literalTableHeader,
   nestedFootnoteAfterItem,
   siblingHeadingBoundary, siblingListBoundary, tabbedFootnoteContinuation, wrappedCodeTableRow,
@@ -55,5 +56,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary, literalQuoteAfterAttributes, innerFenceRun,
     siblingHeadingBoundary, emptyAttributeItemAfterDescription, emptyColonDiv, continuedHeaderRow,
     descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
-    footnoteQuoteAfterDescription],
+    footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition],
 ]

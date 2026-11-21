@@ -100,6 +100,30 @@ describe('replay fallback families', () => {
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
+  it('keeps a document list outside the footnote above it', () => {
+    const input = '[^a]: note\n \n - one\n    - deep\n\n  end.\n\nsee[^a]\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('[^a]: note\n \n- one\n    - deep\n\nend.\n\nsee[^a]\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('does not duplicate an inline escape when two rules reach the same star', () => {
+    const input = '\\!\\"\\#\\$\\%\\&\\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~ done\n*a {*b**} c*\n{#i}\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe(input)
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps a braced strike beside its preceding pipe', () => {
+    const input = '{|= a |= b |~{+b~>c+}~>a~}\n@user\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('{|= a |= b |{~{+b~>c+}~}>a~}\n@user\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('preserves adjacent reversed and ordinary strong-emphasis spans', () => {
     const input = 'b */{/*/*{t="*/"}\nb *///*{t="*/"}\n'
     const result = upgrade(input)

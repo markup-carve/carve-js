@@ -219,6 +219,40 @@ export function footnoteQuoteAfterDescription(ctx: Context): void {
   }
 }
 
+/** A list outside an old note definition stays at document column after the blank. */
+export function listAfterFootnote(ctx: Context): void {
+  const places = ctx.doc.footnoteDefPos
+  if (typeof places !== 'object' || places === null) return
+  const after = new Set(Object.values(places as Record<string, { endLine: number }>).map((pos) => pos.endLine + 2))
+  for (const visit of ctx.visits) {
+    const list = visit.node
+    if (list.type !== 'list' || list.pos === undefined || visit.parent?.node.type !== 'document'
+      || !after.has(list.pos.startLine)) continue
+    const line = list.pos.startLine
+    if (lineText(ctx.lines, line - 1).trim() !== '') continue
+    const match = /^ +(?=[-*+] |[0-9]+[.)] )/u.exec(lineText(ctx.lines, line))
+    if (match === null) continue
+    const at = lineStart(ctx.lines, line)
+    change(ctx, 'U-109', at, at + match[0].length, '',
+      'document list after a footnote moved to column zero')
+  }
+}
+
+/** Compose inline escapes and braced spans without adding a second slash or a source space. */
+export function inlineEditComposition(ctx: Context): void {
+  const escaped = new Set(ctx.findings.filter(({ record, edit }) => record.entry === 'U-274'
+    && edit?.text === '\\' && edit.start === edit.end).map(({ edit }) => edit!.start))
+  ctx.findings = ctx.findings.filter(({ record, edit }) => record.entry !== 'U-070' || edit?.text !== '\\'
+    || !escaped.has(edit.start))
+  for (const finding of ctx.findings) {
+    const edit = finding.edit
+    if (finding.record.entry !== 'U-066' || edit === null || edit.text !== ' {'
+      || ctx.src[edit.start - 1] !== '|') continue
+    finding.edit = { ...edit, text: '{' }
+    finding.record.message = 'braced strike kept beside its preceding pipe without a space'
+  }
+}
+
 function textOnly(node: Node01): boolean {
   return (node.children ?? []).every((child) => child.type === 'text' || child.type === 'soft_break'
     || (child.type === 'emphasis' && textOnly(child)))
