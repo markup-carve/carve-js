@@ -21,6 +21,8 @@ interface Active {
   /** The line rules per leaf and the block rules per type and parent type, in catalog order. */
   byLeaf: Map<string, LineRun[]>
   byBlock: Map<string, Map<string, BlockRun[]>>
+  /** The inline types the walk records, made once per rule set. */
+  walkTypes?: ReadonlySet<string>
 }
 
 const push = <T>(map: Map<string, T[]>, key: string, value: T): void => {
@@ -83,7 +85,7 @@ function blockRuns(rules: Active, type: string, parent: string): BlockRun[] {
 
 function runLines(model: LineModel<BlockRun>, rules: Active, context: LintContext): void {
   if (rules.lines.length === 0) return
-  for (const line of model.lines) {
+  for (const line of model.lines.all()) {
     const runs = lineRuns(rules, line.leaf)
     if (runs.length === 0) continue
     const path = context.lines[line.number - 1]?.path ?? ''
@@ -106,7 +108,8 @@ export function startDataWalk(document: Node, context: LintContext, active: (id:
   defaults: boolean): DataWalk | undefined {
   const rules = activeRules(active, defaults)
   if (rules.lines.length === 0 && rules.blocks.length === 0 && rules.inline.size === 0) return undefined
-  return new DataWalk(document, new Set([...rules.inline.keys(), ...rules.needInline]), context)
+  rules.walkTypes ??= new Set([...rules.inline.keys(), ...rules.needInline])
+  return new DataWalk(document, rules.walkTypes, context)
 }
 
 /** Run the data rules that `active` keeps on the model of the parsed document, walked by the lint visit. */
@@ -134,4 +137,6 @@ export function runDataRules(walk: DataWalk, context: LintContext, active: (id: 
   runBlocks(model, reportingContext)
   runInline(walk, rules, reportingContext)
   runLines(model, rules, reportingContext)
+  // The lookup index holds every record of the document; kept past the call it would hold the whole document alive.
+  useRecords([], [])
 }
