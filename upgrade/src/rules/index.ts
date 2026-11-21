@@ -39,5 +39,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
   [...RULES, ...LATE_RULES, itemParagraphBreaks],
   [...RULES.map((rule) => rule === tables ? tablesHeadStyles : rule), ...LATE_RULES],
   [...RULES.map((rule) => rule === definitions ? definitionsKeptAfter : rule), ...LATE_RULES],
-  [repairs, ...RULES, ...LATE_RULES],
+  [repairs, ...RULES, ...LATE_RULES, descriptionColumns],
 ]

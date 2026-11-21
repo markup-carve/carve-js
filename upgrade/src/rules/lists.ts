@@ -458,6 +458,7 @@ function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
 /** A `+` line that attaches no block: 0.1 rendered nothing for it, 0.2 reads it as text (C2-B-059), so it goes. */
 function danglingPlus(ctx: Context, used: Set<number>): void {
   for (let line = 1; line <= ctx.lines.count; line++) {
+    if (ctx.repairs === true && quotedLastPlus(ctx, line, used)) continue
     if (used.has(line) || !isGap(ctx, line) || lineText(ctx.lines, line).trim() !== '+') continue
     if (ctx.repairs === true && endsItem(ctx, line)) continue
     change(
@@ -469,6 +470,16 @@ function danglingPlus(ctx: Context, used: Set<number>): void {
       '+ line that attaches no block removed, 0.1 rendered nothing for it'
     )
   }
+}
+
+/** A quoted `+` line that ends its quote attaches nothing either (C2-B-059), so it goes. */
+function quotedLastPlus(ctx: Context, line: number, used: Set<number>): boolean {
+  const text = lineText(ctx.lines, line)
+  if (used.has(line) || !isGap(ctx, line) || text.trim() === '+' || insideQuotes(text).trim() !== '+') return false
+  if (line < ctx.lines.count && !isBlank(lineText(ctx.lines, line + 1))) return false
+  change(ctx, 'U-014', lineStart(ctx.lines, line), lineStart(ctx.lines, line + 1), '',
+    '+ line that attaches no block removed, 0.1 rendered nothing for it')
+  return true
 }
 
 /**

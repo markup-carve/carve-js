@@ -210,7 +210,7 @@ export function blankLines(ctx: Context): void {
       attributeAbove(ctx, above, line)
       continue
     }
-    if (below === above || below.node.pos!.startLine !== line) continue
+    if (below === above || below.node.pos!.startLine !== line || ctx.repairs === true && onNewMarker(above, below, line)) continue
     const entry = entryFor(ctx, kind, above, below, line, notes)
     if (entry === null) continue
     const prefix = quotePrefix(lineText(ctx.lines, line), sharedQuotes(above, below))
@@ -227,6 +227,12 @@ export function blankLines(ctx: Context): void {
       outOfDescription(ctx, entry, above, below, line, line)
     }
   }
+}
+
+/** A block on the marker line of a later item of a list the text above is in: the marker ends it (C2-B-015). */
+function onNewMarker(above: Visit, below: Visit, line: number): boolean {
+  const item = ancestor(below, 'list_item')
+  return item?.parent != null && item.node.pos?.startLine === line && !isInside(above, item) && isInside(above, item.parent)
 }
 
 /** An attribute line under text, and with the repairs the block it belongs to after a description list. */
