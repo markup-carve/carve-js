@@ -501,23 +501,26 @@ interface RepairHistory {
 
 const MAX_REPAIR_CHARS = 20_000_000
 const MIN_REPAIR_ROUNDS = 32
-// C2-W-133: every parse of a repair, its probes included, reads at most this many characters per character of the
-// group, or the floor for a short group, so the repair of any group takes time linear in its size. The floor is
-// above the 20 million characters that the slowest of 20,000 property documents needs (four kilobytes of
-// unclosed braced openers past the depth cap), so no output that finished before is refused now.
+// C2-W-133: the parses of all repairs, their probes included, read at most this many characters per character of
+// the document, or the floor for a short one, so the repairs take time linear in the document however many groups
+// it has. The floor is above the 20 million characters that the slowest of 20,000 property documents needs (four
+// kilobytes of unclosed braced openers past the depth cap).
 const WORK_FACTOR = 1000
 const WORK_FLOOR = 24_000_000
 
 /** C2-W-133: stop a repeated repair state or an exhausted repair budget. */
 function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistory): boolean {
   const chars = w.lines.reduce((total, line) => total + line.length + 1, 0)
+  let spent = false
   if (history.rounds === 0) {
     history.remainingChars = Math.max(history.remainingChars, chars * MIN_REPAIR_ROUNDS)
-    w.work.limit = w.work.chars + Math.max(WORK_FLOOR, chars * WORK_FACTOR)
+    const budget = Math.max(WORK_FLOOR, Math.max(w.work.source, w.work.written + chars) * WORK_FACTOR)
+    w.work.limit = w.work.chars + budget - w.work.spent
+    spent = w.work.spent >= budget
   }
   history.rounds++
   history.remainingChars -= chars
-  if (history.rounds > 8192 || history.remainingChars < 0 || exhausted(w)) {
+  if (spent || history.rounds > 8192 || history.remainingChars < 0 || exhausted(w)) {
     const host = group[0]
     if (host !== undefined) refuseRepair(w, host)
     return true
@@ -975,7 +978,9 @@ function repairBareAlts(w: Writer, document: DocumentNode, from: number, first: 
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
 function repairGroup(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+  const start = w.work.chars
   const end = repairRounds(w, document, from, first, reported)
+  w.work.spent += w.work.chars - start
   w.work.limit = Infinity
   return end
 }
@@ -1074,6 +1079,7 @@ function writeDocument(w: Writer, run: WriterRun, document: DocumentNode): strin
     if (out.length === 0 && w.blankFirst) out.push('')
     const blanks = before === null ? 0 : blankLinesBetween(w, before, list, nodes[from]!, false)
     addLines(out, w.lines, blanks)
+    w.work.written += w.lines.reduce((total, line) => total + line.length + 1, blanks)
     before = nodes[at - 1]!
     list = lastBlock(nodes, from, at, list)
   }
@@ -1374,6 +1380,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
     new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
+  w.work.source = original?.length ?? 0
   const source = writeWithSpanMarks(w, run, document, original)
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
