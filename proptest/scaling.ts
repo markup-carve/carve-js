@@ -151,12 +151,14 @@ function best(work: () => unknown, runs: number): number {
 const SLACK = 2
 const FLOOR_MS = 8
 const STEP_BUDGET_MS = 4000
+const DEEP_MAX_BYTES = 2 * 1024 * 1024
 
 function measure(operation: Operation, build: (n: number) => string, base: number): string | null {
   const times: number[] = []
   const sizes: number[] = []
   for (const factor of [1, 2, 4, 8]) {
     const source = build(base * factor)
+    if (source.length > DEEP_MAX_BYTES && times.length >= 2) break
     const ms = best(() => operation[1](source), factor === 8 ? 2 : 3)
     times.push(ms)
     sizes.push(source.length)
@@ -188,10 +190,14 @@ export function checkScaling(_source: string, rng: Random): Finding | null {
   const chosen = family(rng)
   const base = 50 + rng.int(576)
   const operation = OPERATIONS[rng.int(OPERATIONS.length)]!
-  const deep = chosen.build(Math.min(5000, base * 8))
+  let depth = Math.min(5000, base * 8)
+  let deep = chosen.build(depth)
+  // Families that grow quadratically in bytes reach 24 MB at depth 5,000, which the writer cannot finish in the
+  // case timeout; 2 MB still nests far past every depth cap.
+  while (deep.length > DEEP_MAX_BYTES && depth > 50) deep = chosen.build(depth = Math.max(50, depth >> 1))
   try { operation[1](deep) } catch (error) {
     const found = failure(error)
-    if (found !== null) return { ...found, detail: `${operation[0]} ${chosen.name} n=${Math.min(5000, base * 8)}\n${found.detail}` }
+    if (found !== null) return { ...found, detail: `${operation[0]} ${chosen.name} n=${depth}\n${found.detail}` }
   }
   try {
     const slow = measure(operation, chosen.build, Math.min(base, 625))
