@@ -9,6 +9,8 @@ import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, commentLinesEnd, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { addSpanMarks } from './write-spans.ts'
+import { tableFormat } from './write-table.ts'
+import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
@@ -1365,6 +1367,16 @@ function writeWithSpanMarks(w: Writer, run: WriterRun, document: DocumentNode, o
   return source
 }
 
+/** C2-W-151: the document written without the spaces and tabs that would end a line of text, then restored. */
+function writeTrimmed(w: Writer, run: WriterRun, document: DocumentNode, original: string | null): string {
+  const restore = trimLineEnds(document, (table) => tableFormat(w, table) !== 'pipe')
+  try {
+    return writeWithSpanMarks(w, run, document, original)
+  } finally {
+    restore?.()
+  }
+}
+
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout)):
@@ -1379,7 +1391,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
   w.work.source = original?.length ?? 0
-  const source = writeWithSpanMarks(w, run, document, original)
+  const source = writeTrimmed(w, run, document, original)
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
   rootMetadataLosses(document, diagnostics)

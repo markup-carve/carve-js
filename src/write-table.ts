@@ -357,7 +357,7 @@ function headerRows(w: Writer | null, table: TableNode): number | undefined {
 }
 
 /** C2-W-066: the form of the table, `pipe`, `csv` or `tsv`. */
-function tableFormat(w: Writer, table: TableNode): string {
+export function tableFormat(w: Writer, table: TableNode): string {
   const recorded = w.facts?.get(table)?.sourceFormat
   const rows = rowsOf(table, 'table_head').length + rowsOf(table, 'table_body').length + rowsOf(table, 'table_foot').length
   // C2-L-036: a pipe table needs a row, so a table with none is delimited even where that form loses some of it.
