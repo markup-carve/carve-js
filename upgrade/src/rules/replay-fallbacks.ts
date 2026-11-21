@@ -41,6 +41,50 @@ export function innerFenceRun(ctx: Context): void {
   }
 }
 
+/** Consecutive old headings need their own boundaries when the second mark is indented. */
+export function siblingHeadingBoundary(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    const previous = visit.siblings[visit.index - 1]
+    if (node.type !== 'heading' || node.pos === undefined || previous?.type !== 'heading'
+      || previous.pos === undefined || previous.pos.endLine + 1 !== node.pos.startLine) continue
+    const line = node.pos.startLine
+    if (!/^ +#{1,6}(?:[ \t]|$)/u.test(lineText(ctx.lines, line))) continue
+    change(ctx, 'U-001', lineStart(ctx.lines, line), lineStart(ctx.lines, line), '\n',
+      'blank line keeps the next heading separate from its sibling')
+  }
+}
+
+function attributeBodyColumn(source: string): number | null {
+  return /^([ \t]*[-*+] +)[ \t]*\{[^}\n]+\}[ \t]*$/u.exec(source)?.[1]?.length ?? null
+}
+
+function emptyAttributeBody(ctx: Context, visit: Visit): { line: number; body: number } | null {
+  const item = visit.node
+  if (item.type !== 'list_item' || item.pos === undefined || (item.children?.length ?? 0) !== 0 || visit.index !== 0
+    || visit.parent?.node.type !== 'list') return null
+  const list = visit.parent.node
+  const before = visit.parent.siblings[visit.parent.index - 1]
+  if (list.pos === undefined || before?.type !== 'definition_list'
+    || before.pos?.endLine !== list.pos.startLine - 1) return null
+  const line = item.pos.startLine
+  const column = attributeBodyColumn(lineText(ctx.lines, line))
+  return column === null ? null : { line, body: lineStart(ctx.lines, line) + column }
+}
+
+/** An old empty list item carrying only unattached attributes keeps its empty body. */
+export function emptyAttributeItemAfterDescription(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const place = emptyAttributeBody(ctx, visit)
+    if (place === null) continue
+    const { line, body } = place
+    change(ctx, 'U-008', lineStart(ctx.lines, line), lineStart(ctx.lines, line), '\n',
+      'blank line ends the description before the next list')
+    change(ctx, 'U-034', body, lineEnd(ctx.lines, line), '{% %}',
+      'unattached attributes of an empty item replaced with an empty body')
+  }
+}
+
 function textOnly(node: Node01): boolean {
   return (node.children ?? []).every((child) => child.type === 'text' || child.type === 'soft_break'
     || (child.type === 'emphasis' && textOnly(child)))
