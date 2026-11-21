@@ -43,6 +43,13 @@ describe('glued backtick runs', () => {
       `structure-unspellable ${at(1)}`, `structure-unspellable ${at(3)}`])
   })
 
+  it('a span the leftover of a lost node opens takes the siblings before its own end (carve-js#5320)', () => {
+    const tree = documentOf(paragraph(math('m'), raw('r`'), math('m'), code('c'), math('m')))
+    expect(written(tree)).toBe('$`m``` r` ``{=html}$`m``c`$`m`\n')
+    expect(losses(tree)).toEqual([`field-unspellable ${at(0)}/value`, `structure-unspellable ${at(1)}`,
+      `structure-unspellable ${at(2)}`, `structure-unspellable ${at(3)}`, `structure-unspellable ${at(4)}`])
+  })
+
   it('the comparison goes on behind the run, so a later span is repaired', () => {
     const tree = documentOf(paragraph(math('a'), raw('<b>'), raw('<b>'), { type: 'text', value: 'x`' }, raw('r')))
     const source = written(tree)

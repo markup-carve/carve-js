@@ -1135,28 +1135,56 @@ const VERBATIM: ReadonlySet<string> = new Set(['code', 'literal_inline', 'math',
 
 /**
  * C2-W-117, C2-W-124: the span `a` read on past the spelling of `e` to a later closing run. Every sibling whose
- * spelling starts before that closer is part of `a` and is lost; the text the last one left behind it is stepped over.
+ * spelling starts before that closer is part of `a` and is lost. What the last one leaves behind the closer is read
+ * on: where it opens another span, that span takes the siblings that start before its own end, by the same rule.
  */
 function stepOverAbsorbed(c: Check, e: Node, es: readonly Node[], as: readonly Node[], a: Node, at: Cursor): boolean {
-  const end = a.pos?.endOffset
+  let end = a.pos?.endOffset
   if (end === undefined) return true
   const own = writeInlines(c.w, [e], c.flags)
   // Container prefixes on later lines would stand between the offsets.
   if (own.includes('\n')) return true
-  let offset = a.pos!.startOffset + utf8Length(own)
-  while (offset < end && at.i < es.length && !isBreak(es[at.i])) {
-    const to = gluedEnd(es, at.i)
-    const spelled = writeInlines(c.w, es.slice(at.i, to), c.flags)
-    const start = offset
-    offset += utf8Length(spelled)
-    // The last one reads on behind the closer; where that tail is no text, the comparison goes on from it.
-    const tail = offset > end ? spelled.slice(stringOffsetOfByte(spelled, end - start)) : ''
-    const text = textAt(as, at.j)
-    if (tail !== '' && (text === null || !text.value.startsWith(tail))) return true
-    loseTaken(c, es, at, to)
-    if (text !== null && tail !== '') return stepIntoText(at, text, tail)
+  const taken: Taken = { offset: a.pos!.startOffset + utf8Length(own), start: 0, spelled: '' }
+  for (;;) {
+    loseBefore(c, es, at, taken, end)
+    if (taken.offset < end) return false
+    const next = leftoverNode(as, at, taken.offset)
+    if (next === null) return true
+    if (next.type === 'text') return stepIntoLeftover(at, next as TextNode, leftover(taken, next.pos!.startOffset))
+    end = next.pos!.endOffset
+    at.j++
   }
-  return offset >= end
+}
+
+/** The parse node that starts inside the leftover of the last lost node and runs on past it, or null. */
+function leftoverNode(as: readonly Node[], at: Cursor, offset: number): Node | null {
+  // The parse nodes that lie inside the leftover belong to the lost node.
+  while ((as[at.j]?.pos?.endOffset ?? Infinity) <= offset) at.j++
+  const from = as[at.j]?.pos?.startOffset
+  return from !== undefined && from < offset ? as[at.j]! : null
+}
+
+/** The spelling of the last lost node from the byte `from` on. */
+function leftover(taken: Taken, from: number): string {
+  return taken.spelled.slice(stringOffsetOfByte(taken.spelled, from - taken.start))
+}
+
+/** Where the siblings taken so far end, and the spelling and start of the last of them. */
+interface Taken {
+  offset: number
+  start: number
+  spelled: string
+}
+
+/** Loses the siblings from the cursor on whose spelling starts before `end`. */
+function loseBefore(c: Check, es: readonly Node[], at: Cursor, taken: Taken, end: number): void {
+  while (taken.offset < end && at.i < es.length && !isBreak(es[at.i])) {
+    const to = gluedEnd(es, at.i)
+    taken.spelled = writeInlines(c.w, es.slice(at.i, to), c.flags)
+    taken.start = taken.offset
+    taken.offset += utf8Length(taken.spelled)
+    loseTaken(c, es, at, to)
+  }
 }
 
 /** C2-W-112: the end of the part that starts at `from`, where code spans glued to each other are written as one. */
@@ -1170,7 +1198,9 @@ function loseTaken(c: Check, es: readonly Node[], at: Cursor, to: number): void 
   for (; at.i < to; at.i++) c.losses.push([es[at.i]!, es[at.i]!.type === 'text' ? 'value' : null])
 }
 
-function stepIntoText(at: Cursor, text: TextNode, tail: string): boolean {
+/** The parsed text `text` starts with `tail`, the end of a lost node; the comparison goes on behind it. */
+function stepIntoLeftover(at: Cursor, text: TextNode, tail: string): boolean {
+  if (!text.value.startsWith(tail)) return false
   at.aj = tail.length
   if (at.aj === text.value.length) {
     at.j++
