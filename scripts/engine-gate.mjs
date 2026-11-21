@@ -76,9 +76,7 @@ switch (gate) {
     for (const target of ['parse', 'render', 'format', 'diagnostics', 'extensions', 'decode', 'cli', 'lint', 'migrate', 'import', 'scaling']) {
       if (smoke && target === 'cli') continue
       const count = target === 'import' ? bounds.importProptest : target === 'scaling' ? bounds.scalingProptest : bounds.proptest
-      // carve-js#5259: the nesting input family finds that open writer bug on this seed; the fixed-seed gate keeps
-      // the four families it ran green on until the fix lands. The scaling target and `npm run fuzz` keep nesting.
-      node('proptest/run.ts', '--target', target, '--seed', seed, '--count', count, '--minutes', bounds.minutes, '--max-bytes', 4096, '--no-nesting')
+      node('proptest/run.ts', '--target', target, '--seed', seed, '--count', count, '--minutes', bounds.minutes, '--max-bytes', 4096)
     }
     break
   default: throw new Error(`unknown gate: ${gate}`)
