@@ -9,7 +9,8 @@ import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 import { append } from '../src/append.ts'
-import { DATA_ONLY, dataRulesOn, fromData, runDataRules, startDataWalk } from './data-rules.ts'
+import { DATA_RULE_IDS, runDataRules, startDataWalk } from './data-rules.ts'
+import { DATA_RULES } from './data-tables.ts'
 
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
@@ -114,9 +115,8 @@ function runNodeRules(node: Node, path: string, context: LintContext): void {
 
 function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
   const byType = new Map<Node['type'], Rule[]>()
-  const data = dataRulesOn()
   for (const rule of NODE_RULES) {
-    if (!active(rule.id, options) || fromData(rule.id, data)) continue
+    if (!active(rule.id, options) || DATA_RULE_IDS.has(rule.id)) continue
     for (const type of rule.nodes ?? []) {
       const rules = byType.get(type)
       if (rules === undefined) byType.set(type, [rule])
@@ -221,7 +221,34 @@ function maskLeaf(node: Node, path: string, context: LintContext): void {
   const start = context.chars[startByte] ?? 0
   const end = context.chars[endByte] ?? context.source.length
   context.leafMask.fill(1, start, end)
+  if (!BLOCK_OPAQUE.has(node.type)) unmaskQuotePrefixes(path, start, end, context)
 }
+
+// C2-B-027: the quote marks that prefix a later line of an inline span in a quote are no characters of the span.
+function unmaskQuotePrefixes(path: string, start: number, end: number, context: LintContext): void {
+  let quotes = 0
+  for (let at = path.lastIndexOf('/children/'); at > 0; at = path.lastIndexOf('/children/', at - 1)) {
+    if (context.nodeTypes.get(path.slice(0, at)) === 'block_quote') quotes++
+  }
+  if (quotes === 0) return
+  for (let line = context.source.indexOf('\n', start); line >= 0 && line + 1 < end; line = context.source.indexOf('\n', line + 1)) {
+    context.leafMask.fill(0, line + 1, Math.min(quotePrefixEnd(context.source, line + 1, quotes), end))
+  }
+}
+
+/** The end of up to `quotes` quote marks, each with its leading and one following space or tab, from `at`. */
+function quotePrefixEnd(source: string, at: number, quotes: number): number {
+  const blank = (char: string | undefined): boolean => char === ' ' || char === '\t'
+  for (let mark = 0; mark < quotes; mark++) {
+    while (blank(source[at])) at++
+    if (source[at] !== '>') break
+    at++
+    if (blank(source[at])) at++
+  }
+  return at
+}
+
+const BLOCK_OPAQUE: ReadonlySet<Node['type']> = new Set(['code_block', 'raw_block', 'frontmatter', 'link_reference_definition', 'abbreviation_def'])
 
 function needsMasking(line: Line, mask: Uint8Array): boolean {
   return !line.opaque && (line.text.includes('\\') || mask.subarray(line.start, line.end).includes(1))
@@ -287,6 +314,148 @@ function filterControls(context: LintContext, controls: Control[][]): Diagnostic
   return output
 }
 
+const NODE_ORDER: ReadonlyMap<string, number> = new Map([
+  ['include-attributes-unused', 0],
+  ['include-lines-table-rows-hint', 1],
+  ['deprecated-bare-underline', 2],
+  ['deprecated-bare-strike', 3],
+  ['deprecated-bare-highlight', 4],
+  ['markdown-strong-double-star', 5],
+  ['markdown-strikethrough-double-tilde', 6],
+  ['djot-emphasis-underscore', 7],
+  ['djot-subscript-tilde', 8],
+  ['djot-superscript-caret', 9],
+  ['a11y/image-alt', 10],
+  ['empty-link-destination', 11],
+  ['deprecated-loose-attribute', 12],
+  ['deprecated-table-attribute', 13],
+  ['heading-level-skip', 14],
+  ['heading-marker-mixed', 15],
+  ['heading-closing-hashes', 16],
+  ['heading-trailing-attribute', 17],
+  ['duplicate-reference-url', 18],
+  ['deprecated-separator-row', 19],
+  ['table-row-cell-count', 20],
+  ['figure-group-empty', 21],
+  ['figure-group-single-panel', 22],
+  ['deprecated-substitution-arrow', 23],
+  ['frontmatter-shaped-thematic-break', 24],
+  ['blockquote-marker-without-space', 25],
+  ['html-comment-renders-as-text', 26],
+  ['bidi-control-in-source', 27],
+  ['description-term-multi-line', 28],
+  ['deprecated-indented-line-under-heading', 29],
+  ['figure-group-nested', 30],
+  ['figure-group-panel-number', 31],
+  ['footnotes-placement-in-container', 32],
+  ['references-placement-in-container', 33],
+  ['semantic-attribute-outside-span', 34],
+  ['semantic-attribute-value-ignored', 35],
+  ['table-column-arity', 36],
+  ['table-attribute-invalid', 37],
+  ['table-row-count-clamped', 38],
+  ['comment-splits-table-row', 39],
+  ['table-width-total', 40],
+  ['table-row-attribute-as-cell', 41],
+  ['emphasis-as-heading', 42],
+  ['comment-shaped-emphasis', 43],
+  ['glob-shaped-strong', 44],
+  ['djot-subscript-tilde-braced', 45],
+  ['djot-highlight-braces', 46],
+  ['unattached-inline-attribute', 47],
+  ['deprecated-cell-alignment', 48],
+  ['table-marker-run-padding', 49],
+  ['fence-closer-indented', 50],
+  ['figure-group-opener-metadata', 51],
+  ['comment-line-in-line-block', 52],
+  ['broken-crossref', 53],
+  ['broken-fragment-link', 54],
+  ['platform-issue-reference', 55],
+  ['platform-mention-token', 56],
+  ['delimited-table-wide-row', 57],
+  ['djot-intraword-underscore', 58],
+  ['emphasis-marker-before-attributes', 59],
+  ['emphasis-marker-before-attributes', 60],
+  ['carve-version-unsupported', 61],
+  ['blank-reference-label', 62],
+  ['comment-fence-closer-with-text', 63],
+  ['comment-in-reference-label', 64],
+  ['footnote-labels-differ-only-in-whitespace', 65],
+  ['table-column-overlap', 66],
+  ['tight-list-item-with-blank-line', 67],
+  ['braced-comment-in-a-template-source', 68],
+  ['region-marker-renders-as-text', 69],
+  ['unclosed-braced-comment', 70],
+  ['unclosed-inline-emphasis', 71],
+  ['ordered-list-kind-split', 72],
+  ['sigil-after-letter', 73],
+  ['list-item-body-below-content-column', 74],
+  ['list-item-block-overindented', 75],
+  ['list-marker-below-content-column', 76],
+  ['block-opener-overindented', 77],
+  ['braced-span-opener-as-text', 78],
+  ['consumed-key-near-miss', 79],
+  ['ordered-marker-right-aligned', 80],
+  ['table-span-marker-blocked', 81],
+  ['table-span-marker-attribute', 82],
+  ['uneven-list-indent', 83],
+  ['non-descriptive-link-text', 84],
+  ['unresolved-reference-link', 85],
+  ['unused-link-reference-definition', 86],
+  ['unresolved-footnote', 87],
+  ['unused-footnote-definition', 88],
+])
+
+const LINE_ORDER: ReadonlyMap<string, number> = new Map([
+  ['deprecated-continuation-marker', 0],
+  ['thematic-break-spelling', 1],
+  ['setext-heading-underline', 2],
+  ['deprecated-spaced-thematic-break', 3],
+  ['block-marker-as-text', 4],
+  ['html-comment-renders-as-text', 5],
+  ['bare-html-tag', 6],
+  ['empty-reference-definition', 7],
+  ['table-shaped-paragraph', 8],
+  ['blockquote-marker-without-space', 9],
+  ['block-opener-without-blank-line', 10],
+  ['list-marker-without-blank-line', 11],
+  ['indented-code-block', 12],
+  ['unattached-caption', 13],
+  ['unattached-block-attribute', 14],
+  ['markdown-definition-paragraph', 15],
+  ['empty-include-path', 16],
+  ['link-gap-before-destination', 17],
+  ['djot-plus-bullet', 18],
+  ['definition-in-container', 19],
+  ['definition-term-block-folded', 20],
+  ['github-alert-marker', 21],
+  ['djot-heading-continuation', 22],
+  ['quote-fence-ends-the-quote-above', 23],
+  ['region-marker-renders-as-text', 24],
+  ['caption-looking-paragraph', 25],
+  ['colon-fence-length-mismatch', 26],
+  ['description-separator-below-content-column', 27],
+  ['table-row-without-closing-pipe', 28],
+])
+
+const DIAGNOSTIC_KIND: ReadonlyMap<string, number> = new Map([
+  ...DATA_RULES.map((rule): [string, number] => [rule.id, rule.over === 'line' ? 2 : 1]),
+  ...NODE_RULES.map((rule): [string, number] => [rule.id, 1]),
+  ...LINE_RULES.map((rule): [string, number] => [rule.id, 2]),
+])
+
+function diagnosticOrigin(diagnostic: Diagnostic): string {
+  const path = diagnostic.path ?? ''
+  if (diagnostic.code !== 'table-row-cell-count') return path
+  const row = path.lastIndexOf('/children/')
+  const group = path.lastIndexOf('/children/', row - 1)
+  return group < 0 ? path : path.slice(0, group)
+}
+
+function diagnosticKind(diagnostic: Diagnostic): number {
+  return diagnostic.channel === 'lint' ? (DIAGNOSTIC_KIND.get(diagnostic.code) ?? 1) : 0
+}
+
 function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnostic[] {
   const buckets = new Map<number, Diagnostic[]>()
   for (const diagnostic of diagnostics) {
@@ -296,9 +465,25 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
     else bucket.push(diagnostic)
   }
   const output: Diagnostic[] = []
+  let visitOrder: Map<string, number> | undefined
   const length = context.bytes[context.source.length] ?? 0
   for (let at = 0; at <= length; at++) {
     const bucket = buckets.get(at)
+    if (bucket !== undefined && bucket.length > 1) {
+      bucket.sort((a, b) => {
+        const aKind = diagnosticKind(a)
+        const bKind = diagnosticKind(b)
+        if (aKind !== bKind) return aKind - bKind
+        if (aKind === 1) {
+          visitOrder ??= new Map([...context.nodeTypes.keys()].map((path, index) => [path, index]))
+          const visit = (visitOrder.get(diagnosticOrigin(a)) ?? 0) - (visitOrder.get(diagnosticOrigin(b)) ?? 0)
+          if (visit !== 0) return visit
+          return (NODE_ORDER.get(a.code) ?? 999) - (NODE_ORDER.get(b.code) ?? 999)
+        }
+        if (aKind === 2) return (LINE_ORDER.get(a.code) ?? 999) - (LINE_ORDER.get(b.code) ?? 999)
+        return 0
+      })
+    }
     if (bucket !== undefined) append(output, bucket)
   }
   return output
@@ -367,25 +552,25 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
     ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
-  const data = dataRulesOn()
   // The default rule set is the same on every call, so its compiled rule lists are kept.
   const defaults = options.rules === undefined && options.platforms === undefined
-  const runsFromData = (id: RuleId): boolean => active(id, options) && fromData(id, data)
-  const walk = startDataWalk(parsed.document, context, runsFromData, defaults && data)
+  const walk = startDataWalk(parsed.document, context, (id) => active(id, options), defaults)
   if (walk !== undefined) context.dataWalk = walk
   visit(parsed.document, '', context, controls)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
-  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !fromData(rule.id, data))
+  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !DATA_RULE_IDS.has(rule.id))
   for (const line of scanLines) {
     if (line.opaque) continue
     for (const rule of activeLineRules) rule.checkLine?.(line, context)
   }
-  if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, runsFromData, defaults && data)
+  if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, (id) => active(id, options), defaults)
   const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
   return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
 }
 
-// The rows of DATA_ONLY have no hand-written rule; data/lint-model.json implements them.
-export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES, ...[...DATA_ONLY].map((id) => ({ id: id as RuleId }))]
+export const IMPLEMENTED_RULES: readonly Rule[] = [
+  ...[...LINE_RULES, ...NODE_RULES].filter((rule) => !DATA_RULE_IDS.has(rule.id)),
+  ...DATA_RULES.map((rule): Rule => ({ id: rule.id, ...(rule.over === 'line' ? { lines: true } : {}) })),
+]
 export type { LintOptions } from './types.ts'

@@ -1,11 +1,11 @@
-import { forEachSlot, INLINE_PARENTS, type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
+import { forEachSlot, type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
 import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
-import { columnOf, readPrefix } from '../src/layout-lines.ts'
+import { readPrefix } from '../src/layout-lines.ts'
 import { advanceColumn } from '../src/source.ts'
-import { escaped, isWord, pairedMarks } from '../src/pair-marks.ts'
+import { escaped, isWord } from '../src/pair-marks.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -39,46 +39,6 @@ function reportAttribute(id: Rule['id'], node: Node, path: string, context: Lint
   const range = attributeRange(node, context, key, whole)
   if (range !== null) context.report(id, range[0], range[1], path, values)
   else reportNode(id, node, path, context, values)
-}
-
-function textPair(mark: string, id: Rule['id']): (node: Node, path: string, context: LintContext) => void {
-  return (node, path, context) => checkTextPair(node, path, context, mark, id)
-}
-
-function checkTextPair(node: Node, path: string, context: LintContext, mark: string, id: Rule['id']): void {
-  if (!INLINE_PARENTS.includes(node.type as typeof INLINE_PARENTS[number]) || !('children' in node)) return
-  if (path.includes('/title/') && context.nodeTypes.get(path.slice(0, path.indexOf('/title/'))) === 'code_block') return
-  let first: number | undefined
-  let last = 0
-  const flush = (): void => {
-    if (first === undefined) return
-    const begin = first
-    pairedMarks(context.source.slice(begin, last), mark, id, (start, end) => context.report(id, begin + start, begin + end, path))
-    first = undefined
-  }
-  for (const child of node.children) {
-    if (child.type !== 'text' && child.type !== 'soft_break') { flush(); continue }
-    const range = bounds(child, context)
-    if (range === null) continue
-    first ??= range[0]
-    last = range[1]
-  }
-  flush()
-}
-
-function imageAlt(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'image' && node.alt === '' && node.decorative !== true) {
-    reportNode('a11y/image-alt', node, path, context)
-  }
-}
-
-function emptyDestination(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'link' && node.href === '') reportNode('empty-link-destination', node, path, context)
-}
-
-function looseAttribute(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list') return
-  if (node.attrs?.keyValues?.some(([key]) => key === 'loose')) reportNode('deprecated-loose-attribute', node, path, context)
 }
 
 function tableAttribute(node: Node, path: string, context: LintContext): void {
@@ -196,104 +156,9 @@ function readAttributeValue(line: string, offset: number): string {
   return line.slice(start, end)
 }
 
-function headingLevel(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'heading') return
-  const previous = context.state.headingLevel
-  if (previous > 0 && node.level > previous + 1) {
-    reportNode('heading-level-skip', node, path, context, { previous: String(previous), level: String(node.level) })
-  }
-  context.state.headingLevel = node.level
-}
-
-function headingKind(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'heading') return
-  const source = raw(node, context)
-  const kind = source.trimStart()[0]
-  if (kind === '#' || kind === '=') {
-    const range = bounds(node, context)
-    if (context.state.firstHeading === null && range !== null) context.state.firstHeading = { range, path }
-    context.state.headingKinds.add(kind)
-    const first = context.state.firstHeading
-    if (context.state.headingKinds.size === 2 && !context.state.mixedReported && first !== null) {
-      context.report('heading-marker-mixed', first.range[0], first.range[1], first.path)
-      context.state.mixedReported = true
-    }
-  }
-}
-
-function headingClosing(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'heading') return
-  const end = raw(node, context).trimEnd()
-  // C2-B-153: an `=` heading too; the run needs heading text before its space, so `= ##` is left alone.
-  const marker = /^[ \t]*(?:#+|=+)[ \t]/.exec(end)?.[0].length ?? 0
-  const run = /[ \t](#+)$/.exec(end)
-  const hash = run === null ? -1 : run.index
-  if (hash >= marker && end.slice(marker, hash).trim() !== '') {
-    const range = bounds(node, context)
-    if (range !== null) context.report('heading-closing-hashes', range[0] + hash + 1, range[0] + end.length,
-      path, { run: end.slice(hash + 1) })
-  }
-}
-
-function headingTrailing(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'heading') return
-  const end = raw(node, context).trimEnd()
-  const brace = end.lastIndexOf(' {')
-  if (brace >= 0 && /^\{\s*[.#][^{}]*\}$/.test(end.slice(brace + 1))) {
-    const block = end.slice(brace + 1)
-    const range = bounds(node, context)
-    if (range !== null) context.report('heading-trailing-attribute', range[0] + brace + 1, range[0] + end.length,
-      path, { block })
-  }
-}
-
-function duplicateReferenceUrl(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'link_reference_definition') return
-  if (context.state.referenceUrls.has(node.href)) reportNode('duplicate-reference-url', node, path, context)
-  else context.state.referenceUrls.add(node.href)
-}
-
-function separatorRow(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table_row' || node.children.length === 0) return
-  if (!path.endsWith('/children/1')) return
-  const line = raw(node, context).trim()
-  if (!line.startsWith('|') || !line.endsWith('|')) return
-  const cells = line.slice(1, -1).split('|')
-  if (cells.length < 1 || !cells.every(isSeparatorCell)) return
-  const previousLine = context.lines[(node.pos?.startLine ?? 1) - 2]?.text ?? ''
-  const previous = previousLine.slice(previousLine.indexOf('|')).trim()
-  if (!previous.startsWith('|') || previous.slice(1, -1).split('|').every(isSeparatorCell)) return
-  reportNode('deprecated-separator-row', node, path, context)
-}
-
-function isSeparatorCell(value: string): boolean {
-  const text = value.trim()
-  if (text.length < 1) return false
-  let hyphens = 0
-  for (const ch of text) {
-    if (ch === '-') hyphens++
-    else if (ch !== ':') return false
-  }
-  return hyphens >= 1
-}
-
 /** C2-A-084: a child of a group that carries a caption; C2-B-127: a nested figure group is a group of its own, no panel. */
 function isPanel(child: Node): boolean {
   return child.type === 'table' || (child.type !== 'figure_group' && 'caption' in child && child.caption !== undefined)
-}
-
-function panelCount(node: Node): number {
-  if (node.type !== 'figure_group') return 0
-  return node.children.filter(isPanel).length
-}
-
-function figureEmpty(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'figure_group') return
-  if (panelCount(node) === 0) reportNode('figure-group-empty', node, path, context)
-}
-
-function figureSingle(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'figure_group' && panelCount(node) === 1) reportNode('figure-group-single-panel', node, path, context)
 }
 
 function substitutionArrow(node: Node, path: string, context: LintContext): void {
@@ -306,24 +171,6 @@ function substitutionArrow(node: Node, path: string, context: LintContext): void
     for (let at = source.indexOf('~>'); at >= 0; at = source.indexOf('~>', at + 2)) {
       if (!escaped(source, at)) return reportNode('deprecated-substitution-arrow', node, path, context)
     }
-  }
-}
-
-function frontmatterBreak(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'frontmatter') return
-  if (!/^---[ \t]*\r?\n/.test(raw(node, context))) return
-  const value = node.value.trim()
-  const first = node.value.split('\n', 1)[0]?.trim() ?? ''
-  if (first === '' || value === '' || !value.includes(':')) reportNode('frontmatter-shaped-thematic-break', node, path, context)
-}
-
-function frontmatterQuote(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'frontmatter' || node.pos === undefined) return
-  for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
-    const line = context.lines[number - 1]
-    if (line === undefined || !/^>[^ ]/.test(line.text) || line.text.length < 2) continue
-    context.report('blockquote-marker-without-space', line.start, line.start + line.text.replace(/[ \t]+$/u, '').length, path,
-      { text: line.text.slice(1) }, 1)
   }
 }
 
@@ -345,16 +192,6 @@ function bidiControl(node: Node, path: string, context: LintContext): void {
       context.report('bidi-control-in-source', range[0] + at, range[0] + at + 1, path,
         { code: code.toString(16).toUpperCase().padStart(4, '0') })
     }
-  }
-}
-
-function multilineTerm(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'definition_term' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
-  const line = context.lines[node.pos.startLine]
-  if (line !== undefined) {
-    const text = line.text.trimStart()
-    const start = line.start + line.text.length - text.length
-    context.report('description-term-multi-line', start, line.end, path)
   }
 }
 
@@ -399,11 +236,6 @@ function figurePanelNumber(node: Node, path: string, context: LintContext): void
       reportNode('figure-group-panel-number', panel, `${path}/children/${at}`, context)
     }
   }
-}
-
-function footnotePlacement(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'directive' || path.split('/').length <= 3) return
-  if (node.kind === 'footnotes') reportNode('footnotes-placement-in-container', node, path, context)
 }
 
 function referencesPlacement(node: Node, path: string, context: LintContext): void {
@@ -469,21 +301,6 @@ function rowAttributeCell(node: Node, path: string, context: LintContext): void 
   if (cell.startsWith('{') && cell.endsWith('}')) reportNode('table-row-attribute-as-cell', node, path, context)
 }
 
-function emphasizedHeading(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'paragraph') return
-  const visible = node.children.filter((child) => child.type !== 'comment' && (child.type !== 'text' || child.value.trim() !== ''))
-  if (visible.length !== 1 || (visible[0]?.type !== 'emphasis' && visible[0]?.type !== 'strong')) return
-  reportNode('emphasis-as-heading', node, path, context)
-}
-
-function commentEmphasis(node: Node, path: string, context: LintContext): void {
-  const source = raw(node, context)
-  if ((node.type === 'emphasis' && (source.startsWith('/*') || source.endsWith('*/')))
-    || (node.type === 'strong' && (source.startsWith('*/') || source.endsWith('/*')))) {
-    reportNode('comment-shaped-emphasis', node, path, context)
-  }
-}
-
 function multilineHtmlComment(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'paragraph') return
   const range = bounds(node, context)
@@ -493,24 +310,6 @@ function multilineHtmlComment(node: Node, path: string, context: LintContext): v
     const end = source.indexOf('-->', at + 4)
     if (end < 0 || !source.slice(at, end).includes('\n') || escaped(source, at)) continue
     context.report('html-comment-renders-as-text', range[0] + at, range[0] + end + 3, path)
-  }
-}
-
-function globStrong(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'strong' && raw(node, context).startsWith('*.') && raw(node, context).endsWith('*')) {
-    reportNode('glob-shaped-strong', node, path, context)
-  }
-}
-
-function djotBracedStrike(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'strike' && raw(node, context).startsWith('{~')) {
-    reportNode('djot-subscript-tilde-braced', node, path, context)
-  }
-}
-
-function djotBracedHighlight(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'highlight' && raw(node, context).startsWith('{=')) {
-    reportNode('djot-highlight-braces', node, path, context)
   }
 }
 
@@ -575,58 +374,6 @@ function deprecatedCellAlignment(node: Node, path: string, context: LintContext)
   if (run === null || range === null) return
   const at = raw(node, context).indexOf(run.prefix)
   context.report('deprecated-cell-alignment', range[0] + at, range[0] + at + run.prefix.length, path, run)
-}
-
-function markerRunPadding(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table_cell') return
-  const source = raw(node, context).trimStart()
-  if (!source.startsWith('{')) return
-  const close = source.indexOf('}')
-  const marker = source[close + 1]
-  if (close < 2 || marker === undefined || !'<>~'.includes(marker)) return
-  const block = source.slice(0, close + 1)
-  const range = bounds(node, context)
-  if (range === null) return
-  const start = range[0] + raw(node, context).indexOf(block)
-  context.report('table-marker-run-padding', start, start + block.length + 1, path,
-    { spelling: block + marker, marker, block, correctedPrefix: `{${marker} ${block.slice(1, -1)}}` })
-}
-
-function backtickRunLength(line: string, at: number): number {
-  return /^`+/.exec(line.slice(at))?.[0].length ?? 0
-}
-
-function fenceCloserPrefix(line: LintContext['lines'][number], path: string, context: LintContext): number {
-  const quotes = quoteDepth(path, context)
-  return quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
-}
-
-function fenceCloserIndent(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'code_block' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
-  const first = context.lines[node.pos.startLine - 1]
-  const last = context.lines[node.pos.endLine - 1]
-  if (first === undefined || last === undefined) return
-  const opener = first.text.indexOf('```')
-  const closer = last.text.indexOf('```')
-  if (opener < 0 || closer < 0 || opener === closer) return
-  if (backtickRunLength(last.text, closer) < backtickRunLength(first.text, opener)) return
-  const prefix = fenceCloserPrefix(last, path, context)
-  if (last.text.slice(prefix - last.start, closer).trim() !== '' || !/^`{3,}[ \t]*$/.test(last.text.slice(closer))) return
-  context.report('fence-closer-indented', last.start + closer, last.end, path)
-}
-
-function figureOpenerMetadata(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'div' || !node.attrs?.classes?.includes('figure')) return
-  const first = context.lines[node.pos?.startLine === undefined ? 0 : node.pos.startLine - 1]
-  if (first === undefined || !first.text.trimStart().startsWith('::: figure ')) return
-  if (first.text.includes('"') || first.text.includes('[')) {
-    context.report('figure-group-opener-metadata', first.start, first.end, path)
-  }
-}
-
-function commentInLineBlock(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'line' || !raw(node, context).trimStart().startsWith('%%')) return
-  reportNode('comment-line-in-line-block', node, path, context)
 }
 
 function brokenCrossref(node: Node, path: string, context: LintContext): void {
@@ -775,27 +522,6 @@ function carveVersion(node: Node, path: string, context: LintContext): void {
   }
 }
 
-function commentFenceCloserText(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'comment' || node.form !== 'block' || node.pos === undefined) return
-  const openerStart = context.chars[node.pos.startOffset] ?? 0
-  const opener = context.source.slice(openerStart, context.lines[node.pos.startLine - 1]?.end ?? openerStart)
-  let width = 0
-  while (opener[width] === '%') width++
-  if (width < 3) return
-  const quotes = quoteDepth(path, context)
-  for (let lineNumber = node.pos.startLine + 1; lineNumber <= node.pos.endLine; lineNumber++) {
-    const line = context.lines[lineNumber - 1]
-    if (line === undefined) continue
-    const prefix = quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
-    const text = line.text.slice(prefix - line.start).trimStart()
-    let run = 0
-    while (text[run] === '%') run++
-    if (run >= width && text.slice(run).trim() !== '') {
-      context.report('comment-fence-closer-with-text', line.start, line.end, path)
-    }
-  }
-}
-
 function commentInLabel(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'comment' || node.form !== 'line' || node.pos === undefined) return
   const line = context.lines[node.pos.startLine - 1]
@@ -851,16 +577,6 @@ function tightBlankLine(node: Node, path: string, context: LintContext): void {
   }
 }
 
-function templateComment(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'comment' || node.form !== 'braced') return
-  const source = raw(node, context)
-  const content = source.startsWith('{%') ? source.slice(2, -2).trim() : ''
-  if (['raw', 'endraw', 'endif', 'endfor', 'endblock'].includes(content)
-    || /^(?:if|for|block)\s+\S/.test(content)) {
-    reportNode('braced-comment-in-a-template-source', node, path, context)
-  }
-}
-
 function regionComment(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'comment' || node.form !== 'line' || !/^#(?:end)?region(?![A-Za-z0-9_])/i.test(node.value)) return
   if (/^#(?:end)?region(?![A-Za-z0-9_])/.test(node.value)) return
@@ -897,19 +613,6 @@ function unclosedEmphasis(node: Node, path: string, context: LintContext): void 
 
 const NOT_SPAN = [...NODE_SLOTS.keys()].filter((type) => type !== 'span') as Node['type'][]
 // C2-I-079: a footnote label, a full reference's label or a definition label of only whitespace.
-const BLANK_LABEL = /\[\^[ \t\n]+\]|(?<=\])\[[ \t\n]+\]|^\[[ \t]+\]:/gm
-
-function blankReferenceLabel(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'text') return
-  const source = raw(node, context)
-  if (!source.includes('[')) return
-  const range = bounds(node, context)
-  if (range === null) return
-  for (const match of source.matchAll(BLANK_LABEL)) {
-    const end = match.index + match[0].length
-    context.report('blank-reference-label', range[0] + match.index, range[0] + end, path, { text: match[0] })
-  }
-}
 
 function sigilAfterLetter(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
@@ -930,70 +633,8 @@ function sigilAfterLetter(node: Node, path: string, context: LintContext): void 
 }
 
 /** C2-W-106 table: a block of an item, after its first, that starts past the marker and short of the content column. */
-function listItemBodyColumn(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list_item') return
-  const layout = context.layouts.get(path)
-  const marker = layout?.markerColumn
-  const content = layout?.contentColumn
-  if (marker === undefined || content === undefined) return
-  for (const child of node.children.slice(1)) {
-    const line = child.pos === undefined ? undefined : context.lines[child.pos.startLine - 1]
-    const start = child.pos === undefined ? undefined : context.chars[child.pos.startOffset]
-    const column = start === undefined ? undefined : columnOf(context.source, start, quoteDepth(path, context))
-    if (line === undefined || column === undefined || column <= marker || column >= content) continue
-    const at = start ?? line.start
-    context.report('list-item-body-below-content-column', at, line.end, path)
-  }
-}
 
 /** Each block of a list item, other than a paragraph, that starts past the item's content column. */
-function blockColumn(node: Node, path: string, context: LintContext): number | undefined {
-  const marker = context.layouts.get(path)?.markerColumn
-  // An attached attribute line starts the node before its block marker.
-  if (marker !== undefined && node.attrs === undefined) return marker
-  const start = node.pos === undefined ? undefined : context.chars[node.pos.startOffset]
-  return start === undefined ? undefined : columnOf(context.source, start, quoteDepth(path, context))
-}
-
-function isLintableItemBlock(child: Node | undefined): child is Node & { pos: NonNullable<Node['pos']> } {
-  // The row lists its openers one by one, and an include directive is none of them (carve#6193).
-  if (child === undefined || child.pos === undefined || child.type === 'list' || child.type === 'comment'
-    || child.type === 'include') return false
-  return child.type !== 'paragraph' || child.attrs !== undefined ||
-    child.children.length === 1 && child.children[0]?.type === 'image'
-}
-
-function overindentedBlocks(node: Node, path: string, context: LintContext,
-  visit: (path: string, child: Node, start: number, end: number, past: number, content: number) => void): void {
-  if (node.type !== 'list_item') return
-  const layout = context.layouts.get(path)
-  const content = layout?.contentColumn
-  const marker = layout?.markerColumn
-  if (content === undefined || marker === undefined) return
-  const scan = (children: Node[], parentPath: string): void => {
-    for (let at = 0; at < children.length; at++) {
-      const child = children[at]
-      if (child === undefined) continue
-      const childPath = `${parentPath}/children/${at}`
-      if (isLintableItemBlock(child)) {
-        const line = context.lines[child.pos.startLine - 1]
-        const column = blockColumn(child, childPath, context)
-        if (line !== undefined && column !== undefined && column > content) {
-          visit(childPath, child, line.start + child.pos.startColumn - 1, line.end, column - content, content)
-        }
-      }
-      if (child.type === 'div' || child.type === 'admonition' || child.type === 'directive' || child.type === 'figure_group') {
-        scan(child.children, childPath)
-      }
-    }
-  }
-  scan(node.children, path)
-}
-
-function listItemBlockIndent(node: Node, path: string, context: LintContext): void {
-  overindentedBlocks(node, path, context, (childPath, _child, start, end, _past, content) => context.report(
-    'list-item-block-overindented', start, end, childPath, { contentColumn: String(content + 1) }))
-}
 
 /** The marker column of the list item that holds the list at `path`, or undefined at the top of a container. */
 function outerMarkerColumn(path: string, context: LintContext): number | undefined {
@@ -1050,93 +691,9 @@ function quoteDepth(path: string, context: LintContext): number {
   return depth
 }
 
-function ownerContentColumn(ownerPath: string, ownerType: string, quotes: number, context: LintContext): number {
-  if (ownerType === 'block_quote' || ownerType === 'document') return 0
-  const ownerLayout = context.layouts.get(ownerPath)
-  if (ownerLayout?.contentColumn !== undefined) return ownerLayout.contentColumn
-  if (ownerLayout === undefined) return 0
-  const ownerStart = context.chars[ownerLayout.startByte] ?? 0
-  return columnOf(context.source, ownerStart, quotes)
-}
-
-function blockOwner(path: string, context: LintContext): { path: string, type: string } {
-  let split = path.lastIndexOf('/children/')
-  let ownerPath = split < 0 ? '' : path.slice(0, split)
-  let ownerType = context.nodeTypes.get(ownerPath) ?? 'document'
-  while (ownerType === 'definition_list' && split > 0) {
-    split = ownerPath.lastIndexOf('/children/')
-    ownerPath = split < 0 ? '' : ownerPath.slice(0, split)
-    ownerType = context.nodeTypes.get(ownerPath) ?? 'document'
-  }
-  return { path: ownerPath, type: ownerType }
-}
-
-function listItemThroughDiv(path: string, ownerType: string, context: LintContext): boolean {
-  if (ownerType === 'list_item') return true
-  let ancestor = path
-  let type = ownerType
-  while (type === 'div' || type === 'admonition' || type === 'directive' || type === 'figure_group') {
-    const split = ancestor.lastIndexOf('/children/')
-    ancestor = split < 0 ? '' : ancestor.slice(0, split)
-    type = context.nodeTypes.get(ancestor) ?? 'document'
-    if (type === 'list_item') return true
-  }
-  return false
-}
-
 /** The whole opening mark of a block opener, as the row of `block-opener-overindented` states its range (carve#6192). */
-function openingMarkWidth(node: Node, text: string): number {
-  if (node.type === 'block_quote' || node.type === 'table') return 1
-  if (node.type === 'definition_term') return 2
-  if (node.type === 'thematic_break') return text.trimEnd().length
-  const mark = text[0]
-  if (mark === undefined || !'#=:`~|'.includes(mark)) return 1
-  let width = 1
-  while (text[width] === mark) width++
-  return width
-}
 
 /** Where the opening mark of a block stands: an attributed block starts at its attribute lines (C2-W-138). */
-function openerBehindAttributes(node: Node, context: LintContext): { start: number, line: LintContext['lines'][number] } | undefined {
-  if (node.pos === undefined) return undefined
-  let start = context.chars[node.pos.startOffset] ?? 0
-  let number = node.pos.startLine
-  let line = context.lines[number - 1]
-  while (node.attrs !== undefined && line !== undefined) {
-    const rest = line.text.slice(start - line.start).trimEnd()
-    const next = context.lines[number]
-    if (next === undefined || !rest.startsWith('{') || !isAttributeLine(rest, 0, rest.length)) break
-    // The opener may stand at another indent than its attribute line: find its first character on its own line.
-    let at = Math.min(start - line.start, next.text.length)
-    while (at < next.text.length && (next.text[at] === ' ' || next.text[at] === '\t')) at++
-    while (at > 0 && !' \t>'.includes(next.text[at - 1]!)) at--
-    start = next.start + at
-    line = next
-    number++
-  }
-  return line === undefined ? undefined : { start, line }
-}
-
-function blockOverindent(node: Node, path: string, context: LintContext): void {
-  if (node.pos === undefined) return
-  const { path: ownerPath, type: ownerType } = blockOwner(path, context)
-  if (listItemThroughDiv(ownerPath, ownerType, context)) return
-  const opener = openerBehindAttributes(node, context)
-  if (opener === undefined) return
-  const { start, line } = opener
-  if (line.text.slice(0, start - line.start).endsWith('> ')) return
-  const quotes = quoteDepth(path, context)
-  const column = columnOf(context.source, start, quotes)
-  const content = ownerContentColumn(ownerPath, ownerType, quotes, context)
-  if (column <= content) return
-  const colonDiv = node.type === 'div' || node.type === 'directive' || node.type === 'admonition'
-    || node.type === 'figure_group'
-  const kind = node.type === 'block_quote' ? 'quote' : colonDiv ? 'div' : node.type.replaceAll('_', ' ')
-  const width = openingMarkWidth(node, line.text.slice(start - line.start))
-  const past = column - content
-  context.report('block-opener-overindented', start, start + width, path,
-    { kind, past: String(past), columns: past === 1 ? 'column' : 'columns', owner: ownerType.replaceAll('_', ' ') })
-}
 
 function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
@@ -1271,21 +828,6 @@ function unresolvedReference(node: Node, path: string, context: LintContext): vo
   context.state.unresolvedReferences.push({ node, path })
 }
 
-function unusedReference(node: Node, _path: string, context: LintContext): void {
-  if ((node.type === 'link' || node.type === 'image') && node.key !== undefined) context.state.usedReferences.add(node.key)
-}
-
-function unresolvedFootnote(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'footnote_ref' && node.number === undefined) {
-    reportNode('unresolved-footnote', node, path, context, { id: node.key })
-  }
-}
-
-function unusedFootnote(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'footnote') context.state.footnoteDefinitions.push({ node, path })
-  else if (node.type === 'footnote_ref') context.state.usedFootnotes.add(node.key)
-}
-
 function fragmentNames(href: string): [string, string] {
   const fragment = href.slice(1).split(':~:', 1)[0] ?? ''
   try { return [fragment, decodeURIComponent(fragment)] }
@@ -1343,41 +885,14 @@ function reportUnresolvedReference(item: { node: Node, path: string }, context: 
     { rawRef, caseOnlyPhrase: `the label ${caseOnly[0] ?? ''} differs only in case` }, index)
 }
 
-function reportUnusedReferences(context: LintContext): void {
-  // The rule runs by hand only where its node rule is registered: not when it is off, nor when it runs from data.
-  if (!(context.nodeRules.get('link_reference_definition') ?? []).some((rule) => rule.id === 'unused-link-reference-definition')) return
-  for (const item of context.state.referenceDefinitions) {
-    if (item.node.type === 'link_reference_definition' && !context.state.usedReferences.has(item.node.key)) {
-      reportNode('unused-link-reference-definition', item.node, item.path, context)
-    }
-  }
-}
-
 function finishReferences(context: LintContext): void {
   for (const item of context.state.unresolvedReferences) reportUnresolvedReference(item, context)
-  reportUnusedReferences(context)
-}
-
-function finishFootnotes(context: LintContext): void {
-  if (context.options.rules?.['unused-footnote-definition'] !== 'off') {
-    for (const item of context.state.footnoteDefinitions) {
-      if (item.node.type === 'footnote' && !context.state.usedFootnotes.has(item.node.key)) {
-        const range = bounds(item.node, context)
-        if (range === null) continue
-        const key = `[^${item.node.key}]`
-        const at = context.source.slice(range[0], range[1]).indexOf(key)
-        if (at >= 0) context.report('unused-footnote-definition', range[0] + at,
-          range[0] + at + key.length, item.path, { label: item.node.key })
-      }
-    }
-  }
 }
 
 export function finishStructure(context: LintContext): void {
   finishFragments(context)
   finishCrossrefs(context)
   finishReferences(context)
-  finishFootnotes(context)
   for (let at = context.diagnostics.length - 1; at >= 0; at--) {
     const entry = context.diagnostics[at]!
     if (entry.code !== 'platform-issue-reference' && entry.code !== 'platform-mention-token') continue
@@ -1389,64 +904,21 @@ export function finishStructure(context: LintContext): void {
 }
 
 /** C2-N-072: the attribute line above an include without `code` applies to nothing. */
-function includeAttributesUnused(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'include' && node.attrs !== undefined && node.options?.code === undefined) {
-    reportNode('include-attributes-unused', node, path, context)
-  }
-}
 
 /** C2-N-088: `lines` on a delimited table include counts physical lines, where `rows` counts records. */
-function includeLinesTableRows(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'include' || node.options?.lines === undefined) return
-  const code = node.options.code
-  const table = node.attrs?.keyValues?.some(([key]) => key === 'table') === true
-  if (table && (code === 'csv' || code === 'tsv')) {
-    const range = bounds(node, context)
-    if (range === null) return
-    const source = raw(node, context)
-    const start = source.indexOf('@lines:')
-    if (start >= 0) context.report('include-lines-table-rows-hint', range[0] + start,
-      range[0] + start + source.slice(start).split(/[\s}]/, 1)[0]!.length, path)
-  }
-}
 
 function nodeRule(id: Rule['id'], nodes: readonly Node['type'][] , checkNode: NonNullable<Rule['checkNode']>): Rule {
   return { id, nodes, checkNode }
 }
 
 export const NODE_RULES: readonly Rule[] = [
-  nodeRule('include-attributes-unused', ['include'], includeAttributesUnused),
-  nodeRule('include-lines-table-rows-hint', ['include'], includeLinesTableRows),
-  nodeRule('deprecated-bare-underline', INLINE_PARENTS, textPair('_', 'deprecated-bare-underline')),
-  nodeRule('deprecated-bare-strike', INLINE_PARENTS, textPair('~', 'deprecated-bare-strike')),
-  nodeRule('deprecated-bare-highlight', INLINE_PARENTS, textPair('=', 'deprecated-bare-highlight')),
-  nodeRule('markdown-strong-double-star', INLINE_PARENTS, textPair('**', 'markdown-strong-double-star')),
-  nodeRule('markdown-strikethrough-double-tilde', INLINE_PARENTS, textPair('~~', 'markdown-strikethrough-double-tilde')),
-  nodeRule('djot-emphasis-underscore', INLINE_PARENTS, textPair('_', 'djot-emphasis-underscore')),
-  nodeRule('djot-subscript-tilde', INLINE_PARENTS, textPair('~', 'djot-subscript-tilde')),
-  nodeRule('djot-superscript-caret', INLINE_PARENTS, textPair('^', 'djot-superscript-caret')),
-  nodeRule('a11y/image-alt', ['image'], imageAlt),
-  nodeRule('empty-link-destination', ['link'], emptyDestination),
-  nodeRule('deprecated-loose-attribute', ['list'], looseAttribute),
-  nodeRule('deprecated-table-attribute', ['table'], tableAttribute),
-  nodeRule('heading-level-skip', ['heading'], headingLevel),
-  nodeRule('heading-marker-mixed', ['heading'], headingKind),
-  nodeRule('heading-closing-hashes', ['heading'], headingClosing),
-  nodeRule('heading-trailing-attribute', ['heading'], headingTrailing),
-  nodeRule('duplicate-reference-url', ['link_reference_definition'], duplicateReferenceUrl),
-  nodeRule('deprecated-separator-row', ['table_row'], separatorRow),
-  nodeRule('figure-group-empty', ['figure_group'], figureEmpty),
-  nodeRule('figure-group-single-panel', ['figure_group'], figureSingle),
-  nodeRule('deprecated-substitution-arrow', ['strike'], substitutionArrow),
-  nodeRule('frontmatter-shaped-thematic-break', ['frontmatter'], frontmatterBreak),
-  nodeRule('blockquote-marker-without-space', ['frontmatter'], frontmatterQuote),
-  nodeRule('html-comment-renders-as-text', ['paragraph'], multilineHtmlComment),
+                            nodeRule('deprecated-table-attribute', ['table'], tableAttribute),
+                  nodeRule('deprecated-substitution-arrow', ['strike'], substitutionArrow),
+      nodeRule('html-comment-renders-as-text', ['paragraph'], multilineHtmlComment),
   nodeRule('bidi-control-in-source', ['text', 'code', 'code_block', 'math'], bidiControl),
-  nodeRule('description-term-multi-line', ['definition_term'], multilineTerm),
-  nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
+    nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
   nodeRule('figure-group-panel-number', ['figure_group'], figurePanelNumber),
-  nodeRule('footnotes-placement-in-container', ['directive'], footnotePlacement),
-  nodeRule('references-placement-in-container', ['directive'], referencesPlacement),
+    nodeRule('references-placement-in-container', ['directive'], referencesPlacement),
   nodeRule('semantic-attribute-outside-span', NOT_SPAN, semanticOutside),
   nodeRule('semantic-attribute-value-ignored', ['span'], semanticValue),
   nodeRule('table-column-arity', ['table'], tableColumnArity),
@@ -1455,18 +927,9 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('comment-splits-table-row', ['table'], commentSplitsRow),
   nodeRule('table-width-total', ['table'], tableWidth),
   nodeRule('table-row-attribute-as-cell', ['table_row'], rowAttributeCell),
-  nodeRule('emphasis-as-heading', ['paragraph'], emphasizedHeading),
-  nodeRule('comment-shaped-emphasis', ['emphasis', 'strong'], commentEmphasis),
-  nodeRule('glob-shaped-strong', ['strong'], globStrong),
-  nodeRule('djot-subscript-tilde-braced', ['strike'], djotBracedStrike),
-  nodeRule('djot-highlight-braces', ['highlight'], djotBracedHighlight),
-  nodeRule('unattached-inline-attribute', ['text'], unattachedInline),
+            nodeRule('unattached-inline-attribute', ['text'], unattachedInline),
   nodeRule('deprecated-cell-alignment', ['table_cell'], deprecatedCellAlignment),
-  nodeRule('table-marker-run-padding', ['table_cell'], markerRunPadding),
-  nodeRule('fence-closer-indented', ['code_block'], fenceCloserIndent),
-  nodeRule('figure-group-opener-metadata', ['div'], figureOpenerMetadata),
-  nodeRule('comment-line-in-line-block', ['line'], commentInLineBlock),
-  nodeRule('broken-crossref', ['xref'], brokenCrossref),
+          nodeRule('broken-crossref', ['xref'], brokenCrossref),
   nodeRule('broken-fragment-link', ['link'], collectFragment),
   nodeRule('platform-issue-reference', ['text'], platformIssue),
   nodeRule('platform-mention-token', ['text', 'mention'], platformMention),
@@ -1475,23 +938,15 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('emphasis-marker-before-attributes', ['text'], emphasisBeforeAttrs),
   nodeRule('emphasis-marker-before-attributes', ['strong', 'emphasis'], spanMarkerBeforeAttrs),
   nodeRule('carve-version-unsupported', ['frontmatter'], carveVersion),
-  nodeRule('blank-reference-label', ['text'], blankReferenceLabel),
-  nodeRule('comment-fence-closer-with-text', ['comment'], commentFenceCloserText),
-  nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
+      nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
   nodeRule('table-column-overlap', ['table'], tableColumnOverlap),
   nodeRule('tight-list-item-with-blank-line', ['list'], tightBlankLine),
-  nodeRule('braced-comment-in-a-template-source', ['comment'], templateComment),
-  nodeRule('region-marker-renders-as-text', ['comment'], regionComment),
+    nodeRule('region-marker-renders-as-text', ['comment'], regionComment),
   nodeRule('unclosed-braced-comment', ['text'], unclosedBracedComment),
   nodeRule('unclosed-inline-emphasis', ['text'], unclosedEmphasis),
   nodeRule('sigil-after-letter', ['text'], sigilAfterLetter),
-  nodeRule('list-item-body-below-content-column', ['list_item'], listItemBodyColumn),
-  nodeRule('list-item-block-overindented', ['list_item'], listItemBlockIndent),
-  nodeRule('list-marker-below-content-column', ['list'], listMarkerBelowColumn),
-  nodeRule('block-opener-overindented', ['block_quote', 'div', 'directive', 'admonition', 'figure_group',
-    'code_block', 'raw_block', 'line_block', 'definition_term', 'heading',
-    'thematic_break', 'table'], blockOverindent),
-  nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
+      nodeRule('list-marker-below-content-column', ['list'], listMarkerBelowColumn),
+    nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
   nodeRule('consumed-key-near-miss', ['code_block'], consumedNearMiss),
   nodeRule('ordered-marker-right-aligned', ['list'], orderedRightAligned),
   nodeRule('table-span-marker-blocked', ['table_cell'], spanMarkerBlocked),
@@ -1499,7 +954,4 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('uneven-list-indent', ['list'], unevenListIndent),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
   nodeRule('unresolved-reference-link', ['link', 'image'], unresolvedReference),
-  nodeRule('unused-link-reference-definition', ['link', 'image', 'link_reference_definition'], unusedReference),
-  nodeRule('unresolved-footnote', ['footnote_ref'], unresolvedFootnote),
-  nodeRule('unused-footnote-definition', ['footnote', 'footnote_ref'], unusedFootnote),
-]
+      ]
