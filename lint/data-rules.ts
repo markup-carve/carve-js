@@ -13,8 +13,9 @@ export const DATA_RULE_IDS: ReadonlySet<string> = new Set(DATA_RULES.map((rule) 
 
 /** The rows whose hand-written rule is gone: they run from data whether or not the switch is on. */
 export const DATA_ONLY: ReadonlySet<string> = new Set(['block-marker-as-text', 'broken-crossref', 'broken-fragment-link',
-  'html-comment-renders-as-text', 'list-marker-below-content-column', 'ordered-marker-right-aligned', 'region-marker-renders-as-text',
-  'tight-list-item-with-blank-line', 'uneven-list-indent', 'unresolved-reference-link'])
+  'description-separator-below-content-column', 'html-comment-renders-as-text', 'list-marker-below-content-column',
+  'markdown-definition-paragraph', 'ordered-marker-right-aligned', 'region-marker-renders-as-text', 'tight-list-item-with-blank-line',
+  'uneven-list-indent', 'unresolved-reference-link'])
 
 /** Whether a rule runs from data: every data rule with the switch on, the rows of DATA_ONLY without it. */
 export function fromData(id: string, data: boolean): boolean {

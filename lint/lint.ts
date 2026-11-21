@@ -146,10 +146,9 @@ function visitChildren(node: Node, path: string, context: LintContext, controls:
   }, SOURCE_ORDER)
 }
 
-function markDescriptionAndCloser(node: Node, context: LintContext): void {
+function markCloser(node: Node, context: LintContext): void {
   const pos = node.pos
   if (pos === undefined) return
-  if (node.type === 'definition_description') context.state.descriptionStarts.add(pos.startLine)
   if (['div', 'admonition', 'figure_group', 'line_block', 'block_quote'].includes(node.type) && pos.endLine > pos.startLine
     && /^\s*:{3,}\s*$/.test(context.lines[pos.endLine - 1]?.text ?? '')) context.state.containerClosers.add(pos.endLine)
 }
@@ -167,7 +166,7 @@ function visit(node: Node, path: string, context: LintContext, controls: Control
   collectKeys(node, path, context)
   if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
   const pos = node.pos
-  markDescriptionAndCloser(node, context)
+  markCloser(node, context)
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
     node.type, path, pos.startLine, pos.endLine)
   markContent(node, context)
@@ -316,7 +315,6 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, firstHeading: null, referenceUrls: new Set(),
       footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
-      descriptionStarts: new Set(),
       containerClosers: new Set(),
       usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [],
       footnoteDefinitions: [] },

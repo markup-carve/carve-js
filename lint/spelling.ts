@@ -1,4 +1,3 @@
-import { columnOf } from '../src/layout-lines.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { type Line, type LintContext, type Rule } from './types.ts'
@@ -324,15 +323,6 @@ function unattachedAttribute(line: Line, context: LintContext): void {
     !finalLineFeed && blankness(next, line, context) === 'blank' ? 1 : 0)
 }
 
-function markdownDefinition(line: Line, context: LintContext): void {
-  const { text, start } = lineText(line)
-  const previous = prior(line, context)
-  // C2-B-074: a later line of its paragraph, below a line that is no `::` term.
-  if (!line.paragraphLeaf || previous === undefined || previous.path !== line.path || !/^:[ \t]./.test(text)) return
-  if (lineText(previous).text.startsWith(':: ') || belowListColumn(line, context) !== undefined) return
-  context.report('markdown-definition-paragraph', start, start + text.length, line.path)
-}
-
 function emptyInclude(line: Line, context: LintContext): void {
   if (!line.paragraph) return
   for (const match of line.text.matchAll(/\{\{([^{}]*)\}\}/g)) {
@@ -431,68 +421,6 @@ function captionLooking(line: Line, context: LintContext): void {
   if (below || above) context.report('caption-looking-paragraph', start, start + 1, line.path, {}, below ? 0 : 1)
 }
 
-function ancestorOf(path: string, context: LintContext, type: string): string | undefined {
-  let current = path
-  while (current !== '') {
-    if (context.nodeTypes.get(current) === type) return current
-    const split = current.lastIndexOf('/children/')
-    if (split < 0) return undefined
-    current = current.slice(0, split)
-  }
-  return undefined
-}
-
-function quoteDepth(path: string, context: LintContext): number {
-  let depth = 0
-  for (let at = path.indexOf('/children/'); at >= 0; at = path.indexOf('/children/', at + 1)) {
-    if (context.nodeTypes.get(path.slice(0, at)) === 'block_quote') depth++
-  }
-  return depth + (context.nodeTypes.get(path) === 'block_quote' ? 1 : 0)
-}
-
-// C2-B-067, C2-B-071, C2-B-074: a colon mark that opens no entry, below a description list whose first term
-// mark stands further right.
-function opensEntry(line: Line, context: LintContext): boolean {
-  if (context.nodeTypes.get(line.path) === 'definition_term' && firstLineOfPath(line.path, context) === line.number) return true
-  const description = ancestorOf(line.path, context, 'definition_description')
-  return description !== undefined && firstLineOfPath(description, context) === line.number
-}
-
-/** The column of the first term mark of the description list the nearest non-blank line above at the same quote depth lies in. */
-function listColumnAbove(line: Line, context: LintContext): number | undefined {
-  const depth = quoteDepth(line.path, context)
-  for (let at = line.number - 2; at >= 0; at--) {
-    const host = context.lines[at]
-    if (host === undefined || host.text.trim() === '' || quoteDepth(host.path, context) !== depth) continue
-    const list = ancestorOf(host.path, context, 'definition_list')
-    const listStart = list === undefined ? undefined : context.layouts.get(list)?.startByte
-    if (list === undefined || listStart === undefined) return undefined
-    return columnOf(context.source, context.chars[listStart] ?? 0, quoteDepth(list, context))
-  }
-  return undefined
-}
-
-interface BelowColumn { text: string, start: number, column: number, hostColumn: number }
-
-function belowListColumn(line: Line, context: LintContext): BelowColumn | undefined {
-  // A quote-shaped lazy line outside a quote starts with `>`, not with the colon behind it.
-  if (quoteDepth(line.path, context) === 0 && line.text.trimStart().startsWith('>')) return undefined
-  if (context.state.descriptionStarts.has(line.number)) return undefined
-  const { text, start } = contentLine(line)
-  if (!/^::?(?:[ \t]|$)/.test(text) || opensEntry(line, context)) return undefined
-  const hostColumn = listColumnAbove(line, context)
-  // C2-B-004: columns count tab stops.
-  const column = columnOf(context.source, start, quoteDepth(line.path, context))
-  return hostColumn !== undefined && hostColumn > column ? { text, start, column, hostColumn } : undefined
-}
-
-function descriptionColumn(line: Line, context: LintContext): void {
-  const found = belowListColumn(line, context)
-  if (found === undefined) return
-  const { text, start, column, hostColumn } = found
-  context.report('description-separator-below-content-column', start, start + text.length, line.path,
-    { name: text.startsWith('::') ? 'term' : 'description', column: String(column + 1), 'host.column': String(hostColumn + 1) })
-}
 
 const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'directive', 'admonition', 'figure_group', 'line_block', 'block_quote'])
 const COLON_OWNER_BARRIERS: ReadonlySet<string> = new Set(['block_quote', 'list_item', 'definition_description', 'footnote'])
@@ -707,7 +635,6 @@ export const LINE_RULES: readonly Rule[] = [
   spacedRule('indented-code-block', indentedCode),
   spacedRule('unattached-caption', unattachedCaption),
   spacedRule('unattached-block-attribute', unattachedAttribute),
-  spacedRule('markdown-definition-paragraph', markdownDefinition),
   spacedRule('empty-include-path', emptyInclude),
   spacedRule('link-gap-before-destination', linkGap),
   spacedRule('djot-plus-bullet', djotPlus),
@@ -718,6 +645,5 @@ export const LINE_RULES: readonly Rule[] = [
   spacedRule('quote-fence-ends-the-quote-above', quoteFenceSibling),
   spacedRule('caption-looking-paragraph', captionLooking),
   spacedRule('colon-fence-length-mismatch', colonFenceLength),
-  spacedRule('description-separator-below-content-column', descriptionColumn),
   spacedRule('table-row-without-closing-pipe', rowWithoutPipe),
 ]
