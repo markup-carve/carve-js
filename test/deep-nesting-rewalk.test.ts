@@ -106,6 +106,11 @@ describe('long lines without a rescan per position', () => {
     expectNearPlain(source, lint)
   }, 120_000)
 
+  // The text behind the quote marks of a line was sliced and searched again for every `> `.
+  it('lints a 128 KB line of `> ` about as fast as plain text', () => {
+    expectNearPlain(`${'> '.repeat(64 * 1024)}a\n`, lint)
+  }, 120_000)
+
   // The class guard: one line of a short unit repeated, 1 KB against 4 KB. Linear work grows 4 times; the shapes
   // above grew 14 to 16 times before.
   it('keeps parse, render and lint linear on repeated short units', () => {
