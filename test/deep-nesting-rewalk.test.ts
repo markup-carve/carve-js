@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatWithDiagnostics, lint, parse, treesEqual } from '../src/index.ts'
+import { formatWithDiagnostics, lint, parse, render, treesEqual } from '../src/index.ts'
 import { exportDocument } from '../public/export.ts'
 
 // Nested `::: c` fences, each shorter than the one before, as the fuzz round found them: a document nested to
@@ -86,4 +86,52 @@ describe('deep nesting without a walk per level', () => {
       }
     })
   }
+})
+
+describe('long lines without a rescan per position', () => {
+  // The escape mask of lint counted the backslashes before every punctuation mark back from it.
+  it('lints a 64 KB run of backslashes about as fast as plain text', () => {
+    expectNearPlain(`${'\\'.repeat(64 * 1024)}\n`, lint)
+  }, 120_000)
+
+  // emphasis-marker-before-attributes looked for the `}` and scanned the block from every `_{`.
+  it('lints 64 KB of `_{` before one `}` about as fast as plain text', () => {
+    expectNearPlain(`${'_{'.repeat(32 * 1024)}}\n`, lint)
+  }, 120_000)
+
+  // A row whose quoted attribute might hold the later pipes scanned for the `}` from every pipe.
+  it('parses and lints 64 KB of `|{` about as fast as plain text', () => {
+    const source = `${'|{'.repeat(32 * 1024)}\n`
+    expectNearPlain(source, parse)
+    expectNearPlain(source, lint)
+  }, 120_000)
+
+  // The class guard: one line of a short unit repeated, 1 KB against 4 KB. Linear work grows 4 times; the shapes
+  // above grew 14 to 16 times before.
+  it('keeps parse, render and lint linear on repeated short units', () => {
+    const alphabet = ['[', ']', '(', ')', '\\', '{', '}', '<', '_', '|', '!', '`', ' ']
+    const units = alphabet.flatMap((first) => [first, ...alphabet.map((second) => first + second)])
+    const best = (work: () => unknown, runs: number): number => {
+      let fastest = Infinity
+      for (let run = 0; run < runs; run++) {
+        const started = performance.now()
+        work()
+        fastest = Math.min(fastest, performance.now() - started)
+      }
+      return fastest
+    }
+    const slow: string[] = []
+    for (const [name, work] of [['parse', parse], ['render', render], ['lint', lint]] as const) {
+      for (const unit of units) {
+        for (const suffix of ['', '}', ']']) {
+          const line = (size: number): string => `${unit.repeat(Math.ceil(size / unit.length))}${suffix}\n`
+          const small = best(() => work(line(1024)), 2)
+          if (best(() => work(line(4096)), 2) <= 10 * Math.max(small, 1)) continue
+          const again = best(() => work(line(4096)), 3)
+          if (again > 10 * Math.max(small, 1)) slow.push(`${name} ${JSON.stringify(unit)}${JSON.stringify(suffix)}: ${small.toFixed(1)} to ${again.toFixed(1)} ms`)
+        }
+      }
+    }
+    expect(slow).toEqual([])
+  }, 300_000)
 })
