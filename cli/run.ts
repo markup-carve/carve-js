@@ -13,6 +13,7 @@ import cli from '../data/cli.json' with { type: 'json' }
 import lintRules from '../data/lint-rules.json' with { type: 'json' }
 import { FLAGS, type ParsedArgs, UsageError } from './flags.ts'
 import { cliIncludes } from './include-fs.ts'
+import { DirectoryImportError, importMarkdownDirectory, type DirectoryFormat } from './directory-import.ts'
 import { lint } from '../lint/lint.ts'
 import { fixSource } from './fix.ts'
 import { flatten } from '../src/flatten.ts'
@@ -670,9 +671,25 @@ function operationLine(operation: PatchOperation): string {
   return `${operation.op} ${operation.path === '' ? '/' : operation.path}${value}\n`
 }
 
+/**
+ * `import --directory SOURCE --output TARGET` (C2-T-003): the tree of Markdown files as a new tree of Carve files.
+ * Status 1 with `--strict-losses` when a file needs review or an entry was skipped.
+ */
+function importDirectory(args: ParsedArgs): number {
+  let summary: ReturnType<typeof importMarkdownDirectory>
+  try { summary = importMarkdownDirectory(args.values['directory'] as string, args.values['output'] as string, args.values['from'] as DirectoryFormat) }
+  catch (error) {
+    if (error instanceof DirectoryImportError) throw new CliError(error.unreadable ? 'input-unreadable' : 'usage', error.message)
+    throw error
+  }
+  process.stdout.write(`${summary.files} file(s) converted; ${summary.assets} asset(s) copied; ${summary.review} file(s) need review; ${summary.skipped} entry(s) skipped. Report: ${summary.report}\n`)
+  return args.values['strict-losses'] === true && (summary.review > 0 || summary.skipped > 0) ? 1 : 0
+}
+
 /** C2-T-011, C2-T-017: the files in order; a failure of status 2 stops the run, one of status 1 ends its file. */
 export function run(args: ParsedArgs): number {
   if (args.command === 'diff') return diffFiles(args)
+  if (args.command === 'import' && typeof args.values['directory'] === 'string') return importDirectory(args)
   const files = args.files.length === 0 ? ['-'] : args.files
   includedTexts.clear()
   rawHtmlEscaped = false
