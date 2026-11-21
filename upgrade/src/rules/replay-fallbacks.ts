@@ -253,6 +253,23 @@ export function inlineEditComposition(ctx: Context): void {
   }
 }
 
+/** A removed empty quote marker inside an old footnote must not leave a blank body line. */
+export function emptyQuoteInFootnote(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos
+  if (typeof positions !== 'object' || positions === null) return
+  const spans = Object.values(positions as Record<string, { startLine: number; endLine: number }>)
+  for (const finding of ctx.findings) {
+    const edit = finding.edit
+    if (finding.record.entry !== 'U-038' || edit === null || edit.text !== '') continue
+    const line = lineOf(ctx.lines, edit.start)
+    if (!spans.some((pos) => pos.startLine < line && line < pos.endLine)
+      || !/^[ \t]*>{2,}[ \t]*$/u.test(lineText(ctx.lines, line))
+      || edit.end !== lineEnd(ctx.lines, line) || ctx.src[edit.end] !== '\n') continue
+    finding.edit = { ...edit, end: edit.end + 1 }
+    finding.record.message = 'empty quoted line removed without splitting the old footnote body'
+  }
+}
+
 function textOnly(node: Node01): boolean {
   return (node.children ?? []).every((child) => child.type === 'text' || child.type === 'soft_break'
     || (child.type === 'emphasis' && textOnly(child)))

@@ -15,7 +15,7 @@ import { shortcuts } from './shortcuts.ts'
 import { includes, tables, tablesHeadStyles } from './tables.ts'
 import {
   abbreviationSpaces, continuedHeaderRow, crossLineStrong, descriptionAfterQuotedTerm, duplicateItemDefinitions,
-  emptyAttributeItemAfterDescription, emptyAttributeQuote,
+  emptyAttributeItemAfterDescription, emptyAttributeQuote, emptyQuoteInFootnote,
   emptyColonDiv,
   flippedStrong, footnoteQuoteAfterDescription, inlineEditComposition, innerFenceRun, legacyPlusDash, listAfterFootnote,
   literalLinkBeforeCode,
@@ -56,5 +56,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary, literalQuoteAfterAttributes, innerFenceRun,
     siblingHeadingBoundary, emptyAttributeItemAfterDescription, emptyColonDiv, continuedHeaderRow,
     descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
-    footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition],
+    footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote],
 ]

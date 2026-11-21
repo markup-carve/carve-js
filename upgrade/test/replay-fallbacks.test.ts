@@ -112,7 +112,7 @@ describe('replay fallback families', () => {
     const input = '\\!\\"\\#\\$\\%\\&\\\'\\(\\)\\*\\+\\,\\-\\.\\/\\:\\;\\<\\=\\>\\?\\@\\[\\\\\\]\\^\\_\\`\\{\\|\\}\\~ done\n*a {*b**} c*\n{#i}\n'
     const result = upgrade(input)
     expect(result.check).toBe('pass')
-    expect(result.output).toBe(input)
+    expect(result.output).toBe(input.replace('\n{#i}\n', '\n'))
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
@@ -121,6 +121,14 @@ describe('replay fallback families', () => {
     const result = upgrade(input)
     expect(result.check).toBe('pass')
     expect(result.output).toBe('{|= a |= b |{~{+b~>c+}~}>a~}\n@user\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('removes an empty quoted line without splitting the footnote body', () => {
+    const input = '1. a\n   [^f]: note\n    more\n>> \ntail\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('1. a\n\n[^f]: note\n more\ntail\n')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
