@@ -221,7 +221,25 @@ function maskLeaf(node: Node, path: string, context: LintContext): void {
   const start = context.chars[startByte] ?? 0
   const end = context.chars[endByte] ?? context.source.length
   context.leafMask.fill(1, start, end)
+  // C2-B-027: the quote marks that prefix a later line of an inline span in a quote are no characters of the span.
+  let quotes = 0
+  for (let at = path.lastIndexOf('/children/'); at > 0; at = path.lastIndexOf('/children/', at - 1)) {
+    if (context.nodeTypes.get(path.slice(0, at)) === 'block_quote') quotes++
+  }
+  if (quotes === 0 || BLOCK_OPAQUE.has(node.type)) return
+  for (let line = context.source.indexOf('\n', start); line >= 0 && line + 1 < end; line = context.source.indexOf('\n', line + 1)) {
+    let at = line + 1
+    for (let mark = 0; mark < quotes; mark++) {
+      while (context.source[at] === ' ' || context.source[at] === '\t') at++
+      if (context.source[at] !== '>') break
+      at++
+      if (context.source[at] === ' ' || context.source[at] === '\t') at++
+    }
+    context.leafMask.fill(0, line + 1, Math.min(at, end))
+  }
 }
+
+const BLOCK_OPAQUE: ReadonlySet<Node['type']> = new Set(['code_block', 'raw_block', 'frontmatter', 'link_reference_definition', 'abbreviation_def'])
 
 function needsMasking(line: Line, mask: Uint8Array): boolean {
   return !line.opaque && (line.text.includes('\\') || mask.subarray(line.start, line.end).includes(1))
