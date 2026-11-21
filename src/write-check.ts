@@ -1422,6 +1422,24 @@ function stepOverLostText(c: Check, es: readonly Node[], as: readonly Node[], at
   return true
 }
 
+/** A failed construct on one line cannot hide constructs on following lines of the same paragraph. */
+function nextBreak(nodes: readonly Node[], from: number): number {
+  for (let at = from; at < nodes.length; at++) if (isBreak(nodes[at])) return at
+  return nodes.length
+}
+
+function resyncNextConstructLine(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
+  if (es[at.i]?.type === 'text') return false
+  const i = nextBreak(es, at.i + 1)
+  const j = nextBreak(as, at.j)
+  if (i === es.length || j === as.length || es[i]?.type !== as[j]?.type) return false
+  const expected = es[i]?.pos
+  const actual = as[j]?.pos
+  if (expected === undefined || actual === undefined || expected.startLine !== actual.startLine) return false
+  if (changes(c) === 0) for (let k = at.i; k < i; k++) c.losses.push([es[k]!, null])
+  return resumeAt(at, i + 1, j + 1)
+}
+
 function compareInlines(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
   const outer = c.owner
   c.owner = owner
@@ -1435,7 +1453,8 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
     setAnchor(es, as, at)
     const e = es[at.i]!
     const more = e.type === 'text' ? matchText(c, e, es, as, at, owner) : matchNode(c, e, es, as, at, owner)
-    if (!more && !resync(c, es, as, at) && !stepOverLostText(c, es, as, at)) return
+    if (!more && !resync(c, es, as, at) && !stepOverLostText(c, es, as, at) &&
+      !resyncNextConstructLine(c, es, as, at)) return
   }
   if (at.j < as.length) c.losses.push([owner, null])
 }
