@@ -61,29 +61,41 @@ function cliCheck(source: string, seed: number): Finding | null {
   return null
 }
 
+function startWorker(): { worker: Worker, ready: Promise<void> } {
+  const worker = new Worker(new URL('./case-worker.ts', import.meta.url))
+  return { worker, ready: new Promise((resolve) => worker.once('message', () => resolve())) }
+}
+
 class Checker {
   private worker: Worker | null = null
+  private ready: Promise<void> = Promise.resolve()
   private readonly target: Target
 
   constructor(target: Target) {
     this.target = target
-    if (target !== 'cli') this.worker = new Worker(new URL('./case-worker.ts', import.meta.url))
+    if (target !== 'cli') this.restart()
   }
 
-  check(source: string, seed: number): Promise<Finding | null> {
-    if (this.target === 'cli') return Promise.resolve(cliCheck(source, seed))
+  private restart(): void {
+    ({ worker: this.worker, ready: this.ready } = startWorker())
+  }
+
+  async check(source: string, seed: number): Promise<Finding | null> {
+    if (this.target === 'cli') return cliCheck(source, seed)
+    await this.ready
     const worker = this.worker
-    if (worker === null) return Promise.resolve({ kind: 'harness-exception', detail: 'missing worker' })
+    if (worker === null) return { kind: 'harness-exception', detail: 'missing worker' }
     return new Promise((resolve) => {
       // C2-W-089: the writer may need several repair passes for one group.
       const writerTarget = this.target === 'render' || this.target === 'format' || this.target === 'diagnostics' ||
         this.target === 'extensions' || this.target === 'import'
-      const timeout = Math.max(writerTarget ? 30000 : 3000, Buffer.byteLength(source) / 10240 * 500)
+      const base = this.target === 'scaling' ? 180000 : writerTarget ? 30000 : 3000
+      const timeout = Math.max(base, Buffer.byteLength(source) / 10240 * 500)
       const timer = setTimeout(() => {
         worker.removeAllListeners('message')
         worker.removeAllListeners('error')
         void worker.terminate().then(() => {
-          this.worker = new Worker(new URL('./case-worker.ts', import.meta.url))
+          this.restart()
           resolve({ kind: 'no-termination', detail: `over ${timeout} ms` })
         }, (error: unknown) => resolve({ kind: 'worker-exception', detail: String(error) }))
       }, timeout)
@@ -95,7 +107,7 @@ class Checker {
       worker.once('error', (error: Error) => {
         clearTimeout(timer)
         worker.removeAllListeners('message')
-        this.worker = new Worker(new URL('./case-worker.ts', import.meta.url))
+        this.restart()
         resolve({ kind: 'worker-exception', detail: String(error) })
       })
       worker.postMessage({ target: this.target, source, seed })
@@ -114,6 +126,7 @@ function signature(finding: Finding | null): string {
   }
   if (finding.kind === 'parse-invalid-tree') return `${finding.kind}:${finding.detail.split('\n')[0]}`
   if (finding.kind.startsWith('option-')) return `${finding.kind}:${finding.detail.split(':')[0]}`
+  if (finding.kind.startsWith('scaling-')) return `${finding.kind}:${finding.detail.split('\n')[0]}`
   return finding.kind
 }
 
@@ -223,7 +236,8 @@ async function save(checker: Checker, target: Target, source: string, seed: numb
   const path = join('proptest/findings', target)
   mkdirSync(path, { recursive: true })
   const wanted = signature(finding)
-  const deadline = Date.now() + 20_000
+  // A scaling case is fully decided by its seed; its source is empty and there is nothing to shrink.
+  const deadline = target === 'scaling' ? Date.now() : Date.now() + 20_000
   const witness = await singleCharacterWitness(checker, source, seed, wanted, deadline)
   const lines = await removeLines(checker, witness, seed, wanted, deadline)
   const shrunk = await removeBytes(checker, lines, seed, wanted, deadline)
@@ -290,7 +304,7 @@ async function main(): Promise<number> {
   const seen = new Set<string>()
   let cases = 0
   for (; cases < options.count && Date.now() < deadline; cases++) {
-    const source = options.target === 'decode' || options.target === 'migrate' ?
+    const source = options.target === 'scaling' ? '' : options.target === 'decode' || options.target === 'migrate' ?
       generateJson(rng, options.target === 'migrate') : generate(rng, corpus, options.maxBytes)
     const caseSeed = rng.int(0x7fffffff)
     const found = await checker.check(source, caseSeed)

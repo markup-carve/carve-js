@@ -4,6 +4,8 @@ import {
   type Inline, type ListNode, type TableCellNode, type TableRowNode,
 } from '../../src/index.ts'
 
+import type { ImportConstruct } from './hub-constructs.ts'
+
 export type Format = 'markdown' | 'gfm' | 'djot' | 'bbcode' | 'html'
 export type ImportDiagnostic = Diagnostic & { foreignType?: string }
 export interface ImportResult {
@@ -12,6 +14,8 @@ export interface ImportResult {
   diagnostics: ImportDiagnostic[]
   /** C2-H-205: the losses past `maxLosses` that were counted, not kept. */
   suppressedDiagnostics?: number
+  /** Markdown, GFM and Djot with the option `constructs`: each construct of the input in order, with whether the tree holds it. */
+  constructs?: ImportConstruct[]
 }
 
 /** C2-M-082, C2-H-204, C2-H-205: the loss settings an import reads. */
@@ -116,13 +120,15 @@ function unitBytes(input: string, at: number): number {
 
 /** The UTF-8 offset of `at`, as `Buffer.byteLength` gives it for the input before `at`; one table per input keeps it linear. */
 function byteOffset(context: Context, at: number): number {
-  let table = context.byteOffsets
-  if (table === undefined) {
-    table = new Uint32Array(context.input.length + 1)
-    for (let index = 0; index < context.input.length; index++) table[index + 1] = (table[index] ?? 0) + unitBytes(context.input, index)
-    context.byteOffsets = table
-  }
-  return table[Math.min(Math.max(at, 0), context.input.length)] ?? 0
+  context.byteOffsets ??= byteOffsetTable(context.input)
+  return context.byteOffsets[Math.min(Math.max(at, 0), context.input.length)] ?? 0
+}
+
+/** The UTF-8 offset of each UTF-16 offset of `input`. */
+export function byteOffsetTable(input: string): Uint32Array {
+  const table = new Uint32Array(input.length + 1)
+  for (let index = 0; index < input.length; index++) table[index + 1] = (table[index] ?? 0) + unitBytes(input, index)
+  return table
 }
 
 /** C2-M-083: the codes of the HTML importer. The Markdown and Djot importers keep the two codes of the 0.1 importer. */

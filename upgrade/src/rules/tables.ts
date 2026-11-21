@@ -212,8 +212,10 @@ function tableReports(ctx: Context, table: Node01): void {
 
 function blockedSpanMarkers(ctx: Context, table: Node01): void {
   rowsOf(table).forEach((row, rowIndex) => {
-    cellsOf(row).forEach((cell, column) => {
-      if (cell.span !== 'rowspan' && cell.span !== 'colspan') return
+    // The column counts the cells a continuation row formed too, which have no position.
+    const all = !Array.isArray(row.cells) ? [] : ctx.repairs === true ? row.cells as Node01[] : cellsOf(row)
+    all.forEach((cell, column) => {
+      if (cell.pos === undefined || cell.span !== 'rowspan' && cell.span !== 'colspan') return
       const text = ctx.src.slice(cell.pos!.startOffset, cell.pos!.endOffset)
       const content = text.trim().replace(/^=/u, '').trim()
       const blockedCaret = content === '^' && cell.span === 'rowspan' && rowIndex === 0

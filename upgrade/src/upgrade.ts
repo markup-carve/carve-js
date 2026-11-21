@@ -1,6 +1,6 @@
 import { compareHtml, compareHtmlExact, dropOnlyItemParagraphs } from './compare.ts'
 import { type Context, type Finding, makeContext, type Rule } from './context.ts'
-import { applyEdits, type Edit, offsetBefore, selectEdits } from './edits.ts'
+import { applyEdits, type Edit, offsetAfter, offsetBefore, selectEdits } from './edits.ts'
 import { ENGINE_01_VERSION, html01, html02, type Node01 } from './engines.ts'
 import { ENTRIES, needsPerson, recordOf, type ReportRecord } from './report.ts'
 import { rescuePlus } from './plus-rescue.ts'
@@ -482,8 +482,8 @@ function recordsAfterRescue(input: string, rescued: { output: string; record: Re
 }
 
 /** The first rescue whose spelling keeps the 0.1 HTML, in the order of the rescues. */
-function rescueMismatch(input: string, output: string, mismatch: ReportRecord, records: readonly ReportRecord[]):
-  { output: string; record: ReportRecord } | null {
+function rescueMismatch(input: string, output: string, mismatch: ReportRecord, records: readonly ReportRecord[],
+  outputLine = 0): { output: string; record: ReportRecord } | null {
   // U-430 and U-431 leave a line that only report rows cite to a person (carve#6163).
   const onLine = records.filter((record) => record.line === mismatch.line || record.line === 0)
   const reported = onLine.some((record) => record.class === 'report' || record.class === 'unverified explanation')
@@ -495,7 +495,8 @@ function rescueMismatch(input: string, output: string, mismatch: ReportRecord, r
     const rescued = rescue(input, output, mismatch)
     if (rescued !== null) return rescued
   }
-  return null
+  // The repairs also read the line of the output that holds the mismatch line of the input.
+  return outputLine > 0 && outputLine !== mismatch.line && !reported ? rescueEscape(input, output, mismatch, outputLine) : null
 }
 
 function preservingMappedResult(input: string, mapped: { output: string; record: ReportRecord }): UpgradeResult {
@@ -515,12 +516,24 @@ function keepIncludeReview(rescue: ReportRecord, checked: readonly ReportRecord[
   for (const record of checked) if (record.entry === 'U-011') records.push({ ...record, class: 'report' })
 }
 
+/** The line of the output of a repairs variant that holds the mismatch line of the input, else 0. */
+function repairsLine(input: string, done: Rewritten, mismatch: ReportRecord): number {
+  if (done.context.repairs !== true || mismatch.line < 1) return 0
+  const at = offsetAfter(done.edits, lineStart(readLines(input), mismatch.line))
+  return lineOf(readLines(done.output), at)
+}
+
+/** A repairs variant that writes an output already tried still gets its own rescues. */
+function triedBefore(tried: Set<string>, done: Rewritten): boolean {
+  return tried.has(done.output) && done.context.repairs !== true
+}
+
 /** The first late variant whose output clears the self-check. */
 function latePass(input: string, first: string): UpgradeResult | null {
   const tried = new Set([first])
   for (const rules of LATE_VARIANTS) {
     const done = rewrite(input, rules, true)
-    if (tried.has(done.output)) continue
+    if (triedBefore(tried, done)) continue
     tried.add(done.output)
     const mathClass = mathClassReport(done.context)
     if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
@@ -528,7 +541,7 @@ function latePass(input: string, first: string): UpgradeResult | null {
     let check = selfCheck(input, done)
     const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
     if (check === 'mismatch' && mismatch !== undefined) {
-      const rescued = rescueMismatch(input, done.output, mismatch, done.records)
+      const rescued = rescueMismatch(input, done.output, mismatch, done.records, repairsLine(input, done, mismatch))
       if (rescued !== null && !tried.has(rescued.output)) {
         tried.add(rescued.output)
         done.records = [...recordsAfterRescue(input, rescued, rewritten), rescued.record]

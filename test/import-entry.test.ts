@@ -21,6 +21,13 @@ describe('@markup-carve/carve/import', () => {
     expect(() => importHtmlOnly('a', { from: 'markdown' } as never)).toThrow(CarveOptionError)
   })
 
+  it('returns construct records on request (carve-js#5133)', () => {
+    expect(importDocument('**Hello**', { from: 'markdown', constructs: true }).constructs).toEqual([
+      { construct: 'strong', node: 'strong', status: 'preserved', range: { startOffset: 0, endOffset: 9 } },
+    ])
+    expect(() => importDocument('a', { from: 'markdown', constructs: 'yes' } as never)).toThrow(CarveOptionError)
+  })
+
   it('refuses BBCode past its limit with a typed input error', () => {
     expect(() => importDocument('x'.repeat(BBCODE_MAX_INPUT_LENGTH + 1), { from: 'bbcode' })).toThrow(BbcodeInputTooLargeError)
     expect(() => importDocument('x'.repeat(BBCODE_MAX_INPUT_LENGTH + 1), { from: 'bbcode' })).toThrow(ImportInputError)
