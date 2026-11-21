@@ -367,7 +367,7 @@ export function createEditorSessionInternal(
         paths = changedPaths(signatures ?? nodeSignatures(current.ast, pathsByAst.get(current.ast)!), nextSignatures)
         signatures = nextSignatures
       }
-      const update = Object.freeze({ ...next, changedPaths: Object.freeze(paths) })
+      const update = Object.freeze({ ...next, changedPaths: Object.freeze(paths.sort()) })
       current = next
       return update
     },

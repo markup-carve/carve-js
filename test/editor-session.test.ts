@@ -33,6 +33,17 @@ describe('editor session', () => {
     expect(update.ast.children[0]).toBe(before.ast.children[0])
   })
 
+  it('keeps unchanged node IDs after a length-changing edit', () => {
+    const session = createEditorSession('first\n\ntext\n\nlast')
+    const before = new Map(session.snapshot().identity.nodes.map(node => [node.path, node.id]))
+    const update = session.update([{ from: 7, to: 11, insert: 'edited' }])
+    const after = new Map(update.identity.nodes.map(node => [node.path, node.id]))
+    for (const path of ['/children/0', '/children/0/children/0', '/children/2']) {
+      expect(after.get(path)).toBe(before.get(path))
+    }
+    expect(update.changedPaths).toContain('/children/1')
+  })
+
   it('falls back for structural edits', () => {
     for (const insert of ['# Heading', '[ref]: /url', 'first\n\nsecond', '1. item']) {
       const session = createEditorSession('before\n\ntext\n\nafter')
