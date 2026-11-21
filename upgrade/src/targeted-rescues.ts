@@ -2,6 +2,7 @@ import { closedRunCandidates } from './backtick-rescue.ts'
 import { compareHtml } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
+import { insideQuotes } from './rules/lines.ts'
 import { lineEnd, lineStart, lineText, readLines } from './source.ts'
 
 interface Candidate {
@@ -193,6 +194,13 @@ function descriptionLineCandidates(
   ) {
     for (let indent = 1; indent <= 4; indent++) {
       found.push({ id: 'U-180', output: output.slice(0, start) + ' '.repeat(indent) + output.slice(start) })
+    }
+  } else if (value.startsWith('>') && insideQuotes(value).trimStart().startsWith(':: ')
+    && insideQuotes(lineText(lines, line + 1)).trimStart().startsWith(': ')) {
+    // In a quote the term moves past its marks.
+    const marks = value.length - insideQuotes(value).length
+    for (let indent = 1; indent <= 4; indent++) {
+      found.push({ id: 'U-180', output: output.slice(0, start + marks) + ' '.repeat(indent) + output.slice(start + marks) })
     }
   }
   if (descriptionFence > 0 && line > descriptionFence && line - descriptionFence <= 5 && value.startsWith(' ')) {

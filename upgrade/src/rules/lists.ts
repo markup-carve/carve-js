@@ -491,12 +491,37 @@ function endsItem(ctx: Context, line: number): boolean {
   const below = ctx.blocks.leaf[line + 1]
   if (above == null || below == null || below.node.pos?.startLine !== line + 1) return false
   const item = ancestor(above, 'list_item')
-  if (item === null || isInside(below, item) || ancestor(below, 'list_item') !== null) return false
+  if (item === null || isInside(below, item)) return false
+  const list = ancestor(below, 'list_item') === null ? null : outerListAt(below, line + 1)
+  if (ancestor(below, 'list_item') !== null && list === null) return false
   const message = '+ line that attaches no block written as a blank line, the block after it kept after the list'
   const text = lineText(ctx.lines, line)
   const start = lineStart(ctx.lines, line)
   change(ctx, 'U-014', start + indentOf(text), lineEnd(ctx.lines, line), '', message)
+  // U-109 leaves a list alone, so a list 0.1 put after the item moves to the column of the `+` here.
+  if (list !== null) shiftLines(ctx, list.node.pos!.startLine, list.node.pos!.endLine, indentOf(text), message)
   return true
+}
+
+/** The outermost list that opens on `line` and holds `below`, or null. */
+function outerListAt(below: Visit, line: number): Visit | null {
+  let found: Visit | null = null
+  for (let up = ancestor(below, 'list'); up !== null && up.node.pos?.startLine === line; up = ancestor(up, 'list')) found = up
+  return found
+}
+
+/** Moves every line from `first` through `last` left to `column`, by the indent of `first`; none when one is indented less. */
+function shiftLines(ctx: Context, first: number, last: number, column: number, message: string): void {
+  const shift = indentOf(lineText(ctx.lines, first)) - column
+  if (shift <= 0) return
+  for (let at = first; at <= last; at++) {
+    const text = lineText(ctx.lines, at)
+    if (!isBlank(text) && indentOf(text) < shift) return
+  }
+  for (let at = first; at <= last; at++) {
+    const text = lineText(ctx.lines, at)
+    if (!isBlank(text)) change(ctx, 'U-014', lineStart(ctx.lines, at), lineStart(ctx.lines, at) + shift, '', message)
+  }
 }
 
 export function lists(ctx: Context): void {
