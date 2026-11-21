@@ -2,6 +2,7 @@
 // is an abbreviation node. A term is ASCII letters and digits (C2-B-084) and matches a whole word.
 import { type AbbreviationNode, type Inline, type InlineParent, isInlineParent, type TextNode } from './ast.ts'
 import { addText, type TreeContext } from './ast-inline.ts'
+import { utf8Length } from './positions.ts'
 import { codePointAt, codePointBefore, isAsciiAlphanumeric, isWordCharacter, NO_CHARACTER } from './unicode.ts'
 
 /** C2-I-100: no term matches in the text of these nodes, whose content is not flow of this content. */
@@ -88,7 +89,18 @@ function offsetOf(split: Split, index: number): number {
 function addTerm(split: Split, at: number, end: number, expansion: string): void {
   const { ctx, value, parts } = split
   if (at > split.done) addText(ctx, parts, value.slice(split.done, at), offsetOf(split, split.done), offsetOf(split, at))
-  const term: AbbreviationNode = { type: 'abbreviation', key: value.slice(at, end), namespace: 'abbr', expansion }
+  const key = value.slice(at, end)
+  const term: AbbreviationNode = { type: 'abbreviation', key, namespace: 'abbr' }
+  let cost = ctx.abbreviationCosts.get(key)
+  if (cost === undefined) {
+    cost = utf8Length(expansion)
+    ctx.abbreviationCosts.set(key, cost)
+  }
+  if (cost <= ctx.abbreviationBytesLeft) {
+    term.expansion = expansion
+    ctx.abbreviationBytesLeft -= cost
+  }
+  ctx.resolvable = true
   const pos = split.node.pos
   if (split.start >= 0 && pos !== undefined) term.pos = { ...pos, startOffset: offsetOf(split, at), endOffset: offsetOf(split, end) }
   parts.push(term)

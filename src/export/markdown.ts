@@ -333,7 +333,7 @@ const INLINES: NodeHandlers<string, MarkdownState> = {
   },
   abbreviation: (node, m) => {
     const term = escapeHtml(node.key)
-    const expansion = node.expansion
+    const expansion = node.expansion ?? m.x.resolution.expansionOf.get(node)
     if (m.abbrDepth > 0 || expansion === undefined || !drawDerived(m.x, node, expansion)) return term
     return `<abbr title="${escapeAttribute(expansion)}">${term}</abbr>`
   },

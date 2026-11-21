@@ -60,6 +60,10 @@ export interface TreeContext {
   inline: InlineState
   /** C2-I-098: the expansion of each defined term. The first definition of a term wins (C2-B-085). */
   abbreviations: Map<string, string>
+  /** C2-I-098: bytes left for copied expansions in this parse. */
+  abbreviationBytesLeft: number
+  /** The UTF-8 cost of each term's expansion, computed once even when it has many uses. */
+  abbreviationCosts: Map<string, number>
   /** The lines from the first attribute line of each block that took attribute lines to its own markup (C2-A-148). */
   markup: Map<Node, number>
   /**

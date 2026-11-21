@@ -379,7 +379,7 @@ function literal(node: LiteralInlineNode, r: Render): string {
 /** C2-H-098, C2-H-099. */
 function abbreviation(node: AbbreviationNode, r: Render): string {
   const term = escapeText(node.key)
-  const expansion = node.expansion
+  const expansion = node.expansion ?? r.resolution.expansionOf.get(node)
   if (r.abbrDepth > 0 || expansion === undefined || !drawDerivedText(r, node, expansion)) return term
   return `<abbr${attributes(r, node, { structural: [['title', expansion]] })}>${term}</abbr>`
 }

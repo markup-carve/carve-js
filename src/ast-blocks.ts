@@ -27,6 +27,7 @@ import { lineFeedAt } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
 import { finishPositions, utf8Length } from './positions.ts'
+import { DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR } from './derived-text.ts'
 import { type Findings } from './diagnostics.ts'
 import { acquireState, releaseState } from './state.ts'
 import { type BlockNode, buildTree } from './tree.ts'
@@ -674,7 +675,8 @@ export function inlineContent(text: string): Inline[] {
   inline.definitions = new Set()
   try {
     const ctx: TreeContext = {
-      src: text, positions: false, inline, abbreviations: new Map(), markup: new Map(), resolvable: false,
+      src: text, positions: false, inline, abbreviations: new Map(), abbreviationBytesLeft: 0,
+      abbreviationCosts: new Map(), markup: new Map(), resolvable: false,
       resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null, includes: [],
     }
     return contentNodes(ctx, [0, text.length], 0, 2, true, FLOW_PLAIN)
@@ -684,11 +686,11 @@ export function inlineContent(text: string): Inline[] {
 }
 
 /** `source` is the source as given, of which offsets count the bytes; `ctx.src` is the text that was read. */
-function buildDocument(ctx: TreeContext, root: BlockNode, source: string): ParsedTree {
+function buildDocument(ctx: TreeContext, root: BlockNode, source: string, sourceByteLength: number): ParsedTree {
   const src = ctx.src
   const children = buildChildren(ctx, root.children!, FLOW_PLAIN, DOCUMENT_BUILDERS)
   const document: DocumentNode = { type: 'document', astVersion: AST_VERSION, children }
-  document.srcByteLength = utf8Length(source)
+  document.srcByteLength = sourceByteLength
   if (ctx.positions) {
     finishPositions(document, source)
   }
@@ -712,18 +714,25 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
   return { document, facts }
 }
 
+/** C2-I-098: a byte input counts its own bytes, not those of its decoded text. */
+function sourceBytes(src: string, byteLength: number | null | undefined): number {
+  return byteLength ?? utf8Length(src)
+}
+
 /**
  * The public tree of `src` before resolution, built from the events of the block pass and of the
  * inline pass of each content. `abbreviations` replaces the terms the source defines, for a source
  * that is one block of a larger document (C2-W-089). `trace` takes what the source-layout record reads (C2-A-003).
+ * `byteLength` is the length of a byte input the text was decoded from.
  */
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
   collectSourceNames = false, linkKeys: ReadonlySet<string> | null = null, outer: OuterScope | null = null,
-  frontmatterOpens = true,
+  frontmatterOpens = true, byteLength?: number | null,
 ): ParsedTree {
   // C2-B-218: U+0000 and an unpaired surrogate are read as U+FFFD. All are one UTF-16 unit, so every string offset stays.
   const text = withoutUnpairedSurrogates(src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src)
+  const sourceByteLength = sourceBytes(src, byteLength)
   const blocks = acquireState()
   blocks.frontmatterOpens = frontmatterOpens
   const inline = acquireInlineState()
@@ -736,11 +745,13 @@ export function buildSource(
     const terms = abbreviations ?? collectAbbreviations(text, root)
     if (outer !== null) for (const [term, expansion] of outer.abbreviations) if (!terms.has(term)) terms.set(term, expansion)
     const ctx: TreeContext = {
-      src: text, positions, inline, abbreviations: terms, markup: new Map(),
+      src: text, positions, inline, abbreviations: terms,
+      abbreviationBytesLeft: Math.max(DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR * sourceByteLength),
+      abbreviationCosts: new Map(), markup: new Map(),
       resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
       sourceNames: collectSourceNames ? new Map() : null, includes: [],
     }
-    return buildDocument(ctx, root, src)
+    return buildDocument(ctx, root, src, sourceByteLength)
   } finally {
     releaseInlineState(inline)
     releaseState(blocks)
