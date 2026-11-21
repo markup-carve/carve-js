@@ -1393,6 +1393,45 @@ function resync(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor):
   return false
 }
 
+/**
+ * A leading space or tab of supplied text can be lost at a paragraph start while the rest of the
+ * text joins the next node in the read-back parse. Continue at the surviving suffix so later
+ * constructs and fields are still compared (C2-W-117).
+ */
+function stepOverLostText(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
+  const expected = es[at.i]
+  const actual = as[at.j]
+  if (expected?.type !== 'text' || actual?.type !== 'text' || at.vi !== 0) return false
+  const kept = expected.value.replace(/^[ \t]+/, '')
+  if (kept.length === expected.value.length || !actual.value.startsWith(kept, at.aj)) return false
+  if (expected.lang !== undefined || expected.dir !== undefined || expected.metadata !== undefined ||
+    expected.attrs !== undefined || expected.data !== undefined) {
+    const last = c.losses.length - 1
+    if (c.losses[last]?.[0] === expected) c.losses[last] = [expected, '']
+  }
+  at.i++
+  at.aj += kept.length
+  if (at.aj === actual.value.length) {
+    at.j++
+    at.aj = 0
+  }
+  return true
+}
+
+/** A failed comparison on one line cannot hide constructs on following lines of the same paragraph. */
+function resyncNextLine(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
+  let i = at.i + 1
+  while (i < es.length && !isBreak(es[i])) i++
+  let j = at.j
+  while (j < as.length && !isBreak(as[j])) j++
+  if (i === es.length || j === as.length || es[i]?.type !== as[j]?.type) return false
+  const expected = es[i]?.pos
+  const actual = as[j]?.pos
+  if (expected === undefined || actual === undefined || expected.startLine !== actual.startLine) return false
+  if (changes(c) === 0) for (let k = at.i; k < i; k++) c.losses.push([es[k]!, null])
+  return resumeAt(at, i + 1, j + 1)
+}
+
 function compareInlines(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
   const outer = c.owner
   c.owner = owner
@@ -1406,7 +1445,8 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
     setAnchor(es, as, at)
     const e = es[at.i]!
     const more = e.type === 'text' ? matchText(c, e, es, as, at, owner) : matchNode(c, e, es, as, at, owner)
-    if (!more && !resync(c, es, as, at)) return
+    if (!more && !resync(c, es, as, at) && !stepOverLostText(c, es, as, at) &&
+      !resyncNextLine(c, es, as, at)) return
   }
   if (at.j < as.length) c.losses.push([owner, null])
 }

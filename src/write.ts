@@ -2,7 +2,7 @@
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
 import {
-  childNodes, type CommentNode, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode,
+  childNodes, type CommentNode, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, type TextNode,
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
@@ -359,112 +359,15 @@ function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
   return end
 }
 
-/** The text nodes below `nodes` in the order in which they are written: a title before the children. */
-function textOrder(nodes: readonly Node[], order: Map<Node, number>): Map<Node, number> {
-  for (const node of nodes) {
-    if (node.type === 'text') order.set(node, order.size)
-    forEachSlot(node, (slot) => void textOrder(slot, order), SOURCE_ORDER)
-  }
-  return order
-}
-
-/**
- * C2-W-091: a round that asks for this many escapes or fewer places the first one only, since the
- * ones behind it were asked for with it not yet in place. A round that asks for more places them
- * all, so that the number of rounds stays linear in the size of the group.
- */
-const MAX_ORDERED_ESCAPES = 4
 // The nesting of inline nodes stays under the depth cap of the parser.
 const MAX_LEAF_DEPTH = 200
 
-/** C2-W-091: the first of `escapes` in written order. */
-function leftmost(group: readonly Node[], escapes: readonly [TextNode, number][]): [TextNode, number] {
-  const order = textOrder(group, new Map())
-  let best = escapes[0]!
-  for (const escape of escapes) {
-    const rank = order.get(escape[0]) ?? -1
-    const bestRank = order.get(best[0]) ?? -1
-    if (rank < bestRank || (rank === bestRank && escape[1] < best[1])) best = escape
-  }
-  return best
-}
-
-/**
- * The escapes a round asked for behind the leftmost one wait for the next round (C2-W-091). A node
- * whose way to form asked for one of them takes that way again then, rather than its next one.
- */
-function deferEscapes(w: Writer, deferred: readonly [TextNode, number][]): void {
-  for (const attempt of w.attempts.values()) {
-    const kept = attempt.escapes.filter((escape) => !deferred.includes(escape))
-    if (kept.length === attempt.escapes.length) continue
-    attempt.escapes = kept
-    attempt.step--
-  }
-}
-
-/** The tree of the group written with the escapes `escapes`. */
-function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: Map<TextNode, number[]>): DocumentNode {
-  w.escapes = escapes
-  w.lines = []
-  w.lead = null
-  w.starts.clear()
-  writeBlocks(w, group, '', 0, false)
-  return parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
-}
-
-/**
- * C2-W-088, C2-W-091: whether the test asks for the escape `at` of `node`: with the escapes to its
- * left in place and none to its right, the group parses to another tree without it.
- */
-function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNode, at: number): boolean {
-  const placed = w.escapes
-  const lines = w.lines
-  const lead = w.lead
-  const starts = new Map(w.starts)
-  const order = textOrder(group, new Map())
-  const rank = order.get(node) ?? -1
-  const left = new Map<TextNode, number[]>()
-  for (const [text, offsets] of placed) {
-    const own = order.get(text) ?? -1
-    if (own < rank) left.set(text, offsets)
-    else if (text === node) left.set(text, offsets.filter((offset) => offset < at))
-  }
-  // Built before the first write, which may add the doubled backslash of C2-W-097 to the lists it reads.
-  const escaped = new Map(left)
-  escaped.set(node, [...(left.get(node) ?? []), at])
-  const without = groupTree(w, group, first, left)
-  const asked = !treesEqual(groupTree(w, group, first, escaped), without)
-  w.escapes = placed
-  w.lines = lines
-  w.lead = lead
-  w.starts.clear()
-  for (const [key, value] of starts) w.starts.set(key, value)
-  return asked
-}
-
 /**
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
- * false when the group reads back as its blocks. C2-W-091: an escape stays once placed, and an
- * escape that a node which did not form asks for is placed only where the test asks for it.
+ * false when the group reads back as its blocks. C2-W-088 places all escapes reported by the same read-back parse.
  */
 function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
-  let dropped = false
-  // Each test writes the group twice; a round with more trials places them all, as it does escapes.
-  const trials = check.trials.length <= MAX_ORDERED_ESCAPES ? check.trials : []
-  for (const [node, at] of trials) {
-    if (isAsked(w, group, first, node, at)) continue
-    const place = check.escapes.findIndex((escape) => escape[0] === node && escape[1] === at)
-    if (place >= 0) check.escapes.splice(place, 1)
-    dropped = true
-  }
-  // The node that asked for a dropped escape takes its next way to form in the next round.
-  if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
-  if (check.escapes.length > 1 && check.escapes.length <= MAX_ORDERED_ESCAPES) {
-    const first = leftmost(group, check.escapes)
-    deferEscapes(w, check.escapes.filter((escape) => escape !== first))
-    check.escapes = [first]
-  }
   extendChains(check)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {

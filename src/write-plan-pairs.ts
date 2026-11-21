@@ -377,24 +377,25 @@ function respell(leaf: Leaf, at: number, owner: Node): void {
   leaf.respell.push(owner)
 }
 
-// C2-W-088, C2-W-090: a pair of two marks of text is a node the tree does not hold, the leftmost one the procedure
-// meets, so it escapes the opener and reads again; the plan repeats that on its own scan, a bounded number of times.
+// C2-W-088, C2-W-090: all pairs of two text marks found by one scan take their openers together.
 const TEXT_PAIR_ROUNDS = 4
 
-/** The first unit of the opener of the leftmost pair whose marks are both text, behind pairs of the tree only, or -1. */
-function textPairOpener(leaf: Leaf, tokens: readonly Token[]): number {
+/** Openers of pairs whose marks are both text, behind pairs of the tree only. */
+function textPairOpeners(leaf: Leaf, tokens: readonly Token[]): number[] | null {
+  const openers: number[] = []
   for (const token of tokens) {
     if (token.kind === ENTER || token.kind === LEAVE || token.pair < 0) continue
     const pair = tokens[token.pair]!
     if (pair.start < token.start) continue
     const owner = ownerOf(leaf, token.start, token.end)
     if (owner !== null) {
-      if (owner === MIXED || ownerOf(leaf, pair.start, pair.end) !== owner) return -1
+      if (owner === MIXED || ownerOf(leaf, pair.start, pair.end) !== owner) return null
       continue
     }
-    return ownerOf(leaf, pair.start, pair.end) === null ? token.start : -1
+    if (ownerOf(leaf, pair.start, pair.end) !== null) return null
+    openers.push(token.start)
   }
-  return -1
+  return openers
 }
 
 /**
@@ -451,10 +452,11 @@ export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
   let tokens = scan(leaf, escaped)
   let s = pairAll(tokens)
   for (let round = 0; ; round++) {
-    const opener = textPairOpener(leaf, tokens)
-    if (opener < 0) break
+    const openers = textPairOpeners(leaf, tokens)
+    if (openers === null) return undecide(leaf, 'text pairs')
+    if (openers.length === 0) break
     if (round === TEXT_PAIR_ROUNDS) return undecide(leaf, 'text pairs')
-    escaped[opener] = 1
+    for (const opener of openers) escaped[opener] = 1
     tokens = scan(leaf, escaped)
     s = pairAll(tokens)
   }

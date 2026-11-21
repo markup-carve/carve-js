@@ -186,7 +186,8 @@ export function lose(w: Writer, node: Node, field: string | null): void {
   w.lossLog.push([node, null])
   const message = field === null
     ? `Carve source cannot spell a ${node.type} node here`
-    : `Carve source cannot spell the field ${field} of a ${node.type} node here`
+    : field === '' ? `Carve source cannot spell the fields of a ${node.type} node here`
+      : `Carve source cannot spell the field ${field} of a ${node.type} node here`
   const code = field === null ? 'structure-unspellable' : 'field-unspellable'
   const entry: Diagnostic = { code, severity: 'warning', channel: 'render-loss', message }
   addFinding(w.losses, node, entry)
