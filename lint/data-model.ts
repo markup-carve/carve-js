@@ -1,5 +1,6 @@
 import { INLINE_PARENTS, type Node } from '../src/ast.ts'
 import { columnOf } from '../src/layout-lines.ts'
+import { type Attributed } from './data-attributes.ts'
 import { type NodeLayout } from '../src/layout.ts'
 import { shapeOf } from './data-shape.ts'
 import { type Line, type LintContext } from './types.ts'
@@ -97,7 +98,7 @@ const LEAF_TYPES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'defini
 const isSpace = (code: number): boolean => code === 32 || code === 9
 
 /** Behind leading spaces and tabs and every quote mark followed by a space or the line end (C2-B-031), at most `marks` of them. */
-function quotedStart(line: Line, marks = Infinity): number {
+export function quotedStart(line: Line, marks = Infinity): number {
   const text = line.text
   let at = 0
   let left = marks
@@ -118,7 +119,7 @@ function trimEndAt(text: string, from: number): number {
 const depths = new WeakMap<Map<string, string>, Map<string, number>>()
 
 /** The number of quotes that hold the node at `path`, the node itself left out. */
-function quoteDepth(path: string, types: Map<string, string>): number {
+export function quoteDepth(path: string, types: Map<string, string>): number {
   let cache = depths.get(types)
   if (cache === undefined) {
     cache = new Map<string, number>()
@@ -566,6 +567,8 @@ class TextRunRecord implements ModelInline {
 export class DataWalk {
   readonly walked: Walked[] = []
   readonly inline: ModelInline[] = []
+  /** The nodes that carry `attrs`, when an attribute rule is on (C2-W-148), with their paths and whether they are inline. */
+  readonly attributed: Attributed = { nodes: [], paths: [], inline: [] }
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
   private readonly types: ReadonlySet<string>
   private readonly context: LintContext
@@ -573,10 +576,16 @@ export class DataWalk {
   // Visit order is depth first, so a run can only go on at the next sibling of its last node: one run is open at a time.
   private open: TextRunRecord | undefined = undefined
 
-  constructor(document: Node, types: ReadonlySet<string>, context: LintContext) {
+  private readonly attributes: boolean
+  private readonly model: boolean
+
+  /** `model`: whether the line model is built, which reads the block nodes of the walk. */
+  constructor(document: Node, types: ReadonlySet<string>, context: LintContext, attributes = false, model = true) {
     this.types = types
     this.textRuns = types.has('text_run')
     this.context = context
+    this.attributes = attributes
+    this.model = model
     this.walked.push({ node: document, path: '', parent: '', index: 0 })
   }
 
@@ -605,7 +614,17 @@ export class DataWalk {
     this.inline.push(record)
   }
 
+  // C2-B-227: a table may have consumed every key it took.
+  private attribute(node: Node, path: string, parent: Node): void {
+    if (node.attrs === undefined && node.type !== 'table') return
+    this.attributed.nodes.push(node)
+    this.attributed.paths.push(path)
+    this.attributed.inline.push(INLINE_PARENT_TYPES.has(parent.type))
+  }
+
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
+    if (this.attributes) this.attribute(node, path, parent)
+    if (!this.model) return
     const holder = this.holder
     // Inline content holds no block and no line of its own; the caption of an image paragraph is a block (C2-W-140).
     if (holder !== undefined && node.type !== 'caption' && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {

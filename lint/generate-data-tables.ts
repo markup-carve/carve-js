@@ -6,7 +6,7 @@ type Expr = unknown
 interface Report { when?: Expr, message?: number, start?: Expr, end?: Expr, values?: Record<string, Expr> }
 interface DataRule {
   id: string
-  over: 'line' | 'block' | 'inline'
+  over: 'line' | 'block' | 'inline' | 'attribute'
   types?: readonly string[]
   verbatim?: readonly string[]
   let?: Record<string, Expr>
@@ -60,6 +60,11 @@ class Compiler {
     const keys = rest.map((part) => literal(/^\d+$/.test(part) ? Number(part) : part))
     // A list item or an AST node has no static type here: its fields are read by name.
     if (head === 'item' || head === 'node') return `at(${head === 'item' ? 'item' : 'self.node'}${keys.map((key) => `, ${key}`).join('')})`
+    // The node of an attribute record's owner is a tree node too (C2-W-148).
+    const node = rest.indexOf('node') + 1
+    if (node > 0 && node < rest.length) {
+      return `at(self.${head}${keys.slice(0, node).map((key) => `?.[${key}]`).join('')}${keys.slice(node).map((key) => `, ${key}`).join('')})`
+    }
     return `self.${head}` + keys.map((key) => `?.[${key}]`).join('')
   }
 
@@ -212,7 +217,7 @@ const TESTS: Record<string, Make> = {
   v: (c, arg) => `Boolean(${c.letValue(String(arg))})`,
 }
 
-const SELF = { line: 'ModelLine', block: 'ModelBlock', inline: 'ModelInline' } as const
+const SELF = { line: 'ModelLine', block: 'ModelBlock', inline: 'ModelInline', attribute: 'ModelAttribute' } as const
 
 function reportLines(rule: DataRule, compiler: Compiler, indent: string): string[] {
   const body: string[] = []
@@ -249,18 +254,22 @@ function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string
   } else {
     const [subject, pattern] = argsOf(rule.each.matches)
     const regex = compiler.hoistRegex(String(pattern), 'gd')
+    // A pattern that cannot match an empty text finds nothing in one, so the scan is not started.
+    const empty = new RegExp(String(pattern), unicodeFlags(String(pattern), '')).test('')
     body.push(`  const one = (): void => {`, ...reportLines(rule, compiler, '    '), '  }',
-      `  for (const found of matchAll(${regex}, ${compiler.value(subject)})) {`,
+      `  const text = ${compiler.value(subject)}`, ...(empty ? [] : ['  if (text === \'\') return']),
+      `  for (const found of matchAll(${regex}, text)) {`,
       '    groups = spansOf(found)', `    base = ${compiler.base(subject)}`, '    one()', '  }')
   }
   if (body.some((code) => /[(\s]line[,)]/.test(code))) {
-    if (rule.over === 'inline') throw new Error(`lint-model: ${rule.id} reads a line offset over inline records`)
+    if (rule.over === 'inline' || rule.over === 'attribute') throw new Error(`lint-model: ${rule.id} reads a line offset over ${rule.over} records`)
     body.unshift(`  const line = ${rule.over === 'block' ? 'self.line' : 'self'}`)
   }
   return [`function rule${index}(self: ${SELF[rule.over]}, path: string, context: LintContext): void {`, ...body, '}'].join('\n')
 }
 
 const PRELUDE = `import { type RuleId } from './catalog.ts'
+import { type ModelAttribute } from './data-attributes.ts'
 import { type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
 import { linearPattern, type Pattern } from './linear-patterns.ts'
 import { type LintContext } from './types.ts'
@@ -508,7 +517,7 @@ export function generateDataTables(json: string): string {
   })
   const entries = model.rules.map((rule, index) => {
     const types = rule.types === undefined ? 'undefined' : literal(rule.types)
-    const field = rule.over === 'line' ? 'leaf' : rule.over === 'block' ? 'parent.type' : 'parent'
+    const field = rule.over === 'line' ? 'leaf' : rule.over === 'block' ? 'parent.type' : rule.over === 'attribute' ? 'kind' : 'parent'
     const only = rule.when === undefined ? undefined : admitted(rule.when, field, sets)
     return `  { id: ${literal(rule.id)}, over: ${literal(rule.over)}, types: ${types}, verbatim: new Set(${literal(rule.verbatim ?? [])}), `
       + `only: ${only === undefined ? 'undefined' : `new Set(${literal([...only].sort())})`}, needs: ${literal(needs[index])}, run: rule${index} },`
@@ -516,7 +525,8 @@ export function generateDataTables(json: string): string {
   return ['// Generated from data/lint-model.json by lint/generate-data-tables.ts. Do not edit.', PRELUDE,
     ...compiler.hoisted.map((code, index) => `const K${index} = ${code}`), '', ...functions.flatMap((code) => [code, '']),
     '/**',
-    ' * `only`: the leaf of a line, the parent type of a block or the parent of an inline record that the rule can match.',
+    ' * `only`: the leaf of a line, the parent type of a block, the parent of an inline record or the kind of an attribute record',
+    ' * that the rule can match.',
     ' * `needs`: the block and inline types whose records the lookups of the rule read.',
     ' */',
     'interface Needs { readonly block: readonly string[], readonly inline: readonly string[] }',
@@ -527,6 +537,8 @@ export function generateDataTables(json: string): string {
       + 'needs: Needs, run: (self: ModelBlock, path: string, context: LintContext) => void }',
     '  | { id: RuleId, over: \'inline\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, '
       + 'needs: Needs, run: (self: ModelInline, path: string, context: LintContext) => void }',
+    '  | { id: RuleId, over: \'attribute\', types: readonly string[] | undefined, verbatim: ReadonlySet<string>, only: ReadonlySet<string> | undefined, '
+      + 'needs: Needs, run: (self: ModelAttribute, path: string, context: LintContext) => void }',
     '',
     `export const VERBATIM_LEAVES: ReadonlySet<string> = new Set(${literal(model.verbatim_leaves)})`,
     '',
