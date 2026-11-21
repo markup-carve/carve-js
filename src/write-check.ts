@@ -485,7 +485,14 @@ function runProbe(c: Check, e: Node, expected: readonly Node[], flags: number, t
     if (taken === null) return round === 0 ? null : found
     if (taken.length === 0) return found
     found = true
-    for (const [node, at] of taken) w.escapes.set(node, [...(w.escapes.get(node) ?? []), at].sort((x, y) => x - y))
+    // One copy and one sort per node and round: one per escape made a node with many escapes quadratic.
+    const added = new Map<TextNode, number[]>()
+    for (const [node, at] of taken) {
+      const list = added.get(node) ?? [...(w.escapes.get(node) ?? [])]
+      list.push(at)
+      added.set(node, list)
+    }
+    for (const [node, list] of added) w.escapes.set(node, list.sort((x, y) => x - y))
   }
   return found
 }
