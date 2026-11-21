@@ -44,6 +44,17 @@ describe('editor session', () => {
     expect(update.changedPaths).toContain('/children/1')
   })
 
+  it('keeps the tree, IDs, and changed paths unchanged for a no-op replacement', () => {
+    const session = createEditorSession('first\n\nsecond')
+    const before = session.snapshot()
+    const update = session.update([{ from: 1, to: 2, insert: 'i' }])
+    expect(update.ast).toBe(before.ast)
+    expect(update.identity).toBe(before.identity)
+    expect(update.changedPaths).toEqual([])
+    expect(update.parsedSourceBytes).toBe(0)
+    expect(update.revision).toBe(1)
+  })
+
   it('falls back for structural edits', () => {
     for (const insert of ['# Heading', '[ref]: /url', 'first\n\nsecond', '1. item']) {
       const session = createEditorSession('before\n\ntext\n\nafter')

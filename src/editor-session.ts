@@ -350,6 +350,12 @@ export function createEditorSessionInternal(
       }
       parts.push(current.source.slice(cursor))
       const source = parts.join('')
+      if (source === current.source) {
+        const unchanged = Object.freeze({ ...current, revision: current.revision + 1, parsedSourceBytes: 0,
+          reusedPreviousTree: true, changedPaths: Object.freeze([] as string[]) })
+        current = unchanged
+        return unchanged
+      }
       const next = build(source, current.revision + 1, current, changes)
       let paths: string[]
       if (next.reusedPreviousTree && changes.length === 1) {
