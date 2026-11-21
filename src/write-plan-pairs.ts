@@ -70,6 +70,8 @@ interface Stack {
   demoted: boolean
   /** Where the open entries first reached the cap, or -1: a bracket behind it may be text (C2-I-118). */
   fullAt: number
+  /** The most entries open at once. */
+  peak: number
 }
 
 function depth(s: Stack): number {
@@ -215,6 +217,7 @@ function scan(leaf: Leaf, escaped: Uint8Array): Token[] {
 function push(s: Stack, token: number, cls: number, below: number): number {
   s.entries.push({ token, cls, below, slash: s.lastSlash, star: s.lastStar })
   s.live++
+  if (s.live > s.peak) s.peak = s.live
   if (s.live >= DEPTH_CAP && s.fullAt < 0) s.fullAt = s.tokens[token]!.start
   return s.entries.length - 1
 }
@@ -319,7 +322,7 @@ function braceOpener(s: Stack, token: number): void {
 function pairAll(tokens: Token[]): Stack {
   const s: Stack = {
     tokens, entries: [], top: new Array<number>(BARRIER).fill(-1), floor: -1, lastSlash: -1, lastStar: -1,
-    live: 0, demoted: false, fullAt: -1,
+    live: 0, demoted: false, fullAt: -1, peak: 0,
   }
   for (let at = 0; at < tokens.length; at++) {
     const kind = tokens[at]!.kind
@@ -404,6 +407,45 @@ function escapedBracketFrom(leaf: Leaf, escaped: Uint8Array, from: number): bool
   return false
 }
 
+/**
+ * C2-I-118: whether the reader may reach the cap where this scan does not. The reader counts open text brackets too,
+ * takes each as a bound that no closer reaches past, so an opener inside one may stay open, and counts the brackets
+ * and alt openers of an image, which this scan reads as one atom. Without those the scan counts as the reader does.
+ */
+function beyondCap(leaf: Leaf, tokens: readonly Token[], s: Stack): boolean {
+  const inside = new Uint8Array(leaf.codes.length)
+  let open = 0
+  let brackets = 0
+  for (let at = 0; at < leaf.codes.length; at++) {
+    if (leaf.kinds[at] === TEXT && leaf.codes[at] === BRACKET_OPEN_CODE) brackets = Math.max(brackets, ++open)
+    else if (leaf.kinds[at] === TEXT && leaf.codes[at] === BRACKET_CLOSE && open > 0) open--
+    if (open > 0) inside[at] = 1
+  }
+  let stuck = 0
+  for (const token of tokens) {
+    if (inside[token.start] === 1 && (token.kind === BRACED_OPEN || (token.kind === DELIMITER && (token.flags & CAN_OPEN) !== 0))) stuck++
+  }
+  const extra = brackets + stuck + imageMarks(leaf)
+  return extra > 0 && s.peak + extra >= DEPTH_CAP
+}
+
+/** The most punctuation one image of the leaf spells: its brackets and the openers its alt text may hold. */
+function imageMarks(leaf: Leaf): number {
+  let most = 0
+  let count = 0
+  for (let at = 0; at < leaf.codes.length; at++) {
+    const owner = leaf.kinds[at] === ATOM && leaf.owners[at]?.type === 'image' ? leaf.owners[at] : undefined
+    if (owner === undefined || (at > 0 && leaf.owners[at - 1] !== owner)) count = 0
+    const code = leaf.codes[at]!
+    if (owner !== undefined && code < 128 && isPunctuation(code)) most = Math.max(most, ++count)
+  }
+  return most
+}
+
+function isPunctuation(code: number): boolean {
+  return (code >= 33 && code <= 47) || (code >= 58 && code <= 64) || (code >= 91 && code <= 96) || (code >= 123 && code <= 126)
+}
+
 /** C2-W-093: every pair the reader forms is a node of the tree, and the marks of every delimited node pair. */
 export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
   let tokens = scan(leaf, escaped)
@@ -417,7 +459,9 @@ export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
     s = pairAll(tokens)
   }
   // C2-I-118, C2-B-190: the depth counts from zero in each content, whatever blocks stand around it.
-  if (s.demoted || escapedBracketFrom(leaf, escaped, s.fullAt)) return undecide(leaf, 'depth cap')
+  if (s.demoted || escapedBracketFrom(leaf, escaped, s.fullAt) || beyondCap(leaf, tokens, s)) {
+    return undecide(leaf, 'depth cap')
+  }
   const formed = formedNodes(leaf, tokens)
   if (formed === null) return undecide(leaf, 'text pairs')
   for (let at = 0; at < leaf.codes.length && leaf.undecided === null; at++) {

@@ -577,7 +577,7 @@ function imageNode(w: Writer, node: ImageNode, flags: number): string {
   if (raw !== null) return `!${raw}`
   const pipes = (flags & IN_CELL) !== 0
   if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
-  const alt = collapsedAlt(node, altSource(node.alt ?? ''))
+  const alt = collapsedAlt(node, altSource(node.alt ?? '', w.bareAlts))
   return `![${pipes ? escapePipes(alt) : alt}]${target(node, node.src, pipes)}`
 }
 
@@ -653,9 +653,10 @@ function rawAtoms(alt: string, lone: Set<number>): Uint8Array {
  * C2-W-097: alt text doubles a backslash before ASCII punctuation or at its end, and escapes a bracket with no partner.
  * An opener of raw content with no closer takes one for the same reason (G-G8 in _SPEC_GAPS.md).
  */
-function altSource(alt: string): string {
+function altSource(alt: string, bare = false): string {
   const lone = new Set<number>()
-  unpartnered(alt, rawAtoms(alt, lone), lone)
+  const raw = rawAtoms(alt, lone)
+  if (!bare) unpartnered(alt, raw, lone)
   let out = ''
   for (let at = 0; at < alt.length; at++) {
     const char = alt[at]!

@@ -679,6 +679,7 @@ function settledPlan(w: Writer, run: WriterRun, group: readonly Node[], first: b
     const plan = planWrite(w, group, first)
     const why = planReason(w, group, plan, reported)
     if (why === null && plan.respell.length === 0) return plan
+    w.planWhy = why
     if (why !== null || round === MAX_PLAN_ROUNDS - 1) {
       noteReason(run, why ?? 'respell rounds', plan.detail)
       break
@@ -932,6 +933,7 @@ function writeGroupOnce(w: Writer, run: WriterRun, document: DocumentNode, from:
   pairs: GroupPairs): number {
   // C2-W-002: the losses that the first write reports count for the repair that follows a plan with no decision.
   const reported = w.losses.entries.length
+  w.planWhy = null
   if (run.path !== 'repair') {
     const end = groupEnd(w, document.children, from)
     // The `both` path compares with a repair from the escapes before the plan, which `planGroup` changes in place.
@@ -943,9 +945,29 @@ function writeGroupOnce(w: Writer, run: WriterRun, document: DocumentNode, from:
   }
   run.stats.repaired++
   const work = w.work.chars
-  const end = repairGroup(w, document, from, first, reported)
+  const end = w.planWhy === 'depth cap'
+    ? repairBareAlts(w, document, from, first, reported) : repairGroup(w, document, from, first, reported)
   run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), w.work.chars - work])
   return end
+}
+
+/**
+ * C2-I-118: past the depth cap the brackets of an alt text are text, and the backslash a bracket without a partner
+ * takes elsewhere removes an opener and moves the cap. Such a group is repaired with bare alt brackets first, and as
+ * usual where that reports a loss.
+ */
+function repairBareAlts(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+  const saved = saveGroup(w, groupEnd(w, document.children, from))
+  w.bareAlts = true
+  let end: number
+  try {
+    end = repairGroup(w, document, from, first, reported)
+  } finally {
+    w.bareAlts = false
+  }
+  if (w.losses.entries.length === reported) return end
+  restoreGroup(w, saved)
+  return repairGroup(w, document, from, first, reported)
 }
 
 /**

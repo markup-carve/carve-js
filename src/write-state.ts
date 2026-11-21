@@ -66,6 +66,10 @@ export interface Writer {
   /** The parse of the group of blocks as it was last written (C2-W-089). */
   parsed: DocumentNode | null
   prewrittenAttributes: Node | null
+  /** C2-I-118: images write the brackets of their alt text bare, for a group past the depth cap where they are text. */
+  bareAlts: boolean
+  /** Why the plan left the last group to the repair, or null. */
+  planWhy: string | null
   /** The plan of the group being written, while the writer plans it (write-plan.ts). */
   plan: Plan | null
   /** The parses the writer made, for the test that the planned path makes none. */
@@ -98,7 +102,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
-    prewrittenAttributes: null, plan: null, parses: 0, parseCache: new Map(),
+    prewrittenAttributes: null, bareAlts: false, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(), work: { chars: 0, limit: Infinity },
   }
 }
