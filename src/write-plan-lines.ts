@@ -21,6 +21,10 @@ export interface LeafPlace {
   item: 'plain' | 'task' | null
   /** The type of the block before the paragraph, or null. */
   before: string | null
+  /** Another block follows the paragraph in its container. */
+  followed: boolean
+  /** The paragraph has attributes, which the writer puts on the line above its first line (C2-W-047). */
+  attributed: boolean
   /** The leaf starts the document: its first line is line 1. */
   documentStart: boolean
   /** The leaf is a line of a line block, which recognizes only prefixes and the closer (C2-B-123). */
@@ -372,7 +376,7 @@ function blankOrImage(leaf: Leaf, unit: number): boolean {
  * the brace takes the backslash; alone it becomes a paragraph of its text. Stacked attribute lines and lines that
  * hold a node are left to the repair.
  */
-function attributeLine(leaf: Leaf, at: number, _place: LeafPlace, first: boolean): number {
+function attributeLine(leaf: Leaf, at: number, place: LeafPlace, first: boolean): number {
   if (isBracedOpener(code(leaf, at + 1)) || !lineEndsWith(leaf, at, 125)) return NO_ESCAPE
   if (!first) return UNDECIDED
   const [line, whole] = textOfLine(leaf, at)
@@ -380,8 +384,11 @@ function attributeLine(leaf: Leaf, at: number, _place: LeafPlace, first: boolean
   // C2-B-090: a line of braces that is no valid block is text. An include shape (C2-B-156) and a quote or a backslash,
   // whose escape may make the block valid, are left to the repair.
   if (!isAttributeLine(line, 0, line.length)) return line.startsWith('{{') || mayTakeEscape(line) ? UNDECIDED : NO_ESCAPE
-  const next = nextStructuralLine(leaf, at + line.length + 1)
-  if (next > leaf.codes.length) return NO_ESCAPE
+  const below = at + line.length + 1
+  const next = nextStructuralLine(leaf, below)
+  // C2-B-090, C2-B-137: a last line stacks on the attribute line of the paragraph itself, which is then text, takes
+  // the comment lines below it out of the paragraph, or applies to a block written directly below it.
+  if (next > leaf.codes.length) return place.attributed || next > below ? at : decidedIf(place.followed)
   const [after, afterWhole] = textOfLine(leaf, next)
   return afterWhole && isAttributeLine(after, 0, after.length) ? UNDECIDED : at
 }

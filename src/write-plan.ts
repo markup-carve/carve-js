@@ -19,6 +19,7 @@ import { BRACED_CLOSER_MARKS, INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tab
 import { type Writer } from './write-state.ts'
 import { MAX_DEPTH } from './state.ts'
 import { plainLeaf } from './write-plain.ts'
+import { braceBlock } from './write-attributes.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
 
 /** What one planned write of a group collects. */
@@ -900,7 +901,7 @@ function noteNode(plan: Plan, pending: Pending[], [list, depth, containers, plac
   const shape = blockShape(node, containers)
   if (shape !== null && plan.undecided === null) plan.undecided = shape
   if (referenceNeedsCheck(node)) plan.undecided ??= 'reference label'
-  const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
+  const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null, at + 1 < list.length)
   inner.documentStart = first && depth === 0 && at === 0
   const below = containers + (BLOCK_CAP_CONTAINERS.includes(node.type) ? 1 : 0)
   // Long quote prefixes can keep a multiline image alive past the modeled leaf boundary.
@@ -937,12 +938,13 @@ function blockShape(node: Node, level: number): string | null {
 }
 
 const TOP_PLACE: LeafPlace = {
-  paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, nested: false, item: null, before: null, documentStart: false,
+  paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, nested: false, item: null, before: null, followed: false,
+  attributed: false, documentStart: false,
   line: false, term: false, capped: false,
 }
 
-/** The place of the slots of `node`, which stands in `place` behind a block of the type `before`. */
-function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPlace {
+/** The place of the slots of `node`, which stands in `place` behind a block of the type `before`, and before a block where `followed`. */
+function innerPlace(node: Node, place: LeafPlace, before: string | null, followed: boolean): LeafPlace {
   const type = node.type
   return {
     paragraph: type === 'paragraph',
@@ -953,6 +955,8 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
     nested: place.nested || type !== 'paragraph',
     item: node.type === 'list_item' ? (node.task === undefined ? 'plain' : 'task') : type === 'paragraph' ? place.item : null,
     before,
+    followed,
+    attributed: type === 'paragraph' && braceBlock(node) !== '',
     documentStart: false,
     line: type === 'line',
     term: type === 'definition_term',
