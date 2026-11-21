@@ -33,6 +33,7 @@ export {
 } from '../src/ast.ts'
 export type * from '../src/ast-nodes.ts'
 export { encodeEnvelope, encodeTree, treesEqual } from '../src/ast-json.ts'
+export { tryRenderHtmlStreaming, type StreamOutcome } from '../src/stream.ts'
 export { type AnnotationRangeSidecar, CarveTreeError, MAX_TREE_DEPTH } from '../src/ast-validate.ts'
 export { type MigrateOptions, type MigrationResult } from '../migrate/index.ts'
 export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from '../src/layout.ts'
