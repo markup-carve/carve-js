@@ -18,6 +18,7 @@ const { document, source, diagnostics } = importDocument('# Hello *world*\n', { 
 | `labels` | map of label keys to text | HTML only: identifies generated accessible names from the renderer (C2-M-101). |
 | `adapter` | `generic` (default), `tiptap`, `prosemirror`, `ckeditor`, `tinymce`, `word`, `google-docs` | HTML only: the editor that wrote the HTML (C2-M-102). `word` and `google-docs` read a word processor's notes, a reference and a note linked to each other, as footnotes; the other values read the HTML as `generic` does. |
 | `strictLosses` | boolean, default `false` | Makes each loss of the import an error (C2-M-082). |
+| `constructs` | boolean, default `false` | Markdown, GFM and Djot: adds `constructs` to the result, a record of each construct of the input. |
 
 The result holds `document` (the validated tree), `source` (the writer's Carve text) and `diagnostics`. An input
 the importer cannot read throws `ImportInputError`; an unknown option throws `CarveOptionError`. The core entry
@@ -32,6 +33,25 @@ carve import --from djot notes.dj > notes.crv
 carve import --from bbcode post.txt > post.crv
 carve import --from html --adapter word export.html > export.crv
 ```
+
+## Construct records
+
+The diagnostics name what an import lost. With `constructs: true`, a Markdown, GFM or Djot import also lists what
+it read, so a host can show a receipt for each construct:
+
+```js
+const { constructs } = importDocument('**Hello**', { from: 'markdown', constructs: true })
+// [{ construct: 'strong', node: 'strong', status: 'preserved', range: { startOffset: 0, endOffset: 9 } }]
+```
+
+Each record names the construct as its library does (a micromark token type such as `strong`, `atxHeading` or
+`codeFenced`, or a djot.js node tag such as `emph`), the Carve node type it imports as, and its range in UTF-8 bytes
+of the input. Records come in input order. The status is decided per node type: the constructs that import as a type
+are `preserved` when the tree holds exactly as many nodes of that type and no diagnostic names the HTML element the
+type is read from; otherwise every one of them is `unverified`. Emphasis inside an image's alternative text, for
+example, has no node in the tree, so the emphasis records of that import are `unverified`.
+
+HTML and BBCode imports give no records: their diagnostics already point into the input.
 
 ## How it works
 

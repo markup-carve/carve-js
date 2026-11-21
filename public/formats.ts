@@ -13,6 +13,7 @@ import { checkOptions } from './check.ts'
 
 export { BBCODE_MAX_INPUT_LENGTH, BbcodeInputTooLargeError } from '../import/src/bbcode.ts'
 export { ImportInputError, type ImportDiagnostic, type ImportResult } from '../import/src/kit.ts'
+export type { ImportConstruct } from '../import/src/hub-constructs.ts'
 
 /** The formats this entry reads. */
 export type ImportFormat = 'markdown' | 'gfm' | 'djot' | 'bbcode' | 'html'
@@ -30,6 +31,8 @@ export interface ImportOptions {
   adapter?: 'generic' | 'tiptap' | 'prosemirror' | 'ckeditor' | 'tinymce' | 'word' | 'google-docs'
   /** C2-M-082: makes each loss of the import an error. */
   strictLosses?: boolean
+  /** Markdown, GFM and Djot: adds `constructs`, a record of each construct of the input and whether the tree holds it. */
+  constructs?: boolean
 }
 
 /**
@@ -39,7 +42,7 @@ export interface ImportOptions {
  */
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   if (options === undefined) throw new CarveOptionError('from', 'required')
-  checkOptions(options, { from: 'string', rawHtml: 'boolean', labels: 'labels', adapter: 'string', strictLosses: 'boolean' })
+  checkOptions(options, { from: 'string', rawHtml: 'boolean', labels: 'labels', adapter: 'string', strictLosses: 'boolean', constructs: 'boolean' })
   if (!FORMATS.includes(options.from)) throw new CarveOptionError('from', `unknown value ${JSON.stringify(options.from)}`)
   if (typeof input !== 'string') throw new ImportInputError('the input is not text', options.from)
   return importAny(input, options)

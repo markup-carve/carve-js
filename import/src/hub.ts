@@ -1,7 +1,7 @@
 // Markdown, GFM and Djot import through the HTML hub (ruling of 17 November): the reference library renders HTML and
 // the 0.2 HTML importer reads it. Hooks here only shape what the library's HTML cannot carry on its own.
-import { micromark } from 'micromark'
-import type { CompileContext, Extension, Handle, HtmlExtension, Token } from 'micromark-util-types'
+import { compile, parse as parseMarkdown, postprocess, preprocess } from 'micromark'
+import type { CompileContext, Event, Extension, Handle, HtmlExtension, Options, Token } from 'micromark-util-types'
 import { gfm } from 'micromark-extension-gfm'
 import { gfmAutolinkLiteralHtml } from 'micromark-extension-gfm-autolink-literal'
 import { gfmFootnoteHtml } from 'micromark-extension-gfm-footnote'
@@ -16,6 +16,7 @@ import type { DocumentNode } from '../../src/index.ts'
 import { ensureForeignDepth, ImportInputError, type ImportResult, withoutHtmlRanges } from './kit.ts'
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { ADMONITION_KINDS, importHtml } from './html.ts'
+import { constructRecords, djotConstructs, markdownConstructs } from './hub-constructs.ts'
 
 export type HubFormat = 'markdown' | 'gfm' | 'djot'
 
@@ -72,7 +73,13 @@ function frontmatterCapture(sink: Sink): HtmlExtension {
   return { enter, exit }
 }
 
-interface Sink { format?: 'yaml' | 'toml', value?: string, raw: { format: string, value: string }[] }
+interface Sink {
+  format?: 'yaml' | 'toml'
+  value?: string
+  raw: { format: string, value: string }[]
+  /** Set when the caller asks for construct records; the routes then fill it. */
+  constructs?: ReturnType<typeof markdownConstructs>
+}
 
 const RAW_PLACEHOLDER = /^<!--carve-hub-raw-(\d+)-->\n$/u
 const RAW_INLINE_PLACEHOLDER = /^<!--carve-hub-raw-(\d+)-->$/u
@@ -241,13 +248,17 @@ const GFM_HTML = (): HtmlExtension[] => [gfmAutolinkLiteralHtml(), gfmFootnoteHt
 
 /** Markdown (CommonMark) or GFM to HTML with micromark. */
 export function markdownHtml(input: string, format: 'markdown' | 'gfm', sink: Sink): string {
-  return micromark(input, {
+  const options: Options = {
     allowDangerousHtml: true,
     allowDangerousProtocol: true,
     extensions: [frontmatter(['yaml', 'toml']), math(), containerDirectives(), ...(format === 'gfm' ? [gfm()] : [])],
     htmlExtensions: [frontmatterCapture(sink), rawHtmlCarrier(sink), mathHtml(), directiveHandlers(),
       ...(format === 'gfm' ? GFM_HTML() : [])],
-  })
+  }
+  // micromark's own pipeline, run here so the constructs come from the events it compiles.
+  const events: Event[] = postprocess(parseMarkdown(options).document().write(preprocess()(input, undefined, true)))
+  if (sink.constructs !== undefined) sink.constructs = markdownConstructs(events, input, format === 'gfm')
+  return compile(options)(events)
 }
 
 /** djot.js generates a section id from each heading; Carve generates its own, so only an authored id is written. */
@@ -296,8 +307,9 @@ interface InTags { inTags: (tag: string, node: unknown, newlines: number, extra:
 
 /** Djot to HTML with djot.js, the reference implementation; raw content of every format is carried as in Markdown. */
 export function djotHtml(input: string, sink: Sink): string {
-  const doc = parseDjot(input, { sourcePositions: false })
+  const doc = parseDjot(input, { sourcePositions: sink.constructs !== undefined })
   ensureForeignDepth(doc, 'djot')
+  if (sink.constructs !== undefined) sink.constructs = djotConstructs(doc, input.length)
   dropGeneratedIds(doc)
   return renderDjot(doc, { overrides: {
     raw_inline: node => `<span data-carve-raw="${escapeHtml(node.format)}">${escapeHtml(node.text)}</span>`,
@@ -311,8 +323,8 @@ export function djotHtml(input: string, sink: Sink): string {
 }
 
 /** Imports through the hub: library HTML, then the 0.2 HTML importer with raw HTML kept, then the frontmatter. */
-export function importThroughHtml(input: string, format: HubFormat): ImportResult {
-  const sink: Sink = { raw: [] }
+export function importThroughHtml(input: string, format: HubFormat, constructs = false): ImportResult {
+  const sink: Sink = { raw: [], ...(constructs ? { constructs: [] } : {}) }
   let html: string
   try {
     html = format === 'djot' ? djotHtml(input, sink) : markdownHtml(input, format, sink)
@@ -330,5 +342,7 @@ export function importThroughHtml(input: string, format: HubFormat): ImportResul
   },
     finish: children => [...lead, ...(sink.raw.length > 0 ? restoreRaw(children, sink.raw) : children)] })
   // The libraries' own line breaks around tags are no whitespace of the input.
-  return { ...result, diagnostics: withoutHtmlRanges(result.diagnostics) }
+  const diagnostics = withoutHtmlRanges(result.diagnostics)
+  if (sink.constructs === undefined) return { ...result, diagnostics }
+  return { ...result, diagnostics, constructs: constructRecords(input, sink.constructs, result.document, diagnostics) }
 }
