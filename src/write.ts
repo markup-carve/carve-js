@@ -2,7 +2,7 @@
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
 import {
-  childNodes, type CommentNode, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, type TextNode,
+  childNodes, type CommentNode, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode,
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
@@ -347,12 +347,67 @@ function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
 // The nesting of inline nodes stays under the depth cap of the parser.
 const MAX_LEAF_DEPTH = 200
 
+/** Text nodes in source order, so a trial sees the escapes already placed to its left. */
+function textOrder(nodes: readonly Node[], order: Map<Node, number>): Map<Node, number> {
+  for (const node of nodes) {
+    if (node.type === 'text') order.set(node, order.size)
+    forEachSlot(node, (slot) => void textOrder(slot, order), SOURCE_ORDER)
+  }
+  return order
+}
+
+/** Parse a C2-W-125 trial with one candidate escape in the current group spelling. */
+function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: Map<TextNode, number[]>): DocumentNode {
+  w.escapes = escapes
+  w.lines = []
+  w.lead = null
+  w.starts.clear()
+  writeBlocks(w, group, '', 0, false)
+  return parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
+}
+
+/** Whether a trial escape changes the tree with earlier escapes in place. */
+function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNode, at: number): boolean {
+  const placed = w.escapes
+  const lines = w.lines
+  const lead = w.lead
+  const starts = new Map(w.starts)
+  const order = textOrder(group, new Map())
+  const rank = order.get(node) ?? -1
+  const left = new Map<TextNode, number[]>()
+  for (const [text, offsets] of placed) {
+    const own = order.get(text) ?? -1
+    if (own < rank) left.set(text, offsets)
+    else if (text === node) left.set(text, offsets.filter((offset) => offset < at))
+  }
+  const escaped = new Map(left)
+  escaped.set(node, [...(left.get(node) ?? []), at])
+  const without = groupTree(w, group, first, left)
+  const asked = !treesEqual(groupTree(w, group, first, escaped), without)
+  w.escapes = placed
+  w.lines = lines
+  w.lead = lead
+  w.starts.clear()
+  for (const [key, value] of starts) w.starts.set(key, value)
+  return asked
+}
+
 /**
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
  * false when the group reads back as its blocks. C2-W-088 places all escapes reported by the same read-back parse.
  */
 function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
+  // C2-W-125 tries to form a missing node separately from the constructs C2-W-088 found in the
+  // read-back parse. An ineffective trial takes no escape; all actual constructs still act together.
+  let dropped = false
+  for (const [node, at] of check.trials.length <= 4 ? check.trials : []) {
+    if (isAsked(w, group, first, node, at)) continue
+    const place = check.escapes.findIndex((escape) => escape[0] === node && escape[1] === at)
+    if (place >= 0) check.escapes.splice(place, 1)
+    dropped = true
+  }
+  if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
   extendChains(check)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
