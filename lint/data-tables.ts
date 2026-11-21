@@ -407,8 +407,8 @@ const K132 = new RegExp("(?<lines>@lines:[^\\s}]*)", "")
 const K133 = new RegExp("(?<lines>@lines:[^\\s}]*)", "d")
 const K134 = new RegExp("^[ \\t]*$", "")
 const K135 = new RegExp("^ {4,}[^ ]", "")
-const K136 = linearPattern("(?<link>\\[[^\\]\\n]+\\][ \\t]+\\([^)\\n]*\\))")
-const K137 = linearPattern("\\([^)\\n]*[^)\\s][^)\\n]*\\)$")
+const K136 = linearPattern("(?<link>\\[[^\\]\\n]+\\][ \\t]+\\((?<dest>[^)\\n]*)\\))|\\[[^\\]\\n]+\\][ \\t]+\\([^)\\n]*|\\[[^\\]\\n]*")
+const K137 = new RegExp("[^)\\s]", "")
 const K138 = new Set<unknown>(["list_item","admonition","directive","div","figure_group"])
 const K139 = new Set<unknown>(["admonition","block_quote","code_block","definition_list","directive","div","figure_group","heading","line_block","raw_block","table","thematic_break"])
 const K140 = new Set<string>(["list_item"])
@@ -1168,7 +1168,7 @@ function rule62(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
   if (!(K7.has(self.leaf) && contains(self.text, "]"))) return
   const one = (): void => {
-    if (test(K137, str(self.text).slice((num(group("link", 0)) - num(self.start)), (num(group("link", 1)) - num(self.start))))) {
+    if (((num(group("link", 0)) >= 0) && test(K137, str(self.text).slice((num(group("dest", 0)) - num(self.start)), (num(group("dest", 1)) - num(self.start)))))) {
       context.report("link-gap-before-destination", num(group("link", 0)), num(group("link", 1)), path, {  }, 0)
       return
     }
