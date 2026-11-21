@@ -12,8 +12,10 @@ import { lists } from './lists.ts'
 import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
 import { includes, tables, tablesHeadStyles } from './tables.ts'
-import { abbreviationSpaces, crossLineStrong, duplicateItemDefinitions, emptyAttributeQuote, flippedStrong, literalLinkBeforeCode, literalTableHeader,
-  nestedOrderedStart, siblingListBoundary, wrappedCodeTableRow } from './replay-fallbacks.ts'
+import {
+  abbreviationSpaces, crossLineStrong, duplicateItemDefinitions, emptyAttributeQuote, flippedStrong, literalLinkBeforeCode,
+  literalTableHeader, nestedOrderedStart, siblingListBoundary, wrappedCodeTableRow,
+} from './replay-fallbacks.ts'
 
 /** Starts the repairs of the replay rows (carve#6183) for the rules after it. */
 function repairs(ctx: Context): void {
