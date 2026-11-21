@@ -544,32 +544,38 @@ function lateHosts(input: string, parsed: Context): boolean[] {
   ]
 }
 
+/** Try one late rule set, preserving the order of full checks and rescues. */
+function checkedLateVariant(input: string, rules: readonly Rule[], parsed: Context,
+  tried: Set<string>): UpgradeResult | null {
+  const done = rewrite(input, rules, true, parsed)
+  if (triedBefore(tried, done)) return null
+  tried.add(done.output)
+  const mathClass = mathClassReport(done.context)
+  if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
+  const rewritten = done.records.map((record) => ({ ...record }))
+  let check = selfCheck(input, done)
+  const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
+  if (check === 'mismatch' && mismatch !== undefined) {
+    const rescued = rescueMismatch(input, done.output, mismatch, done.records, repairsLine(input, done, mismatch))
+    if (rescued !== null && !tried.has(rescued.output)) {
+      tried.add(rescued.output)
+      done.records = [...recordsAfterRescue(input, rescued, rewritten), rescued.record]
+      done.output = rescued.output
+      check = selfCheck(input, done)
+    }
+  }
+  return check === 'mismatch' ? null
+    : { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+}
+
 /** The first late variant whose output clears the self-check. */
 function latePass(input: string, first: string, parsed: Context): UpgradeResult | null {
   const tried = new Set([first])
   const hosts = lateHosts(input, parsed)
   for (const [index, rules] of LATE_VARIANTS.entries()) {
     if (hosts[index] === false) continue
-    const done = rewrite(input, rules, true, parsed)
-    if (triedBefore(tried, done)) continue
-    tried.add(done.output)
-    const mathClass = mathClassReport(done.context)
-    if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
-    const rewritten = done.records.map((record) => ({ ...record }))
-    let check = selfCheck(input, done)
-    const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
-    if (check === 'mismatch' && mismatch !== undefined) {
-      const rescued = rescueMismatch(input, done.output, mismatch, done.records, repairsLine(input, done, mismatch))
-      if (rescued !== null && !tried.has(rescued.output)) {
-        tried.add(rescued.output)
-        done.records = [...recordsAfterRescue(input, rescued, rewritten), rescued.record]
-        done.output = rescued.output
-        check = selfCheck(input, done)
-      }
-    }
-    if (check !== 'mismatch') {
-      return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
-    }
+    const result = checkedLateVariant(input, rules, parsed, tried)
+    if (result !== null) return result
   }
   return null
 }
