@@ -33,6 +33,7 @@ export { type Attributes, foldLabel } from './ast-attributes.ts'
 export { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from './inline-tables.ts'
 export { type DelimitedTable, readDelimitedTable } from './delimited.ts'
 export { tryRenderHtmlStreaming, type StreamOutcome } from './stream.ts'
+export { createEditorSession, EditorChangeError, type EditorChange, type EditorSession, type EditorSnapshot, type EditorUpdate } from './editor-session.ts'
 
 export {
   CarveInputError, CarveRenderError, type LayoutResult, parse, type ParsedTree, type ParseResult, parseTree, parseWithDiagnostics,

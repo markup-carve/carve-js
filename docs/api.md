@@ -23,6 +23,7 @@ HTML importer uses.
 | `parseWithLayout` | as `parse` | the same and `layout`, the source-layout sidecar | `CarveOptionError` |
 | `render` | source or a tree, `RenderOptions` | HTML | `CarveOptionError`, `CarveInputError`, `CarveRenderError`, `CarveTreeError` |
 | `renderWithDiagnostics` | as `render` | `{ html, diagnostics, suppressedDiagnostics }` | as `render` |
+| `createEditorSession` | source, `ParseOptions` | a revisioned UTF-16 editor session | `EditorChangeError` for invalid edits |
 | `format` | source, `{ alignTables, normalize, extensions }` | canonical source | `CarveOptionError`, `CarveWriteError` |
 | `formatWithDiagnostics` | as `format` | `{ source, diagnostics }` | `CarveOptionError` |
 | `write` | a tree, `{ layout, alignTables, extensions, check }` | canonical source | `CarveOptionError`, `CarveTreeError`, `CarveWriteError` |
@@ -364,7 +365,7 @@ old and new host HTML. The command line spelling is `carve upgrade --registered-
 | `glossary`, `index`, `citations` | same names from `@markup-carve/carve/extensions` | provisional; each returns `{ extensions, renderers, transforms }`, see [glossary, index and citations](extensions-reference.md) |
 | `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingNumbers`, `headingLevelShift`, `externalLinks`, `autolink` | `@markup-carve/carve/extensions` | provisional; see [Standard extensions: navigation](extensions-navigation.md) |
 | `parseWithProvenance`, `astNodePaths`, `readNodeIdentity`, `toNodeIdentity`, `readAnnotationRanges`, `toAnnotationRanges`, `readProvenance`, `toProvenance`, `toAuthoredProvenance`, `AstSidecarError` | gone | `validateTree` and `decodeTree` accept an optional annotation-range sidecar as `annotations`; node identity and provenance have no 0.2 call or schema; a diagnostic names its node by an RFC 6901 `path` |
-| `createEditorSession`, `EditorChangeError` | gone | no incremental session in 0.2; parse again |
+| `createEditorSession`, `EditorChangeError` | same names | snapshots hold the 0.2 tree; plain paragraph edits reuse unchanged nodes |
 | `tryRenderHtmlStreaming` | `tryRenderHtmlStreaming` | calls the sink once after rendering the whole HTML document |
 | `diffAst`, `createAstPatch` | `diffTree` | a JSON Patch over the encoded tree |
 | `applyAstPatch` | `applyPatch` | with `fingerprint` to bind the patch to its tree |
