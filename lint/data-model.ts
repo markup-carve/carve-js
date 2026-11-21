@@ -735,7 +735,9 @@ function earlierCloser(path: string, layout: NodeLayout, width: number, context:
   return false
 }
 
-interface ColonLayout { path: string, layout: NodeLayout, type: string, from: number, to: number, width: number, owner?: string }
+interface ColonLayout {
+  path: string, layout: NodeLayout, type: string, from: number, to: number, width: number, owner?: string, closed?: boolean
+}
 
 const colonLayouts = new WeakMap<LintContext['layouts'], ColonLayout[]>()
 
@@ -777,9 +779,54 @@ function colonOpener(colon: ColonLayout, at: number, lineStart: number, context:
   const { path, layout, type, from, to, width } = colon
   if (from >= at) return undefined
   // A container without a closer of its own stays open across the blank lines after its last block.
-  if (to < lineStart - 1 && !/^[ \t\r\n>]*$/.test(context.source.slice(to, lineStart))) return undefined
-  if (to < lineStart && earlierCloser(path, layout, width, context)) return undefined
+  if (to < lineStart - 1 && blankFrom(context, lineStart) > to) return undefined
+  if (to < lineStart && (colon.closed ??= earlierCloser(path, layout, width, context))) return undefined
   return colonEntry(type, from, width, context)
+}
+
+const blankStarts = new WeakMap<LintContext['layouts'], Uint32Array>()
+
+/** Where the run of spaces, tabs, line ends and quote marks that ends at `end` starts. */
+function blankFrom(context: LintContext, end: number): number {
+  let starts = blankStarts.get(context.layouts)
+  if (starts === undefined) {
+    const source = context.source
+    starts = new Uint32Array(source.length + 1)
+    for (let at = 1; at <= source.length; at++) {
+      const code = source.charCodeAt(at - 1)
+      starts[at] = code === 32 || code === 9 || code === 13 || code === 10 || code === 62 ? starts[at - 1]! : at
+    }
+    blankStarts.set(context.layouts, starts)
+  }
+  return starts[end]!
+}
+
+/** The candidates of a line: the first `length` entries of `list`, which later lines only append to. */
+interface Candidates { list: ColonLayout[], length: number }
+
+const colonCandidates = new WeakMap<LintContext['layouts'], Candidates[]>()
+
+/**
+ * The colon containers that may be open on each line, by line number: those that start before the line ends and end
+ * at or after the blank run before the line. A container that ends before that run never is again, so one sweep
+ * over the lines finds them all (carve-js#5280).
+ */
+function colonCandidatesOf(context: LintContext): Candidates[] {
+  let table = colonCandidates.get(context.layouts)
+  if (table !== undefined) return table
+  const colons = [...colonLayoutsOf(context)].sort((a, b) => a.from - b.from)
+  table = []
+  let active: ColonLayout[] = []
+  let next = 0
+  for (const line of context.lines) {
+    while (next < colons.length && colons[next]!.from <= line.end) active.push(colons[next++]!)
+    const bound = Math.min(line.start - 1, blankFrom(context, line.start))
+    // A line keeps the list it saw, so a list that loses an entry is copied rather than changed.
+    if (active.some((colon) => colon.to < bound)) active = active.filter((colon) => colon.to >= bound)
+    table[line.number] = { list: active, length: active.length }
+  }
+  colonCandidates.set(context.layouts, table)
+  return table
 }
 
 function colonEntry(type: string, from: number, width: number, context: LintContext): ColonContainer {
@@ -791,21 +838,47 @@ function colonEntry(type: string, from: number, width: number, context: LintCont
 
 const OWNER_BOUNDARIES: ReadonlySet<string> = new Set(['block_quote', 'list_item', 'footnote', 'definition_description'])
 
-const owners = new WeakMap<LintContext['layouts'], { path: string, from: number, to: number }[]>()
+interface Owner { path: string, from: number, to: number, parent: number }
+
+const owners = new WeakMap<LintContext['layouts'], Owner[]>()
+
+/**
+ * The owners by start, each with the nearest earlier one that covers it: the sources of blocks nest, so the owners
+ * that cover a point are the last one that starts at or before it and those it lies in.
+ */
+function ownersOf(context: LintContext): Owner[] {
+  let list = owners.get(context.layouts)
+  if (list !== undefined) return list
+  list = []
+  for (const [path, layout] of context.layouts) {
+    if (!OWNER_BOUNDARIES.has(context.nodeTypes.get(path) ?? '')) continue
+    list.push({ path, from: context.chars[layout.startByte] ?? 0, to: context.chars[layout.endByte] ?? 0, parent: -1 })
+  }
+  list.sort((a, b) => a.from - b.from || b.to - a.to || a.path.length - b.path.length)
+  const open: number[] = []
+  for (let index = 0; index < list.length; index++) {
+    const owner = list[index]!
+    while (open.length > 0 && list[open.at(-1)!]!.to < owner.to) open.pop()
+    owner.parent = open.at(-1) ?? -1
+    open.push(index)
+  }
+  owners.set(context.layouts, list)
+  return list
+}
 
 /** The path of the innermost quote, item, footnote or description whose source covers `at`, or `undefined`. */
 function ownerBoundary(at: number, context: LintContext): string | undefined {
-  let list = owners.get(context.layouts)
-  if (list === undefined) {
-    list = []
-    for (const [path, layout] of context.layouts) {
-      if (!OWNER_BOUNDARIES.has(context.nodeTypes.get(path) ?? '')) continue
-      list.push({ path, from: context.chars[layout.startByte] ?? 0, to: context.chars[layout.endByte] ?? 0 })
-    }
-    owners.set(context.layouts, list)
+  const list = ownersOf(context)
+  let low = 0
+  let high = list.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (list[middle]!.from <= at) low = middle + 1
+    else high = middle
   }
   let found: string | undefined
-  for (const { path, from, to } of list) {
+  for (let index = low - 1; index >= 0; index = list[index]!.parent) {
+    const { path, from, to } = list[index]!
     if (from <= at && at < to && (found === undefined || path.length > found.length)) found = path
   }
   return found
@@ -815,7 +888,11 @@ function ownerBoundary(at: number, context: LintContext): string | undefined {
 function openColon(line: ModelLine, context: LintContext): ColonContainer[] {
   const open: ColonContainer[] = []
   const boundary = ownerBoundary(line.body_start, context)
-  for (const colon of colonLayoutsOf(context)) {
+  const candidates = colonCandidatesOf(context)[line.number]
+  const list = candidates?.list ?? colonLayoutsOf(context)
+  const length = candidates?.length ?? list.length
+  for (let index = 0; index < length; index++) {
+    const colon = list[index]!
     if ((colon.owner ??= ownerBoundary(colon.from, context) ?? '') !== (boundary ?? '')) continue
     const found = colonOpener(colon, line.body_start, line.start, context)
     if (found !== undefined) open.push(found)
