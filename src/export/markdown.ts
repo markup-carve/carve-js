@@ -1,5 +1,6 @@
 // The Markdown export: CommonMark with the GFM tables, task lists, strikethrough and footnotes. What Markdown cannot
 // spell falls back to inline HTML (escaped where it is author content) or flattens, and the flattening is reported.
+import { trimSpaceTabEnd } from '../source.ts'
 import {
   type Attrs, type Block, type CaptionNode, type CodeBlockNode, type DocumentNode, type HeadingNode, type ImageNode, type Inline,
   type LinkNode, type ListNode, type Node, type NodeHandlers, type TableCellNode, type TableNode, type TableRowNode,
@@ -368,10 +369,11 @@ const INLINES: NodeHandlers<string, MarkdownState> = {
  */
 function protectLine(line: string, first: boolean): string {
   let text = line.replace(/^[ \t]+/u, '')
-  text = text.replace(/[ \t]+$/u, '')
+  text = trimSpaceTabEnd(text)
   // A hard break keeps its backslash as the last character of the line, with no space before it.
-  const backslashes = /\\+$/u.exec(text)?.[0].length ?? 0
-  if (backslashes % 2 === 1) text = `${text.slice(0, -1).replace(/[ \t]+$/u, '')}\\`
+  let backslashes = 0
+  while (text[text.length - 1 - backslashes] === '\\') backslashes++
+  if (backslashes % 2 === 1) text = `${trimSpaceTabEnd(text.slice(0, -1))}\\`
   if (text === '') return text
   text = text
     .replace(first ? /^([-+])(?=[ \t]|$)/u : /^([-+])(?=[ \t]+\S)/u, '\\$1')

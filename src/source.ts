@@ -58,6 +58,13 @@ export function trimEndWhitespace(text: string): string {
   return end === text.length ? text : text.slice(0, end)
 }
 
+/** `text` without the spaces and tabs at its end. Trap: `/[ \t]+$/` rescans a long inner run from each of its characters. */
+export function trimSpaceTabEnd(text: string): string {
+  let end = text.length
+  while (end > 0 && isSpaceOrTab(text.charCodeAt(end - 1))) end--
+  return end === text.length ? text : text.slice(0, end)
+}
+
 /** `text` without the spaces and tabs at its ends. Unlike `String.prototype.trim` it keeps a no-break space and other Unicode spaces. */
 export function trimSpaces(text: string): string {
   let start = 0

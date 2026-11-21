@@ -2,6 +2,7 @@ import { forEachSlot, type Node, type TableCellNode, type TableColumnNode } from
 import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
+import { quotesAbove } from './ancestry.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
 import { readPrefix } from '../src/layout-lines.ts'
 import { advanceColumn } from '../src/source.ts'
@@ -215,7 +216,7 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   if (first === undefined || second === undefined) return
   const marker = context.layouts.get(path)?.markerColumn
   if (marker === undefined) return
-  const quotes = quoteDepth(path, context)
+  const quotes = quotesAbove(path, context)
   const indent = headingLineColumn(second, quotes, context)
   if (indent > marker) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
 }
@@ -681,14 +682,6 @@ function listMarkerBelowColumn(node: Node, path: string, context: LintContext): 
     reportNode('list-marker-below-content-column', item, `${path}/children/${at}`, context,
       { column: String(column + 1), contentColumn: String(deeper + 1), baseColumn: String(outer + 1) })
   })
-}
-
-function quoteDepth(path: string, context: LintContext): number {
-  let depth = 0
-  for (let split = path.lastIndexOf('/children/'); split > 0; split = path.lastIndexOf('/children/', split - 1)) {
-    if (context.nodeTypes.get(path.slice(0, split)) === 'block_quote') depth++
-  }
-  return depth
 }
 
 /** The whole opening mark of a block opener, as the row of `block-opener-overindented` states its range (carve#6192). */

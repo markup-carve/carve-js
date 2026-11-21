@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { hasLinearMatcher } from './linear-patterns.ts'
 
 type Expr = unknown
 interface Report { when?: Expr, message?: number, start?: Expr, end?: Expr, values?: Record<string, Expr> }
@@ -64,6 +65,8 @@ class Compiler {
 
   /** The source offset that index 0 of a text value stands at, for the spans of a `matches`. */
   hoistRegex(source: string, flags: string): string {
+    // carve#6297: a pattern a backtracking engine runs in quadratic time gets the linear matcher of the same answers.
+    if (hasLinearMatcher(source)) return this.hoist(`linearPattern(${literal(source)})`)
     return this.hoist(`new RegExp(${literal(source)}, ${literal(unicodeFlags(source, flags))})`)
   }
 
@@ -114,11 +117,11 @@ class Compiler {
     const source = String(pattern)
     const named = source.includes('(?<')
     const plain = typeof flags === 'string' ? flags : ''
-    const regex = this.hoist(`new RegExp(${literal(source)}, ${literal(unicodeFlags(source, plain))})`)
+    const regex = this.hoistRegex(source, plain)
     const value = this.value(subject)
     if (!named) return `test(${regex}, ${value})`
     // A plain test first: a pattern with indices is several times slower, and most lines do not match.
-    const spans = this.hoist(`new RegExp(${literal(source)}, ${literal(unicodeFlags(source, `${plain}d`))})`)
+    const spans = this.hoistRegex(source, `${plain}d`)
     return `(hit(${regex}, ${spans}, ${value}) && mark(${this.base(subject)}))`
   }
 
@@ -259,6 +262,7 @@ function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string
 
 const PRELUDE = `import { type RuleId } from './catalog.ts'
 import { type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
+import { linearPattern, type Pattern } from './linear-patterns.ts'
 import { type LintContext } from './types.ts'
 
 let groups: Record<string, [number, number]> | undefined
@@ -283,7 +287,7 @@ const trimEnd = (text: string): string => {
   while (end > 0 && (text.charCodeAt(end - 1) === 32 || text.charCodeAt(end - 1) === 9)) end--
   return text.slice(0, end)
 }
-const test = (regex: RegExp, value: unknown): boolean => typeof value === 'string' && regex.test(value)
+const test = (regex: RegExp | Pattern, value: unknown): boolean => typeof value === 'string' && regex.test(value)
 const starts = (value: unknown, prefix: string): boolean => typeof value === 'string' && value.startsWith(prefix)
 
 function spansOf(found: RegExpExecArray | RegExpMatchArray): Record<string, [number, number]> {
@@ -297,12 +301,12 @@ function spansOf(found: RegExpExecArray | RegExpMatchArray): Record<string, [num
   return spans
 }
 
-let lastRegex: RegExp | undefined
+let lastRegex: RegExp | Pattern | undefined
 let lastValue = ''
 let lastSpans: Record<string, [number, number]> | undefined
 
 // The lines of one leaf often test the same text against the same pattern, as a block's opener line.
-function hit(regex: RegExp, spans: RegExp, value: unknown): boolean {
+function hit(regex: RegExp | Pattern, spans: RegExp | Pattern, value: unknown): boolean {
   if (typeof value !== 'string') return false
   if (regex === lastRegex && value === lastValue) {
     if (lastSpans === undefined) return false
@@ -320,8 +324,10 @@ function hit(regex: RegExp, spans: RegExp, value: unknown): boolean {
   return true
 }
 
-const matchAll = (regex: RegExp, value: unknown): RegExpStringIterator<RegExpExecArray> | [] =>
-  (typeof value === 'string' ? value.matchAll(regex) : [])
+const matchAll = (regex: RegExp | Pattern, value: unknown): Iterable<RegExpExecArray> => {
+  if (typeof value !== 'string') return []
+  return regex instanceof RegExp ? value.matchAll(regex) : regex.matchAll(value)
+}
 
 const PAIR_SPACE = /[\\p{Zs}\\t\\n\\r]/u
 

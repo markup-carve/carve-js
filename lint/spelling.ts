@@ -1,6 +1,7 @@
 import { columnOf } from '../src/layout-lines.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type Line, type LintContext, type Rule } from './types.ts'
+import { ancestorOf, quoteDepth } from './ancestry.ts'
 
 function trimmed(line: Line): { text: string, start: number } {
   let at = 0
@@ -95,25 +96,6 @@ function regionAsText(line: Line, context: LintContext): void {
   if (line.paragraph && /^(?:(?:\/\/|--|\/\*|<!--)[ \t]*)?#(?:end)?region(?![A-Za-z0-9_])/i.test(text)) {
     context.report('region-marker-renders-as-text', start, start + text.length, line.path)
   }
-}
-
-function ancestorOf(path: string, context: LintContext, type: string): string | undefined {
-  let current = path
-  while (current !== '') {
-    if (context.nodeTypes.get(current) === type) return current
-    const split = current.lastIndexOf('/children/')
-    if (split < 0) return undefined
-    current = current.slice(0, split)
-  }
-  return undefined
-}
-
-function quoteDepth(path: string, context: LintContext): number {
-  let depth = 0
-  for (let at = path.indexOf('/children/'); at >= 0; at = path.indexOf('/children/', at + 1)) {
-    if (context.nodeTypes.get(path.slice(0, at)) === 'block_quote') depth++
-  }
-  return depth + (context.nodeTypes.get(path) === 'block_quote' ? 1 : 0)
 }
 
 // C2-B-067, C2-B-071, C2-B-074: a colon mark that opens no entry, below a description list whose first term
