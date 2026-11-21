@@ -549,7 +549,7 @@ function latePass(input: string, first: string, parsed: Context): UpgradeResult 
   const tried = new Set([first])
   const hosts = lateHosts(input, parsed)
   for (const [index, rules] of LATE_VARIANTS.entries()) {
-    if (!hosts[index]) continue
+    if (hosts[index] === false) continue
     const done = rewrite(input, rules, true, parsed)
     if (triedBefore(tried, done)) continue
     tried.add(done.output)
