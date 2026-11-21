@@ -36,6 +36,70 @@ describe('replay fallback families', () => {
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
+  it('keeps an empty div after an indented colon fence line', () => {
+    const input = '~s~\n\n- ::: note\n  1. para text\n :::\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('{~s~}\n\n- ::: note\n  1. para text\n :::\n\n:::\n:::\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps an empty div inside an admonition with a long closing run', () => {
+    const input = '::: note "Title"\t[First]\n x\n:::::\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe(':::: note\n x\n:::\n:::\n::::\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('marks the first cell of a continued header row before removing its separator', () => {
+    const input = '\n| a | b |\n + cont |\n| - | - |\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('\n|= a |= b |\n + cont |\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('separates a description from a quoted term', () => {
+    const input = '> :: t\n:: t\n: 1. para\n> : d\n>   [^f]: n\ntail\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('> :: t\n\n:: t\n: 1. para\n\n> : d\n\n[^f]: n\ntail\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('moves nested footnote definitions to document scope after an item', () => {
+    const input = '- item\n  [^c]: [^d]: para\n\n::::\n          more\n\n   ~~~\n  See[^c][^d]\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toContain('\n\n[^c]: [^d]: para\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps adjacent old smart punctuation glyphs in a quoted item', () => {
+    const input = '{.x}\n\n> - +---\n> q\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('{.x}\n> - ±–\n> q\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps a tabbed paragraph inside its old footnote body', () => {
+    const input = ' [^a]: note\n\n\tmore\n::: note\n\nsee[^a]\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('[^a]: note\n\n more\n::: note\n\nsee[^a]\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('places a quote after a description at the old footnote column', () => {
+    const input = ' [^n]: intro\n\n   :: term\n   :  definition\n    > quote\n\nsee[^n]\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('[^n]: intro\n\n  :: term\n  :  definition\n\n  > quote\n\nsee[^n]\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('preserves adjacent reversed and ordinary strong-emphasis spans', () => {
     const input = 'b */{/*/*{t="*/"}\nb *///*{t="*/"}\n'
     const result = upgrade(input)
