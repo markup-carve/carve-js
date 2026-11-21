@@ -4,8 +4,28 @@ import { describe, expect, it } from 'vitest'
 import { lint } from '../src/index.ts'
 import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.ts'
 import { TableLines } from '../lint/data-table.ts'
+import { itemOwnerOf } from '../lint/data-model.ts'
 
 const codes = (source: string) => lint(source, {}).map(d => `${d.code}@${d.range?.startOffset}-${d.range?.endOffset}`)
+
+it('resolves colon ancestors once across all nested block owners', () => {
+  class CountedTypes extends Map<string, string> {
+    reads = 0
+    override get(path: string): string | undefined { this.reads++; return super.get(path) }
+  }
+  const types = new CountedTypes()
+  const item = '/children/0'
+  types.set(item, 'list_item')
+  let path = item
+  const owners = []
+  for (let at = 0; at < 160; at++) {
+    path += '/children/0'
+    types.set(path, 'div')
+    owners.push({ path, type: 'div' })
+  }
+  for (const owner of owners) expect(itemOwnerOf(owner, types)).toEqual({ path: item, type: 'list_item' })
+  expect(types.reads).toBeLessThan(owners.length * 3)
+})
 
 describe('lint data model on opener lines', () => {
   it('reads an opener with trailing spaces and tabs as before', () => {
@@ -15,6 +35,12 @@ describe('lint data model on opener lines', () => {
   perfIt('scales linearly on a div opener line of tabs before text', () => {
     expectBuiltInputScansLinearly(source => { lint(source, {}) }, count => `::: d${'\t'.repeat(count)}x\n:::\n`,
       { label: 'div opener tabs', smallRepeats: 2_000 })
+  })
+
+  perfIt('scales by bytes on nested colon fence staircases', () => {
+    expectBuiltInputScansLinearly(source => { lint(source, {}) }, count =>
+      Array.from({ length: count }, (_, at) => `${':'.repeat(count + 3 - at)} c\n`).join('') + '@\n',
+      { label: 'nested colon fence descriptions', smallRepeats: 36, largeRepeats: 144 })
   })
 })
 
