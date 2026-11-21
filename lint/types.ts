@@ -49,20 +49,11 @@ export interface LintContext {
     mixedReported: boolean
     firstHeading: { range: [number, number], path: string } | null
     referenceUrls: Set<string>
-    ids: Set<string>
-    idOwners: Map<string, Node['type']>
-    fragmentLinks: { node: Node, path: string }[]
-    crossrefs: { node: Node, path: string }[]
     footnoteKeys: Map<string, string>
     attachedLines: Set<number>
-    descriptionStarts: Set<number>
     containerClosers: Set<number>
-    /** The source characters where an inline node other than text starts, directly in a paragraph. */
-    spanStarts: Set<number>
     usedReferences: Set<string>
     usedFootnotes: Set<string>
-    referenceDefinitions: { node: Node, path: string }[]
-    unresolvedReferences: { node: Node, path: string }[]
     footnoteDefinitions: { node: Node, path: string }[]
   }
   report: (id: RuleId, start: number, end: number, path: string, values?: Record<string, string>, message?: number) => void

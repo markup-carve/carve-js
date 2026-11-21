@@ -165,17 +165,9 @@ function plainEmptyCell(node: Node, context: LintContext): boolean {
   return start !== undefined && end !== undefined && context.source.slice(start, end).trim() === ''
 }
 
-function markSpanStarts(children: readonly Node[], context: LintContext): void {
-  for (const child of children) {
-    const at = child.type === 'text' || child.pos === undefined ? undefined : context.chars[child.pos.startOffset]
-    if (at !== undefined) context.state.spanStarts.add(at)
-  }
-}
-
 function markDescriptionAndCloser(node: Node, context: LintContext): void {
   const pos = node.pos
   if (pos === undefined) return
-  if (node.type === 'definition_description') context.state.descriptionStarts.add(pos.startLine)
   if (['div', 'admonition', 'figure_group', 'line_block', 'block_quote'].includes(node.type) && pos.endLine > pos.startLine
     && /^\s*:{3,}\s*$/.test(context.lines[pos.endLine - 1]?.text ?? '')) context.state.containerClosers.add(pos.endLine)
 }
@@ -183,26 +175,14 @@ function markDescriptionAndCloser(node: Node, context: LintContext): void {
 /** The footnote and reference keys that several rules read, collected whichever of them run by hand. */
 function collectKeys(node: Node, path: string, context: LintContext): void {
   if (node.type === 'footnote') context.state.footnoteKeys.set(path, node.key)
-  // The platform rules read the used footnote keys, and unresolved-reference-link reads the definitions.
+  // The platform rules read the used footnote keys.
   else if (node.type === 'footnote_ref') context.state.usedFootnotes.add(node.key)
-  else if (node.type === 'link_reference_definition') context.state.referenceDefinitions.push({ node, path })
-}
-
-// C2-A-039: of two nodes with one id, the first is its anchor.
-function addId(id: string, node: Node, context: LintContext): void {
-  context.state.ids.add(id)
-  if (!context.state.idOwners.has(id)) context.state.idOwners.set(id, node.type)
 }
 
 function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
   context.nodeTypes.set(path, node.type)
   collectKeys(node, path, context)
-  if (node.attrs?.id !== undefined) addId(node.attrs.id, node, context)
   if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
-  if (node.type === 'paragraph') markSpanStarts(node.children, context)
-  if (node.type === 'heading' && node.generatedId !== undefined) {
-    addId(node.generatedId, node, context)
-  }
   const pos = node.pos
   markDescriptionAndCloser(node, context)
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
@@ -538,12 +518,10 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     source, ...position, leafMask: new Uint8Array(source.length), options, layouts, nodeTypes: new Map(),
     nodeRules: nodeRulesByType(options),
     diagnostics: [], findingLines: [],
-    state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, firstHeading: null, referenceUrls: new Set(), ids: new Set(),
-      idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteKeys: new Map(), attachedLines: new Set(),
-      descriptionStarts: new Set(),
+    state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, firstHeading: null, referenceUrls: new Set(),
+      footnoteKeys: new Map(), attachedLines: new Set(),
       containerClosers: new Set(),
-      spanStarts: new Set(),
-      usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [], unresolvedReferences: [],
+      usedReferences: new Set(), usedFootnotes: new Set(),
       footnoteDefinitions: [] },
     report(id, start, end, path, values = {}, index = 0) {
       const boundedStart = Math.max(0, Math.min(start, source.length))

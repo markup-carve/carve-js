@@ -110,18 +110,6 @@ function referencesPlacement(node: Node, path: string, context: LintContext): vo
   if (node.kind === 'references') reportNode('references-placement-in-container', node, path, context)
 }
 
-function multilineHtmlComment(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'paragraph') return
-  const range = bounds(node, context)
-  if (range === null) return
-  const source = raw(node, context)
-  for (let at = source.indexOf('<!--'); at >= 0; at = source.indexOf('<!--', at + 4)) {
-    const end = source.indexOf('-->', at + 4)
-    if (end < 0 || !source.slice(at, end).includes('\n') || escaped(source, at)) continue
-    context.report('html-comment-renders-as-text', range[0] + at, range[0] + end + 3, path)
-  }
-}
-
 // carve#6176: every inline content of text, a description's through its paragraphs.
 const INLINE_HOSTS: ReadonlySet<string> = new Set(['paragraph', 'heading', 'definition_term', 'cell_paragraph'])
 
@@ -171,15 +159,6 @@ function opensCell(context: LintContext, start: number): boolean {
   while (context.source[at] === ' ' || context.source[at] === '\t') at--
   if (context.source[at] === '=') at--
   return context.source[at] === '|'
-}
-
-function brokenCrossref(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'xref' || node.namespace !== 'heading' || node.href !== undefined) return
-  context.state.crossrefs.push({ node, path })
-}
-
-function collectFragment(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'link' && node.href?.startsWith('#')) context.state.fragmentLinks.push({ node, path })
 }
 
 function platformIssue(node: Node, path: string, context: LintContext): void {
@@ -324,28 +303,6 @@ function jsonText(value: string): string {
   return JSON.stringify(value).slice(1, -1)
 }
 
-function tightBlankLine(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list' || node.spacing !== 'tight') return
-  for (let at = 0; at < node.children.length; at++) {
-    const item = node.children[at]
-    if (item === undefined || !item.children.some((child) => child.type === 'paragraph')) continue
-    for (let inner = 0; inner < item.children.length - 1; inner++) {
-      const childPath = `${path}/children/${at}/children/${inner}`
-      if ((context.layouts.get(childPath)?.blankLinesAfter ?? 0) > 0
-        && item.children.slice(inner + 1).some((child) => child.type !== 'comment')) {
-        reportNode('tight-list-item-with-blank-line', node, path, context)
-        return
-      }
-    }
-  }
-}
-
-function regionComment(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'comment' || node.form !== 'line' || !/^#(?:end)?region(?![A-Za-z0-9_])/i.test(node.value)) return
-  if (/^#(?:end)?region(?![A-Za-z0-9_])/.test(node.value)) return
-  reportNode('region-marker-renders-as-text', node, path, context, {}, 1)
-}
-
 function unclosedBracedComment(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const source = raw(node, context)
@@ -398,53 +355,6 @@ function sigilAfterLetter(node: Node, path: string, context: LintContext): void 
 
 /** Each block of a list item, other than a paragraph, that starts past the item's content column. */
 
-/** The marker column of the list item that holds the list at `path`, or undefined at the top of a container. */
-function outerMarkerColumn(path: string, context: LintContext): number | undefined {
-  const split = path.lastIndexOf('/children/')
-  if (split < 0) return undefined
-  const parent = path.slice(0, split)
-  return context.nodeTypes.get(parent) === 'list_item' ? context.layouts.get(parent)?.markerColumn : undefined
-}
-
-/**
- * Each later item of `node` whose marker stands left of the item before it, with `between` true where it stands right of
- * the item that holds the list: C2-B-055 then read it between two open lists, and otherwise C2-B-054 left of them all.
- */
-function leftMarkers(node: Node, path: string, context: LintContext,
-  visit: (at: number, column: number, deeper: number, outer: number | undefined) => void): void {
-  if (node.type !== 'list') return
-  const outer = outerMarkerColumn(path, context)
-  for (let at = 1; at < node.children.length; at++) {
-    const deeper = context.layouts.get(`${path}/children/${at - 1}`)?.markerColumn
-    const column = context.layouts.get(`${path}/children/${at}`)?.markerColumn
-    if (deeper !== undefined && column !== undefined && column < deeper) visit(at, column, deeper, outer)
-  }
-}
-
-function listMarkerBelowColumn(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list') return
-  const split = path.lastIndexOf('/children/')
-  const owner = path.slice(0, split)
-  const index = Number(path.slice(split + '/children/'.length))
-  if (context.nodeTypes.get(owner) === 'list_item' && index > 0) {
-    const previous = `${owner}/children/${index - 1}`
-    const outer = context.layouts.get(owner)?.markerColumn
-    const deeper = context.nodeTypes.get(previous) === 'list'
-      ? context.layouts.get(`${previous}/children/0`)?.markerColumn : undefined
-    const column = context.layouts.get(`${path}/children/0`)?.markerColumn
-    if (outer !== undefined && deeper !== undefined && column !== undefined && outer < column && column < deeper) {
-      reportNode('list-marker-below-content-column', node.children[0]!, `${path}/children/0`, context,
-        { column: String(column + 1), contentColumn: String(deeper + 1), baseColumn: String(outer + 1) })
-    }
-  }
-  leftMarkers(node, path, context, (at, column, deeper, outer) => {
-    const item = node.type === 'list' ? node.children[at] : undefined
-    if (item === undefined || outer === undefined || column <= outer) return
-    reportNode('list-marker-below-content-column', item, `${path}/children/${at}`, context,
-      { column: String(column + 1), contentColumn: String(deeper + 1), baseColumn: String(outer + 1) })
-  })
-}
-
 /** The whole opening mark of a block opener, as the row of `block-opener-overindented` states its range (carve#6192). */
 
 /** Where the opening mark of a block stands: an attributed block starts at its attribute lines (C2-W-138). */
@@ -465,38 +375,6 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
     range[0] + at + 2, path)
 }
 
-/** C2-B-030: an ordered marker left of the list's first marker that ends where the list's markers end. */
-function rightAligned(node: Node, path: string, at: number, context: LintContext): boolean {
-  if (node.type !== 'list' || node.marker.kind !== 'ordered' || at < 1) return false
-  const first = context.layouts.get(`${path}/children/0`)
-  const item = context.layouts.get(`${path}/children/${at}`)
-  if (first?.markerColumn === undefined || item?.markerColumn === undefined) return false
-  return first.markerColumn > item.markerColumn && first.contentColumn === item.contentColumn
-}
-
-function orderedRightAligned(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list') return
-  for (let at = 1; at < node.children.length; at++) {
-    if (rightAligned(node, path, at, context)) reportNode('ordered-marker-right-aligned', node.children[at]!, `${path}/children/${at}`, context)
-  }
-}
-
-function unevenListIndent(node: Node, path: string, context: LintContext): void {
-  leftMarkers(node, path, context, (at, column, _deeper, outer) => {
-    const item = node.type === 'list' ? node.children[at] : undefined
-    let footnoteColumn = 0
-    for (let owner = path; owner !== ''; owner = owner.slice(0, owner.lastIndexOf('/children/'))) {
-      if (context.nodeTypes.get(owner) === 'footnote') {
-        footnoteColumn = context.layouts.get(owner)?.contentColumn ?? 0
-        break
-      }
-    }
-    const previous = context.layouts.get(`${path}/children/${at - 1}`)?.markerColumn ?? 0
-    if (Math.max(0, column - footnoteColumn) >= Math.max(0, previous - footnoteColumn) || rightAligned(node, path, at, context)) return
-    if (item !== undefined && (outer === undefined || column <= outer)) reportNode('uneven-list-indent', item, `${path}/children/${at}`, context)
-  })
-}
-
 function nonDescriptiveLink(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'link' || node.children.length !== 1) return
   const child = node.children[0]
@@ -507,79 +385,7 @@ function nonDescriptiveLink(node: Node, path: string, context: LintContext): voi
   }
 }
 
-function unresolvedReference(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'link' && node.type !== 'image') return
-  if (node.key === undefined) return
-  const resolved = node.type === 'link' ? node.href !== undefined : node.src !== undefined
-  if (resolved) return
-  context.state.unresolvedReferences.push({ node, path })
-}
-
-function fragmentNames(href: string): [string, string] {
-  const fragment = href.slice(1).split(':~:', 1)[0] ?? ''
-  try { return [fragment, decodeURIComponent(fragment)] }
-  catch { return [fragment, fragment] }
-}
-
-function brokenFragment(item: { node: Node, path: string }, context: LintContext): void {
-  if (item.node.type !== 'link' || item.node.href === undefined) return
-  const href = item.node.href
-  const [fragment, decoded] = fragmentNames(href)
-  if (fragment === '' || fragment.toLowerCase() === 'top') return
-  if (context.state.ids.has(fragment) || context.state.ids.has(decoded)) return
-  const caseOnly = [...context.state.ids].find((id) => id.toLowerCase() === fragment.toLowerCase()
-    || id.toLowerCase() === decoded.toLowerCase())
-  reportNode('broken-fragment-link', item.node, item.path, context, { href, caseOnly: caseOnly ?? '' },
-    caseOnly === undefined ? 1 : 0)
-}
-
-function finishFragments(context: LintContext): void {
-  if (context.options.rules?.['broken-fragment-link'] === 'off' || (context.options.extensions?.length ?? 0) > 0) return
-  for (const item of context.state.fragmentLinks) brokenFragment(item, context)
-}
-
-function finishCrossrefs(context: LintContext): void {
-  for (const item of context.state.crossrefs) {
-    if (item.node.type !== 'xref') continue
-    const target = item.node.key
-    const exact = context.state.idOwners.get(target)
-    if (exact !== undefined && exact !== 'heading' && exact !== 'caption') {
-      reportNode('broken-crossref', item.node, item.path, context, { target, id: target, kind: exact }, 0)
-      continue
-    }
-    const caseOnly = [...context.state.idOwners].filter(([id, type]) => (type === 'heading' || type === 'caption')
-      && id.toLowerCase() === target.toLowerCase()).map(([id]) => id)
-    const phrase = caseOnly.length === 1 ? `the id ${caseOnly[0]} differs only in case`
-      : `the ids ${caseOnly.join(', ')} differ only in case`
-    reportNode('broken-crossref', item.node, item.path, context,
-      { target, caseOnlyPhrase: phrase }, caseOnly.length === 0 ? 2 : 1)
-  }
-}
-
-function reportUnresolvedReference(item: { node: Node, path: string }, context: LintContext): void {
-  const { node } = item
-  if (node.type !== 'link' && node.type !== 'image') return
-  const rawRef = context.layouts.get(item.path)?.rawRef ?? raw(node, context)
-  const key = node.key ?? ''
-  const matches = context.state.referenceDefinitions.filter(({ node: definition }) =>
-    definition.type === 'link_reference_definition' && definition.key.toLowerCase() === key.toLowerCase())
-  const headings = node.type === 'link' ? [...context.state.idOwners.keys()].filter((id) =>
-    id.toLowerCase() === key.toLowerCase()) : []
-  const caseOnly = [...matches.map(({ node: definition }) => definition.type === 'link_reference_definition'
-    ? definition.key : ''), ...headings].filter((value) => value !== key)
-  const index = node.type === 'link' ? (caseOnly.length > 0 ? 0 : 1) : (caseOnly.length > 0 ? 2 : 3)
-  reportNode('unresolved-reference-link', node, item.path, context,
-    { rawRef, caseOnlyPhrase: `the label ${caseOnly[0] ?? ''} differs only in case` }, index)
-}
-
-function finishReferences(context: LintContext): void {
-  for (const item of context.state.unresolvedReferences) reportUnresolvedReference(item, context)
-}
-
 export function finishStructure(context: LintContext): void {
-  finishFragments(context)
-  finishCrossrefs(context)
-  finishReferences(context)
   for (let at = context.diagnostics.length - 1; at >= 0; at--) {
     const entry = context.diagnostics[at]!
     if (entry.code !== 'platform-issue-reference' && entry.code !== 'platform-mention-token') continue
@@ -600,14 +406,11 @@ function nodeRule(id: Rule['id'], nodes: readonly Node['type'][] , checkNode: No
 
 export const NODE_RULES: readonly Rule[] = [
                   nodeRule('deprecated-substitution-arrow', ['strike'], substitutionArrow),
-      nodeRule('html-comment-renders-as-text', ['paragraph'], multilineHtmlComment),
   nodeRule('bidi-control-in-source', ['text', 'code', 'code_block', 'math'], bidiControl),
     nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
   nodeRule('figure-group-panel-number', ['figure_group'], figurePanelNumber),
     nodeRule('references-placement-in-container', ['directive'], referencesPlacement),
             nodeRule('unattached-inline-attribute', ['text'], unattachedInline),
-          nodeRule('broken-crossref', ['xref'], brokenCrossref),
-  nodeRule('broken-fragment-link', ['link'], collectFragment),
   nodeRule('platform-issue-reference', ['text'], platformIssue),
   nodeRule('platform-mention-token', ['text', 'mention'], platformMention),
   nodeRule('djot-intraword-underscore', ['text'], intrawordUnderscore),
@@ -615,15 +418,9 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('emphasis-marker-before-attributes', ['strong', 'emphasis'], spanMarkerBeforeAttrs),
   nodeRule('carve-version-unsupported', ['frontmatter'], carveVersion),
       nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
-  nodeRule('tight-list-item-with-blank-line', ['list'], tightBlankLine),
-    nodeRule('region-marker-renders-as-text', ['comment'], regionComment),
   nodeRule('unclosed-braced-comment', ['text'], unclosedBracedComment),
   nodeRule('unclosed-inline-emphasis', ['text'], unclosedEmphasis),
   nodeRule('sigil-after-letter', ['text'], sigilAfterLetter),
-      nodeRule('list-marker-below-content-column', ['list'], listMarkerBelowColumn),
     nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
-  nodeRule('ordered-marker-right-aligned', ['list'], orderedRightAligned),
-  nodeRule('uneven-list-indent', ['list'], unevenListIndent),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
-  nodeRule('unresolved-reference-link', ['link', 'image'], unresolvedReference),
       ]
