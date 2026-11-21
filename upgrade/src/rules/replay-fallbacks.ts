@@ -85,6 +85,290 @@ export function emptyAttributeItemAfterDescription(ctx: Context): void {
   }
 }
 
+function documentEmptyColonDiv(ctx: Context, visit: Visit, line: number, source: string): void {
+  if (visit.parent?.node.type !== 'document' || !/^ +:::[ \t]*$/u.test(source)
+    || line !== ctx.lines.count || !ctx.src.endsWith('\n')) return
+  const at = lineEnd(ctx.lines, line) + 1
+  change(ctx, 'U-049', at, at, '\n:::\n:::\n', 'empty div written explicitly after the old fence line')
+}
+
+function admonitionEmptyColonDiv(ctx: Context, visit: Visit, line: number, source: string): void {
+  if (visit.parent?.node.type !== 'admonition' || !/^ *:{4,}[ \t]*$/u.test(source)
+    || visit.parent.node.pos?.startLine === undefined) return
+  const first = lineStart(ctx.lines, visit.parent.node.pos.startLine)
+  const opener = lineText(ctx.lines, visit.parent.node.pos.startLine)
+  const prefix = /^ *::: /u.exec(opener)?.[0]
+  if (prefix === undefined) return
+  if (source.trim() === '::::' && opener.startsWith(' ')) {
+    change(ctx, 'U-276', first + prefix.length - 1, first + prefix.length - 1, '::',
+      'outer admonition widened beyond its old empty div')
+    return
+  }
+  if (first !== 0) return
+  change(ctx, 'U-276', first + 3, first + 3, ':', 'outer admonition widened to hold its old empty div')
+  change(ctx, 'U-276', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), ':::\n:::\n::::',
+    'empty div written before the outer admonition closes')
+}
+
+/** Keep a 0.1 empty div when a colon run becomes a closer in 0.2. */
+export function emptyColonDiv(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const div = visit.node
+    if (div.type !== 'div' || div.pos === undefined || div.pos.startLine !== div.pos.endLine
+      || (div.children?.length ?? 0) !== 0) continue
+    const line = div.pos.startLine
+    const source = lineText(ctx.lines, line)
+    documentEmptyColonDiv(ctx, visit, line, source)
+    admonitionEmptyColonDiv(ctx, visit, line, source)
+  }
+}
+
+/** A continued 0.1 head row needs every cell marked as a head after its separator is removed. */
+export function continuedHeaderRow(ctx: Context): void {
+  const removed = new Set(ctx.findings.filter(({ record, edit }) => record.entry === 'U-055'
+    && edit !== null && edit.text === '' && edit.start < edit.end).map(({ edit }) => edit!.start))
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'table_row' || node.pos === undefined || !node.continuationLines) continue
+    const separator = lineStart(ctx.lines, node.pos.endLine + 1)
+    if (!removed.has(separator)) continue
+    const row = lineText(ctx.lines, node.pos.startLine)
+    const pipe = row.indexOf('|')
+    if (pipe < 0 || row[pipe + 1] === '=') continue
+    const at = lineStart(ctx.lines, node.pos.startLine) + pipe + 1
+    change(ctx, 'U-055', at, at, '=', 'continued header row keeps its first cell in the head')
+  }
+}
+
+/** A description after a quoted term starts outside the quote in the old tree. */
+export function descriptionAfterQuotedTerm(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const current = visit.node
+    const before = visit.siblings[visit.index - 1]
+    if (current.type !== 'definition_list' || current.pos === undefined || before?.type !== 'block_quote'
+      || before.pos === undefined || before.pos.endLine + 1 !== current.pos.startLine
+      || !before.children?.some((child) => child.type === 'definition_list')) continue
+    const at = lineStart(ctx.lines, current.pos.startLine)
+    change(ctx, 'U-004', at, at, '\n', 'blank line separates a description from the quoted term above')
+  }
+}
+
+/** Nested old footnote definitions on one line need their outer label at document scope. */
+export function nestedFootnoteAfterItem(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos
+  if (typeof positions !== 'object' || positions === null) return
+  const lines = new Map<number, number>()
+  for (const value of Object.values(positions as Record<string, { startLine: number; startColumn: number }>)) {
+    lines.set(value.startLine, (lines.get(value.startLine) ?? 0) + 1)
+  }
+  for (const [line, count] of lines) {
+    if (count < 2 || line < 2 || ctx.blocks.leaf[line - 1]?.parent?.node.type !== 'list_item') continue
+    const text = lineText(ctx.lines, line)
+    const match = /^ +(?=\[\^[^\]\n]+\]:)/u.exec(text)
+    if (match === null) continue
+    const at = lineStart(ctx.lines, line)
+    change(ctx, 'U-005', at, at + match[0].length, '',
+      'nested footnote labels moved to document scope after the list')
+  }
+}
+
+/** Adjacent old smart punctuation nodes keep their combined glyphs across the upgrade. */
+export function legacyPlusDash(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    const next = visit.siblings[visit.index + 1]
+    if (node.type !== 'smart_punctuation' || node.pos === undefined
+      || next?.type !== 'smart_punctuation' || next.pos === undefined
+      || node.pos.endOffset !== next.pos.startOffset) continue
+    const from = node.pos.startOffset
+    const to = next.pos.endOffset
+    if (ctx.src.slice(from, to) !== '+---') continue
+    change(ctx, 'U-115', from, to, '±–', 'old adjacent smart punctuation kept as its visible glyphs')
+  }
+}
+
+/** A tabbed paragraph below a blank stays in the old footnote body after U-039 moves it. */
+export function tabbedFootnoteContinuation(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos
+  if (typeof positions !== 'object' || positions === null) return
+  const bodyLines = new Set<number>()
+  for (const pos of Object.values(positions as Record<string, { startLine: number; endLine: number }>)) {
+    for (let line = pos.startLine + 1; line <= pos.endLine; line++) {
+      if (lineText(ctx.lines, line - 1).trim() === '' && lineText(ctx.lines, line).startsWith('\t')) bodyLines.add(line)
+    }
+  }
+  for (const finding of ctx.findings) {
+    const edit = finding.edit
+    if (finding.record.entry !== 'U-039' || edit === null || edit.text !== ''
+      || ctx.src.slice(edit.start, edit.end) !== '\t') continue
+    if (!bodyLines.has(lineOf(ctx.lines, edit.start))) continue
+    finding.edit = { ...edit, text: ' ' }
+    finding.record.message = 'tabbed continuation kept inside the old footnote body'
+  }
+}
+
+/** A quote after a description in a footnote needs its own content column. */
+export function footnoteQuoteAfterDescription(ctx: Context): void {
+  const places = ctx.doc.footnoteDefPos
+  if (typeof places !== 'object' || places === null) return
+  const definitions = Object.values(places as Record<string, { startLine: number; endLine: number }>)
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'block_quote' || node.pos === undefined) continue
+    const line = node.pos.startLine
+    if (!definitions.some((pos) => pos.startLine < line && line <= pos.endLine)
+      || ctx.blocks.leaf[line - 1]?.parent?.node.type !== 'definition_list'
+      || !/^ {2,}>/u.test(lineText(ctx.lines, line))) continue
+    const at = lineStart(ctx.lines, line)
+    const moved = ctx.findings.find(({ record, edit }) => record.entry === 'U-039' && edit?.start === at
+      && edit.end === at + 1 && edit.text === '')
+    if (moved?.edit === null || moved?.edit === undefined) continue
+    moved.edit = { ...moved.edit, end: at + 2 }
+    moved.record.message = 'quoted follower moved to the old footnote content column'
+    ctx.findings = ctx.findings.filter(({ record, edit }) => record.entry !== 'U-435' || edit?.start !== at)
+  }
+}
+
+/** A list outside an old note definition stays at document column after the blank. */
+export function listAfterFootnote(ctx: Context): void {
+  const places = ctx.doc.footnoteDefPos
+  if (typeof places !== 'object' || places === null) return
+  const after = new Set(Object.values(places as Record<string, { endLine: number }>).map((pos) => pos.endLine + 2))
+  for (const visit of ctx.visits) {
+    const list = visit.node
+    if (list.type !== 'list' || list.pos === undefined || visit.parent?.node.type !== 'document'
+      || !after.has(list.pos.startLine)) continue
+    const line = list.pos.startLine
+    if (lineText(ctx.lines, line - 1).trim() !== '') continue
+    const match = /^ +(?=[-*+] |[0-9]+[.)] )/u.exec(lineText(ctx.lines, line))
+    if (match === null) continue
+    const at = lineStart(ctx.lines, line)
+    change(ctx, 'U-109', at, at + match[0].length, '',
+      'document list after a footnote moved to column zero')
+  }
+}
+
+/** Compose inline escapes and braced spans without adding a second slash or a source space. */
+export function inlineEditComposition(ctx: Context): void {
+  const escaped = new Set(ctx.findings.filter(({ record, edit }) => record.entry === 'U-274'
+    && edit?.text === '\\' && edit.start === edit.end).map(({ edit }) => edit!.start))
+  ctx.findings = ctx.findings.filter(({ record, edit }) => record.entry !== 'U-070' || edit?.text !== '\\'
+    || !escaped.has(edit.start))
+  for (const finding of ctx.findings) {
+    const edit = finding.edit
+    if (finding.record.entry !== 'U-066' || edit === null || edit.text !== ' {'
+      || ctx.src[edit.start - 1] !== '|') continue
+    finding.edit = { ...edit, text: '{' }
+    finding.record.message = 'braced strike kept beside its preceding pipe without a space'
+  }
+}
+
+/** A removed empty quote marker inside an old footnote must not leave a blank body line. */
+export function emptyQuoteInFootnote(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos
+  if (typeof positions !== 'object' || positions === null) return
+  const spans = Object.values(positions as Record<string, { startLine: number; endLine: number }>)
+  for (const finding of ctx.findings) {
+    const edit = finding.edit
+    if (finding.record.entry !== 'U-038' || edit === null || edit.text !== '') continue
+    const line = lineOf(ctx.lines, edit.start)
+    if (!spans.some((pos) => pos.startLine < line && line < pos.endLine)
+      || !/^[ \t]*>{2,}[ \t]*$/u.test(lineText(ctx.lines, line))
+      || edit.end !== lineEnd(ctx.lines, line) || ctx.src[edit.end] !== '\n') continue
+    finding.edit = { ...edit, end: edit.end + 1 }
+    finding.record.message = 'empty quoted line removed without splitting the old footnote body'
+  }
+}
+
+/** A lazy caption-shaped line stays text in the old quote paragraph. */
+export function lazyCaretAfterQuote(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'block_quote' || node.pos === undefined) continue
+    for (let line = node.pos.startLine + 1; line <= node.pos.endLine; line++) {
+      const text = lineText(ctx.lines, line)
+      if (!/^ *\^ +\S/u.test(text) || !/^ *>/u.test(lineText(ctx.lines, line - 1))) continue
+      const at = lineStart(ctx.lines, line) + text.indexOf('^')
+      change(ctx, 'U-006', at, at, '\\', 'lazy caption-shaped line kept as quote paragraph text')
+    }
+  }
+}
+
+/** A narrow space made these 0.1 link forms literal, including references to such definitions. */
+export function literalNarrowSpaceLinks(ctx: Context): void {
+  if (ctx.findings.some(({ record }) => record.entry === 'U-258')) return
+  const literalRefs = new Set<string>()
+  for (const match of ctx.src.matchAll(/(?<!\\)\[([^\]\n]+)\]:[^\n]*\u202f[^\n]*/gu)) {
+    const start = match.index
+    if (start === undefined) continue
+    literalRefs.add(match[1]!)
+    change(ctx, 'U-132', start, start, '\\', 'old literal reference definition kept as text')
+  }
+  for (const match of ctx.src.matchAll(/(?<!\\)\[[^\]\n]+\]\([^\n)]*\u202f[^\n)]*\)/gu)) {
+    if (match.index !== undefined) change(ctx, 'U-132', match.index, match.index, '\\',
+      'old literal link with a narrow space kept as text')
+  }
+  if (literalRefs.size === 0) return
+  for (const match of ctx.src.matchAll(/(?<!\\)\[[^\]\n]+\]\[([^\]\n]+)\]/gu)) {
+    if (match.index !== undefined && literalRefs.has(match[1]!)) change(ctx, 'U-132', match.index, match.index, '\\',
+      'reference to an old literal definition kept as text')
+  }
+}
+
+/** A document fence after a definition stays outside its description body. */
+export function fenceAfterDescription(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const place = descriptionFence(ctx, visit)
+    if (place !== null) moveFence(ctx, place)
+  }
+}
+
+function descriptionFence(ctx: Context, visit: Visit): { first: number; last: number; indent: number; entry: string;
+  closer: typeof ctx.findings[number] | undefined } | null {
+  const node = visit.node
+  const before = visit.siblings[visit.index - 1]
+  if (node.type !== 'code_block' || node.pos === undefined || before?.type !== 'definition_list'
+    || before.pos?.endLine !== node.pos.startLine - 1 || visit.parent?.node.type !== 'document') return null
+  const first = node.pos.startLine
+  const last = node.pos.endLine
+  const opener = /^( +)(?:`{3,}|~{3,})/u.exec(lineText(ctx.lines, first))
+  if (opener === null) return null
+  const indent = opener[1]!.length
+  const closer = ctx.findings.find(({ record, edit }) => record.entry === 'U-049'
+    && edit?.start === lineEnd(ctx.lines, last) && edit.text.startsWith(`\n${' '.repeat(indent)}`))
+  if (closer === undefined && !ctx.findings.some(({ record, edit }) => record.entry === 'U-116'
+    && edit !== null && lineOf(ctx.lines, edit.start) === first)) return null
+  return { first, last, indent, entry: closer === undefined ? 'U-116' : 'U-049', closer }
+}
+
+function moveFence(ctx: Context, { first, last, indent, entry, closer }: NonNullable<ReturnType<typeof descriptionFence>>): void {
+  change(ctx, entry, lineStart(ctx.lines, first), lineStart(ctx.lines, first) + indent, '\n',
+    'blank line and document column keep the fence outside the description')
+  for (let line = first + 1; line <= last; line++) {
+    const spaces = /^ */u.exec(lineText(ctx.lines, line))![0].length
+    const cut = Math.min(indent, spaces)
+    if (cut === 0) continue
+    change(ctx, entry, lineStart(ctx.lines, line), lineStart(ctx.lines, line) + cut, '',
+      'fence body shifted with its document opener')
+  }
+  if (closer?.edit !== null && closer?.edit !== undefined) {
+    closer.edit = { ...closer.edit, text: closer.edit.text.replace(new RegExp(`^\\n {${indent}}`, 'u'), '\n') }
+  }
+}
+
+/** Literal 0.1 include text keeps its sigil words from becoming 0.2 mentions. */
+export function literalIncludeMentions(ctx: Context): void {
+  if (!ctx.findings.some(({ record }) => record.entry === 'U-011')) return
+  for (let line = 1; line <= ctx.lines.count; line++) {
+    const source = lineText(ctx.lines, line)
+    if (!source.includes('{{') || !source.includes('}}')) continue
+    const start = source.indexOf('{{')
+    const end = source.indexOf('}}', start + 2)
+    if (end < 0) continue
+    for (const match of source.slice(start + 2, end).matchAll(/(?<!\\)@[A-Za-z][A-Za-z0-9-]*/gu)) {
+      const at = lineStart(ctx.lines, line) + start + 2 + match.index
+      change(ctx, 'U-011', at, at, '\\', 'old literal include sigil kept as text')
+    }
+  }
+}
+
 function textOnly(node: Node01): boolean {
   return (node.children ?? []).every((child) => child.type === 'text' || child.type === 'soft_break'
     || (child.type === 'emphasis' && textOnly(child)))

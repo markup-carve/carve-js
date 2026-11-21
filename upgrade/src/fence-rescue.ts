@@ -8,6 +8,8 @@ interface Rescue {
   record: ReportRecord
 }
 
+const FENCE_RESCUE_REACH = 12
+
 function listFence(text: string): string | null {
   const trimmed = text.trimStart()
   const first = trimmed[0]
@@ -54,10 +56,10 @@ function lengthenedCloser(output: string, lines: ReturnType<typeof readLines>, o
   return found
 }
 
-function longerFence(output: string): string[] {
+function longerFence(output: string, mismatchLine: number): string[] {
   const lines = readLines(output)
   const found: string[] = []
-  for (let open = 1; open < lines.count - 2; open++) {
+  for (let open = 1; open < Math.min(lines.count - 2, mismatchLine + FENCE_RESCUE_REACH); open++) {
     if (lineText(lines, open).trim() !== '```') continue
     for (let middle = open + 1; middle < lines.count - 1; middle++) {
       const middleText = lineText(lines, middle)
@@ -69,10 +71,10 @@ function longerFence(output: string): string[] {
   return found
 }
 
-function secondFence(output: string): string[] {
+function secondFence(output: string, mismatchLine: number): string[] {
   const lines = readLines(output)
   const found: string[] = []
-  for (let line = 2; line < lines.count - 1; line++) {
+  for (let line = 2; line < Math.min(lines.count - 1, mismatchLine + FENCE_RESCUE_REACH); line++) {
     if (lineText(lines, line).trim() !== '```' || lineText(lines, line + 1).trim() !== '') continue
     const follower = lineText(lines, line + 2)
     if (follower.trim() === '') continue
@@ -83,10 +85,10 @@ function secondFence(output: string): string[] {
   return found
 }
 
-function descriptionFenceBoundary(output: string): string[] {
+function descriptionFenceBoundary(output: string, mismatchLine: number): string[] {
   const lines = output.split('\n')
   const found: string[] = []
-  for (let open = 1; open < lines.length - 3; open++) {
+  for (let open = 1; open < Math.min(lines.length - 3, mismatchLine + FENCE_RESCUE_REACH); open++) {
     const opener = lines[open] ?? ''
     if (opener.trim() !== '```' || !(lines[open - 1] ?? '').trimStart().startsWith(': ')) continue
     const indent = opener.length - opener.trimStart().length
@@ -115,10 +117,10 @@ function closerAfterBlank(lines: string[], blank: number, marker: number): strin
   return candidate.join('\n')
 }
 
-function trailingBlankFence(output: string): string[] {
+function trailingBlankFence(output: string, mismatchLine: number): string[] {
   const lines = output.split('\n')
   const found: string[] = []
-  for (let open = 0; open < lines.length - 3; open++) {
+  for (let open = 0; open < Math.min(lines.length - 3, mismatchLine + FENCE_RESCUE_REACH); open++) {
     const value = lines[open] ?? ''
     const marker = value.indexOf('```')
     if (marker < 0 || value.slice(marker).trim() !== '```') continue
@@ -146,14 +148,14 @@ function firstPreserving(expected: string, candidates: string[]): string | null 
 export function rescueFence(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('```')) return null
   const expected = html01(input)
-  const trailing = firstPreserving(expected, trailingBlankFence(output))
+  const trailing = firstPreserving(expected, trailingBlankFence(output, mismatch.line))
   if (trailing !== null) return { output: trailing, record: recordOf('U-135', mismatch.line,
     'the fence was closed after its retained trailing blank line under C2-B-113') }
-  const description = firstPreserving(expected, descriptionFenceBoundary(output))
+  const description = firstPreserving(expected, descriptionFenceBoundary(output, mismatch.line))
   if (description !== null) return { output: description, record: recordOf('U-179', mismatch.line,
     'the description fence was closed before the following block at its 0.1 boundary') }
   const item = firstPreserving(expected, [...variants(output, Math.max(1, mismatch.line)),
-    ...longerFence(output), ...secondFence(output)])
+    ...longerFence(output, mismatch.line), ...secondFence(output, mismatch.line)])
   if (item !== null) return { output: item, record: recordOf('U-127', mismatch.line,
     'the fence was closed at the item boundary while preserving 0.1 HTML') }
   return null

@@ -48,23 +48,33 @@ export function addTaskPresentation(old: string, next: string): Result {
 
 const LABEL = / aria-label="([^"]*)"/u
 
-/** C2-H-032: the 0.2 box label also takes the text of the item's later paragraph and heading children. */
+function labelSpacing(left: string | undefined, right: string | undefined): boolean | null {
+  if (right === undefined) return null
+  if (left === undefined || right.startsWith(`${left} `)) return false
+  const words = (value: string): string => value.replace(/\s+/gu, ' ').trim()
+  return words(left) === words(right) ? true : null
+}
+
+/** C2-H-032: the 0.2 box label takes text from the item's direct paragraphs and headings. */
 export function followTaskLabels(old: string, next: string): Result {
   const source = htmlTokens(old)
   const target = htmlTokens(next)
   let changed = false
+  let spacing = false
   for (let at = 0; at < Math.min(source.length, target.length); at++) {
     const before = source[at]!
     const after = target[at]!
-    if (!before.startsWith('<input ') || !before.includes('type="checkbox"')) continue
+    if (before === after || !before.startsWith('<input ') || !before.includes('type="checkbox"')) continue
     const left = LABEL.exec(before)?.[1]
     const right = LABEL.exec(after)?.[1]
-    if (left === undefined || right === undefined || !right.startsWith(`${left} `)) continue
+    const differentSpacing = labelSpacing(left, right)
+    if (differentSpacing === null) continue
     if (before.replace(LABEL, '') !== after.replace(LABEL, '')) continue
     source[at] = after
     changed = true
+    spacing ||= differentSpacing
   }
-  return { html: source.join(''), applied: changed ? ['U-133'] : [] }
+  return { html: source.join(''), applied: changed ? spacing ? ['U-133', 'U-159'] : ['U-133'] : [] }
 }
 
 function isLiOpen(token: string): boolean { return token === '<li>' || token.startsWith('<li ') }

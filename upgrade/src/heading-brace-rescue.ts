@@ -30,10 +30,14 @@ function tagCount(source: string): number {
 }
 
 /** Escapes each `{#` opener whose escape brings a 0.2 tag back, then requires the complete 0.1 HTML. */
-function escapedOpeners(output: string, expected: string): string | null {
+function escapedOpeners(output: string, expected: string, mismatchLine: number): string | null {
+  const all = output.replace(/(^|[^\\])\{#/gu, '$1\\{#')
+  if (all !== output && compareHtmlExact(expected, html02(all, false)).equal) return all
+  const lines = output.split('\n')
+  const limit = mismatchLine > 0 ? lines.slice(0, mismatchLine + 12).join('\n').length : output.length
   let current = output
   let count = tagCount(current)
-  for (let at = current.indexOf('{#'); at >= 0; at = current.indexOf('{#', at + 1)) {
+  for (let at = current.indexOf('{#'); at >= 0 && at < limit; at = current.indexOf('{#', at + 1)) {
     if (current[at - 1] === '\\') continue
     const candidate = current.slice(0, at) + '\\' + current.slice(at)
     const next = tagCount(candidate)
@@ -78,7 +82,7 @@ export function rescueHeadingBraceTag(input: string, output: string, mismatch: R
 /** U-256 for any failed brace attribute, tried after every other rescue. */
 export function rescueBraceOpenerTags(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!output.includes('{#')) return null
-  const openers = escapedOpeners(output, html01(input))
+  const openers = escapedOpeners(output, html01(input), mismatch.line)
   return openers === null ? null : { output: openers, record: recordOf('U-256', mismatch.line,
     'the failed brace openers were escaped so the tags keep their 0.1 boundaries') }
 }

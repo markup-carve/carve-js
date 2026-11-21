@@ -331,6 +331,9 @@ function applyCitedStep(old: string, next: string, records: ReportRecord[]): Ret
       const label = followTaskLabels(task.html, next)
       transformed.html = label.html
       transformed.applied.push(...task.applied, ...label.applied)
+      if (label.applied.includes('U-159') && !hasEntry(records, 'U-159')) {
+        records.push(recordOf('U-159', 0, 'task checkbox label spacing follows the 0.2 plain text'))
+      }
     }
   }
   const catalog = applyHtmlTransformations(transformed.html, next,

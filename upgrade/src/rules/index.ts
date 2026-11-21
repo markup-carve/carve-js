@@ -14,9 +14,15 @@ import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
 import { includes, tables, tablesHeadStyles } from './tables.ts'
 import {
-  abbreviationSpaces, crossLineStrong, duplicateItemDefinitions, emptyAttributeItemAfterDescription, emptyAttributeQuote,
-  flippedStrong, innerFenceRun, literalLinkBeforeCode, literalQuoteAfterAttributes, literalTableHeader, siblingHeadingBoundary,
-  siblingListBoundary, wrappedCodeTableRow,
+  abbreviationSpaces, continuedHeaderRow, crossLineStrong, descriptionAfterQuotedTerm, duplicateItemDefinitions,
+  emptyAttributeItemAfterDescription, emptyAttributeQuote, emptyQuoteInFootnote,
+  emptyColonDiv,
+  fenceAfterDescription, flippedStrong, footnoteQuoteAfterDescription, inlineEditComposition, innerFenceRun, lazyCaretAfterQuote,
+  legacyPlusDash, listAfterFootnote,
+  literalIncludeMentions, literalLinkBeforeCode, literalNarrowSpaceLinks,
+  literalQuoteAfterAttributes, literalTableHeader,
+  nestedFootnoteAfterItem,
+  siblingHeadingBoundary, siblingListBoundary, tabbedFootnoteContinuation, wrappedCodeTableRow,
 } from './replay-fallbacks.ts'
 
 /** Starts the repairs of the replay rows (carve#6183) for the rules after it. */
@@ -49,5 +55,8 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
   [repairs, ...RULES.map((rule) => rule === inline ? inlineBraced : rule === tables ? tablesHeadStyles : rule),
     ...LATE_RULES, descriptionColumns, flippedStrong, crossLineStrong, literalTableHeader, duplicateItemDefinitions, literalLinkBeforeCode,
     wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary, literalQuoteAfterAttributes, innerFenceRun,
-    siblingHeadingBoundary, emptyAttributeItemAfterDescription],
+    siblingHeadingBoundary, emptyAttributeItemAfterDescription, emptyColonDiv, continuedHeaderRow,
+    descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
+    footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
+    literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions],
 ]

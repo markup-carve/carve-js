@@ -984,7 +984,7 @@
     "path": "resources/examples/edge-cases/0695-a-promoted-image-leaves-the-task-checkbox-unnamed.md",
     "line": 8,
     "input": "- [ ] ![x](x)\n",
-    "check": "mismatch",
+    "check": "explained",
     "entries": [
       "U-133"
     ]
@@ -1267,7 +1267,7 @@
     "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
     "line": 45,
     "input": "-{#k} [x] {#h}\n  # h\n",
-    "check": "mismatch",
+    "check": "explained",
     "entries": [
       "U-133"
     ]
@@ -1859,7 +1859,7 @@
     "path": "resources/examples/edge-cases/0766-an-editorial-comment-contributes-nothing-to-a-heading-id.md",
     "line": 25,
     "input": "- [ ] x {#c#} y\n- [x] {# note #}done\n",
-    "check": "mismatch",
+    "check": "explained",
     "entries": [
       "U-133",
       "U-159"
