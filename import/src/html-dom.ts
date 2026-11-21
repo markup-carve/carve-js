@@ -165,13 +165,18 @@ function isAuthored(item: { name: string, value: string }, omit: readonly string
  * the audit of the document reports. With `alignStyle`, an exact alignment declaration is the key `align`, and an
  * `align` attribute beside it is dropped and reported, since the declaration wins in a browser (C2-M-075).
  */
-export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyled = false, heading = false): MappedAttrs {
+function reportUnreadCarrier(context: HtmlContext, node: Html.Element, name: string, heading: boolean): void {
+  if (!CARRIERS.has(name) || readsCarrier(node, name, heading)) return
+  ignoredCarrier(context, node, name, name === SOURCE_LEVEL ? 'the element is no heading' : 'the element does not read this carrier')
+}
+
+export function attrs(
+  context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyled = false, heading = false,
+): MappedAttrs {
   const styled = alignStyled && alignStyle(attr(node, 'style')) !== undefined
   const entries: [string, string][] = []
   for (const item of node.attrs) {
-    if (CARRIERS.has(item.name) && !readsCarrier(node, item.name, heading)) {
-      ignoredCarrier(context, node, item.name, item.name === SOURCE_LEVEL ? 'the element is no heading' : 'the element does not read this carrier')
-    }
+    reportUnreadCarrier(context, node, item.name, heading)
     if (!isAuthored(item, omit)) continue
     if (styled && item.name === 'align') {
       report(context, node, 'import-attribute-dropped', 'An align attribute beside a text-align declaration dropped')
