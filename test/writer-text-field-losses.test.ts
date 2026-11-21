@@ -1,7 +1,7 @@
 // C2-W-117, C2-W-151 (carve#6343): lang, dir and metadata on a supplied text are never dropped without a report.
 import { describe, expect, it } from 'vitest'
 import { type Block, type DocumentNode, type Inline } from '../src/ast.ts'
-import { writeWithDiagnostics } from '../src/index.ts'
+import { treesEqual, writeWithDiagnostics } from '../src/index.ts'
 
 const text = (value: string): Inline => ({ type: 'text', value })
 const withField = (value: string, name: string, field: unknown): Inline => ({ ...text(value), [name]: field }) as Inline
@@ -51,5 +51,13 @@ describe('carve#6343: text fields the writer cannot spell are reported', () => {
       }
     }
     expect(checked).toBe(3 * 7 * 6 * 4)
+  })
+
+  it('C2-A-161: adjacent texts join only where their other fields agree', () => {
+    const one = paragraph([withField('ab', 'lang', 'de')])
+    expect(treesEqual(paragraph([withField('a', 'lang', 'de'), withField('b', 'lang', 'de')]), one)).toBe(true)
+    expect(treesEqual(paragraph([withField('a', 'lang', 'de'), withField('b', 'lang', 'fr')]), one)).toBe(false)
+    expect(treesEqual(paragraph([withField('a', 'lang', 'de'), text('b')]), one)).toBe(false)
+    expect(treesEqual(paragraph([text('a'), text('b')]), paragraph([text('ab')]))).toBe(true)
   })
 })

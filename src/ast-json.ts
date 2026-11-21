@@ -91,11 +91,16 @@ function comparedField(node: Record<string, unknown>, results: ReadonlyMap<strin
   return false
 }
 
-/** A text with no field beyond its value and geometry; only such runs join, so a field of a later one is compared. */
-function joinableText(node: unknown): node is { type: 'text', value?: string } {
-  if (!isRecord(node) || node['type'] !== 'text') return false
-  for (const name of Object.keys(node)) if (name !== 'type' && name !== 'value' && name !== 'pos' && name !== 'segments') return false
-  return true
+const TEXT_RUN = new Set(['type', 'value', 'pos', 'segments'])
+
+/** Two texts whose other fields agree; only such runs join, so a field that differs is compared. */
+function joinableTexts(last: unknown, next: unknown): last is { type: 'text', value?: string } {
+  if (!isRecord(last) || !isRecord(next) || last['type'] !== 'text' || next['type'] !== 'text') return false
+  const fields = (node: Record<string, unknown>): string[] =>
+    Object.keys(node).filter((name) => !TEXT_RUN.has(name) && node[name] !== undefined)
+  const own = fields(last)
+  const other = fields(next)
+  return own.length === other.length && own.every((name) => Object.hasOwn(next, name) && equalValues(last[name], next[name], false))
 }
 
 /** C2-A-040: adjacent text nodes compare as one. */
@@ -103,7 +108,7 @@ function coalesced(list: unknown[]): unknown[] {
   const out: unknown[] = []
   for (const item of list) {
     const last = out[out.length - 1]
-    if (joinableText(item) && joinableText(last)) out[out.length - 1] = { ...last, value: (last.value ?? '') + (item.value ?? '') }
+    if (joinableTexts(last, item)) out[out.length - 1] = { ...last, value: (last.value ?? '') + ((item as { value?: string }).value ?? '') }
     else out.push(item)
   }
   return out
