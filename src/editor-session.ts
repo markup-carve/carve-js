@@ -153,8 +153,12 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
       const last = authored.lastIndexOf('\n')
       if (first >= 0) token('fence-open', contentStart, contentStart + first + 1)
       const opener = /`{3,}/.exec(authored)?.[0].length ?? 3
-      const closer = first >= 0 ? /(`{3,})[ \t]*$/.exec(authored.slice(last + 1)) : null
-      if (closer && closer[1]!.length >= opener) token('fence-close', contentStart + last + 1 + closer.index, node.end)
+      // The closer stands alone on its line, behind the quote marks of the opener's line and indentation only.
+      const closer = first >= 0 ? /^([ \t>]*)(`{3,})[ \t]*$/.exec(authored.slice(last + 1)) : null
+      const quotes = (text: string): number => text.split('>').length - 1
+      if (closer && closer[2]!.length >= opener && quotes(closer[1]!) === quotes(source.slice(lineStarts[contentStart], contentStart))) {
+        token('fence-close', contentStart + last + 1 + closer[1]!.length, node.end)
+      }
     } else if (node.type === 'table_row') {
       const cells = (cellsByRow.get(node.path) ?? []).sort((a, b) => a.start - b.start)
       let cell = 0

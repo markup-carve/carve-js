@@ -24,6 +24,10 @@ describe('editor session tokens', () => {
     expect(tokens('> ```\n> a\n> ```', 'code_block')).toEqual(['fence-open 2-6', 'fence-close 12-15'])
     expect(tokens('```\na', 'code_block')).toEqual(['fence-open 0-4'])
     expect(tokens('````\na\n```', 'code_block')).toEqual(['fence-open 0-5'])
+    expect(tokens('```\nfoo```', 'code_block')).toEqual(['fence-open 0-4'])
+    expect(tokens('```\n> ```', 'code_block')).toEqual(['fence-open 0-4'])
+    expect(tokens('```\na\n  ```', 'code_block')).toEqual(['fence-open 0-4', 'fence-close 8-11'])
+    expect(tokens('- ```\n  a\n  ```', 'code_block')).toEqual(['fence-open 2-6', 'fence-close 12-15'])
     expect(tokens('````\na\n`````', 'code_block')).toEqual(['fence-open 0-5', 'fence-close 7-12'])
   })
 
