@@ -70,6 +70,23 @@ const result = renderWithDiagnostics('`x`{=latex}')
 if (result.diagnostics[0]?.channel !== 'render-loss') throw new Error('no loss reported')
 ```
 
+## Editor sessions
+
+`createEditorSession(source, options?)` returns a source-authoritative session. `snapshot()` gives a revision, the
+source and its resolved 0.2 tree, UTF-16 node ranges, stable IDs for unchanged nodes, and the number of source bytes
+parsed. `update(changes)` applies sorted, nonoverlapping `{ from, to, insert }` edits in the previous snapshot's UTF-16
+coordinates. It returns the new snapshot plus `changedPaths`. An invalid range or a range that splits a Unicode scalar
+throws `EditorChangeError` without changing the session. A plain paragraph edit reuses untouched paragraphs; other
+edits parse the whole document again.
+
+```ts
+import { createEditorSession } from '@markup-carve/carve'
+
+const session = createEditorSession('first\n\nsecond')
+const update = session.update([{ from: 7, to: 13, insert: 'revised' }])
+if (update.source !== 'first\n\nrevised') throw new Error('edit failed')
+```
+
 ## Options and errors
 
 ### Soft breaks and losses

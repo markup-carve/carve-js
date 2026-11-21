@@ -42,6 +42,18 @@ describe('editor session', () => {
     }
   })
 
+  it('matches fresh parses after repeated local edits', () => {
+    const session = createEditorSession('first\n\ntext\n\nlast')
+    for (let index = 0; index < 100; index++) {
+      const old = session.snapshot().source
+      const end = old.indexOf('\n', 7)
+      const update = session.update([{ from: 7, to: end, insert: `paragraph ${index} é` }])
+      expect(update.ast).toEqual(parse(update.source))
+      expect(update.reusedPreviousTree).toBe(true)
+      expect(update.parsedSourceBytes).toBeLessThan(update.ast.srcByteLength!)
+    }
+  })
+
   it('matches a fresh 0.2 parse after single-character edits throughout clause cases', () => {
     let edits = 0
     for (const entry of cases) {

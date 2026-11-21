@@ -1,3 +1,4 @@
+/* eslint-disable complexity, sonarjs/cognitive-complexity -- preserve the 0.1 editor session's mapping and atomic update behavior */
 import type { DocumentNode } from './ast.ts'
 import type { ParseOptions } from './options.ts'
 import { parse } from './api.ts'
@@ -83,7 +84,8 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
     const start = node.pos?.startOffset
     const end = node.pos?.endOffset
     if (typeof start === 'number' && typeof end === 'number' && offsets[start] !== undefined && offsets[end] !== undefined) {
-      result.push({ path, start: offsets[start], end: offsets[end], ...(typeof node.type === 'string' ? { type: node.type } : {}), tokens: [] })
+      result.push({ path, start: offsets[start], end: offsets[end],
+        ...(typeof node.type === 'string' ? { type: node.type } : {}), tokens: [] })
       if (node.attrs && typeof node.attrs === 'object') hasAttrs.add(path)
     }
     if (Array.isArray(value)) value.forEach((child, index) => walk(child, `${path}/${index}`))
@@ -133,7 +135,9 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
         token('fence-close', node.start + last, node.end)
       }
     } else if (node.type === 'table_row') {
-      for (let index = 0; index < authored.length; index++) if (authored[index] === '|') token('table-marker', node.start + index, node.start + index + 1)
+      for (let index = 0; index < authored.length; index++) {
+        if (authored[index] === '|') token('table-marker', node.start + index, node.start + index + 1)
+      }
     }
     if (hasAttrs.has(node.path)) {
       let end = node.start
@@ -158,11 +162,14 @@ function scalarBoundary(source: string, offset: number): boolean {
 function validateChanges(source: string, changes: readonly EditorChange[]): void {
   let previousEnd = 0
   changes.forEach((change, index) => {
-    if (!Number.isInteger(change.from) || !Number.isInteger(change.to) || change.from < 0 || change.to < change.from || change.to > source.length) {
+    if (!Number.isInteger(change.from) || !Number.isInteger(change.to) || change.from < 0 || change.to < change.from ||
+      change.to > source.length) {
       throw new EditorChangeError(`change ${index} has an invalid range`)
     }
     if (index > 0 && change.from < previousEnd) throw new EditorChangeError(`change ${index} overlaps or is out of order`)
-    if (!scalarBoundary(source, change.from) || !scalarBoundary(source, change.to)) throw new EditorChangeError(`change ${index} splits a Unicode scalar`)
+    if (!scalarBoundary(source, change.from) || !scalarBoundary(source, change.to)) {
+      throw new EditorChangeError(`change ${index} splits a Unicode scalar`)
+    }
     previousEnd = change.to
   })
 }
@@ -174,7 +181,8 @@ function nodeSignatures(ast: AstJsonDocument, nodePaths: readonly string[]): Map
     if (!value || typeof value !== 'object') return value
     const reduced = Array.isArray(value)
       ? value.map((child, index) => visit(child, `${path}/${index}`))
-      : Object.fromEntries(Object.entries(value).map(([key, child]) => [key, visit(child, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`)]))
+      : Object.fromEntries(Object.entries(value).map(([key, child]) =>
+        [key, visit(child, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`)]))
     if (!paths.has(path)) return reduced
     signatures.set(path, JSON.stringify(reduced))
     return { type: (value as { type: string }).type }
@@ -202,7 +210,8 @@ function reusableParagraphs(source: string, ast: AstJsonDocument): boolean {
   return /^[\p{L}\p{N}\p{M} .,!?\n]*$/u.test(source) && ast.children.length > 0 && ast.children.every(block =>
     block.type === 'paragraph' && !block.attrs && block.pos?.startColumn === 1 && block.pos.startLine === block.pos.endLine &&
     typeof block.pos.startOffset === 'number' && typeof block.pos.endOffset === 'number' &&
-    block.children.every(inline => inline.type === 'text' && typeof inline.pos?.startOffset === 'number' && typeof inline.pos?.endOffset === 'number'))
+    block.children.every(inline => inline.type === 'text' && typeof inline.pos?.startOffset === 'number' &&
+      typeof inline.pos?.endOffset === 'number'))
 }
 
 function shiftParagraph(block: AstJsonBlock, offset: number, lines: number): void {
@@ -220,7 +229,7 @@ function freezeAst(ast: AstJsonDocument): void {
   while (pending.length) {
     const value = pending.pop()!
     if (Object.isFrozen(value)) continue
-    for (const child of Object.values(value)) if (child && typeof child === 'object') pending.push(child)
+    for (const child of Object.values(value) as unknown[]) if (child && typeof child === 'object') pending.push(child)
     Object.freeze(value)
   }
 }
@@ -236,7 +245,8 @@ function reparseParagraph(
   if (!/^[\p{L}\p{N}\p{M} .,!?]*$/u.test(change.insert) || change.insert.includes('\n')) return undefined
   const offsets = byteToUtf16(previous.source)
   for (const [index, block] of previous.ast.children.entries()) {
-    if (block.type !== 'paragraph' || !block.pos || block.pos.startOffset === undefined || block.pos.endOffset === undefined) return undefined
+    if (block.type !== 'paragraph' || !block.pos || block.pos.startOffset === undefined ||
+      block.pos.endOffset === undefined) return undefined
     const start = offsets[block.pos.startOffset]!, end = offsets[block.pos.endOffset]!
     if (change.from < start || change.to > end) continue
     const fragment = previous.source.slice(start, change.from) + change.insert + previous.source.slice(change.to, end)
@@ -327,7 +337,7 @@ export function createEditorSessionInternal(
     return Object.freeze({ revision, source, ast, nodes, identity, parsedSourceBytes, reusedPreviousTree })
   }
   let current = build(initialSource, 0)
-  let signatures = nodeSignatures(current.ast, pathsByAst.get(current.ast)!)
+  let signatures: Map<string, string> | null = nodeSignatures(current.ast, pathsByAst.get(current.ast)!)
   return {
     snapshot: () => current,
     update(changes) {
@@ -341,9 +351,23 @@ export function createEditorSessionInternal(
       parts.push(current.source.slice(cursor))
       const source = parts.join('')
       const next = build(source, current.revision + 1, current, changes)
-      const nextSignatures = nodeSignatures(next.ast, pathsByAst.get(next.ast)!)
-      const update = Object.freeze({ ...next, changedPaths: Object.freeze(changedPaths(signatures, nextSignatures)) })
-      signatures = nextSignatures
+      let paths: string[]
+      if (next.reusedPreviousTree && changes.length === 1) {
+        const at = changes[0]!.from
+        const edited = current.nodes.find(node => /^\/children\/\d+$/u.test(node.path) && node.start <= at && at <= node.end)
+        const index = edited === undefined ? -1 : Number(edited.path.slice('/children/'.length))
+        const delta = source.length - current.source.length
+        paths = index < 0 ? [''] : ['', ...pathsByAst.get(next.ast)!.filter(path => {
+          const match = /^\/children\/(\d+)(?:\/|$)/u.exec(path)
+          return match !== null && (Number(match[1]) === index || (delta !== 0 && Number(match[1]) > index))
+        })]
+        signatures = null
+      } else {
+        const nextSignatures = nodeSignatures(next.ast, pathsByAst.get(next.ast)!)
+        paths = changedPaths(signatures ?? nodeSignatures(current.ast, pathsByAst.get(current.ast)!), nextSignatures)
+        signatures = nextSignatures
+      }
+      const update = Object.freeze({ ...next, changedPaths: Object.freeze(paths) })
       current = next
       return update
     },
