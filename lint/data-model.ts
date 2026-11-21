@@ -22,6 +22,7 @@ export interface ModelLine {
   attached_here: boolean
   closes_container: boolean
   readonly ancestors: string[]
+  readonly ancestor_ids: string[]
   readonly shape: string
   readonly quote_prefix: boolean
   readonly quote_depth: number
@@ -70,6 +71,8 @@ export interface ModelBlock {
   readonly row_index: number | undefined
   readonly ancestors: string[]
   readonly ancestor_ids: string[]
+  readonly identity: string
+  readonly layout: NodeLayout | undefined
 }
 
 /** An inline record: one node of an inline content, with the leaf block that holds it. */
@@ -82,6 +85,7 @@ export interface ModelInline {
   leaf: string
   parent: string
   readonly node: Node | undefined
+  readonly raw_ref?: string
 }
 
 export interface Container { readonly type: string, readonly content_column: number, readonly marker_column: number | undefined }
@@ -258,6 +262,8 @@ class LineRecord {
   }
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
+  /** The identities of the blocks of `ancestors`, item by item. */
+  get ancestor_ids(): string[] { return this.path === '' ? [] : ancestorPaths(this.path) }
   get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
   get quote_depth(): number { return this.leaf_id === '' ? 0 : quoteDepth(this.leaf_id, this.context.nodeTypes as Map<string, string>) }
   get quote_marks(): number {
@@ -420,6 +426,8 @@ class ContainerRecord implements Container {
 }
 
 class BlockRecord {
+  private ancestorsCache: string[] | undefined = undefined
+  private ancestorIdsCache: string[] | undefined = undefined
   private quotes: number | undefined = undefined
   private columnCache: number | undefined = undefined
   private ownerCache: Container | undefined = undefined
@@ -456,8 +464,12 @@ class BlockRecord {
   }
 
   get attributed(): boolean { return this.node.attrs !== undefined }
-  get ancestors(): string[] { return ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>) }
-  get ancestor_ids(): string[] { return ancestorPaths(this.path) }
+  get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
+  get ancestor_ids(): string[] { return (this.ancestorIdsCache ??= ancestorPaths(this.path)) }
+  /** The identity of the block, as ancestor_ids gives the identities of the blocks that hold it. */
+  get identity(): string { return this.path }
+  /** C2-L-009: the layout entry of the block, absent where the layout has none. */
+  get layout(): NodeLayout | undefined { return this.context.layouts.get(this.path) }
   get end(): number { return this.spanEnd ?? this.context.chars[this.node.pos?.endOffset ?? 0] ?? this.context.source.length }
   get text(): string { return this.context.source.slice(this.start, this.end) }
   get last_line(): ModelLine {
@@ -541,9 +553,11 @@ class InlineRecord implements ModelInline {
   readonly parent: string
   readonly node: Node
   private readonly source: string
+  private readonly layouts: LintContext['layouts']
 
   constructor(node: Node, path: string, leaf: string, parent: string, context: LintContext) {
     this.node = node
+    this.layouts = context.layouts
     this.type = node.type
     this.path = path
     this.start = context.chars[node.pos?.startOffset ?? 0] ?? 0
@@ -554,6 +568,19 @@ class InlineRecord implements ModelInline {
   }
 
   get text(): string { return this.source.slice(this.start, this.end) }
+
+  /** C2-L-022: the reference of a link or an image, read without the container prefixes of the lines it crosses. */
+  get raw_ref(): string { return this.layouts.get(this.path)?.rawRef ?? this.text }
+}
+
+/** An id record: one distinct id that the tree carries, in order of first occurrence. */
+export interface ModelId {
+  readonly type: 'id'
+  readonly id: string
+  /** C2-A-039: the type of the first node that carries the id, the one it anchors. */
+  readonly owner: string
+  readonly index: number
+  readonly start: number
 }
 
 /** A text run record: the text and soft breaks that stand next to each other among the children of one inline parent. */
@@ -590,6 +617,8 @@ export class DataWalk {
   readonly inline: ModelInline[] = []
   /** The nodes that carry `attrs`, when an attribute rule is on (C2-W-148), with their paths and whether they are inline. */
   readonly attributed: Attributed = { nodes: [], paths: [], inline: [] }
+  readonly ids: ModelId[] = []
+  private readonly idIndex = new Map<string, ModelId>()
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
   private readonly types: ReadonlySet<string>
   private readonly context: LintContext
@@ -608,6 +637,22 @@ export class DataWalk {
     this.attributes = attributes
     this.model = model
     this.walked.push({ node: document, path: '', parent: '', index: 0 })
+    this.id(document)
+  }
+
+  /** The ids a node carries: an authored id, then a generated heading id. */
+  private id(node: Node): void {
+    const authored = node.attrs?.id
+    if (authored !== undefined) this.addId(authored, node)
+    if (node.type === 'heading' && node.generatedId !== undefined) this.addId(node.generatedId, node)
+  }
+
+  private addId(id: string, node: Node): void {
+    if (this.idIndex.has(id)) return
+    const start = node.pos === undefined ? 0 : this.context.chars[node.pos.startOffset] ?? 0
+    const record: ModelId = { type: 'id', id, owner: node.type, index: this.ids.length, start }
+    this.idIndex.set(id, record)
+    this.ids.push(record)
   }
 
   /** C2-W-140: a text or soft break child of an inline parent joins the run of its previous sibling, or starts one. */
@@ -643,16 +688,21 @@ export class DataWalk {
     this.attributed.inline.push(INLINE_PARENT_TYPES.has(parent.type))
   }
 
+  private inlineChild(node: Node, path: string, parent: Node, parentPath: string, index: number, leaf: string): void {
+    if ((this.types.has(node.type) || this.types.has('*')) && node.pos !== undefined) {
+      this.inline.push(new InlineRecord(node, path, leaf, parent.type, this.context))
+    }
+    if (this.textRuns) this.run(node, parent, parentPath, index, leaf)
+  }
+
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
     if (this.attributes) this.attribute(node, path, parent)
     if (!this.model) return
+    if (node.attrs?.id !== undefined || node.type === 'heading') this.id(node)
     const holder = this.holder
     // Inline content holds no block and no line of its own; the caption of an image paragraph is a block (C2-W-140).
     if (holder !== undefined && node.type !== 'caption' && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
-      if (holder.inline && this.types.has(node.type) && node.pos !== undefined) {
-        this.inline.push(new InlineRecord(node, path, holder.type, parent.type, this.context))
-      }
-      if (holder.inline && this.textRuns) this.run(node, parent, parentPath, index, holder.type)
+      if (holder.inline) this.inlineChild(node, path, parent, parentPath, index, holder.type)
       return
     }
     if (this.textRuns) this.run(node, parent, parentPath, index, blockType(parent))
@@ -669,6 +719,9 @@ function blockSpan(item: Walked, context: LintContext): { start: number, end: nu
   return { start: context.chars[layout.startByte] ?? 0, end: context.chars[layout.endByte] ?? context.source.length }
 }
 
+// A lookup that names no block types reads every block.
+const isNeeded = (needed: ReadonlySet<string>, type: string): boolean => needed.has(type) || needed.has('*')
+
 /** The model; a block record is made only where `runsFor` gives runs for its type and its parent's type, or a lookup needs it. */
 export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   runsFor: (type: string, parent: string) => readonly T[], needed: ReadonlySet<string> = new Set()): LineModel<T> {
@@ -683,7 +736,7 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   for (const item of walked) {
     if (item.path === '') continue
     const blockRuns = runsFor(blockType(item.node), context.nodeTypes.get(item.parent) ?? 'document')
-    if (blockRuns.length === 0 && !needed.has(blockType(item.node))) continue
+    if (blockRuns.length === 0 && !isNeeded(needed, blockType(item.node))) continue
     const span = blockSpan(item, context)
     const line = span === undefined ? undefined : model.at((context.offsetLines[span.start] ?? 1) - 1)
     if (line === undefined) continue

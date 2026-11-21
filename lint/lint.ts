@@ -169,18 +169,20 @@ function collectKeys(node: Node, path: string, context: LintContext): void {
   else if (node.type === 'link_reference_definition') context.state.referenceDefinitions.push({ node, path })
 }
 
+// C2-A-039: of two nodes with one id, the first is its anchor.
+function addId(id: string, node: Node, context: LintContext): void {
+  context.state.ids.add(id)
+  if (!context.state.idOwners.has(id)) context.state.idOwners.set(id, node.type)
+}
+
 function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
   context.nodeTypes.set(path, node.type)
   collectKeys(node, path, context)
-  if (node.attrs?.id !== undefined) {
-    context.state.ids.add(node.attrs.id)
-    context.state.idOwners.set(node.attrs.id, node.type)
-  }
+  if (node.attrs?.id !== undefined) addId(node.attrs.id, node, context)
   if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
   if (node.type === 'paragraph') markSpanStarts(node.children, context)
   if (node.type === 'heading' && node.generatedId !== undefined) {
-    context.state.ids.add(node.generatedId)
-    context.state.idOwners.set(node.generatedId, node.type)
+    addId(node.generatedId, node, context)
   }
   const pos = node.pos
   markDescriptionAndCloser(node, context)
