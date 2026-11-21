@@ -63,7 +63,7 @@ export function markdownConstructs(events: readonly Event[], input: string, aler
   let directive: Found | undefined
   for (const [kind, token] of events) {
     if (kind !== 'enter') continue
-    const type = token.type
+    const type: string = token.type
     const text = (): string => input.slice(token.start.offset, token.end.offset)
     if (type === 'directiveContainerName') directive = nameDirective(directive, text())
     const mapped = MARKDOWN_NODES[type]
