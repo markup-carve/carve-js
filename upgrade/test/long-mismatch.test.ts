@@ -18,4 +18,17 @@ describe('large upgrade inputs', () => {
     expect(result.check).toBe('pass')
     expect(result.records).toEqual([])
   })
+
+  it('keeps an unresolved repeated fence source behind the write gate', () => {
+    const input = '  x{#i}\n- ````\n  ```\n\n  ^ cap\n- c\n\n'.repeat(64)
+    const result = upgrade(input)
+    expect(result.check).toBe('mismatch')
+    expect(result.records.some((record) => record.entry === 'upgrade-mismatch')).toBe(true)
+  })
+
+  it('allows a late footnote definition to resolve the first line', () => {
+    const input = 'X[^a].\n\n[^n]: First paragraph of the note.\n\n::: footnotes\nFirst marker.\n:::\n:::\n\n'
+      + '::: footnotes\nSecond marker.\n:::\n\n[^a]: note\n'
+    expect(upgrade(input).check).toBe('pass')
+  })
 })

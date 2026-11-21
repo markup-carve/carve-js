@@ -263,10 +263,11 @@ function consumedListAttribute(output: string): Candidate[] {
   return found
 }
 
-function captionBoundary(output: string): Candidate[] {
+function captionBoundary(output: string, mismatchLine: number): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
-  for (let line = 2; line <= lines.count; line++) {
+  const last = mismatchLine > 0 ? Math.min(lines.count, mismatchLine + 12) : lines.count
+  for (let line = 2; line <= last; line++) {
     if (!lineText(lines, line).trimStart().startsWith('^ ')) continue
     if (lineText(lines, line - 1).trim() === '') continue
     const at = lineStart(lines, line)
@@ -591,7 +592,7 @@ export function rescueMinor(
     ...multilineQuotedAttribute(output),
     ...conflictingListStart(output),
     ...consumedListAttribute(output),
-    ...captionBoundary(output),
+    ...captionBoundary(output, mismatch.line),
     ...emptyFootnote(output),
     ...emptyFootnoteBody(output),
     ...invisibleCommentCandidates(input),
