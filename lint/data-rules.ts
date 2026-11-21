@@ -82,6 +82,7 @@ function blockRuns(rules: Active, type: string, parent: string): BlockRun[] {
 }
 
 function runLines(model: LineModel<BlockRun>, rules: Active, context: LintContext): void {
+  if (rules.lines.length === 0) return
   for (const line of model.lines) {
     const runs = lineRuns(rules, line.leaf)
     if (runs.length === 0) continue

@@ -489,7 +489,7 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     nodeRules: nodeRulesByType(options),
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, firstHeading: null, referenceUrls: new Set(), ids: new Set(),
-      idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
+      idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteKeys: new Map(), attachedLines: new Set(),
       descriptionStarts: new Set(),
       containerClosers: new Set(),
       spanStarts: new Set(),

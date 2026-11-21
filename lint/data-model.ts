@@ -219,10 +219,10 @@ class LineRecord {
   private readonly leafLast: number
   private readonly path: string
   private readonly index: number
-  private readonly model: ModelLine[]
+  private readonly model: LineList
   private readonly context: LintContext
 
-  constructor(fields: LineFields, path: string, index: number, model: ModelLine[], context: LintContext) {
+  constructor(fields: LineFields, path: string, index: number, model: LineList, context: LintContext) {
     this.number = fields.number
     this.start = fields.start
     this.end = fields.end
@@ -266,15 +266,41 @@ class LineRecord {
   get quote_prefix(): boolean { return this.text.slice(0, this.body_start - this.start).includes('>') }
   get shape(): string { return (this.shapeCache ??= shapeOf(this.body)) }
   get lazy(): boolean { return (this.lazyCache ??= isLazy(this, this.context)) }
-  get prev(): ModelLine | undefined { return this.model[this.index - 1] }
-  get prev2(): ModelLine | undefined { return this.model[this.index - 2] }
-  get next(): ModelLine | undefined { return this.model[this.index + 1] }
-  get next2(): ModelLine | undefined { return this.model[this.index + 2] }
-  get leaf_next(): ModelLine | undefined { return this.leafLast === 0 ? this.next : this.model[this.leafLast] }
-  get leaf_head(): ModelLine | undefined { return this.leafHead === 0 ? undefined : this.model[this.leafHead - 1] }
+  get prev(): ModelLine | undefined { return this.model.at(this.index - 1) }
+  get prev2(): ModelLine | undefined { return this.model.at(this.index - 2) }
+  get next(): ModelLine | undefined { return this.model.at(this.index + 1) }
+  get next2(): ModelLine | undefined { return this.model.at(this.index + 2) }
+  get leaf_next(): ModelLine | undefined { return this.leafLast === 0 ? this.next : this.model.at(this.leafLast) }
+  get leaf_head(): ModelLine | undefined { return this.leafHead === 0 ? undefined : this.model.at(this.leafHead - 1) }
 }
 
-function lineRecord(line: Line, index: number, model: ModelLine[], found: Leaves, context: LintContext): ModelLine {
+/** The line records of a document, each made on first read: a document whose rules read few lines makes few. */
+class LineList {
+  private readonly made: (ModelLine | undefined)[]
+  private readonly count: number
+  private readonly found: Leaves
+  private readonly context: LintContext
+
+  constructor(count: number, found: Leaves, context: LintContext) {
+    this.made = new Array<ModelLine | undefined>(count)
+    this.count = count
+    this.found = found
+    this.context = context
+  }
+
+  at(index: number): ModelLine | undefined {
+    if (index < 0 || index >= this.count) return undefined
+    return (this.made[index] ??= lineRecord(this.context.lines[index]!, index, this, this.found, this.context))
+  }
+
+  all(): ModelLine[] {
+    const out: ModelLine[] = []
+    for (let index = 0; index < this.count; index++) out.push(this.at(index)!)
+    return out
+  }
+}
+
+function lineRecord(line: Line, index: number, model: LineList, found: Leaves, context: LintContext): ModelLine {
   const leaf = found.type[index]!
   // A verbatim body line keeps quote marks past the quotes that hold its leaf: they are content.
   const marks = VERBATIM_LEAVES.has(leaf) ? quoteDepth(found.id[index]!, context.nodeTypes as Map<string, string>) : Infinity
@@ -392,11 +418,11 @@ class BlockRecord {
 
   private readonly containers: Map<string, number>
 
-  private readonly lines: ModelLine[]
+  private readonly lines: LineList
 
   private readonly spanEnd: number | undefined
 
-  constructor(item: Walked, line: ModelLine, start: number, context: LintContext, containers: Map<string, number>, lines: ModelLine[],
+  constructor(item: Walked, line: ModelLine, start: number, context: LintContext, containers: Map<string, number>, lines: LineList,
     end?: number) {
     this.spanEnd = end
     this.containers = containers
@@ -418,7 +444,7 @@ class BlockRecord {
   get text(): string { return this.context.source.slice(this.start, this.end) }
   get last_line(): ModelLine {
     const number = this.spanEnd === undefined ? this.node.pos?.endLine ?? 1 : this.context.offsetLines[Math.max(this.start, this.spanEnd - 1)] ?? 1
-    return this.lines[number - 1] ?? this.line
+    return this.lines.at(number - 1) ?? this.line
   }
   get prev_type(): string | undefined {
     const split = this.path.lastIndexOf('/')
@@ -593,8 +619,7 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   const found = leaves(walked, lines.length, context.chars)
   // C2-B-010: the empty rest after the last line terminator is no line.
   const count = lines.length > 1 && lines[lines.length - 1]!.text === '' && source.endsWith('\n') ? lines.length - 1 : lines.length
-  const model: ModelLine[] = []
-  for (let index = 0; index < count; index++) model.push(lineRecord(lines[index]!, index, model, found, context))
+  const model = new LineList(count, found, context)
   const blocks: ModelBlock[] = []
   const runs: (readonly T[])[] = []
   const containers = new Map<string, number>()
@@ -606,13 +631,13 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
     const layout = item.node.pos === undefined ? context.layouts.get(item.path) : undefined
     if (item.node.pos === undefined && layout === undefined) continue
     const start = context.chars[item.node.pos?.startOffset ?? layout!.startByte] ?? 0
-    const line = model[(context.offsetLines[start] ?? 1) - 1]
+    const line = model.at((context.offsetLines[start] ?? 1) - 1)
     if (line === undefined) continue
     const end = layout === undefined ? undefined : context.chars[layout.endByte] ?? source.length
     blocks.push(new BlockRecord(item, line, start, context, containers, model, end))
     runs.push(blockRuns)
   }
-  return { lines: model, blocks, runs }
+  return { get lines() { return model.all() }, blocks, runs }
 }
 
 function ownerContent(type: string, layout: NodeLayout | undefined, quotes: number, context: LintContext): number {
@@ -669,7 +694,7 @@ function colonLayoutsOf(context: LintContext): ColonLayout[] {
 }
 
 /** The opener of a block whose source starts at its attached attribute lines: past them and the next line's prefixes. */
-export function openerStart(source: string, from: number, marks = Infinity): number {
+function openerStart(source: string, from: number, marks = Infinity): number {
   let at = from
   while (source.charCodeAt(at) === 123) {
     const end = source.indexOf('\n', at)
