@@ -8,7 +8,7 @@ const cases = (JSON.parse(readFileSync(new URL('../data/conformance/clause-cases
 
 describe('streaming HTML render', () => {
   it('publishes exact HTML after successful render, including empty output', () => {
-    for (const source of ['', '# Heading\n\nText with *strong*.\n', '😀 & text\n']) {
+    for (const source of ['', '= Heading\n\nText with *strong*.\n', '😀 & text\n']) {
       const chunks: string[] = []
       expect(tryRenderHtmlStreaming(source, {}, chunk => chunks.push(chunk))).toBe('complete')
       expect(chunks).toEqual([render(source)])
