@@ -36,7 +36,8 @@ describe('1. the tree contract', () => {
     })
     expect(() => validateTree(node([]))).toThrow('an expanded include names its file')
     const frontmatter = { type: 'frontmatter', format: 'yaml', value: '' }
-    expect(() => validateTree(node([{ type: 'thematic_break' }, frontmatter], 'a'))).toThrow('frontmatter is not the first child')
+    // Prototype (metadata blocks): an included file may hold later metadata blocks too.
+    expect(() => validateTree(node([{ type: 'thematic_break' }, frontmatter], 'a'))).not.toThrow()
   })
 
   it('C2-A-171: the children of an include count their depth from level 0 again', () => {
