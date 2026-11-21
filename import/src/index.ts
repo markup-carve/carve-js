@@ -7,6 +7,7 @@ import { runImport, type Format, type ImportResult } from './kit.ts'
 
 export { BBCODE_MAX_INPUT_LENGTH, BbcodeInputTooLargeError } from './bbcode.ts'
 export { ImportInputError, type ImportDiagnostic, type ImportResult } from './kit.ts'
+export type { ImportConstruct } from './hub-constructs.ts'
 export type { Format } from './kit.ts'
 export { ADAPTERS, type Adapter } from './html-adapter.ts'
 
@@ -19,6 +20,8 @@ export interface ImportOptions {
   /** C2-M-102: the editor that wrote the HTML; default `generic`. */
   adapter?: Adapter
   strictLosses?: boolean
+  /** Markdown, GFM and Djot: adds `constructs`, a record of each construct of the input. */
+  constructs?: boolean
   allowLosses?: readonly string[]
   maxLosses?: number
 }
@@ -34,7 +37,7 @@ function importByFormat(input: string, options: ImportOptions): ImportResult {
   switch (options.from) {
     case 'markdown':
     case 'gfm':
-    case 'djot': return importThroughHtml(input, options.from)
+    case 'djot': return importThroughHtml(input, options.from, options.constructs === true)
     case 'bbcode': return importBbcode(input)
     case 'html': return importHtml(input, options.rawHtml === true, {}, true, options.labels, readAdapter(options.adapter))
   }
