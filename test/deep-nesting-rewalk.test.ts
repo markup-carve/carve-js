@@ -17,35 +17,40 @@ function cpuMs(work: () => unknown): number {
   return (used.user + used.system) / 1000
 }
 
+/**
+ * The same work on plain lines of the same length is the yardstick, so a busy runner slows both sides. Before these
+ * fixes the shapes below took 8 to 109 times as long as plain text; after, at most as long.
+ */
+function expectNearPlain(source: string, work: (input: string) => unknown): void {
+  work('warm\n')
+  const plain = 'plain words here\n'.repeat(Math.ceil(source.length / 17)).slice(0, source.length)
+  const yardstick = cpuMs(() => work(plain))
+  expect(cpuMs(() => work(source))).toBeLessThan(4 * yardstick + 200)
+}
+
 describe('deep nesting without a walk per level', () => {
-  it('lints 372 KB of nested fences within the smoke budget', () => {
+  it('lints 372 KB of nested fences about as fast as plain text', () => {
     const source = nestedFences(128)
     expect(source.length).toBeGreaterThan(360_000)
-    let found = 0
-    // CPU time keeps the guard useful on a shared runner; the walk per line took 7 s here, the memoized one under 1 s.
-    expect(cpuMs(() => { found = lint(source).length })).toBeLessThan(3000)
-    expect(found).toBeGreaterThan(0)
-  }, 60_000)
+    expectNearPlain(source, lint)
+    expect(lint(source).length).toBeGreaterThan(0)
+  }, 120_000)
 
-  it('lints a 96 KB line of unclosed image openers within the smoke budget', () => {
-    const source = `${'[!'.repeat(48 * 1024)}\n`
-    expect(cpuMs(() => lint(source))).toBeLessThan(3000)
-  }, 60_000)
+  it('lints a 96 KB line of unclosed image openers about as fast as plain text', () => {
+    expectNearPlain(`${'[!'.repeat(48 * 1024)}\n`, lint)
+  }, 120_000)
 
   // `/[ \t]+$/` rescans a long run of spaces and tabs inside a line from each of its characters.
-  it('lints 288 KB of space and tab indentation within the smoke budget', () => {
+  it('lints 288 KB of space and tab indentation about as fast as plain text', () => {
     const indent = '  \t'.repeat(32000)
-    const source = `${indent}[^n]\n${indent}[^n]\n${indent}[^n]\n`
-    expect(cpuMs(() => lint(source))).toBeLessThan(3000)
-  }, 60_000)
+    expectNearPlain(`${indent}[^n]\n${indent}[^n]\n${indent}[^n]\n`, lint)
+  }, 120_000)
 
-  it('exports a line with 80 KB of inner spaces and tabs to Markdown within the smoke budget', () => {
+  it('exports a line with 80 KB of inner spaces and tabs to Markdown about as fast as plain text', () => {
     const source = `a${' \t'.repeat(40000)}b\n`
-    const document = parse(source)
-    let output = ''
-    expect(cpuMs(() => { output = exportDocument('markdown', document).output })).toBeLessThan(3000)
-    expect(output.startsWith('a ')).toBe(true)
-  }, 60_000)
+    expectNearPlain(source, (input) => exportDocument('markdown', parse(input)).output)
+    expect(exportDocument('markdown', parse(source)).output.startsWith('a ')).toBe(true)
+  }, 120_000)
 
   // The linear scan of link-gap-before-destination reports what the pattern it replaced matched.
   it('reports link-gap-before-destination where the old pattern matched', () => {
