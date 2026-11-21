@@ -179,3 +179,24 @@ export function abbreviationSpaces(ctx: Context): void {
       'extra abbreviation separator spaces removed so the expansion keeps its 0.1 title')
   }
 }
+
+/** An attribute-only line can leave an empty 0.1 quote that 0.2 otherwise drops. */
+export function emptyAttributeQuote(ctx: Context): void {
+  const lines: number[] = []
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'block_quote' || node.pos === undefined || (node.children?.length ?? 0) !== 0
+      || node.pos.startLine !== node.pos.endLine) continue
+    const line = node.pos.startLine
+    if (ctx.blocks.leaf[line - 1]?.node.type !== 'paragraph'
+      || !/^[ \t]*>[ \t]*\{[^}\n]*\}[ \t]*$/u.test(lineText(ctx.lines, line))) continue
+    lines.push(line)
+  }
+  if (lines.length === 0) return
+  const masked = new Uint8Array(ctx.src.length + 1)
+  for (const line of lines) masked.fill(1, lineStart(ctx.lines, line), lineEnd(ctx.lines, line) + 1)
+  ctx.findings = ctx.findings.filter(({ edit }) => edit === null || masked[edit.start] !== 1)
+  for (const line of lines) {
+    change(ctx, 'U-034', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), '\n> ',
+      'an attribute-only quote kept as an empty quote after a paragraph break')
+  }
+}

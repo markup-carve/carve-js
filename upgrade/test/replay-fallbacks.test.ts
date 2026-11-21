@@ -54,4 +54,12 @@ describe('replay fallback families', () => {
     expect(result.output).toContain('*[HTML]: Long Form')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
+
+  it('keeps an empty quote after its attribute-only line is removed', () => {
+    const input = '[x]{.a!b}\n- > - para\n^ c[d]: uap\n  >   {#x}\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('[x]{.a!b}\n- > - para\n^ c[d]: uap\n\n> \n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
 })
