@@ -96,17 +96,15 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
   }
   walk(ast, '')
   const byPath = new Map(result.map((node) => [node.path, node]))
-  const textByAncestor = new Map<string, { start: number; end: number }>()
+  const labelByLink = new Map<string, EditorRange>()
   for (const node of result) {
-    if (node.type !== 'text') continue
-    let ancestor = node.path.slice(0, node.path.lastIndexOf('/'))
-    while (ancestor) {
-      const previous = textByAncestor.get(ancestor)
-      textByAncestor.set(ancestor, previous
-        ? { start: Math.min(previous.start, node.start), end: Math.max(previous.end, node.end) }
-        : { start: node.start, end: node.end })
-      ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'))
-    }
+    const split = node.path.lastIndexOf('/children/')
+    if (split < 0 || byPath.get(node.path.slice(0, split))?.type !== 'link') continue
+    const link = node.path.slice(0, split)
+    const previous = labelByLink.get(link)
+    labelByLink.set(link, previous
+      ? { start: Math.min(previous.start, node.start), end: Math.max(previous.end, node.end) }
+      : { start: node.start, end: node.end })
   }
   const cellsByRow = new Map<string, EditorRange[]>()
   for (const node of result) {
@@ -139,16 +137,20 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
       const content = byPath.get(`${node.path}/children/0`)
       if (content && content.start > contentStart) token('block-marker', contentStart, content.start)
     } else if (node.type === 'link') {
-      const text = textByAncestor.get(node.path)
-      if (text) {
-        const { start, end } = text
-        token('open-marker', node.start, start)
-        const tail = source.slice(end, node.end)
-        if (tail.startsWith('](') && tail.endsWith(')')) {
-          token('close-marker', end, end + 2)
-          token('destination', end + 2, end + 2 + destinationLength(tail.slice(2, -1)))
-          token('close-marker', node.end - 1, node.end)
-        } else token('close-marker', end, node.end)
+      // The label ends at the `]` behind the link's last child, whatever kind of node that is.
+      const label = labelByLink.get(node.path) ?? { start: node.start + 1, end: node.start + 1 }
+      if (source[node.start] === '[' && source[label.end] === ']') {
+        token('open-marker', node.start, label.start)
+        const tail = source.slice(label.end, node.end)
+        const close = tail.startsWith('](') ? closingParen(tail) : tail.startsWith('][') ? tail.indexOf(']', 2) : 0
+        const end = close < 0 ? node.end : label.end + close + 1
+        if (close > 0 && tail[1] === '(') {
+          token('close-marker', label.end, label.end + 2)
+          token('destination', label.end + 2, label.end + 2 + destinationLength(tail.slice(2, close)))
+          token('close-marker', end - 1, end)
+        } else token('close-marker', label.end, end)
+        if (end < node.end && hasAttrs.has(node.path) && source[end] === '{') token('attribute', end, node.end)
+        else if (end < node.end) token('close-marker', end, node.end)
       }
     } else if (node.type === 'code_block') {
       const first = authored.indexOf('\n')
@@ -190,6 +192,32 @@ function attributeLine(source: string, start: number): { end: number; next: numb
   while (end < source.length && source[end] !== '\n' && source[end] !== '\r') end++
   if (end === start || source[end - 1] !== '}' || end >= source.length) return null
   return { end, next: end + (source.startsWith('\r\n', end) ? 2 : 1) }
+}
+
+/** The index of the `)` that closes the destination and title of the link tail `](...`, or -1. */
+function closingParen(tail: string): number {
+  let at = 2
+  // A `<` without its `>` opens no angle destination.
+  const angle = tail[at] === '<' ? tail.indexOf('>', at) : -1
+  if (angle >= 0) at = angle + 1
+  else {
+    for (let depth = 0; at < tail.length; at++) {
+      const char = tail[at]
+      if (char === '\\') at++
+      else if (char === '(') depth++
+      else if (char === ')' && depth-- === 0) return at
+      else if (depth === 0 && (char === ' ' || char === '\t' || char === '\n' || char === '\r')) break
+    }
+  }
+  for (let quote = ''; at < tail.length; at++) {
+    const char = tail[at]!
+    if (char === '\\') at++
+    else if (quote !== '') { if (char === quote) quote = '' }
+    else if (char === '"' || char === "'") quote = char
+    else if (char === '(') quote = ')'
+    else if (char === ')') return at
+  }
+  return -1
 }
 
 /** The length of the destination at the start of the inside of `(...)`: up to a space or tab outside parentheses. */
