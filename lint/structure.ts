@@ -1,5 +1,6 @@
 import { forEachSlot, type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
 import { NODE_SLOTS } from '../src/ast-tables.ts'
+import { emptyMemo, readAttributeBlock } from '../src/attributes.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { quotesAbove } from './ancestry.ts'
@@ -464,18 +465,30 @@ function intrawordUnderscore(node: Node, path: string, context: LintContext): vo
   }
 }
 
+function markBeforeBrace(source: string, at: number): boolean {
+  return '*_/~='.includes(source[at] ?? '') && source[at + 1] === '{' && !escaped(source, at)
+}
+
+/** Whether `source` from `start` to `end` is one attribute line; the grammar stops at the first character it cannot read. */
+function attributeBlockBetween(source: string, start: number, end: number): boolean {
+  const block = source.slice(start, end)
+  return readAttributeBlock(block, 0, block.length, emptyMemo(), null) === block.length && isAttributeLine(block, 0, block.length)
+}
+
 function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const source = raw(node, context)
   if (!source.includes('{')) return
   const range = bounds(node, context)
   if (range === null) return
+  // Each candidate looked for its `}` and scanned the block again, so a line of `_{` before one `}` was quadratic.
+  let end = -1
   for (let at = 0; at < source.length - 2; at++) {
     const ch = source[at] ?? ''
-    if (!'*_/~='.includes(ch) || source[at + 1] !== '{' || escaped(source, at)) continue
-    const end = source.indexOf('}', at + 2)
-    if (end < 0) continue
-    if (!isAttributeLine(source.slice(at + 1, end + 1), 0, end - at)) continue
+    if (!markBeforeBrace(source, at)) continue
+    if (end < at + 2) end = source.indexOf('}', at + 2)
+    if (end < 0) return
+    if (!attributeBlockBetween(source, at + 1, end + 1)) continue
     // C2-B-182: an alignment run that opens a cell is reported by deprecated-cell-alignment.
     if (at <= 1 && opensCell(context, range[0]) && oldAlignmentRun(source)?.prefix.length === end + 1) {
       at = end

@@ -47,20 +47,40 @@ function afterMarkerSpace(src: string, markerEnd: number, end: number, spaces: n
  * and the other quote (C2-I-033), and an unquoted one an opening brace (C2-I-032); whether the block is
  * valid is read by the attribute grammar.
  */
-export function braceBlockEnd(src: string, pos: number, end: number): number {
+export function braceBlockEnd(src: string, pos: number, end: number, scans?: Map<number, number>): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACE_OPEN) return -1
   const first = src.charCodeAt(pos + 1)
   // `{%` starts a braced comment and `{{` an include directive.
   if (first === PERCENT || first === BRACE_OPEN || first === BRACE_CLOSE) return -1
-  for (let p = pos + 1; p < end; p++) {
+  return closingBraceEnd(src, pos + 1, end, scans)
+}
+
+/**
+ * Offset after the first `}` at or after `from` outside quoted values, or -1. The scan only depends on where it
+ * starts, so `scans` keeps the answer for every offset it passes, and a later scan that runs into one stops there.
+ */
+function closingBraceEnd(src: string, from: number, end: number, scans: Map<number, number> | undefined): number {
+  const passed: number[] = []
+  let found = -1
+  for (let p = from; p < end; p++) {
+    const known = scans?.get(p)
+    if (known !== undefined) {
+      found = known
+      break
+    }
+    if (scans !== undefined) passed.push(p)
     const code = src.charCodeAt(p)
-    if (code === BRACE_CLOSE) return p + 1
+    if (code === BRACE_CLOSE) {
+      found = p + 1
+      break
+    }
     if (code !== QUOTE_MARK && code !== APOSTROPHE) continue
     const after = quotedEnd(src, p, end, code)
-    if (after < 0) return -1
+    if (after < 0) break
     p = after - 1
   }
-  return -1
+  if (scans !== undefined) for (const p of passed) scans.set(p, found)
+  return found
 }
 
 /** Offset after the glued brace blocks at `pos`; `pos` itself when there are none (C2-B-093). */
@@ -628,10 +648,10 @@ function lastPipe(src: string, pos: number, end: number): number {
 }
 
 /** Offset of the brace block of the row attribute behind the closing pipe at `pipe`, or -1 (C2-B-167). */
-export function rowAttributeStart(src: string, pipe: number, end: number): number {
+export function rowAttributeStart(src: string, pipe: number, end: number, scans?: Map<number, number>): number {
   let p = pipe + 1
   if (p < end && src.charCodeAt(p) === SPACE) p++
-  const blockEnd = braceBlockEnd(src, p, end)
+  const blockEnd = braceBlockEnd(src, p, end, scans)
   return blockEnd < 0 || readAttributeBlock(src, p, blockEnd, emptyMemo(), null) !== blockEnd ? -1 : p
 }
 
@@ -662,8 +682,10 @@ export function rowClosingPipe(src: string, pos: number, end: number): number {
 
 /** C2-B-166: the pipe before a row attribute whose quoted values hold the later pipes of the line, or -1. */
 function quotedPipeRowEnd(src: string, from: number, last: number, end: number): number {
+  // A line of `|{` without a `}` scanned to its end from every pipe.
+  const scans = new Map<number, number>()
   for (let p = src.indexOf('|', from); p >= 0 && p < last; p = src.indexOf('|', p + 1)) {
-    if (rowAttributeStart(src, p, end) >= 0 && rowTailValid(src, p, end)) return p
+    if (rowAttributeStart(src, p, end, scans) >= 0 && rowTailValid(src, p, end)) return p
   }
   return -1
 }

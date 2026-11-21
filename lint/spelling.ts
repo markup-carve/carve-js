@@ -9,13 +9,17 @@ function trimmed(line: Line): { text: string, start: number } {
   return { text: line.text.slice(at).trimEnd(), start: line.start + at }
 }
 
+const SPACE = /\s/
+
 function contentLine(line: Line): { text: string, start: number } {
-  let { text, start } = trimmed(line)
-  while (text.startsWith('> ')) {
-    text = text.slice(2).trimStart()
-    start = line.start + line.text.indexOf(text, start - line.start)
+  const { text, start } = trimmed(line)
+  // An offset instead of a slice and a search of the rest per quote mark, which made a run of `> ` quadratic.
+  let at = 0
+  while (text.startsWith('> ', at)) {
+    at += 2
+    while (at < text.length && SPACE.test(text[at]!)) at++
   }
-  return { text, start }
+  return { text: text.slice(at), start: start + at }
 }
 
 /** The text of the line behind its container prefixes: quote marks, list and description markers, indentation. */

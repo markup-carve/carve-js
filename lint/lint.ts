@@ -258,13 +258,15 @@ function maskLine(line: Line, mask: Uint8Array): Line {
   if (!needsMasking(line, mask)) return line
   const chars = line.text.split('')
   let changed = false
+  // The backslashes right before `at`, counted as the loop goes: counting back from each one made a run quadratic.
+  let slashes = 0
   for (let at = 0; at < chars.length; at++) {
     const code = line.text.charCodeAt(at)
     const punct = (code >= 33 && code <= 47) || (code >= 58 && code <= 64) || (code >= 91 && code <= 96)
       || (code >= 123 && code <= 126)
-    let slashes = 0
-    if (punct) while (line.text[at - 1 - slashes] === '\\') slashes++
-    if (mask[line.start + at] !== 1 && slashes % 2 === 0) continue
+    const before = punct ? slashes : 0
+    slashes = code === 92 ? slashes + 1 : 0
+    if (mask[line.start + at] !== 1 && before % 2 === 0) continue
     chars[at] = '\0'
     changed = true
   }
