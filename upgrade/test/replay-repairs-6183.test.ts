@@ -1,5 +1,6 @@
 // Fourth replay pass (markup-carve/carve#6183, #6181): generated-pack sources that the last late variant repairs.
 import { describe, expect, it } from 'vitest'
+import { offsetAfter, offsetBefore } from '../src/edits.ts'
 import { canWriteUpgrade, upgrade } from '../src/index.ts'
 
 const written: [string, string, string][] = [
@@ -76,5 +77,14 @@ describe('the replay repairs', () => {
     for (const id of rows.trim().split(' ').filter(Boolean)) {
       if (source !== output) expect(result.records.some((record) => record.entry === id)).toBe(true)
     }
+  })
+
+  it('maps an offset of the input through the edits and back', () => {
+    const edits = [
+      { start: 2, end: 2, text: '\n', entry: 'U-005', sequence: 0 },
+      { start: 5, end: 7, text: '', entry: 'U-038', sequence: 1 },
+    ]
+    expect(offsetAfter(edits, 9)).toBe(8)
+    expect(offsetBefore(edits, offsetAfter(edits, 9))).toBe(9)
   })
 })

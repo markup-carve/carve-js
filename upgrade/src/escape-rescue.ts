@@ -31,12 +31,9 @@ function delimiterOffsets(text: string, line: number): number[] {
   return found
 }
 
-export function rescueEscape(input: string, output: string, mismatch: ReportRecord, repairs = false):
+export function rescueEscape(input: string, output: string, mismatch: ReportRecord, line = mismatch.line):
   { output: string; record: ReportRecord } | null {
   if (mismatch.line < 1) return null
-  // The mismatch line counts input lines; the repairs also read it where the rewrite's added lines moved it.
-  const shift = repairs ? output.split('\n').length - input.split('\n').length : 0
-  const line = mismatch.line + Math.max(0, shift)
   // A paragraph difference is placed on its first line; the opener 0.2 reads may stand on the next.
   const offsets = [...delimiterOffsets(output, line), ...delimiterOffsets(output, line + 1)]
   if (offsets.length === 0 || offsets.length > MAX_SINGLE) return null

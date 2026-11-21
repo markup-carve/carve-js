@@ -67,6 +67,16 @@ export function applyEdits(src: string, edits: Edit[]): string {
   return out
 }
 
+/** The offset in the text after `edits` of `offset` in the text before them. */
+export function offsetAfter(edits: Edit[], offset: number): number {
+  let shift = 0
+  for (const edit of edits) {
+    if (edit.start >= offset) break
+    shift += edit.text.length - (Math.min(edit.end, offset) - edit.start)
+  }
+  return offset + shift
+}
+
 /** The offset in the text before `edits` of `offset` in the text after them. */
 export function offsetBefore(edits: Edit[], offset: number): number {
   let shift = 0
