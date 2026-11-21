@@ -2,14 +2,18 @@
 // inputs of the specification and on the small enumerations. The larger ones run in
 // scripts/writer-gates.ts.
 import { describe, expect, it } from 'vitest'
-import { CARVE_SOURCES } from '../scripts/corpus.ts'
+import { CARVE_SOURCES, CLAUSE_CASES } from '../scripts/corpus.ts'
 import { LINE_SHAPES } from './support/enumerate.ts'
 import { INLINE_TOKENS, WRITER_TOKENS } from './support/inline-enumerate.ts'
 import { checkGates, checkWriter, enumerateWriter, seededRandom } from './support/writer-checks.ts'
 
 describe('the gates of the writer', () => {
   it('C2-W-002, C2-W-003, C2-W-088: every example input of the specification', () => {
-    const failures = CARVE_SOURCES.map((example) => [example.id, checkWriter(example.input)]).filter((entry) => entry[1] !== null)
+    // C2-W-133: a clause case that expects `writer-refused` (CC-1493) is checked by the corpus test.
+    const refusing = new Set(CLAUSE_CASES.filter((entry) => (entry.expected as { diagnostics?: { code: string }[] })
+      .diagnostics?.some((found) => found.code === 'writer-refused') === true).map((entry) => entry.id))
+    const failures = CARVE_SOURCES.filter((example) => !refusing.has(example.id))
+      .map((example) => [example.id, checkWriter(example.input)]).filter((entry) => entry[1] !== null)
     expect(failures).toEqual([])
   })
 
