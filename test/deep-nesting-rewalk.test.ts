@@ -26,6 +26,31 @@ describe('deep nesting without a walk per level', () => {
     expect(found).toBeGreaterThan(0)
   }, 60_000)
 
+  it('lints a 96 KB line of unclosed image openers within the smoke budget', () => {
+    const source = `${'[!'.repeat(48 * 1024)}\n`
+    expect(cpuMs(() => lint(source))).toBeLessThan(3000)
+  }, 60_000)
+
+  // The linear scan of link-gap-before-destination reports what the pattern it replaced matched.
+  it('reports link-gap-before-destination where the old pattern matched', () => {
+    const alphabet = ['[', ']', ' ', '\t', '(', ')', 'a', '!', '*']
+    let state = 7
+    const next = (limit: number): number => {
+      state = (state * 1103515245 + 12345) % 2147483648
+      return state % limit
+    }
+    for (let round = 0; round < 3000; round++) {
+      let line = 'x '
+      const length = 1 + next(24)
+      for (let at = 0; at < length; at++) line += alphabet[next(alphabet.length)]
+      const expected = [...line.matchAll(/\[([^\]\n]+)\][ \t]+\(([^)\n]*)\)/g)]
+        .filter((match) => match[2]!.trim() !== '').map((match) => [match.index, match.index + match[0].length])
+      const actual = lint(`${line}\n`).filter((entry) => entry.code === 'link-gap-before-destination')
+        .map((entry) => [entry.range?.startOffset, entry.range?.endOffset])
+      expect(actual, JSON.stringify(line)).toEqual(expected)
+    }
+  }, 60_000)
+
   // C2-W-125 case five: a lone bracket of a nested link is escaped by that link, and the links around it pair
   // the brackets it leaves open or closed.
   const shapes = ['[a [b](u) ]c](v)', '[[a](u)]](v)', '[a [[b](u) c](v)', '[a [b]](u) [c](v)', '[x [a\\]](u) y](v)',
