@@ -1,0 +1,23 @@
+{
+  "killed": [
+    "block-eof",
+    "block-crlf",
+    "block-frontmatter",
+    "block-lazy",
+    "block-blank",
+    "block-heading",
+    "inline-code",
+    "inline-break",
+    "inline-image",
+    "inline-plain",
+    "inline-plain-class",
+    "inline-bracket-close",
+    "html-indent",
+    "html-comments",
+    "html-image",
+    "html-caption",
+    "html-comment-break",
+    "html-text-paragraph"
+  ],
+  "minimumRate": 1
+}

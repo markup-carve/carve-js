@@ -1,0 +1,7 @@
+[ok](https://example.org/path?a=1&b=2) ![alt](https://example.org/image.png)
+
+[blocked](javascript:alert(1))
+
+[ref]: /relative "title"
+
+[ref][] <https://example.org> @person #topic

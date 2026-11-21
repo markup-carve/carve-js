@@ -12,34 +12,26 @@ npm test
 ```
 
 If you cloned without `--recurse-submodules`, run `git submodule update --init`.
-The spec corpus lives in `spec/` as a submodule, and the conformance tests read
-it from there.
+The specification lives in `spec/` as a submodule; `data/` holds the tables and
+the conformance corpus copied from it at the commit `data/spec-pin.json` names.
 
-The runtime requires Node 20 or newer. For development, use Node
-`^20.19.0 || ^22.13.0 || >=24`, as required by the lint toolchain. Pull
-requests run the corpus tests on Node 24; main pushes and the nightly run add
-Node 22, and Node 20 runs daily. The browser jobs use Node 22.
+The runtime requires Node 20 or newer. For development, use Node 22.18 or newer:
+the scripts and the tools in `import/` and `upgrade/` run their TypeScript
+sources directly.
 
 ## Running the tests
 
 ```bash
 npm test               # vitest over test/**/*.test.ts
-npm run typecheck      # source, test and boundary types, then typed lint
-npm run lint           # type-aware rules on boundary modules
-npm run build          # tsc, into dist/
+npm run typecheck      # the engine, proptest and 0.1 reader types, then typed lint
+npm run lint           # typed lint on its own
+npm run build          # the 0.1 reader into build/, the package into dist/
+npm run test:cli       # the carve bin
+npm run test:lint      # the linter
+npm run test:migrate   # tree migration
+npm --prefix upgrade test
+npm --prefix import test
 ```
-
-Typechecking is a gate, not a convenience: CI runs `npm run typecheck` before the
-suite on both Node versions, and `npm run build` after it, so a type error fails
-the run even when every test passes.
-
-Typed linting starts with the DOM adapter, source-position conversion and own-
-property helper. It checks unsafe values, promise handling and exhaustive
-switches. The standard typecheck command includes this pass, so CI uses the same
-command as local development. The lint pass uses `tsconfig.boundaries.json`.
-Expand that config, `eslint.config.mjs` and `scripts.lint` together as
-boundaries become ready. A negative probe verifies that all eight rules reject
-deliberately invalid input.
 
 To narrow a run, name the file or the test:
 
@@ -49,154 +41,54 @@ npx vitest run -t 'heading'
 npm run test:watch
 ```
 
-The suite is about 740 test files. `npm run test:includes` runs the
-include-conformance vectors on their own; CI runs it as a step of its own after
-`npm test`, so a failure there names that gate rather than the whole suite.
-
-Two suites run against the built artifact, so they need `npm run build` first and
-stay out of the everyday run:
+Two checks run against the built artifact, so they need `npm run build` first:
 
 ```bash
-npm run build
 npm run test:browser   # the IIFE bundle renders identically to the ESM build
-npm run test:mxss      # mutation-XSS check on the svg fence
+npm run test:package   # the packed package installs and its entries and bin work
 ```
 
 `test:browser` loads the bundle in a Node `vm` context holding only globals a
 browser also provides, so a Node builtin creeping into the entry fails there
-rather than in a consumer's iframe. `test:mxss` is the one that needs a real
-browser: Playwright and Chromium, which CI installs for that job alone rather than
-carrying as a devDependency.
+rather than in a consumer's iframe. It runs a `--selfcheck` pass first that
+builds deliberately wrong artifacts and asserts the check reports them.
 
-Both scripts run their own `--selfcheck` pass first: each builds a deliberately
-wrong artifact and asserts the check reports it, so neither gate can pass by being
-unable to fail.
-
-### The scaling guards
-
-`npm run test:perf` runs the wall-clock guards, with file parallelism off. They
-assert asymptotics, so a reading taken while the machine is busy means nothing:
-in the default run they would measure each other, which is why they are skipped
-there. CI gives them a runner of their own in
-`.github/workflows/scaling-guards.yml`, nightly and on demand, rather than on
-the pull-request path or on every push to `main`. For a branch:
-
-```bash
-gh workflow run scaling-guards.yml -R markup-carve/carve-js --ref <branch>
-```
-
-## Conformance and the corpus
-
-Part of the suite is driven by the shared spec corpus in `spec/`, so a spec bump
-can change expectations with no local edit. `test/corpus.test.ts` runs the
-mandatory corpus byte for byte and `test/optional-corpus.test.ts` the Tier-2
-opt-in constructs.
-
-A corpus category this implementation does not support yet is declared rather
-than quietly absent. `IMPLEMENTED` in `test/corpus.test.ts` lists the categories
-that must pass; the list is guarded from both directions, so a corpus category
-missing from it fails the build and an entry naming no corpus pair fails it too.
-Implementing a feature therefore means adding its category to `IMPLEMENTED` as
-well as making the parser handle it.
-
-### Generated files a PR does not regenerate
-
-Two committed files are kept in line with `main` by
-`.github/workflows/ledger-refresh.yml`, which runs after every merge and opens an
-`automation/render-ledger` PR. Do not run their regeneration commands in a PR:
-two PRs that rewrite the same rows conflict with each other.
-
-- `test/fixtures/corpus-render-ledger.txt` holds digests of the Markdown,
-  plain-text and ANSI output of every corpus document. On a PR,
-  `test/corpus-render-ledger.test.ts` lists the rows your change moves in the
-  test log and the job summary and does not fail. Read the list to see which
-  documents you moved.
-- `test/conformance-pack-drift.json` declares the conformance pack cases this
-  engine renders differently from the spec model. A NEW difference is still a
-  failure: fix it, or declare its ids under the ticket for its cause in the same
-  PR. A declaration whose case now passes is stale; it is reported, and the
-  automation removes it after the merge.
-
-`npm run ledger:render` and `npm run drift:prune` are the commands the
-automation runs.
+The slower gates (enumerators, stress shapes, writer gates, property tests, the
+AST schema cross-check) run in `.github/workflows/engine.yml`; each has an
+`npm run` script of the same name.
 
 ## Writing tests
 
-Test files are named for the behavior they pin, one sentence per file:
-`test/a-blank-line-is-space-and-tab-only.test.ts`. Match that shape and the
-surrounding style of whichever file is closest to your change.
+Name a test for the clause or behavior it pins, and match the surrounding style
+of whichever file is closest to your change. Make the test able to fail: revert
+the fix and watch it go red before you trust it.
 
-Two conventions worth stating:
-
-- **Make the test able to fail.** Revert the fix and watch it go red before you
-  trust it. Several bugs across the Carve engines survived behind a check that
-  structurally could not see what it was checking.
-- If your change affects behavior documented under `docs/`, update that page in
-  the same PR. A wrong security or migration doc is worse than a missing one.
+If your change affects behavior documented under `docs/`, update that page in
+the same PR.
 
 ## Project layout
 
-```
-src/
-├── index.ts             # public API
-├── parse.ts             # linear-time block and inline parser
-├── ast.ts               # typed AST node definitions
-├── render-html.ts       # canonical HTML renderer
-├── render-markdown.ts   # plus render-plain.ts, render-ansi.ts, render-carve.ts
-├── html-import.ts       # plus djot-migrate.ts, markdown-migrate.ts, bbcode-migrate.ts
-├── profile.ts           # allowed constructs for untrusted input
-├── includes.ts          # file inclusion; the fs resolver is in includes-fs.ts
-├── source-patch.ts      # source-preserving patches
-├── cli.ts               # the `carve` binary
-├── ast/                 # AST wire format, patches, and sidecars
-├── parse/               # block, inline, list, and table parser modules
-├── import/              # Djot, Markdown, and HTML import helpers
-├── extension/           # built-in extensions
-├── heading/             # heading IDs, numbers, and references
-├── render/              # renderer helpers
-├── source/              # source positions and error helpers
-└── table/               # table layout and span helpers
-test/                    # vitest suites plus the corpus runners
-spec/                    # git submodule: markup-carve/carve
-scripts/                 # the browser bundle build and the drift check
-```
-
-`docs/development.md` has the fuller source map.
+`docs/development.md` has the source map.
 
 ## Spec changes
 
 This repository implements the language; it does not define it. Syntax and
-semantics live in [markup-carve/carve](https://github.com/markup-carve/carve)
-(`resources/grammar.ebnf` plus the corpus), and the
-[versioning contract](https://markup-carve.github.io/carve/versioning) says what
-a release may change. If your change would alter what valid Carve means, open the
-discussion there first. Language work for 0.2 is tracked in
-[markup-carve/carve#1092](https://github.com/markup-carve/carve/issues/1092).
+semantics live in [markup-carve/carve](https://github.com/markup-carve/carve),
+and the [versioning contract](https://markup-carve.github.io/carve/versioning)
+says what a release may change. If your change would alter what valid Carve
+means, open the discussion there first.
 
 Rendered output is byte-identical across implementations by design, so a change
-that alters it is rarely a single-repository change. Expect to pair it with
+that alters it is rarely a single-repository change. Check whether the spec pins
+the behavior at all, and link any sibling PRs in
 [carve-rs](https://github.com/markup-carve/carve-rs) and
-[carve-php](https://github.com/markup-carve/carve-php), and check whether the
-spec pins the behavior at all: where it does not, every implementation can agree
-with the others and still be wrong together. Link the sibling PRs from your
-description.
+[carve-php](https://github.com/markup-carve/carve-php) from your description.
 
-CI also asserts that the spec submodule pin is reachable from spec `main`, which
-is the check that catches a pin naming a commit that no longer exists. Reachable
-is all it means: a commit five hundred behind is reachable too.
+CI asserts that the spec submodule pin is reachable from the matching spec
+branch, which catches a pin naming a commit that no longer exists.
 
-## Versions on main
+## Versions
 
-Between releases `main` reads the next version with a `-dev` suffix, for
-example `0.1.11-dev`. The release cut drops the suffix in `package.json`,
-`package-lock.json` and `src/version.ts`, and the tag goes on that commit. Once
-the release is published, the next pull request moves `main` to the following
-`-dev` version. A build from any other commit then names itself as unreleased,
-and semver sorts it below the release it leads up to.
-
-`test/the-lib-version-constant-tracks-the-package-version.test.ts` checks the
-shape: a plain version must have its own `CHANGELOG.md` section, and a `-dev`
-version must be newer than the last one.
 `release.yml` refuses a tag that is not a plain `X.Y.Z`, and a `prepublishOnly`
 script refuses `npm publish` of any other version, including one run by hand.
 
@@ -206,3 +98,17 @@ script refuses `npm publish` of any other version, including one run by hand.
 - `npm test` and `npm run typecheck` green.
 - Say what behavior changed in the description. The reasoning belongs in the
   commit body.
+
+## 0.2 engine gates
+
+Pull requests to `next2` run `engine-smoke.yml`. It uses the same gate scripts as
+`engine.yml` with smaller, seeded bounds. The bound table and the single
+`full`/`smoke` switch are in `scripts/engine-gate.mjs`. To reproduce one gate,
+run `node scripts/engine-gate.mjs smoke enumerate` (or replace `smoke` with
+`full`). Some gates need the pinned spec checkout or import dependencies as in
+the workflow.
+
+The full gates run after each push to `next2`, nightly at 03:15 UTC, and through
+manual workflow dispatch. A failed full run opens or comments on the
+`next2 engine gates failing` issue with its run and failing jobs. A later green
+full run closes it.

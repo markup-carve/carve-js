@@ -1,0 +1,23 @@
+{
+  "name": "@markup-carve/carve-upgrade",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Rewrites a Carve 0.1 document into Carve 0.2 so that it renders the same",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "carve-upgrade": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run --root . --config vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint . --max-warnings=0",
+    "corpus": "node scripts/corpus.ts"
+  }
+}

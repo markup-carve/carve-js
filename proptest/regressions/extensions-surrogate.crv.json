@@ -1,0 +1,9 @@
+{
+  "kind": "tabs-invalid-html",
+  "detail": "surrogate-in-input-stream",
+  "clause": "C2-H-002",
+  "id": "037ba3ddb489e422",
+  "seed": 1,
+  "inputJson": "\ud800",
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198"
+}

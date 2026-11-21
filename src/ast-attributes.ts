@@ -1,0 +1,128 @@
+// The attribute blocks a block took, read from their source spans into the fields of C2-A-032.
+import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
+import { BRACE_OPEN, LF, SPACE, TAB } from './chars.ts'
+import { cellMarksLength } from './lines.ts'
+
+/** The merged attribute blocks of a host, in the fixed order of C2-B-098. */
+export interface Attributes {
+  id: string | null
+  classes: string[]
+  lang: string | null
+  keyValues: [string, string][]
+  /** The place of each key in `keyValues` by its lower-case name, built when a key is merged and dropped when one is taken. */
+  keyIndex?: Map<string, number>
+}
+
+/**
+ * C2-I-079: every run of spaces, tabs and line breaks is one space, and the ends are trimmed of
+ * those. A no-break space and every other character are kept as they stand.
+ */
+export function foldLabel(source: string): string {
+  let out = ''
+  let gap = false
+  let start = 0
+  for (let at = 0; at < source.length; at++) {
+    const code = source.charCodeAt(at)
+    if (code !== SPACE && code !== TAB && code !== LF) continue
+    if (at > start) out += (gap && out !== '' ? ' ' : '') + source.slice(start, at)
+    gap = true
+    start = at + 1
+  }
+  if (start < source.length) out += (gap && out !== '' ? ' ' : '') + source.slice(start)
+  return out
+}
+
+function sameName(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase()
+}
+
+const SEMANTIC_KEYS = new Set(['abbr', 'time', 'kbd'])
+
+/** C2-A-035: lowercase semantic span keys are distinct from ordinary attribute names. */
+export function keyIdentity(key: string, span: boolean): string {
+  const lower = key.toLowerCase()
+  return span && key === lower && SEMANTIC_KEYS.has(lower) ? `semantic:${lower}` : `ordinary:${lower}`
+}
+
+function keyIndexOf(keyValues: readonly [string, string][], span: boolean): Map<string, number> {
+  const index = new Map<string, number>()
+  keyValues.forEach(([key], at) => {
+    const name = keyIdentity(key, span)
+    if (!index.has(name)) index.set(name, at)
+  })
+  return index
+}
+
+/** C2-I-039, C2-I-042: adds the parts of one block to `attributes`. */
+export function attributeSink(attributes: Attributes, span = false): AttributeSink {
+  const sink: AttributeSink = {
+    id: (name) => {
+      attributes.id = name
+    },
+    className: (name) => {
+      attributes.classes.push(name)
+    },
+    lang: (tag) => {
+      attributes.lang = tag
+    },
+    key: (key, value) => {
+      if (sameName(key, 'id')) return sink.id(value)
+      if (sameName(key, 'class')) {
+        for (const name of value.split(/[ \t]+/)) if (name !== '') attributes.classes.push(name)
+        return
+      }
+      // A later key replaces an earlier one of the same name, at its first place (C2-A-035).
+      const index = attributes.keyIndex ??= keyIndexOf(attributes.keyValues, span)
+      const name = keyIdentity(key, span)
+      const earlier = index.get(name)
+      if (earlier === undefined) {
+        index.set(name, attributes.keyValues.length)
+        attributes.keyValues.push([key, value])
+      } else {
+        attributes.keyValues[earlier]![1] = value
+      }
+    },
+  }
+  return sink
+}
+
+export function emptyAttributes(): Attributes {
+  return { id: null, classes: [], lang: null, keyValues: [] }
+}
+
+/** C2-B-093: adds the glued blocks that start at `pos` to `attributes` and returns the offset behind them. */
+export function readGluedBlocks(src: string, pos: number, end: number, attributes: Attributes): number {
+  const sink = attributeSink(attributes)
+  const memo = emptyMemo()
+  const first = pos
+  while (pos < end && src.charCodeAt(pos) === BRACE_OPEN) {
+    // C2-B-182: the alignment marks of a cell prefix stand before the parts of its first block and are none of them.
+    const marks = pos === first ? cellMarksLength(src, pos) : 0
+    const next = readAttributeBlock(src, pos + marks, end, memo, sink)
+    if (next < 0) {
+      const close = marks > 0 ? src.indexOf('}', pos) : -1
+      if (close < 0 || close >= end) break
+      pos = close + 1
+    } else {
+      pos = next
+    }
+  }
+  return pos
+}
+
+/** C2-B-102: the attribute lines of a block, merged in the order written. `spans` holds a start and an end per line. */
+export function readAttributeLines(src: string, spans: number[] | null): Attributes | null {
+  if (spans === null || spans.length === 0) return null
+  const attributes = emptyAttributes()
+  for (let at = 0; at < spans.length; at += 2) readGluedBlocks(src, spans[at]!, spans[at + 1]!, attributes)
+  return attributes
+}
+
+/** Removes the key `name` from `attributes` and returns its value, or null when it is not there. */
+export function takeKey(attributes: Attributes | null, name: string): string | null {
+  if (attributes === null) return null
+  const at = attributes.keyValues.findIndex((pair) => pair[0] === name)
+  if (at < 0) return null
+  delete attributes.keyIndex
+  return attributes.keyValues.splice(at, 1)[0]![1]
+}

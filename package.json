@@ -23,7 +23,7 @@
     "prettier-plugin"
   ],
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/types/public/index.d.ts",
   "unpkg": "./dist/carve.iife.min.js",
   "jsdelivr": "./dist/carve.iife.min.js",
   "bin": {
@@ -31,16 +31,32 @@
   },
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/types/public/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./node": {
-      "import": "./dist/node.js",
-      "types": "./dist/node.d.ts"
+      "types": "./dist/types/public/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./extensions": {
+      "types": "./dist/types/public/extensions.d.ts",
+      "import": "./dist/extensions.js"
+    },
+    "./import": {
+      "types": "./dist/types/public/formats.d.ts",
+      "import": "./dist/import.js"
+    },
+    "./export": {
+      "types": "./dist/types/public/export.d.ts",
+      "import": "./dist/export.js"
     },
     "./prettier": {
-      "import": "./dist/prettier.js",
-      "types": "./dist/prettier.d.ts"
+      "types": "./dist/types/public/prettier.d.ts",
+      "import": "./dist/prettier.js"
+    },
+    "./upgrade": {
+      "types": "./dist/types/public/upgrade.d.ts",
+      "import": "./dist/upgrade.js"
     },
     "./package.json": "./package.json"
   },
@@ -55,43 +71,74 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsx scripts/generate-package-info.ts && tsc -p upgrade/engine-0.1/tsconfig.json && npm ci --prefix import --ignore-scripts --silent && node cli/build.mjs && node public/build.mjs",
     "build:browser": "node scripts/build-browser.mjs",
-    "drift": "node scripts/published-drift.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "node scripts/refuse-prerelease-publish.mjs",
     "test": "vitest run",
-    "test:browser": "node test/browser-bundle.mjs --selfcheck && node test/browser-bundle.mjs",
-    "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
-    "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
     "test:watch": "vitest",
-    "test:includes": "vitest run test/include-conformance.test.ts",
-    "ledger:render": "UPDATE_RENDER_LEDGER=1 vitest run test/corpus-render-ledger.test.ts",
-    "drift:prune": "PRUNE_PACK_DRIFT=1 vitest run test/conformance-pack.test.ts",
-    "lint": "eslint src/import/markdown/markdown-assessment.ts src/import/markdown/markdown-email-links.ts src/import/markdown/markdown-github-alerts.ts src/import/markdown/markdown-gfm-autolinks.ts src/parse/block/append-only-closer.ts src/parse/inline/backtick-run-index.ts src/parse/inline/substitution-scanner.ts src/parse/block/attachment-fence-closers.ts src/parse/block/scoped-fence-closers.ts src/parse/block/literal-comment-closers.ts src/parse/block/verse-whitespace.ts src/parse/inline/reference-resolution.ts src/import/html/html-import-footnote-stage.ts src/import/html/html-import-table-stage.ts src/import/html/html-import-table-row-groups.ts src/import/html/html-import-report.ts src/source/source-positions.ts src/own-property.ts src/import/html/html-import-dom.ts src/extension/attribute-merge.ts src/parse/inline/inline-resolution.ts src/parse/inline/inline-children.ts src/parse/inline/unresolved-reference.ts src/parse/block/block-children.ts src/extension/attribute-parser.ts src/import/html/html-import-code-language.ts src/label-key.ts src/link-destination.ts src/source-layout.ts src/tab-normalize.ts src/parse/block/paragraph-indent.ts src/parse/block/thematic-break-marker.ts src/parse/block/colon-fences.ts src/extension/math-block.ts src/extension/smart-quotes.ts src/trim-non-nbsp.ts src/parse/inline/sentinel-run.ts src/table/table-spans.ts src/table/table-source-metadata.ts src/import/markdown/import-report-messages.ts src/import/markdown/conversion-diagnostics.ts src/import/markdown/deny-listed-destination.ts src/parse/inline/reference-state.ts src/verbatim-payload.ts src/source-patch.ts src/coalesce-text-runs.ts src/ast/owned-child-fields.ts src/carve-escape.ts src/import/markdown/case-migrate.ts src/ast/structural-index.ts src/import/markdown/carrier-markers.ts src/import/djot/djot-image-child-text.ts src/ast/roundtrip-carriers.ts --max-warnings=0 && node scripts/check-lint.mjs",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json && tsc -p tsconfig.boundaries.json && npm run lint && npm run complexity-check",
-    "complexity-check": "eslint 'src/**/*.ts' --max-warnings=0",
-    "test:package": "node scripts/check-package.mjs"
+    "test:browser": "node test/browser-bundle.mjs --selfcheck && node test/browser-bundle.mjs",
+    "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
+    "check:extension-migration": "tsc -p extensions/tsconfig.json && eslint --config extensions/eslint.config.mjs 'extensions/**/*.ts' 'test/extension-migration/**/*.ts' --max-warnings=0 && vitest run test/extension-migration",
+    "test:stress": "CARVE_STRESS=1 vitest run test/writer.stress.test.ts",
+    "test:proptest": "tsx --test proptest/*.test.ts",
+    "fuzz": "node proptest/fuzz.ts",
+    "test:cli": "vitest run --config cli/vitest.config.ts",
+    "test:lint": "vitest run --config lint/vitest.config.mjs",
+    "test:migrate": "tsx --test migrate/*.test.mts && tsc -p migrate/tsconfig.json",
+    "test:package": "node scripts/check-package.mjs",
+    "test:archive": "node scripts/check-archive-build.mjs",
+    "generate:lint-catalog": "tsx lint/generate-catalog.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p proptest/tsconfig.json && tsc -p upgrade/engine-0.1/tsconfig.json --noEmit && npm run lint",
+    "lint": "npm ci --prefix import --ignore-scripts --silent && eslint 'src/**/*.ts' 'public/**/*.ts' 'cli/**/*.ts' 'test/**/*.ts' 'scripts/**/*.ts' 'lint/**/*.ts' 'migrate/**/*.ts' 'proptest/**/*.ts' 'import/**/*.ts' 'upgrade/**/*.ts' --ignore-pattern 'upgrade/engine-0.1/**' --ignore-pattern 'extensions/**' --ignore-pattern 'test/extension-migration/**' --max-warnings=0",
+    "check-public-types": "tsx scripts/check-public-types.ts",
+    "enumerate": "tsx scripts/enumerate.ts",
+    "enumerate-inline": "tsx scripts/enumerate-inline.ts",
+    "enumerate-tree": "tsx scripts/enumerate-tree.ts",
+    "stress-inline": "tsx scripts/stress-inline.ts",
+    "stress-tree": "tsx scripts/stress-tree.ts",
+    "stress-format": "tsx scripts/stress-format.ts",
+    "fuzz-tree": "tsx scripts/fuzz-tree.ts",
+    "conformance": "tsx scripts/conformance.ts",
+    "bench": "tsx scripts/bench.ts",
+    "writer-gates": "tsx scripts/writer-gates.ts",
+    "mutate": "tsx scripts/mutate.ts",
+    "differential": "tsx scripts/differential.ts",
+    "differential-migrate": "tsx scripts/differential-migrate.ts"
   },
   "devDependencies": {
-    "@djot/djot": "^0.3.2",
     "@types/node": "^22.19.20",
+    "ajv": "^8.20.0",
+    "c8": "^12.0.0",
+    "commonmark": "^0.31.2",
+    "esbuild": "^0.21.5",
     "eslint": "^9.39.5",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "markdown-it": "^15.0.3",
+    "markdown-it-footnote": "^4.0.0",
+    "marked": "^18.2.0",
+    "mdast-util-from-markdown": "^2.1.0",
+    "mdast-util-gfm": "^3.1.0",
     "prettier": "^3.9.6",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.2",
+    "typescript-5-9": "npm:typescript@^5.9.3",
     "typescript-eslint": "^8.70.1",
     "vitest": "^2.1.8",
     "yaml": "^2.9.0"
   },
-  "peerDependencies": {
-    "@djot/djot": "^0.3.2"
-  },
-  "peerDependenciesMeta": {
-    "@djot/djot": {
-      "optional": true
-    }
-  },
   "dependencies": {
+    "@djot/djot": "0.3.2",
+    "micromark": "4.0.3",
+    "micromark-extension-directive": "4.0.0",
+    "micromark-extension-frontmatter": "2.0.0",
+    "micromark-extension-gfm": "3.0.0",
+    "micromark-extension-gfm-autolink-literal": "2.1.0",
+    "micromark-extension-gfm-footnote": "2.1.0",
+    "micromark-extension-gfm-strikethrough": "2.1.0",
+    "micromark-extension-gfm-table": "2.1.2",
+    "micromark-extension-gfm-task-list-item": "2.1.0",
+    "micromark-extension-math": "3.1.0",
     "parse5": "^7.3.0"
   }
 }

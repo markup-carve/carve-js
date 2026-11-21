@@ -1,0 +1,12 @@
+{
+  "kind": "parse-invalid-tree",
+  "detail": "CarveTreeError: /children/0/children/0/children/0/children/0/rowspan: a count contradicts its authored span mark\nCarveTreeError: /children/0/children/0/children/0/children/0/rowspan: a count contradicts its authored span mark\n    at fail (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast-validate.ts:191:9)\n    at file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast-validate.ts:911:11\n    at Array.forEach (<anonymous>)\n    at file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast-validate.ts:897:13\n    at Array.forEach (<anonymous>)\n    at file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast-validate.ts:895:10\n    at Array.forEach (<anonymous>)\n    at checkSpanCounts (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast-validate.ts:893:10)\n    at checkNode (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast-validate.ts:954:25)\n    at file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast-validate.ts:802:55",
+  "seed": 496806393,
+  "runSeed": 1794696020,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "{footer-rows}\n||\n|^|\n|^|",
+  "originalBytes": 46,
+  "minimizedBytes": 24,
+  "clause": "C2-A-093 C2-B-173",
+  "id": "86d508c046b97a94"
+}

@@ -1,258 +1,63 @@
-# Command line
+# Engine commands and flags
 
-
-The package installs a `carve` binary. Rendering is the default action: it
-reads a file or stdin and writes the rendered output to stdout. HTML is the
-default; pass a format flag for Markdown, plain text, or ANSI:
-
-```bash
-carve README.crv > README.html   # HTML (default)
-carve --markdown README.crv      # Markdown
-carve --plain README.crv         # plain text
-carve --ansi README.crv          # ANSI-colored terminal text
-carve --carve README.crv         # canonical Carve source (formatter)
-echo '# Hello' | carve           # render from stdin
-```
-
-`--html` / `--markdown` (`--md`) / `--plain` (`--plain-text`) / `--ansi` /
-`--carve` select the format (the explicit `render` subcommand also works:
-`carve render --ansi`). `--roundtrip` adds the preservation
-metadata an export needs to be imported back without losing a distinction the
-serialization has no spelling for - see
-[Roundtrip export](rendering.md#roundtrip-export). On Markdown output,
-`--roundtrip` brackets each flattened container with comments holding its Carve
-opener and closer, so `carve migrate --from markdown` returns the container. See
-[Carrying a container through a Markdown round trip](rendering.md#carrying-a-container-through-a-markdown-round-trip).
-For anything you did not author, add `--safe` and optionally `--profile` - see
-[Untrusted input](#untrusted-input). Three more subcommands round out the
-tooling:
-
-```bash
-carve fmt  file.crv        # print canonically formatted Carve to stdout
-carve fmt -w   file.crv    # format in place
-carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate)
-carve fmt --diff file.crv  # print a unified source diff
-carve fmt --stamp file.crv # also append a provenance marker (spec version + engine)
-carve fmt --migrate -w file.crv # also respell case-only reference misses
-carve fmt --align-tables -w file.crv # align table pipes by display width
-carve fmt --align-tables --check file.crv # check the aligned form
-carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
-carve lint file.crv        # validate: collisions + silent-failure problems
-carve lint --caption-hints file.crv # also check likely missed captions
-carve diff a.crv b.crv     # semantic changes, ignoring source reflow
-carve merge base.crv ours.crv theirs.crv # merge independent edits
-carve portability file.crv # report where the document reads differently in Djot
-carve trace file.crv       # print the block decision trace as JSON lines
-carve --help
-carve --version            # or -V: prints `carve-js <version>`
-```
-
-`carve fmt` rewrites Carve into a canonical form: it strips trailing whitespace,
-collapses blank-line runs, normalizes list markers (`-`), heading hashes, fence
-lengths, and attribute spacing. It is conservative (no reflow, no reference/inline
-link conversion, no list renumbering) and semantic-preserving - the rendered HTML
-is byte-identical before and after - so it is safe to run on a whole tree. The
-same canonical serializer is available programmatically as `carveToCarve(src)`.
-
-On a mismatch, `carve fmt --check` prints the file and first changed line with
-the old and new text. `carve fmt --diff` writes a unified source diff. Both
-return status 1 when formatting would change the input and leave files alone.
-
-`carve fmt --stamp` additionally appends a *provenance marker* - a comment at the
-end of the document recording the Carve spec version it was processed under and
-the engine that wrote it:
-
-```
-%% carve-version: 0.1; generated-by: carve-js 0.1.0
-```
-
-It is deterministic (no timestamp) and replace-in-place, so re-stamping is
-idempotent; it renders nothing and a plain `carve fmt` preserves it. Use
-`--stamp-block` for the multi-line `%%%` block form. The same logic is available
-as `stampCarve(formatted, 'carve-js 0.1.0')`.
-
-The marker is machine-readable, so flagging documents that predate a breaking
-spec change does not have to be done by eye:
-
-```bash
-carve --stamp-info doc.crv    # report the version and the writer
-carve --stamp-check doc.crv   # exit 1 when the document predates this spec version
-```
-
-`--stamp-check` works as a CI gate over a directory of stored documents. An
-**unstamped** document counts as needing review: its provenance is unknown, and
-assuming it is current is the unsafe direction. Programmatically, `readStamp(src)`
-returns `{version, generatedBy}` or `null`, and `needsReview(src)` answers the
-same question as the flag.
-
-Both marker forms are read, and a marker written by another implementation reads
-the same - that is the point of recording it. What to do with the answer is the
-[versioning contract](https://markup-carve.github.io/carve/versioning): only
-`[behavior]` changelog entries between the stamped version and yours can require
-a document change.
-
-`carve diff` compares the normative PART 12 trees rather than source lines, so
-rewrapping and re-indenting are not changes while an edited destination,
-attribute, node, or node order is. `--json` returns stable paths and change
-kinds for applications.
-
-`carve merge` performs a conservative three-way merge over the same exchange
-tree. Give it the common base followed by the two revisions; independent edits
-are written as canonical Carve source. Ambiguous edits exit 1 and name their
-JSON Pointer paths instead of choosing a winner. `--json` emits either the
-merged AST or the complete conflict list. Concurrent insertion, deletion,
-reordering, and a move on one side plus an edit on the other are reconciled by
-node identity and order constraints; contradictory orders and delete-vs-edit
-remain conflicts. Duplicate siblings are occurrence-matched, with a bounded
-linear fallback for very large ambiguous lists.
-
-Programmatically, `mergeAst(base, ours, theirs, { resolve })` lets an application
-resolve selected conflicts as `base`, `ours`, `theirs`, or a supplied value.
-`createAstPatch(before, after)` and `applyAstPatch(ast, operations)` provide a
-serializable, position-independent patch format for storing or transporting the
-same semantic edits. Merged and patched trees omit positions and serialize to
-canonical source: the PART 12 AST does not contain the source-layout sidecar, so
-claiming whitespace-preserving merge from those three trees would be false.
-
-`carve lint` is a validator for problems that *parse* but render as the wrong
-thing (so nothing throws): broken `</#id>` cross-references, duplicate heading
-ids, unresolved reference links, missing/duplicate/unused footnotes, a trailing
-`{…}` on a heading (literal text, not an attribute block), a legacy
-`` ```raw FORMAT `` fence (use `` ```=FORMAT ``), a line that opens like a block
-(`:::`, `{#`) but parsed as plain text, and a document declaring a Carve version
-this engine does not implement. It exits non-zero when it reports anything, so it
-works as a CI gate. The same checks surface live in editors
-through [carve-lsp](https://github.com/markup-carve/carve-lsp).
-
-The authoring rules also flag malformed table rows and separators, lists folded
-into paragraphs, unclosed emphasis, gaps before link destinations, Markdown
-underscores used for italic, heading-level skips, bare HTML tags, Markdown
-definitions, and GitHub alert markers. `--caption-hints` adds a hint for a
-caption-looking paragraph next to a table or image. That hint is off by
-default because ordinary prose can use the same words.
-
-Unused link reference definitions and empty inline link destinations are
-reported by default. Add `--rule duplicate-reference-url`,
-`--rule non-descriptive-link-text`, or `--rule emphasis-as-heading` to enable
-those optional rules. Repeat `--rule` to select more than one. The API uses
-`lintCarve(source, { enabledRules: ['non-descriptive-link-text'] })`.
-
-A Carve line comment such as `%% carve-lint-disable-next-line heading-level-skip`
-suppresses that rule on the next physical line. Use `carve-lint-disable-line`
-for the same line, or `carve-lint-disable` and `carve-lint-enable` for document
-scopes. Commas or ASCII spaces separate rule ids; omitting ids selects every
-rule. The deprecated input alias `a11y/heading-jump` selects
-`heading-level-skip`, which is always the reported id. Directives in code,
-raw content, delimited comments, and fenced comments have no effect.
-
-`--ignore FILE` omits findings for that exact file id. API callers supply
-`ignoredFiles` and `fileId`. Include ids are relative to the include root.
-Ignoring a file leaves its included files' findings visible unless their own
-ids are ignored. Comment scopes stay within each source file.
-
-`carve lint --include-root DIR` also lints what a document pulls in through
-`{{ ... }}`, under the same containment and limits as `carve render`. Every rule
-runs on each Carve-mode include, and a `{table}` csv or tsv code include gets the
-`delimited-table-*` rules. A finding in an included file names that file relative
-to the root and the directive that reached it:
-
-```txt
-data/plans.csv:3:1 delimited-table-malformed — This marked CSV/TSV record has malformed quoting, so the include remains a code block. (included from doc.crv:2:1)
-```
-
-A failed include (missing file, cycle, invalid region) is reported at its
-directive under its `include-*` rule. Without `--include-root`, lint never reads
-an include target; the root is not inferred from the input path. The API takes
-the same thing as `lintCarve(source, { includes: { resolve, sourcePath } })`.
-
-`carve portability` answers a different question: not "is this right in Carve"
-but "does it mean the same thing in Djot" - for a document that has to survive
-both readers. It renders with both engines and reports the first place they
-disagree, so it is a measurement rather than a heuristic; a first attempt that
-*reasoned* about the same question as a lint rule was withdrawn for
-unsoundness (carve-js#546). Carve's deliberate departures (`/italic/`, `=mark=`,
-quoted link titles) are divergences and are reported as such. It needs
-djot.js, which this package does not depend on - `npm install @djot/djot`
-alongside. See [Portability](migration.md#portability).
-
-`carve trace` prints the decision trace of the spec repository's
-[`docs/decision-trace.md`](https://github.com/markup-carve/carve/blob/main/docs/decision-trace.md):
-a header line, then one JSON record per source line naming the step that
-decided its owner (`S1` payload, `S2` an accepted `+`, `S4` lazy, `S5` apply),
-the owner path (`doc/item:1/quote:2`), the governing clause and the line's
-form. The records come from `ownLines`, the ownership walk `parse` runs, so the
-normal parse does no trace work. In a checkout of the spec repository next to
-this one (or with `CARVE_JS_DIR` set), after `npm run build`:
-
-```bash
-node scripts/trace-diff.mjs input.crv --engine js
-```
-
-prints the first line where carve-js decides differently from the spec model.
-A decision carve-js takes in a block reader after the walk, such as refusing a
-`+` whose follower cannot attach, shows up as a difference at that line. The
-same records are available as `decisionTrace(source)` and
-`decisionTraceJsonLines(source)`.
-
-`carve-version-unsupported` reads a frontmatter `carve-version:` key - the
-author-facing declaration of which Carve version a document targets - and warns
-when it is newer than this engine implements, since constructs added after that
-version will not render as intended. Declaring one is optional. A document with
-no frontmatter key falls back to the trailing `%% carve-version:` provenance
-marker, so anything `carve fmt --stamp` has touched is covered too; when both are
-present the author's declaration wins.
-
-
-## Exact-case reference migration
-
-Exact-case lookup changes heading cross-references, numbered caption and equation
-references, and collapsed references that fall back to heading text.
-Link-definition labels, footnote labels and include fragment selectors were
-already case-sensitive in the previous published engine. Whitespace normalization, NFC and default heading slug derivation
-are unchanged. Case-distinct ids identify separate targets.
-
-With the new engine, run `carve lint` before deploying the rendered output.
-`carve fmt --migrate`
-repairs unambiguous case-only cross-reference and link or image label misses,
-including label mistakes that were already unresolved before this release.
-Review the result: changing a collapsed label also changes its visible text or
-image alternative text. Ambiguous matches and labels carrying inline markup
-need manual review. Include selectors, glossary references and external
-fragment links are outside this repair. Glossary ids now preserve case, so
-update links to those ids separately. Ordinary `fmt` does not apply this repair.
-
-The library rewrite is available as `migrateCaseOnlyReferences(src)`. A caller that renders
-with `lowercaseHeadingIds` or `asciiHeadingIds` passes the same options
-(`migrateCaseOnlyReferences(src, { lowercaseHeadingIds: true })`), so a reference
-that already resolves against those ids is left alone.
-
-```carve
-# Getting Started
-
-See </#getting-started> and [getting started][].
-```
-
-becomes
-
-```carve
-# Getting Started
-
-See </#Getting-Started> and [Getting Started][].
-```
-
----
-
-[Back to the README](https://github.com/markup-carve/carve-js/blob/main/README.md)
-
-## Aligned table formatting
-
-Use `carve fmt --align-tables -w README.crv` to align table pipes by Unicode display width.
-
-## Directory migration
+`spec/0.2/tooling.md` specifies the commands every engine offers ([engine notes](engine.md#command-line)). The `carve` program of this package adds the commands and flags below, which the 0.1 command line had. They are engine features: the specification leaves them to each engine (C2-T-003), and no other engine has to offer them.
 
 ```sh
-npx carve migrate --from markdown --directory docs --output docs-carve --check-loss
+carve flatten book.crv > book-all.crv
+carve fix notes.md.crv > notes.crv
+carve fix --write docs/*.crv
+carve lint --fix --write --json docs/*.crv
+carve upgrade --migrate --write legacy.crv
+carve render -o page.html page.crv
+carve lint --strict --ignore vendor/third-party.crv book.crv
 ```
 
-The command copies assets and writes `docs-carve/migration-report.json` with
-files that need review.
+## `carve flatten`
+
+`carve flatten [FILE...]` writes each file as one Carve document with every include expanded in place, through the Carve writer. `fmt` keeps an include as its directive (C2-N-005); `flatten` is the command that replaces it with the included blocks, for a host that has no file system behind it. The library call `flatten` does the same on a parsed tree ([API](api.md#includes)).
+
+Includes resolve as in `render`: below the directory of the entry file, or below `--include-root DIR`. Standard input expands only with `--include-root`. Frontmatter of an included file is dropped, since it renders nothing.
+
+A file fails with status 1 and the run goes on with the next file when:
+
+- an include did not expand: its entries are written on standard error and the category is `include-unresolved`;
+- the flattened document would render differently from the expanded one, with the category `flatten-changed`. Footnote, link reference and abbreviation keys are looked up per file (C2-N-054, C2-N-055), so two included files that each define `[^n]` give two notes, and one flattened file would give one;
+- the writer cannot spell the tree: `writer-refused`.
+
+## `carve fix` and `carve lint --fix`
+
+`carve fix` is `carve lint --fix`, with the same flags. It rewrites the Markdown and Djot habits that Carve 0.2 reads as literal text, each to the replacement that the message of its lint rule names:
+
+| Rule | Before | After |
+| --- | --- | --- |
+| `markdown-strong-double-star` | `**b**` | `*b*` |
+| `markdown-strikethrough-double-tilde` | `~~s~~` | `{~s~}` |
+| `djot-emphasis-underscore` | `_i_` | `/i/` |
+| `djot-intraword-underscore` | `snake_case_name` | `snake{/case/}name` |
+| `djot-subscript-tilde` | `H~2~O` | `H{,2,}O` |
+| `djot-superscript-caret` | `x^2^` | `x{^2^}` |
+| `deprecated-bare-strike` | `~s~` | `{~s~}` |
+| `deprecated-bare-highlight` | `=h=` | `{=h=}` |
+| `djot-plus-bullet` | `+ item` | `- item` |
+| `heading-closing-hashes` | `# Title ##` | `# Title` |
+| `thematic-break-spelling` | `---` | `***` |
+
+Under `--fix` these rules are on unless `--rules` turns one off; without `--fix` the `djot-` rules stay off by default (C2-T-031). A rule whose message offers two replacements, such as `deprecated-bare-underline` (braced underline or the slash pair), has no fix.
+
+A fix is applied only when it holds:
+
+- Where two rules report one range with different replacements, the range is left as written. `~t~` is Djot subscript and also the 0.1 strike, so `carve fix --rules '{"djot-subscript-tilde":"off"}'` picks the strike and `'{"deprecated-bare-strike":"off"}'` the subscript.
+- The fixed source is parsed once, and a fix whose node does not stand where the finding started is dropped. A `+ item` line directly below paragraph text becomes no list item with `-` either, so it stays.
+- Fixes repeat until a pass changes nothing, so a habit nested in another is fixed too.
+
+Without `--write`, the fixed source goes to standard output, and `FILE: fixed RULE COUNT, ...` and the entries that remain go to standard error. With `--write` (`-w`), each changed file is replaced and the remaining entries are the product, as lines or with `--json` as a report. The status is that of `lint` on the fixed source. `--write` without `--fix`, and `--json` without `--write`, are refused with `usage`.
+
+## `carve upgrade --migrate`
+
+`--migrate` is the `fmt --migrate` of 0.1. Before the upgrade reads a 0.1 file, a cross-reference `</#id>` or a reference label that misses its target only by case is respelled to that target, when exactly one target matches it. Each respelled line gets a `case-reference` record of class `rewrite`. A reference with several candidates is left for `lint`.
+
+## Flags on the specified commands
+
+- `-o FILE`, `--output FILE` on `render`, `fmt` and `import`: the product of the run goes to `FILE` instead of standard output. What the files before a failure of status 2 produced is written too. `fmt` refuses it with `--write`, `--check` or `--diff`, and every command refuses it when a report names the same path.
+- `--strict` on `render` and `lint`: a file that wrote any entry ends with status 1, a hint included. `render --strict` still writes the HTML; `--strict-losses` is the flag that withholds it.
+- `--ignore FILE-ID` on `lint`, repeatable: the entries of that file are dropped. An included file is named by its id, its path from the include root; the entry file by its name as given.

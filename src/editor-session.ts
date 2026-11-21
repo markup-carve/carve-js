@@ -1,6 +1,29 @@
-import type { AstJsonBlock, AstJsonDocument } from './ast-json.js'
-import type { ParseOptions } from './parse.js'
-import { astNodePaths, nodeIdentityForPaths, type NodeIdentitySidecar } from './ast-sidecars.js'
+/* eslint-disable complexity, sonarjs/cognitive-complexity -- preserve the 0.1 editor session's mapping and atomic update behavior */
+import type { DocumentNode } from './ast.ts'
+import type { ParseOptions } from './options.ts'
+import { parse } from './api.ts'
+import { utf8Length } from './positions.ts'
+
+type AstJsonDocument = DocumentNode
+type AstJsonBlock = DocumentNode['children'][number]
+export interface NodeIdentitySidecar { version: 1; session: string; nodes: { id: string; path: string }[] }
+const astNodePaths = (ast: DocumentNode): string[] => {
+  const paths: string[] = []
+  const visit = (value: unknown, path: string): void => {
+    if (!value || typeof value !== 'object') return
+    if ('type' in value && typeof value.type === 'string') paths.push(path)
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'pos' || key === 'segments') continue
+      if (Array.isArray(child)) child.forEach((item, index) => visit(item, `${path}/${key}/${index}`))
+      else if (child && typeof child === 'object') visit(child, `${path}/${key}`)
+    }
+  }
+  visit(ast, '')
+  return paths
+}
+const nodeIdentityForPaths = (paths: readonly string[], session: string, ids: ReadonlyMap<string, string>): NodeIdentitySidecar => ({
+  version: 1, session, nodes: paths.map(path => ({ id: ids.get(path)!, path })),
+})
 
 export interface EditorRange { start: number; end: number }
 export interface EditorToken extends EditorRange {
@@ -30,15 +53,22 @@ export class EditorChangeError extends RangeError {
 
 type Positioned = { type?: unknown; attrs?: unknown; pos?: { startOffset?: unknown; endOffset?: unknown } }
 
-function codepointToUtf16(source: string): number[] {
-  const result = [0]
-  let utf16 = 0
-  for (const point of source) { utf16 += point.length; result.push(utf16) }
+function byteToUtf16(source: string): Uint32Array {
+  const result = new Uint32Array(utf8Length(source) + 1)
+  let byte = 0
+  for (let at = 0; at < source.length;) {
+    const point = String.fromCodePoint(source.codePointAt(at)!)
+    const length = utf8Length(point)
+    result.fill(at, byte, byte + length)
+    byte += length
+    at += point.length
+  }
+  result[byte] = source.length
   return result
 }
 
 function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
-  const offsets = codepointToUtf16(source)
+  const offsets = byteToUtf16(source)
   const lineStarts = new Int32Array(source.length + 1)
   let lineStart = 0
   for (let i = 0; i < source.length; i++) {
@@ -54,7 +84,8 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
     const start = node.pos?.startOffset
     const end = node.pos?.endOffset
     if (typeof start === 'number' && typeof end === 'number' && offsets[start] !== undefined && offsets[end] !== undefined) {
-      result.push({ path, start: offsets[start], end: offsets[end], ...(typeof node.type === 'string' ? { type: node.type } : {}), tokens: [] })
+      result.push({ path, start: offsets[start], end: offsets[end],
+        ...(typeof node.type === 'string' ? { type: node.type } : {}), tokens: [] })
       if (node.attrs && typeof node.attrs === 'object') hasAttrs.add(path)
     }
     if (Array.isArray(value)) value.forEach((child, index) => walk(child, `${path}/${index}`))
@@ -104,7 +135,9 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
         token('fence-close', node.start + last, node.end)
       }
     } else if (node.type === 'table_row') {
-      for (let index = 0; index < authored.length; index++) if (authored[index] === '|') token('table-marker', node.start + index, node.start + index + 1)
+      for (let index = 0; index < authored.length; index++) {
+        if (authored[index] === '|') token('table-marker', node.start + index, node.start + index + 1)
+      }
     }
     if (hasAttrs.has(node.path)) {
       let end = node.start
@@ -129,11 +162,14 @@ function scalarBoundary(source: string, offset: number): boolean {
 function validateChanges(source: string, changes: readonly EditorChange[]): void {
   let previousEnd = 0
   changes.forEach((change, index) => {
-    if (!Number.isInteger(change.from) || !Number.isInteger(change.to) || change.from < 0 || change.to < change.from || change.to > source.length) {
+    if (!Number.isInteger(change.from) || !Number.isInteger(change.to) || change.from < 0 || change.to < change.from ||
+      change.to > source.length) {
       throw new EditorChangeError(`change ${index} has an invalid range`)
     }
     if (index > 0 && change.from < previousEnd) throw new EditorChangeError(`change ${index} overlaps or is out of order`)
-    if (!scalarBoundary(source, change.from) || !scalarBoundary(source, change.to)) throw new EditorChangeError(`change ${index} splits a Unicode scalar`)
+    if (!scalarBoundary(source, change.from) || !scalarBoundary(source, change.to)) {
+      throw new EditorChangeError(`change ${index} splits a Unicode scalar`)
+    }
     previousEnd = change.to
   })
 }
@@ -145,7 +181,8 @@ function nodeSignatures(ast: AstJsonDocument, nodePaths: readonly string[]): Map
     if (!value || typeof value !== 'object') return value
     const reduced = Array.isArray(value)
       ? value.map((child, index) => visit(child, `${path}/${index}`))
-      : Object.fromEntries(Object.entries(value).map(([key, child]) => [key, visit(child, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`)]))
+      : Object.fromEntries(Object.entries(value).map(([key, child]) =>
+        [key, visit(child, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`)]))
     if (!paths.has(path)) return reduced
     signatures.set(path, JSON.stringify(reduced))
     return { type: (value as { type: string }).type }
@@ -173,7 +210,8 @@ function reusableParagraphs(source: string, ast: AstJsonDocument): boolean {
   return /^[\p{L}\p{N}\p{M} .,!?\n]*$/u.test(source) && ast.children.length > 0 && ast.children.every(block =>
     block.type === 'paragraph' && !block.attrs && block.pos?.startColumn === 1 && block.pos.startLine === block.pos.endLine &&
     typeof block.pos.startOffset === 'number' && typeof block.pos.endOffset === 'number' &&
-    block.children.every(inline => inline.type === 'text' && typeof inline.pos?.startOffset === 'number' && typeof inline.pos?.endOffset === 'number'))
+    block.children.every(inline => inline.type === 'text' && typeof inline.pos?.startOffset === 'number' &&
+      typeof inline.pos?.endOffset === 'number'))
 }
 
 function shiftParagraph(block: AstJsonBlock, offset: number, lines: number): void {
@@ -191,7 +229,7 @@ function freezeAst(ast: AstJsonDocument): void {
   while (pending.length) {
     const value = pending.pop()!
     if (Object.isFrozen(value)) continue
-    for (const child of Object.values(value)) if (child && typeof child === 'object') pending.push(child)
+    for (const child of Object.values(value) as unknown[]) if (child && typeof child === 'object') pending.push(child)
     Object.freeze(value)
   }
 }
@@ -205,25 +243,34 @@ function reparseParagraph(
   if (changes.length !== 1) return undefined
   const change = changes[0]!
   if (!/^[\p{L}\p{N}\p{M} .,!?]*$/u.test(change.insert) || change.insert.includes('\n')) return undefined
-  const offsets = codepointToUtf16(previous.source)
+  const offsets = byteToUtf16(previous.source)
   for (const [index, block] of previous.ast.children.entries()) {
-    if (block.type !== 'paragraph' || !block.pos || block.pos.startOffset === undefined || block.pos.endOffset === undefined) return undefined
+    if (block.type !== 'paragraph' || !block.pos || block.pos.startOffset === undefined ||
+      block.pos.endOffset === undefined) return undefined
     const start = offsets[block.pos.startOffset]!, end = offsets[block.pos.endOffset]!
     if (change.from < start || change.to > end) continue
     const fragment = previous.source.slice(start, change.from) + change.insert + previous.source.slice(change.to, end)
     if (!fragment || fragment.includes('\n') || fragment.startsWith(' ') || fragment.endsWith(' ')) return undefined
     const replacement = parseDocument(fragment)
     if (replacement.children.length !== 1 || !reusableParagraphs(fragment, replacement)) return undefined
-    const delta = [...fragment].length - (block.pos.endOffset - block.pos.startOffset)
+    const delta = utf8Length(fragment) - (block.pos.endOffset - block.pos.startOffset)
     const children = [...previous.ast.children]
     const edited = replacement.children[0]!
     shiftParagraph(edited, block.pos.startOffset, block.pos.startLine - 1)
     children[index] = edited
     for (let following = index + 1; following < children.length; following++) {
-      children[following] = structuredClone(children[following]!)
-      shiftParagraph(children[following]!, delta, 0)
+      const paragraph = children[following]!
+      if (paragraph.type !== 'paragraph') return undefined
+      children[following] = {
+        ...paragraph,
+        pos: { ...paragraph.pos!, startOffset: paragraph.pos!.startOffset + delta, endOffset: paragraph.pos!.endOffset + delta },
+        children: paragraph.children.map(inline => ({
+          ...inline,
+          pos: { ...inline.pos!, startOffset: inline.pos!.startOffset + delta, endOffset: inline.pos!.endOffset + delta },
+        })),
+      }
     }
-    return { ...previous.ast, children, srcByteLength: new TextEncoder().encode(source).length }
+    return { ...previous.ast, children, srcByteLength: utf8Length(source) }
   }
   return undefined
 }
@@ -232,7 +279,7 @@ function reparseParagraph(
  * Create a source-authoritative editing session. Updates use UTF-16 offsets,
  * apply atomically, and always produce the same AST/map as a fresh parse.
  */
-export function createEditorSession(
+export function createEditorSessionInternal(
   initialSource: string,
   parseDocument: (source: string, options?: ParseOptions) => AstJsonDocument,
   options: ParseOptions = {},
@@ -247,7 +294,7 @@ export function createEditorSession(
       parsedSourceBytes += new TextEncoder().encode(text).length
       return parseDocument(text, { ...options, positions: true })
     }
-    const incremental = allowParagraphReuse && previous && !options.extensions?.length && !options.onUnclosedContainer
+    const incremental = allowParagraphReuse && previous && !options.extensions?.length && !options.includes
       ? reparseParagraph(source, previous, changes, parse) : undefined
     const ast = incremental ?? parse(source)
     const reusedPreviousTree = incremental !== undefined && (changes.length === 0 || ast.children.length > 1)
@@ -290,7 +337,7 @@ export function createEditorSession(
     return Object.freeze({ revision, source, ast, nodes, identity, parsedSourceBytes, reusedPreviousTree })
   }
   let current = build(initialSource, 0)
-  let signatures = nodeSignatures(current.ast, pathsByAst.get(current.ast)!)
+  let signatures: Map<string, string> | null = nodeSignatures(current.ast, pathsByAst.get(current.ast)!)
   return {
     snapshot: () => current,
     update(changes) {
@@ -303,10 +350,30 @@ export function createEditorSession(
       }
       parts.push(current.source.slice(cursor))
       const source = parts.join('')
+      if (source === current.source) {
+        const unchanged = Object.freeze({ ...current, revision: current.revision + 1, parsedSourceBytes: 0,
+          reusedPreviousTree: true, changedPaths: Object.freeze([] as string[]) })
+        current = unchanged
+        return unchanged
+      }
       const next = build(source, current.revision + 1, current, changes)
-      const nextSignatures = nodeSignatures(next.ast, pathsByAst.get(next.ast)!)
-      const update = Object.freeze({ ...next, changedPaths: Object.freeze(changedPaths(signatures, nextSignatures)) })
-      signatures = nextSignatures
+      let paths: string[]
+      if (next.reusedPreviousTree && changes.length === 1) {
+        const at = changes[0]!.from
+        const edited = current.nodes.find(node => /^\/children\/\d+$/u.test(node.path) && node.start <= at && at <= node.end)
+        const index = edited === undefined ? -1 : Number(edited.path.slice('/children/'.length))
+        const delta = source.length - current.source.length
+        paths = index < 0 ? [''] : ['', ...pathsByAst.get(next.ast)!.filter(path => {
+          const match = /^\/children\/(\d+)(?:\/|$)/u.exec(path)
+          return match !== null && (Number(match[1]) === index || (delta !== 0 && Number(match[1]) > index))
+        })]
+        signatures = null
+      } else {
+        const nextSignatures = nodeSignatures(next.ast, pathsByAst.get(next.ast)!)
+        paths = changedPaths(signatures ?? nodeSignatures(current.ast, pathsByAst.get(current.ast)!), nextSignatures)
+        signatures = nextSignatures
+      }
+      const update = Object.freeze({ ...next, changedPaths: Object.freeze(paths.sort()) })
       current = next
       return update
     },
@@ -314,3 +381,8 @@ export function createEditorSession(
 }
 
 let sessionCounter = 0
+
+/** Create a source-authoritative editor session backed by the 0.2 parser. */
+export function createEditorSession(source: string, options: ParseOptions = {}): EditorSession {
+  return createEditorSessionInternal(source, (text, parseOptions) => parse(text, parseOptions), options, true)
+}

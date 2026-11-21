@@ -1,0 +1,1025 @@
+// The block elements of spec/0.2/html.md, the sections of C2-H-026 and the footnote section.
+import {
+  type AdmonitionNode, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
+  type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
+  forEachSlot, isBreak,
+  type FigureGroupNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
+  type ListItemNode,
+  type ImageNode, type ListNode, type Marker, type Node, type NodeOfType, type ParagraphNode, type RawBlockNode, type TableBodyNode,
+  type TableCellNode, type TableColumnNode, type TableFootNode, type TableHeadNode, type TableNode, type TableRowNode,
+} from './ast.ts'
+import { blockText, plainText } from './ast-text.ts'
+import { type Findings } from './diagnostics.ts'
+import {
+  attributes, carriesAttributes, escapeAttribute, escapeCarrierText, escapeText, isDenied, loss, type Pair, type Render, type TagParts,
+} from './html-attributes.ts'
+import { inlineHtml, isEmptyDroppedLink, isSkippedBreak, mergedAttrs } from './html-inline.ts'
+import { CarveOptionError, type Settings } from './options.ts'
+import { attributesAct, includeSource } from './include.ts'
+import { includeMessage } from './expand.ts'
+import { PROFILES } from './render-tables.ts'
+import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
+import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
+import { NODE_TABLE } from './ast-validate.ts'
+import { writeTree } from './write.ts'
+import { type ExtensionRenderHost } from './extensions/types.ts'
+import { append } from './append.ts'
+import { percentageText } from './decimal.ts'
+
+/** A writer per block type, each of which reads a node of its own type. */
+type BlockWriters = { [T in keyof NodeOfType]?: (r: Render, node: NodeOfType[T], level: number) => void }
+
+/** A node with children. */
+type Parent = Extract<Node, { children: unknown[] }>
+
+type TableGroup = TableHeadNode | TableBodyNode | TableFootNode
+
+const MAX_HEADING_ELEMENT = 6
+const INVISIBLE = ['comment', 'frontmatter', ...DEFINITION_TYPES]
+const ALPHA_STYLES = ['a', 'A', 'i', 'I']
+const NO_CLASSES: readonly string[] = []
+const GROUP_CLASSES: readonly string[] = ['carve-figure-group']
+const PANEL_CLASSES: readonly string[] = ['carve-figure-panel']
+
+const CACHED_LEVELS = 64
+// C2-H-005: a line break and two spaces per level, for the levels a document usually has.
+const LINE_STARTS: readonly string[] = Array.from({ length: CACHED_LEVELS }, (_, level) => `\n${'  '.repeat(level)}`)
+
+/** Adds one line to the output, indented by `level`. */
+function line(r: Render, level: number, text: string): void {
+  r.out += (level < CACHED_LEVELS ? LINE_STARTS[level]! : `\n${'  '.repeat(level)}`) + text
+  r.count++
+}
+
+/** Adds one line as it stands, with no indent. */
+function rawLine(r: Render, text: string): void {
+  r.out += `\n${text}`
+  r.count++
+}
+
+const NO_PARTS: TagParts = {}
+
+/** True for a node whose element takes nothing from it: no attribute, no language and no source line. */
+function isPlain(r: Render, node: Node): boolean {
+  return !carriesAttributes(node) && !r.settings.sourceLines
+}
+
+function tag(r: Render, node: Node | null, parts: TagParts = NO_PARTS): string {
+  // Most blocks carry no attribute and add none.
+  if (parts === NO_PARTS && !r.settings.sourceLines && (node === null || !carriesAttributes(node))) return ''
+  return attributes(r, node, { ...parts, block: true })
+}
+
+/** C2-H-019: one comment or more and the line breaks between them; breaks alone are no comment. */
+function onlyComments(nodes: readonly Node[]): boolean {
+  let comment = false
+  for (const child of nodes) {
+    if (child.type === 'comment') comment = true
+    else if (child.type !== 'soft_break' && child.type !== 'hard_break') return false
+  }
+  return comment
+}
+
+/** C2-N-075: the blocks of `nodes` with each expanded include read as its children, recursively. */
+function expandedBlocks(nodes: readonly Node[]): readonly Node[] {
+  for (const node of nodes) if (node.type === 'include' && node.children !== undefined) return nodes.flatMap(expandedNode)
+  return nodes
+}
+
+function expandedNode(node: Node): readonly Node[] {
+  return node.type === 'include' && node.children !== undefined ? expandedBlocks(node.children) : [node]
+}
+
+/** The blocks of `list` that write something, an expanded include read as its children: `list` itself where all of them do. */
+function visibleBlocks(r: Render, list: readonly Node[]): readonly Node[] {
+  const visible = (node: Node): boolean => isVisible(r, node)
+  let all = true
+  for (const node of list) {
+    if (node.type === 'include' && node.children !== undefined) return expandedBlocks(list).filter(visible)
+    all &&= visible(node)
+  }
+  return all ? list : list.filter(visible)
+}
+
+/** A block that writes something. C2-H-019: a paragraph that holds only comments writes nothing. */
+function isVisible(r: Render, node: Node): boolean {
+  if (INVISIBLE.includes(node.type)) return false
+  if (node.type === 'paragraph' && isSilenced(r, node)) return false
+  return node.type !== 'paragraph' || !onlyComments(node.children)
+}
+
+/**
+ * C2-H-019: a paragraph whose content writes nothing once the profile has degraded it (C2-H-165), such as one of
+ * refused links with no text. A break counts as written unless a comment line takes it (C2-H-069). Its denied
+ * destinations are reported the first time it is met.
+ */
+function isSilenced(r: Render, node: ParagraphNode): boolean {
+  if (r.silenced.has(node)) return true
+  if (PROFILES.get(r.settings.profile) === undefined || node.caption !== undefined) return false
+  const children = node.children
+  let silent = children.length === 0
+  for (let at = 0; at < children.length; at++) {
+    const child = children[at]!
+    // A paragraph of comments alone is left to `onlyComments`.
+    if (child.type === 'link' && isEmptyDroppedLink(r, child)) silent = true
+    else if (child.type !== 'comment' && (!isBreak(child) || !isSkippedBreak(children, at, false))) return false
+  }
+  if (!silent) return false
+  r.silenced.add(node)
+  for (const child of node.children) if (child.type === 'link') isDenied(r, child.href ?? '', child)
+  return true
+}
+
+/** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
+function isBareImage(node: ParagraphNode): boolean {
+  if (node.role !== 'image' || node.dir !== undefined) return false
+  // A block image that a profile degraded holds its text and keeps its `<p>` (C2-H-165).
+  for (const child of node.children) if (child.type === 'image') return child.key === undefined || child.src !== undefined
+  return false
+}
+
+/** A paragraph that is written as `<p>`. A captioned one is a figure (C2-H-062), so no one-line rule takes it. */
+function isTextParagraph(node: Node | undefined): node is ParagraphNode {
+  return node !== undefined && node.type === 'paragraph' && !isBareImage(node) && node.caption === undefined
+}
+
+/** Writes `node` through the writer of its type, where it has one. */
+function writeBlock<T extends keyof NodeOfType>(r: Render, type: T, node: NodeOfType[T], level: number): void {
+  const start = r.longDescriptions.length
+  if (isCaptionedBlock(node)) captioned(r, node, level, NO_CLASSES)
+  else BLOCKS[type]?.(r, node, level)
+  const descriptions = r.longDescriptions.splice(start)
+  for (const blocks of descriptions) writeBlocks(r, blocks, level)
+}
+
+function writeBlocks(r: Render, nodes: readonly Node[], level: number): void {
+  for (const node of nodes) writeBlock(r, node.type, node, level)
+}
+
+/** C2-H-008: a body that writes nothing keeps one empty line between its tags. */
+function writeBody(r: Render, nodes: readonly Node[], level: number): void {
+  const before = r.count
+  writeBlocks(r, nodes, level)
+  if (r.count === before) rawLine(r, '')
+}
+
+function container(name: string): (r: Render, node: Parent, level: number) => void {
+  return (r, node, level) => {
+    line(r, level, `<${name}${tag(r, node)}>`)
+    writeBody(r, node.children, level + 1)
+    line(r, level, `</${name}>`)
+  }
+}
+
+const BLOCKQUOTE = container('blockquote')
+
+function paragraphHtml(r: Render, node: ParagraphNode): string {
+  const tail = r.backlinkHost === node ? r.backlinks : ''
+  const open = isPlain(r, node) ? '<p>' : `<p${tag(r, node, { alignStyle: true })}>`
+  return `${open}${inlineHtml(r, node.children)}${tail}</p>`
+}
+
+function paragraph(r: Render, node: ParagraphNode, level: number): void {
+  if (onlyComments(node.children) || isSilenced(r, node)) return
+  if (!isBareImage(node)) return line(r, level, paragraphHtml(r, node))
+  line(r, level, inlineHtml(r, node.children.map((child) => withParagraphAttributes(node, child))))
+}
+
+/** C2-H-020: the attributes and the `lang` of a block image's paragraph go on the image, as its first glued block. */
+function withParagraphAttributes(paragraph: ParagraphNode, child: Inline): Inline {
+  if (child.type !== 'image' || (paragraph.attrs === undefined && paragraph.lang === undefined)) return child
+  const merged: ImageNode = { ...child, attrs: mergedAttrs(child.attrs ?? {}, paragraph.attrs ?? {}) }
+  const lang = child.lang ?? paragraph.lang
+  if (lang !== undefined) merged.lang = lang
+  return merged
+}
+
+function headingId(node: HeadingNode): string | undefined {
+  return node.attrs?.id ?? node.generatedId
+}
+
+/** C2-A-134: under `roundtrip` a carrier says whether the id of a heading was authored or generated. */
+function idCarriers(r: Render, node: HeadingNode): Pair[] {
+  if (!r.settings.roundtrip || headingId(node) === undefined) return []
+  return [[node.attrs?.id === undefined ? 'data-carve-generated-id' : 'data-carve-explicit-id', null]]
+}
+
+/** C2-H-021: `h1` to `h6`, and above them a `div` that keeps the true level. `inSection`: the section carries the id. */
+function headingHtml(r: Render, node: HeadingNode, inSection: boolean): string {
+  const level = node.level
+  const name = level <= MAX_HEADING_ELEMENT ? `h${level}` : 'div'
+  // The heading of a section that carries no attribute of its own, which is the usual one.
+  if (inSection && level <= MAX_HEADING_ELEMENT && isPlain(r, node)) return `<${name}>${inlineHtml(r, node.children)}</${name}>`
+  const structural: Pair[] = level <= MAX_HEADING_ELEMENT ? [] : [['role', 'heading'], ['aria-level', String(level)]]
+  if (!inSection) structural.push(...idCarriers(r, node))
+  const parts: TagParts = { structural, id: inSection ? null : headingId(node) ?? null, alignStyle: true }
+  return `<${name}${tag(r, node, parts)}>${inlineHtml(r, node.children)}</${name}>`
+}
+
+/** C2-H-006: a quote whose only visible child is one paragraph without a caption is written on one line. */
+function quote(r: Render, node: BlockQuoteNode, level: number): void {
+  const visible = visibleBlocks(r, node.children)
+  const first = visible[0]
+  if (visible.length === 1 && (isTextParagraph(first) || isIncludeParagraph(first))) {
+    const content = isTextParagraph(first) ? paragraphHtml(r, first) : includeParagraph(r, first, false)
+    line(r, level, `<blockquote${tag(r, node)}>${content}</blockquote>`)
+    return
+  }
+  BLOCKQUOTE(r, node, level)
+}
+
+/** C2-H-030, C2-H-031: the attributes an ordered list derives from its marker. */
+function orderedAttributes(marker: Marker): Pair[] {
+  const structural: Pair[] = []
+  if (marker.style !== undefined && ALPHA_STYLES.includes(marker.style)) structural.push(['type', marker.style])
+  if (marker.start !== undefined && marker.start !== 1) structural.push(['start', String(marker.start)])
+  if (marker.delimiter === ')') structural.push(['data-delim', ')'])
+  return structural
+}
+
+function listParts(r: Render, node: ListNode): TagParts {
+  const marker = node.marker
+  const structural: Pair[] = marker.kind === 'ordered' ? orderedAttributes(marker) : []
+  if (r.settings.roundtrip) {
+    if (marker.kind === 'bullet' && marker.char !== undefined && marker.char !== '-') structural.push(['data-marker', marker.char])
+    // C2-H-138.
+    if (node.spacing === 'tight') structural.push(['data-carve-tight', null])
+  }
+  const tasks = node.children.some((item) => item.task !== undefined)
+  return tasks ? { structural, base: ['task-list'] } : { structural }
+}
+
+function list(r: Render, node: ListNode, level: number): void {
+  const name = node.marker.kind === 'ordered' ? 'ol' : 'ul'
+  line(r, level, `<${name}${tag(r, node, listParts(r, node))}>`)
+  for (const item of node.children) listItem(r, item, level + 1, node.spacing === 'tight', node.marker.kind === 'bullet')
+  line(r, level, `</${name}>`)
+}
+
+/** C2-H-032, C2-H-033: the opening tag of an item, with the box of a task item. */
+function itemOpen(r: Render, node: ListItemNode, bullet: boolean): string {
+  const task = node.task
+  if (task === undefined) return `<li${tag(r, node)}>`
+  const state: Pair[] = TASK_NO_STATE.includes(task.mark) ? [] : [['data-task-state', task.mark]]
+  const checked = TASK_CHECKED.includes(task.mark) ? ' checked' : ''
+  const label = escapeAttribute(r.taskLabels?.get(node) ?? blockText(node.children))
+  const open = `<li${tag(r, node, { structural: state, base: ['task'],
+    ...(bullet ? { style: 'list-style: none', styleFirst: true } : {}) })}>`
+  return `${open}<input type="checkbox"${checked} disabled${label === '' ? '' : ` aria-label="${label}"`}> `
+}
+
+/** C2-H-007, C2-H-034, C2-H-035: the first paragraph stands on the line of `<li>`, bare in a tight list. */
+function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, bullet: boolean): void {
+  const blocks = visibleBlocks(r, node.children)
+  const first = blocks[0]
+  let open = itemOpen(r, node, bullet)
+  let rest = blocks
+  if (isTextParagraph(first)) {
+    // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`.
+    const bare = tight && !carriesAttributes(first)
+    open += bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
+    rest = blocks.slice(1)
+  } else if (isIncludeParagraph(first)) {
+    open += includeParagraph(r, first, tight)
+    rest = blocks.slice(1)
+  }
+  if (rest.length === 0) {
+    line(r, level, `${open}</li>`)
+    return
+  }
+  line(r, level, open)
+  writeBlocks(r, rest, level + 1)
+  line(r, level, '</li>')
+}
+
+/** C2-H-040: a description with one visible block writes a paragraph bare, unless it carries attributes (C2-H-018). */
+function description(r: Render, node: DefinitionDescriptionNode, level: number): void {
+  const blocks = visibleBlocks(r, node.children)
+  const first = blocks[0]
+  if (blocks.length === 1 && isIncludeParagraph(first)) {
+    line(r, level, `<dd${tag(r, node)}>${includeParagraph(r, first, true)}</dd>`)
+    return
+  }
+  if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
+    let text = ''
+    const bare = first !== undefined && !carriesAttributes(first)
+    if (first !== undefined) text = bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
+    line(r, level, `<dd${tag(r, node)}>${text}</dd>`)
+    return
+  }
+  line(r, level, `<dd${tag(r, node)}>`)
+  writeBlocks(r, blocks, level + 1)
+  line(r, level, '</dd>')
+}
+
+/** C2-H-154: the title of the opener and then its label, each only when the author wrote it. */
+function writeTitle(r: Render, node: AdmonitionNode | DivNode | DirectiveNode, level: number, id: string | null): void {
+  const title = node.title
+  if (title !== undefined) {
+    line(r, level, `<p class="admonition-title"${id === null ? '' : ` id="${escapeAttribute(id)}"`}>${inlineHtml(r, title)}</p>`)
+  }
+  const label = node.groupLabel
+  if (label !== undefined) line(r, level, `<p class="div-label">${escapeText(label)}</p>`)
+}
+
+/** C2-H-042, C2-H-157, C2-H-158: a div, and a directive that places nothing, are `<div>` with no name. */
+function div(r: Render, node: DivNode | DirectiveNode, level: number): void {
+  const base = node.type === 'directive' ? [node.kind] : NO_CLASSES
+  const attrs = tag(r, node, { base, alignStyle: true })
+  // C2-H-114: a div with no other attribute.
+  line(r, level, `<div${attrs === '' && r.settings.roundtrip ? ' data-carve-div' : attrs}>`)
+  const before = r.count
+  writeTitle(r, node, level + 1, null)
+  writeBlocks(r, node.children, level + 1)
+  if (r.count === before) rawLine(r, '')
+  line(r, level, '</div>')
+}
+
+function capitalized(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1)
+}
+
+/** C2-H-155: the title names the element, or else the `labels` string of the kind; an authored name stops both. */
+function admonitionName(r: Render, node: AdmonitionNode, id: string | null): Pair[] {
+  if (id !== null) return [['aria-labelledby', id]]
+  if (hasAuthoredName(node)) return []
+  const kind = capitalized(node.kind)
+  return [['aria-label', r.settings.labels[`admonition${kind}`] ?? kind]]
+}
+
+/** C2-H-154: an admonition is `<aside>` with the classes `admonition` and its kind. */
+function admonition(r: Render, node: AdmonitionNode, level: number): void {
+  const id = r.resolution.labelIds.get(node) ?? null
+  line(r, level, `<aside${tag(r, node, { base: ['admonition', node.kind], generated: admonitionName(r, node, id) })}>`)
+  const before = r.count
+  writeTitle(r, node, level + 1, id)
+  writeBlocks(r, node.children, level + 1)
+  if (r.count === before) rawLine(r, '')
+  line(r, level, '</aside>')
+}
+
+/** C2-H-065: a caption with one paragraph writes it bare; with several blocks every paragraph gets `<p>`. */
+function captionLine(r: Render, caption: CaptionNode, name: string, level: number): void {
+  const blocks = caption.children.filter((block) => isVisible(r, block))
+  const first = blocks[0]
+  if (blocks.length === 1 && isTextParagraph(first)) {
+    line(r, level, `<${name}>${inlineHtml(r, first.children)}</${name}>`)
+    return
+  }
+  line(r, level, `<${name}>`)
+  writeBlocks(r, blocks, level + 1)
+  line(r, level, `</${name}>`)
+}
+
+function tablePanel(r: Render, node: TableNode, level: number): void {
+  line(r, level, `<figure${tag(r, node, { base: PANEL_CLASSES, bare: true })}>`)
+  writeBlock(r, node.type, node, level + 1)
+  line(r, level, '</figure>')
+}
+
+function figureGroup(r: Render, node: FigureGroupNode, level: number): void {
+  line(r, level, `<figure${tag(r, node, { base: GROUP_CLASSES })}>`)
+  const before = r.count
+  for (const child of node.children) {
+    // C2-H-064, C2-A-084: each panel of a group, a captioned block or a table; a table keeps its caption and attributes (C2-H-061).
+    if (isCaptionedBlock(child)) captioned(r, child, level + 1, PANEL_CLASSES)
+    else if (child.type === 'table') tablePanel(r, child, level + 1)
+    else writeBlock(r, child.type, child, level + 1)
+  }
+  const caption = node.caption
+  if (caption !== undefined) captionLine(r, caption, 'figcaption', level + 1)
+  if (r.count === before) rawLine(r, '')
+  line(r, level, '</figure>')
+}
+
+type CaptionedBlock = (ParagraphNode | CodeBlockNode | BlockQuoteNode) & { caption: CaptionNode }
+
+/** C2-A-082: an image paragraph, a math block, a code block or a quote that carries a caption. */
+function isCaptionedBlock(node: Node): node is CaptionedBlock {
+  return (node.type === 'paragraph' || node.type === 'code_block' || node.type === 'block_quote') && node.caption !== undefined
+}
+
+/**
+ * C2-H-062, C2-H-063: `<figure>` around the block and its `<figcaption>`. The figure carries the attributes, the
+ * language, the direction and the first line of the block; the block inside carries only what it generates and the
+ * line of its own markup.
+ */
+function captioned(r: Render, node: CaptionedBlock, level: number, base: readonly string[]): void {
+  line(r, level, `<figure${tag(r, node, { base })}>`)
+  const inner: ParagraphNode | CodeBlockNode | BlockQuoteNode = { ...node }
+  delete inner.caption
+  delete inner.attrs
+  delete inner.lang
+  delete inner.dir
+  const pos = node.pos
+  const markup = r.resolution.markupLines.get(node)
+  if (pos !== undefined && markup !== undefined) inner.pos = { ...pos, startLine: markup }
+  writeBlock(r, inner.type, inner, level + 1)
+  captionLine(r, node.caption, 'figcaption', level + 1)
+  line(r, level, '</figure>')
+}
+
+/**
+ * C2-H-047, C2-H-048: the attributes go on `<pre>`, and an authored `title` key wins over the title of the opener.
+ * `label`: the label of the opener, which `roundtrip` carries.
+ */
+function preHtml(r: Render, node: CodeBlockNode | RawBlockNode, language: string | undefined, title?: string, label?: string): string {
+  const structural: Pair[] = []
+  const authored = node.attrs?.keyValues?.some(([key]) => key.toLowerCase() === 'title') === true
+  if (title !== undefined && !authored) structural.push(['title', title])
+  if (r.settings.roundtrip && label !== undefined) structural.push(['data-carve-label', label])
+  const code = language === undefined ? '<code>' : `<code class="language-${escapeAttribute(language)}">`
+  return `<pre${tag(r, node, { structural })}>${code}${escapeText(node.value)}</code></pre>`
+}
+
+function codeBlock(r: Render, node: CodeBlockNode, level: number): void {
+  // C2-H-048: a supplied tree may hold any inline title, which the attribute takes as plain text (C2-H-143).
+  const title = node.title === undefined ? undefined : plainText(node.title)
+  const defaultHtml = preHtml(r, node, node.syntax, title, node.groupLabel)
+  const html = r.settings.codeBlockRenderer?.(node, defaultHtml)
+  // C2-H-207: a result that is neither text nor nothing refuses the render.
+  if (html !== undefined && html !== null && typeof html !== 'string') {
+    throw new CarveOptionError('codeBlockRenderer', 'returned a value that is neither text nor nothing')
+  }
+  line(r, level, html ?? defaultHtml)
+}
+
+/** C2-H-050, C2-H-053, C2-H-054, C2-H-134. */
+function rawBlock(r: Render, node: RawBlockNode, level: number): void {
+  if (node.format !== 'html') {
+    loss(r, node, 'raw-format-dropped', `Dropped block raw format "${node.format}" while rendering HTML`)
+    return
+  }
+  if (!r.settings.rawHtml) {
+    line(r, level, preHtml(r, node, 'html'))
+    return
+  }
+  const value = node.value
+  rawLine(r, value.endsWith('\n') ? value.slice(0, -1) : value)
+}
+
+function leadingSpaces(text: string): number {
+  let count = 0
+  while (text[count] === ' ') count++
+  return count
+}
+
+/** C2-H-043: the leading spaces of a line are written as `&nbsp;`, one per space. */
+function lineHtml(r: Render, node: LineNode): string {
+  const children = node.children
+  const first = children[0]
+  if (first?.type !== 'text') return inlineHtml(r, children)
+  const spaces = leadingSpaces(first.value)
+  return '&nbsp;'.repeat(spaces) + inlineHtml(r, [{ ...first, value: first.value.slice(spaces) }, ...children.slice(1)])
+}
+
+/** C2-H-043: a hard break that ends a line followed by a line of the same stanza writes nothing; the line end writes the `<br>`. */
+function joinsNext(line: LineNode, next: LineBlockNode['children'][number] | undefined): boolean {
+  return line.children.at(-1)?.type === 'hard_break' && next?.type === 'line' && next.children.length > 0
+}
+
+/** C2-H-043: one `<p>` per stanza, and every line break in it is `<br>`. */
+function lineBlock(r: Render, node: LineBlockNode, level: number): void {
+  const structural: Pair[] = r.settings.roundtrip ? [['data-carve-line-block', null]] : []
+  line(r, level, `<div${tag(r, node, { last: [LINE_BLOCK_CLASS], structural, alignStyle: true })}>`)
+  const before = r.count
+  let stanza: string[] = []
+  const flush = (): void => {
+    if (stanza.length > 0) line(r, level + 1, `<p>${stanza.join('<br>\n')}</p>`)
+    stanza = []
+  }
+  node.children.forEach((child, at) => {
+    if (child.type === 'comment') return
+    if (child.children.length === 0) flush()
+    else stanza.push(lineHtml(r, joinsNext(child, node.children[at + 1]) ? { ...child, children: child.children.slice(0, -1) } : child))
+  })
+  flush()
+  if (r.count === before) rawLine(r, '')
+  line(r, level, '</div>')
+}
+
+/** C2-H-133: an unexpanded include with no caption, which is written bare where a paragraph at its place would be. */
+function isIncludeParagraph(node: Node | undefined): node is IncludeNode {
+  return node !== undefined && node.type === 'include' && node.children === undefined && node.caption === undefined
+}
+
+/** C2-H-133: the paragraph of an unexpanded include, bare or with `<p>`. */
+function includeParagraph(r: Render, node: IncludeNode, bare: boolean): string {
+  loss(r, node, 'include-unresolved', includeMessage('include-unresolved', { path: node.path }))
+  const text = escapeText(includeSource(node))
+  // C2-H-016: the paragraph is a block element and carries its source line; the attributes of the directive are not written.
+  return bare ? text : `<p${tag(r, node, { bare: true })}>${text}</p>`
+}
+
+/** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text, written as in C2-W-058. */
+function include(r: Render, node: IncludeNode, level: number): void {
+  const children = node.children
+  if (children !== undefined) {
+    writeBlocks(r, children, level)
+    return
+  }
+  line(r, level, includeParagraph(r, node, false))
+  // C2-N-074, C2-H-165: its caption follows as one more paragraph of its plain text.
+  const caption = node.caption?.children[0]
+  const text = caption?.type === 'paragraph' ? plainText(caption.children) : ''
+  if (text !== '') line(r, level, `<p>${escapeText(text)}</p>`)
+}
+
+/** C2-X-004: an extension this engine does not know renders through its fallback. */
+function blockExtension(r: Render, node: BlockExtensionNode, level: number): void {
+  const rendered = r.renderExtension(node, level)
+  if (rendered !== null) { line(r, level, rendered); return }
+  loss(r, node, 'extension-fallback-rendered', `Rendered the fallback of the unknown extension "${node.name}"`)
+  // C2-X-035: the attributes of the node go on a div around its fallback.
+  const tag = attributes(r, node, {})
+  if (tag === '') return writeBlocks(r, node.fallback, level)
+  line(r, level, `<div${tag}>`)
+  writeBody(r, node.fallback, level + 1)
+  line(r, level, '</div>')
+}
+
+function isBlockNode(node: Node): node is Block {
+  return NODE_TABLE.BLOCKS.includes(node.type)
+}
+
+function isInlineNode(node: Node): node is Inline {
+  return NODE_TABLE.INLINES.includes(node.type)
+}
+
+function rendererHost(r: Render, blockDepth: number): ExtensionRenderHost {
+  return {
+    blocks: (nodes, depth = 0) => {
+      const previous = r.out
+      const bidi = r.bidi
+      const count = r.count
+      r.bidi = true
+      let html = ''
+      try {
+        for (const node of nodes.filter(isBlockNode)) {
+          r.out = ''
+          writeBlocks(r, [node], depth)
+          if (html !== '' && r.out !== '') html += `\n${'  '.repeat(depth)}`
+          html += r.out.slice(1 + depth * 2)
+        }
+        return html
+      } finally {
+        r.out = previous
+        r.bidi = bidi
+        r.count = count
+      }
+    },
+    inlines: (nodes) => {
+      const bidi = r.bidi
+      r.bidi = true
+      try { return inlineHtml(r, nodes.filter(isInlineNode)) }
+      finally { r.bidi = bidi }
+    },
+    plainText: (nodes) => plainText(nodes.filter(isInlineNode)),
+    escapeText,
+    escapeAttribute,
+    attributes: (node, options) => attributes(r, node, options ?? {}),
+    nextId: (prefix, writtenSuffixes) => nextExtensionId(r, prefix, writtenSuffixes),
+    labels: r.settings.labels,
+    profile: r.settings.profile,
+    mode: r.settings.mode,
+    urlPolicy: r.settings.urlPolicy,
+    sourceLines: r.settings.sourceLines,
+    blockDepth,
+  }
+}
+
+function useId(used: Render['usedIds'], id: string): void {
+  const add = (set: Set<string>, value: string): void => {
+    if (set.has(value)) return
+    set.add(value)
+    used.log.push([set, value])
+  }
+  add(used.ids, id)
+  for (let at = id.indexOf('-'); at >= 0; at = id.indexOf('-', at + 1)) add(used.prefixes, id.slice(0, at))
+}
+
+/** C2-X-044: a generated id is neither an id in use nor the start of one followed by `-`. */
+function nextExtensionId(r: Render, prefix: string, writtenSuffixes?: readonly string[]): string {
+  let candidate = ''
+  do { candidate = `${prefix}-${++r.extensionIds}` }
+  while (writtenSuffixes === undefined
+    ? r.usedIds.ids.has(candidate) || r.usedIds.prefixes.has(candidate)
+    : writtenSuffixes.some((suffix) => r.usedIds.ids.has(`${candidate}${suffix}`)))
+  useId(r.usedIds, candidate)
+  for (const suffix of writtenSuffixes ?? []) useId(r.usedIds, `${candidate}${suffix}`)
+  return candidate
+}
+
+function authoredIds(document: DocumentNode): Render['usedIds'] {
+  const used: Render['usedIds'] = { ids: new Set(), prefixes: new Set(), log: [] }
+  const visit = (node: Node): void => {
+    if (node.attrs?.id !== undefined && attributesAct(node)) useId(used, node.attrs.id)
+    if (node.type === 'heading' && node.generatedId !== undefined) useId(used, node.generatedId)
+    forEachSlot(node, (nodes) => { for (const child of nodes) visit(child) }, undefined, document.extensions)
+  }
+  visit(document)
+  return used
+}
+
+// ---- tables ----
+
+/** C2-B-213: each axis on its own: the mark of the cell, then that of the head cell of its column, then the column. */
+/** A CSS keyword: ASCII letters and hyphens, so a value cannot close its declaration or add another. */
+function isCssKeyword(value: string): boolean {
+  for (let at = 0; at < value.length; at++) {
+    const code = value.charCodeAt(at) | 32
+    if ((code < 97 || code > 122) && value.charCodeAt(at) !== 45) return false
+  }
+  return value !== ''
+}
+
+function cellStyle(cell: TableCellNode, column: TableColumnNode | undefined, headValign: string | undefined): string {
+  const align = cell.align ?? column?.resolvedAlign ?? column?.align
+  const valign = cell.valign ?? column?.resolvedValign ?? headValign ?? column?.valign
+  let declarations = align === undefined ? '' : `text-align: ${align};`
+  // A supplied tree may hold any string here, so the value is checked before it enters the declaration.
+  if (valign !== undefined && isCssKeyword(valign)) declarations += `${declarations === '' ? '' : ' '}vertical-align: ${valign};`
+  return declarations
+}
+
+function isCellParagraph(block: Block | CellParagraphNode): block is CellParagraphNode {
+  return block.type === 'cell_paragraph'
+}
+
+/**
+ * C2-H-200: a cell of blocks, which only an imported or supplied tree holds, writes each paragraph with `<p>`. One
+ * paragraph stays on the row line; any other cell is laid out as an item with more blocks (C2-H-007), its blocks one
+ * level deeper than the row at `level` and the closing tag at the indent of the row.
+ */
+function cellContent(r: Render, cell: TableCellNode, level: number): string {
+  const blocks = cell.children
+  if (blocks.every(isCellParagraph)) return blocks.map((block) => inlineHtml(r, block.children)).join(' ')
+  const visible = visibleBlocks(r, blocks)
+  const first = visible[0]
+  const open = isTextParagraph(first) ? paragraphHtml(r, first) : ''
+  const rest = open === '' ? visible : visible.slice(1)
+  if (rest.length === 0) return open
+  const inner: Render = { ...r, out: '', count: 0 }
+  writeBlocks(inner, rest, level + 1)
+  return `${open}${inner.out}\n${'  '.repeat(level)}`
+}
+
+// C2-H-058: the spans of a cell come from its counts alone; an authored key of either name is never written.
+const SPAN_KEYS: readonly string[] = ['rowspan', 'colspan']
+
+/** C2-H-056 to C2-H-058. */
+function cellHtml(
+  r: Render, cell: TableCellNode, column: TableColumnNode | undefined, headValign: string | undefined, inHead: boolean,
+  level: number, rowHead = false,
+): string {
+  // C2-H-056: a cell in the first `rowHeadColumns` columns of a body is written as a header cell.
+  const header = cell.header || rowHead
+  const name = header ? 'th' : 'td'
+  const structural: Pair[] = []
+  const rowspan = cell.rowspan
+  if (rowspan !== undefined && rowspan > 1) structural.push(['rowspan', String(rowspan)])
+  const colspan = cell.colspan
+  if (colspan !== undefined && colspan > 1) structural.push(['colspan', String(colspan)])
+  if (header) structural.push(['scope', cell.scope ?? (inHead ? 'col' : 'row')])
+  else if (cell.scope !== undefined) structural.push(['scope', cell.scope])
+  if (cell.headerIds !== undefined) structural.push(['headers', cell.headerIds.join(' ')])
+  const written = attributes(r, cell, { structural, style: cellStyle(cell, column, headValign), withheld: SPAN_KEYS })
+  return `<${name}${written}>${cellContent(r, cell, level)}</${name}>`
+}
+
+/** The columns of a table, and the vertical mark each takes from the head (C2-B-213). */
+interface TableLayout {
+  columns: readonly TableColumnNode[]
+  headValign: (string | undefined)[]
+  /** The `rowHeadColumns` of the body being written (C2-B-230). */
+  rowHeads: number
+}
+
+/** Moves `column` past the positions a row span from above covers, and counts each of them down. Returns the new column. */
+function skipCovered(covered: number[], column: number): number {
+  let at = column
+  for (let left = covered[at] ?? 0; left > 0; left = covered[at] ?? 0) covered[at++] = left - 1
+  return at
+}
+
+/**
+ * The cells of one row with their columns. A row with span marks holds one cell per column
+ * (C2-A-092); a row with counts alone covers the positions its counts give (C2-A-093).
+ */
+function rowHtml(r: Render, row: TableRowNode, layout: TableLayout, covered: number[], inHead: boolean, level: number): string {
+  const cells = row.children
+  const marked = cells.some((cell) => cell.span !== undefined)
+  let html = ''
+  let column = 0
+  for (const cell of cells) {
+    if (!marked) column = skipCovered(covered, column)
+    const colspan = cell.colspan ?? 1
+    if (cell.span === 'rowspan') {
+      // A marked row names its covered columns explicitly, so consume the prior row span here.
+      covered[column] = Math.max(0, (covered[column] ?? 0) - 1)
+    } else if (cell.span === undefined) {
+      html += cellHtml(r, cell, layout.columns[column], layout.headValign[column], inHead, level, column < layout.rowHeads)
+      const below = (cell.rowspan ?? 1) - 1
+      for (let more = 0; more < colspan; more++) covered[column + more] = below
+    }
+    column += marked ? 1 : colspan
+  }
+  return `<tr${tag(r, row)}>${html}</tr>`
+}
+
+function writeRows(r: Render, layout: TableLayout, group: TableGroup, level: number, covered: number[]): void {
+  for (const row of group.children) {
+    if (row.type === 'table_row') line(r, level, rowHtml(r, row, layout, covered, group.type === 'table_head', level))
+  }
+}
+
+function isRow(row: Node): row is TableRowNode {
+  return row.type === 'table_row'
+}
+
+const GROUP_ELEMENTS: Readonly<Record<TableGroup['type'], string>> = { table_head: 'thead', table_body: 'tbody', table_foot: 'tfoot' }
+
+function isGroup(node: TableNode['children'][number]): node is TableGroup {
+  return node.type !== 'comment'
+}
+
+function writeGroups(r: Render, layout: TableLayout, groups: readonly TableGroup[], level: number): void {
+  for (const group of groups) {
+    // C2-H-055: an empty group is not written.
+    if (!group.children.some(isRow)) continue
+    const name = GROUP_ELEMENTS[group.type]
+    layout.rowHeads = group.type === 'table_body' ? group.rowHeadColumns ?? 0 : 0
+    line(r, level, `<${name}${tag(r, group)}>`)
+    writeRows(r, layout, group, level + 1, [])
+    line(r, level, `</${name}>`)
+  }
+}
+
+/** C2-H-152: one `<col>` per column when at least one column has a width. */
+function writeColumnGroup(r: Render, columns: readonly TableColumnNode[], level: number): void {
+  if (!columns.some((column) => column.width !== undefined)) return
+  line(r, level, '<colgroup>')
+  for (const column of columns) {
+    const width = column.width
+    line(r, level + 1, width === undefined ? '<col>' : `<col style="width: ${percentageText(width)}%;">`)
+  }
+  line(r, level, '</colgroup>')
+}
+
+const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols']
+
+/** C2-H-153: the five keys a table reads are no HTML attributes, consumed or kept in `attrs` (C2-B-227). */
+function withoutTableKeys(node: TableNode): TableNode {
+  const keyValues = node.attrs?.keyValues
+  if (keyValues === undefined || !keyValues.some(([key]) => TABLE_KEYS.includes(key.toLowerCase()))) return node
+  return { ...node, attrs: { ...node.attrs, keyValues: keyValues.filter(([key]) => !TABLE_KEYS.includes(key.toLowerCase())) } }
+}
+
+function table(r: Render, node: TableNode, level: number): void {
+  line(r, level, `<table${tag(r, withoutTableKeys(node))}>`)
+  const caption = node.caption
+  if (caption !== undefined) captionLine(r, caption, 'caption', level + 1)
+  const layout: TableLayout = { columns: node.columns, headValign: headMarks(node, 'valign'), rowHeads: 0 }
+  writeColumnGroup(r, layout.columns, level + 1)
+  writeGroups(r, layout, node.children.filter(isGroup), level + 1)
+  line(r, level, '</table>')
+}
+
+const BLOCKS: BlockWriters = {
+  paragraph,
+  heading: (r, node, level) => line(r, level, headingHtml(r, node, false)),
+  block_quote: quote,
+  list,
+  definition_list: container('dl'),
+  definition_term: (r, node, level) => line(r, level, `<dt${tag(r, node)}>${inlineHtml(r, node.children)}</dt>`),
+  definition_description: description,
+  div,
+  directive: div,
+  admonition,
+  figure_group: figureGroup,
+  table,
+  code_block: codeBlock,
+  raw_block: rawBlock,
+  line_block: lineBlock,
+  // C2-H-046.
+  thematic_break: (r, node, level) => line(r, level, `<hr${tag(r, node)}>`),
+  include,
+  // C2-H-142.
+  section: container('section'),
+  block_extension: blockExtension,
+}
+
+// ---- footnotes ----
+
+/** C2-H-091: one backlink per reference of the note. */
+function backlinksHtml(r: Render, note: Note): string {
+  const label = r.settings.labels['footnoteBacklink'] ?? ''
+  const single = note.refIds.length === 1
+  return note.refIds.map((id, index) => {
+    const ordinal = single ? '' : `<sup>${index + 1}</sup>`
+    const text = escapeAttribute(single ? label : `${label} ${index + 1}`)
+    return `<a href="#${escapeAttribute(id)}" role="doc-backlink" aria-label="${text}">↩${ordinal}</a>`
+  }).join(' ')
+}
+
+function noteCarriers(r: Render, note: Note): string {
+  if (!r.settings.roundtrip) return ''
+  if (note.definition === null) return ' data-carve-inline-footnote'
+  return ` data-carve-footnote-label="${escapeAttribute(note.definition.key)}"`
+}
+
+/** The body of a note. C2-H-090: that of an inline footnote is one paragraph. */
+function noteBlocks(note: Note): Block[] {
+  if (note.definition !== null) return note.definition.children
+  return note.inline === null ? [] : [{ type: 'paragraph', children: [...note.inline.children] }]
+}
+
+/** C2-H-091: a raw block of another format writes nothing (C2-H-054), so it is not the last block that renders. */
+function rendersInNote(r: Render, node: Node): boolean {
+  return isVisible(r, node) && (node.type !== 'raw_block' || node.format === 'html')
+}
+
+function writeNote(r: Render, note: Note, level: number): void {
+  const blocks = noteBlocks(note)
+  const visible = blocks.filter((block) => rendersInNote(r, block))
+  const last = visible[visible.length - 1]
+  r.backlinks = backlinksHtml(r, note)
+  r.backlinkHost = isTextParagraph(last) && last.children.length > 0 && !onlyComments(last.children) ? last : null
+  line(r, level, `<li id="${note.id}"${noteCarriers(r, note)}>`)
+  writeBlocks(r, blocks, level + 1)
+  if (r.backlinkHost === null) line(r, level + 1, `<p>${r.backlinks}</p>`)
+  r.backlinkHost = null
+  line(r, level, '</li>')
+}
+
+/**
+ * C2-H-089: the footnotes in one section, in number order. C2-H-158: the title and the label of
+ * the directive that places it are its first children, and a title names it.
+ */
+function writeNotes(r: Render, level: number, directive: DirectiveNode | null): void {
+  const id = directive === null ? undefined : r.resolution.labelIds.get(directive)
+  const label = r.settings.labels['endnotes'] ?? ''
+  const name = id === undefined ? `aria-label="${escapeAttribute(label)}"` : `aria-labelledby="${escapeAttribute(id)}"`
+  line(r, level, `<section role="doc-endnotes" ${name}>`)
+  if (directive !== null) writeTitle(r, directive, level + 1, id ?? null)
+  line(r, level + 1, '<hr>')
+  line(r, level + 1, '<ol>')
+  for (const note of r.resolution.notes) writeNote(r, note, level + 2)
+  line(r, level + 1, '</ol>')
+  line(r, level, '</section>')
+}
+
+// ---- the document ----
+
+function isNotesDirective(node: Node): node is DirectiveNode {
+  return node.type === 'directive' && node.kind === 'footnotes'
+}
+
+function closeSections(r: Render, open: number[], level: number): void {
+  for (let top = open.at(-1); top !== undefined && top >= level; top = open.at(-1)) {
+    open.pop()
+    line(r, open.length, '</section>')
+  }
+}
+
+function sectionAttributes(r: Render, node: HeadingNode, id: string | undefined): string {
+  if (r.settings.roundtrip) return attributes(r, null, { structural: idCarriers(r, node), id: id ?? null })
+  // Without the carriers of `roundtrip` a section carries its id and nothing else.
+  return id === undefined ? '' : ` id="${escapeAttribute(id)}"`
+}
+
+/** C2-H-026, C2-H-027: a top-level heading opens a section that carries its id. */
+function openSection(r: Render, node: HeadingNode, open: number[]): void {
+  closeSections(r, open, node.level)
+  const id = headingId(node)
+  line(r, open.length, `<section${sectionAttributes(r, node, id)}>`)
+  open.push(node.level)
+  line(r, open.length, headingHtml(r, node, true))
+}
+
+/**
+ * C2-H-178, C2-H-179: under `roundtrip` a run of abbreviation definitions is one template that holds the run as the
+ * canonical writer spells it, escaped as text. C2-H-181: what the writer cannot spell is reported as a render loss.
+ */
+function writeTemplate(r: Render, document: DocumentNode, nodes: readonly Node[], level: number): void {
+  const run = nodes.flatMap((node) => (node.type === 'abbreviation_def' ? [node] : []))
+  const written = writeTree({ type: 'document', astVersion: document.astVersion, children: run }, undefined)
+  for (const entry of written.diagnostics) loss(r, run[0] ?? null, entry.code, entry.message)
+  const source = written.source.endsWith('\n') ? written.source.slice(0, -1) : written.source
+  // C2-H-172: the template text is data for a reader and keeps its bidirectional controls.
+  line(r, level, `<template data-carve-abbreviations>${escapeCarrierText(source)}</template>`)
+}
+
+/** The end of the run of abbreviation definitions that starts at `start`. */
+function runEnd(children: readonly Node[], start: number, own: ReadonlySet<Node> | null): number {
+  let end = start
+  while (children[end]?.type === 'abbreviation_def' && (own === null || own.has(children[end]!))) end++
+  return end
+}
+
+/** Writes the blocks of the document; C2-H-093: the footnote section stands at a top-level directive or at the end. */
+function writeDocument(r: Render, document: DocumentNode): void {
+  const open: number[] = []
+  const hasNotes = r.resolution.notes.length > 0
+  let placed = false
+  const children = expandedBlocks(document.children)
+  // C2-N-079: the template covers the definitions of the document, and those of an included file get none.
+  const own = children === document.children ? null : new Set<Node>(document.children)
+  for (let index = 0; index < children.length; index++) {
+    const node = children[index]
+    if (node === undefined) break
+    if (node.type === 'abbreviation_def' && r.settings.roundtrip && (own === null || own.has(node))) {
+      const end = runEnd(children, index, own)
+      writeTemplate(r, document, children.slice(index, end), open.length)
+      index = end - 1
+    } else if (node.type === 'heading' && r.settings.sections) {
+      openSection(r, node, open)
+    } else if (isNotesDirective(node) && hasNotes && !placed) {
+      placed = true
+      // The blocks of the directive stand before the section, as in 0.1.
+      writeBlocks(r, node.children, open.length)
+      writeNotes(r, open.length, node)
+    } else {
+      writeBlock(r, node.type, node, open.length)
+    }
+  }
+  closeSections(r, open, 0)
+  if (hasNotes && !placed) writeNotes(r, 0, null)
+}
+
+/** C2-N-079: an import of roundtrip HTML cannot recover the directive of an expanded include that no other one holds. */
+function reportExpanded(r: Render, document: DocumentNode): void {
+  const pending: Node[] = [document]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'include' && node.children !== undefined) {
+      loss(r, node, 'include-expanded-roundtrip', includeMessage('include-expanded-roundtrip', { path: node.path }))
+      continue
+    }
+    const below: Node[] = []
+    forEachSlot(node, (nodes) => { append(below, nodes) }, undefined, document.extensions)
+    for (let at = below.length - 1; at >= 0; at--) pending.push(below[at]!)
+  }
+}
+
+interface RenderResult {
+  html: string
+  losses: Findings
+}
+
+/**
+ * The HTML fragment of a resolved tree (C2-H-001). `losses` takes the losses of the render; `bidi` is
+ * false where its text nodes are known to hold no bidirectional control (C2-H-172).
+ */
+export function renderDocument(
+  document: DocumentNode, settings: Settings, resolution: Resolution, losses: Findings, bidi: boolean, source?: string | number,
+  taskLabels?: ReadonlyMap<ListItemNode, string>,
+): RenderResult {
+  const rule = PROFILES.get(settings.profile)
+  const linksAllowed = rule === undefined ||
+    ((rule.allowedInline?.includes('link') ?? true) && !(rule.deniedInline?.includes('link') ?? false))
+  const r: Render = {
+    settings, resolution, taskLabels, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
+    linkNotes: [], abbrDepth: 0,
+    backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
+    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),
+    usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
+    renderExtension: () => null,
+  }
+  r.renderExtension = (node, level = 0) => {
+    const renderer = settings.renderers[node.name]
+    if (renderer === undefined || renderer.version !== node.version) return null
+    const channel = settings.mode === 'static' ? renderer.buildTime : renderer.render
+    if (channel === undefined) return null
+    const before = { out: r.out, count: r.count, bidi: r.bidi, extensionIds: r.extensionIds,
+      idCount: r.usedIds.log.length, lossCount: r.losses.entries.length, nodeCount: r.losses.nodes.length,
+      linkDepth: r.linkDepth, linkNotes: r.linkNotes.slice(), abbrDepth: r.abbrDepth,
+      backlinkHost: r.backlinkHost, backlinks: r.backlinks, longDescriptions: r.longDescriptions.slice() }
+    try {
+      const result: unknown = channel(node, rendererHost(r, level))
+      if (typeof result !== 'string') throw new TypeError('renderer returned a value that is not a string')
+      return result
+    } catch (error) {
+      r.out = before.out
+      r.count = before.count
+      r.bidi = before.bidi
+      r.extensionIds = before.extensionIds
+      for (const [set, value] of r.usedIds.log.splice(before.idCount)) set.delete(value)
+      r.losses.entries.length = before.lossCount
+      r.losses.nodes.length = before.nodeCount
+      r.linkDepth = before.linkDepth
+      r.linkNotes = before.linkNotes
+      r.abbrDepth = before.abbrDepth
+      r.backlinkHost = before.backlinkHost
+      r.backlinks = before.backlinks
+      r.longDescriptions = before.longDescriptions
+      const detail = error instanceof Error ? error.message : String(error)
+      // C2-X-050: resolution visited the slots, so the fallback is written unresolved.
+      const message = `the extension ${node.name} renderer failed: ${detail}; its fallback is written unresolved`
+      loss(r, node, 'extension-renderer-failed', message)
+      return null
+    }
+  }
+  if (settings.roundtrip) reportExpanded(r, document)
+  writeDocument(r, document)
+  return { html: r.out.slice(1), losses: r.losses }
+}

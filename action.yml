@@ -32,20 +32,6 @@ inputs:
       a line that opens like a block and parsed as text.
     required: false
     default: 'true'
-  from-djot:
-    description: >
-      Also flag valid Carve whose meaning differs from Djot (`_x_` underline vs
-      emphasis, `~x~` strike vs subscript). Noise for hand-written Carve; useful
-      while migrating a Djot corpus.
-    required: false
-    default: 'false'
-  portable:
-    description: >
-      Deprecated. Passed through as `carve lint --portable` for older `version`
-      pins; current releases always check blockquote marker spacing and accept
-      the flag as a no-op. For a Djot portability check run `carve portability`.
-    required: false
-    default: 'false'
   version:
     description: 'npm version or dist-tag of @markup-carve/carve to run.'
     required: false
@@ -64,8 +50,6 @@ runs:
         CARVE_FILES: ${{ inputs.files }}
         CARVE_FMT: ${{ inputs.fmt }}
         CARVE_LINT: ${{ inputs.lint }}
-        CARVE_FROM_DJOT: ${{ inputs.from-djot }}
-        CARVE_PORTABLE: ${{ inputs.portable }}
       run: |
         set -euo pipefail
         shopt -s globstar nullglob
@@ -93,19 +77,12 @@ runs:
         status=0
         record() { if [ "$1" -gt "$status" ]; then status=$1; fi; }
 
-        if [ "$CARVE_PORTABLE" = "true" ]; then
-          echo "::warning::carve: the 'portable' input is deprecated; current releases always check blockquote marker spacing"
-        fi
-
         if [ "$CARVE_FMT" = "true" ]; then
           rc=0; carve fmt --check "${documents[@]}" || rc=$?; record "$rc"
         fi
 
         if [ "$CARVE_LINT" = "true" ]; then
-          lint=(carve lint)
-          if [ "$CARVE_FROM_DJOT" = "true" ]; then lint+=(--from-djot); fi
-          if [ "$CARVE_PORTABLE" = "true" ]; then lint+=(--portable); fi
-          rc=0; "${lint[@]}" "${documents[@]}" || rc=$?; record "$rc"
+          rc=0; carve lint "${documents[@]}" || rc=$?; record "$rc"
         fi
 
         if [ "$status" -eq 1 ]; then

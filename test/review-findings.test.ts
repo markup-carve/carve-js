@@ -1,0 +1,803 @@
+// The findings of the first code review of the 0.2 engine, one test per finding, named with the clause each one cites.
+import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import {
+  CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, renderWithDiagnostics, stringOffsetOfByte,
+  treesEqual, utf8Length,
+  writeWithDiagnostics,
+} from '../src/index.ts'
+import { CarveOptionError, checkType } from '../src/options.ts'
+import { type DocumentNode, pointerKey, pointerToken } from '../src/ast.ts'
+import { documentOf } from './support/tree.ts'
+import { referenceForm } from './support/writer-checks.ts'
+import { growthRatio } from './support/growth.ts'
+import { LINEARITY_LIMIT, linearityExcess } from './support/linearity.ts'
+
+/** The path and the reason of the refusal of `json`, or null when it is accepted. */
+function refusal(json: unknown): string | null {
+  try {
+    decodeTree(JSON.stringify(json))
+    return null
+  } catch (error) {
+    if (!(error instanceof CarveTreeError)) throw error
+    return error.message
+  }
+}
+
+const DIGEST = `sha256:${'0'.repeat(64)}`
+
+it('C2-W-002, C2-W-011: an already spelled strong span with a slash keeps its tree', () => {
+  const source = '*%{/%/}/*\n'
+  const written = formatWithDiagnostics(source)
+  expect(written.diagnostics).toEqual([])
+  expect(treesEqual(parse(written.source), parse(source))).toBe(true)
+})
+
+it('C2-W-002, C2-W-011: an open note-shaped bracket keeps its strong span', () => {
+  const source = '*^[[^*>\\]\n'
+  const written = formatWithDiagnostics(source)
+  expect(written.diagnostics).toEqual([])
+  expect(treesEqual(parse(written.source), parse(source))).toBe(true)
+})
+
+function inParagraph(...children: unknown[]): Record<string, unknown> {
+  return { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children }] }
+}
+
+/** C2-A-124: only a qualified extension carries payload, resources and slots, so the node is declared. */
+function declaredExtension(fields: Record<string, unknown>, slots: string[] = []): Record<string, unknown> {
+  const node = { type: 'inline_extension', name: 'org.example.a', version: '1', children: [], fallback: [{ type: 'text', value: 'f' }], ...fields }
+  return { ...inParagraph(node), extensions: [{ name: 'org.example.a', version: '1', required: false, slots }] }
+}
+
+describe('linear passes', () => {
+  it('C2-I-099: a term reads the character behind the empty spans that follow it, and many spans stay linear', () => {
+    expect(render('*[A]: B\n\nA[]{.x}[]{.x} A[]{.x}b')).toBe(
+      '<p><abbr title="B">A</abbr><span class="x"></span><span class="x"></span> A<span class="x"></span>b</p>',
+    )
+    const spans = parse(`*[A]: B\n\nA ${'[]{.x}'.repeat(20000)} A`).children.at(-1) as { children: { type: string }[] }
+    expect(spans.children.filter((node) => node.type === 'abbreviation')).toHaveLength(2)
+  })
+
+  it('C2-A-035: a later key replaces an earlier one of the same name at its first place, over blocks and lines', () => {
+    expect(parse('{k=1 j=2 K=3}\nx').children[0]!.attrs).toEqual({ keyValues: [['k', '3'], ['j', '2']] })
+    expect(parse('{k=1}\n{j=2}\n{K=3}\nx').children[0]!.attrs).toEqual({ keyValues: [['k', '3'], ['j', '2']] })
+    const many = parse(`{${Array.from({ length: 20000 }, (_, index) => `k${index % 10000}=${index}`).join(' ')}}\nx`).children[0]!
+    expect(many.attrs?.keyValues).toHaveLength(10000)
+    expect(many.attrs?.keyValues?.[0]).toEqual(['k0', '10000'])
+  })
+
+  it('C2-H-141: a reference and its definition with many keys merge, and the reference decides a key', () => {
+    expect(render('[x][r]{a=1 B=2}\n\n{b=3 c=4}\n[r]: /u')).toBe('<p><a href="/u" c="4" a="1" B="2">x</a></p>')
+  })
+})
+
+describe('reading a supplied tree', () => {
+  it('C2-A-167, C2-A-170: a payload alternative that is no object with a media type is refused with its path', () => {
+    const extension = (payload: unknown): unknown => declaredExtension({ payload })
+    expect(refusal(extension([null]))).toBe('/children/0/children/0/payload/0: not a payload alternative')
+    expect(refusal(extension([{ value: 'x' }]))).toBe('/children/0/children/0/payload/0/format: not a string')
+    expect(refusal(extension([{ format: '', value: 'x' }]))).toBe('/children/0/children/0/payload/0/format: an empty media type')
+    expect(refusal(extension([{ format: 'text/plain', other: 1 }]))).toBe('/children/0/children/0/payload/0/other: not a field of a payload alternative')
+    expect(refusal(extension([{ format: 'text/plain', value: { a: [1] } }]))).toBeNull()
+  })
+
+  it('C2-A-014 to C2-A-019: the envelope is checked before its document', () => {
+    const document = { type: 'document', astVersion: '2.0', children: [] }
+    expect(refusal({ astVersion: '3.0', document })).toBe('/astVersion: major version 3 is not read by this engine')
+    expect(refusal({ astVersion: '2.01', document })).toBe('/astVersion: not major.minor')
+    expect(refusal({ document })).toBe('/astVersion: a required field is missing')
+    expect(refusal({ astVersion: '2.0', extensions: [{ name: 'a.b', version: '1', required: true, slots: [] }], document })).toBe('/extensions/0: an unknown required extension')
+    expect(refusal({ astVersion: '2.0', other: 1, document })).toBe('/other: not a field of the envelope')
+    expect(refusal({ astVersion: '2.3', extensions: [{ name: 'a.b', version: '1', required: false, slots: [] }],
+      document: { ...document, astVersion: '2.3' } })).toBeNull()
+    expect(refusal({ astVersion: '2.0', document: { ...document, astVersion: '3.0' } }))
+      .toBe('/document/astVersion: the document and envelope versions differ')
+  })
+
+  it('C2-A-131: an image and an extension name resources of the manifest', () => {
+    const resources = [{ id: 'r', mediaType: 'image/png', digest: DIGEST }]
+    expect(refusal(inParagraph({ type: 'image', resourceId: 'missing', decorative: true }))).toBe('/children/0/children/0/resourceId: no resource has the id "missing"')
+    expect(refusal({ ...inParagraph({ type: 'image', resourceId: 'r', decorative: true }), resources })).toBeNull()
+    expect(refusal({ ...declaredExtension({ resourceIds: ['r', 'q'] }), resources })).toBe('/children/0/children/0/resourceIds/1: no resource has the id "q"')
+  })
+
+  it('C2-A-132: references are counted in every slot that holds nodes, ruby pairs and extension slots included', () => {
+    const resources = [{ id: 'r', mediaType: 'image/png', digest: DIGEST }]
+    const images = (count: number): unknown[] => Array.from({ length: count }, () => ({ type: 'image', resourceId: 'r', decorative: true }))
+    const ruby = (count: number): unknown => ({ ...inParagraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: images(count), annotation: [] }] }), resources })
+    expect(refusal(ruby(4096))).toBeNull()
+    expect(refusal(ruby(4097))).toBe('/children/0/children/0/pairs/0/base/4096: more than 4096 resource references')
+    const slots = (count: number): unknown => ({ ...declaredExtension({ slots: { s: images(count) } }, ['s']), resources })
+    expect(refusal(slots(4096))).toBeNull()
+    expect(refusal(slots(4097))).toBe('/children/0/children/0/slots/s/4096: more than 4096 resource references')
+  })
+
+  it('C2-A-028: a ruby pair is closed', () => {
+    expect(refusal(inParagraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: [], annotation: [], x: 1 }] }))).toBe('/children/0/children/0/pairs/0/x: not a field of ruby_pair')
+  })
+})
+
+describe('the attribute filter', () => {
+  it('C2-H-075, C2-H-161: the title and the datetime that abbr and time give pass the filter of an authored value', () => {
+    expect(render('[x]{abbr=javascript:alert(1)}')).toBe('<p><abbr title="">x</abbr></p>')
+    expect(render('[x]{time=javascript:alert(1)}')).toBe('<p><time datetime="">x</time></p>')
+    expect(render('[x]{abbr="Shell: bash"}')).toBe('<p><abbr title="">x</abbr></p>')
+    expect(render('[x]{abbr=HTML time=2024}')).toBe('<p><time datetime="2024"><abbr title="HTML">x</abbr></time></p>')
+  })
+
+  it('C2-H-161: an authored class and the language of a supplied tree pass the filter too', () => {
+    expect(render('[x]{.a class="javascript:x"}')).toBe('<p><span class="a">x</span></p>')
+    expect(render(decodeTree(JSON.stringify(inParagraph({ type: 'span', lang: 'javascript:x', children: [{ type: 'text', value: 'x' }] }))))).toBe('<p><span lang="">x</span></p>')
+  })
+
+  it('C2-H-057: the vertical alignment of a supplied cell is written only as a CSS keyword, so it adds no declaration', () => {
+    const table = (valign: string): string => render(decodeTree(JSON.stringify({
+      type: 'document', astVersion: '2.0', children: [{
+        type: 'table', columns: [{ type: 'table_column' }], children: [{
+          type: 'table_body', children: [{ type: 'table_row', children: [{ type: 'table_cell', header: false, valign, children: [{ type: 'cell_paragraph', children: [] }] }] }],
+        }],
+      }],
+    })))
+    expect(table('baseline')).toContain('<td style="vertical-align: baseline;"></td>')
+    expect(() => table('top; background-image: url(javascript:alert(1))')).toThrow('unknown value')
+  })
+})
+
+describe('the title of a code block', () => {
+  const titled = JSON.stringify({
+    type: 'document', astVersion: '2.0',
+    children: [{ type: 'code_block', value: 'a\n', title: [{ type: 'emphasis', children: [{ type: 'text', value: 'Hi' }] }, { type: 'text', value: ' there' }] }],
+  })
+
+  it('C2-A-073, C2-H-048: an inline title of a supplied tree is the title attribute as plain text', () => {
+    expect(render(decodeTree(titled))).toBe('<pre title="Hi there"><code>a\n</code></pre>')
+  })
+
+  it('C2-W-117: the writer writes it as text and reports the markup it cannot spell', () => {
+    const output = writeWithDiagnostics(decodeTree(titled))
+    expect(output.source).toBe('``` "Hi there"\na\n```\n')
+    expect(output.diagnostics.map((finding) => finding.code)).toContain('field-unspellable')
+  })
+})
+
+describe('byte offsets', () => {
+  it('C2-A-140: an offset inside a four-byte character gives the start of the character, never its second half', () => {
+    expect([0, 1, 2, 3, 4].map((byte) => stringOffsetOfByte('😀x', byte))).toEqual([0, 0, 0, 0, 2])
+    expect(stringOffsetOfByte('a😀', 3)).toBe(1)
+  })
+
+  it('C2-A-010: an unpaired surrogate counts as U+FFFD, three bytes, as UTF-8 encoders write it', () => {
+    for (const text of ['\ud800x\n', 'a\udc00', '\udc00\ud800', '😀\ud800', 'é😀']) expect(utf8Length(text)).toBe(Buffer.byteLength(text))
+    expect(parse('\ud800x\n').srcByteLength).toBe(5)
+    expect(stringOffsetOfByte('\ud800x', 3)).toBe(1)
+  })
+})
+
+describe('option values', () => {
+  it('C2-H-137, C2-H-128: a urlPolicy that is not a deny list or an allow list of strings is refused', () => {
+    const refused = (urlPolicy: unknown): string => {
+      try {
+        render('[x](javascript:y)', { urlPolicy } as never)
+        return 'accepted'
+      } catch (error) {
+        return error instanceof CarveOptionError ? error.message : `other: ${String(error)}`
+      }
+    }
+    expect(refused({ allow: 'https' })).toBe('option urlPolicy: allow is not a list of strings')
+    expect(refused({ deny: [1] })).toBe('option urlPolicy: deny is not a list of strings')
+    expect(refused({ allow: ['https'], deny: ['ftp'] })).toBe('option urlPolicy: both a deny list and an allow list')
+    expect(refused({ other: [] })).toBe('option urlPolicy: unknown field other')
+    expect(refused(null)).toBe('option urlPolicy: not an object with a deny list or an allow list')
+    expect(refused(['ftp'])).toBe('option urlPolicy: not an object with a deny list or an allow list')
+    expect(refused({ allow: ['https'] })).toBe('accepted')
+  })
+
+  it('C2-H-137: symbols, labels and social of the wrong shape are refused too', () => {
+    expect(() => render('x', { symbols: { a: 1 } } as never)).toThrow(CarveOptionError)
+    expect(() => render('x', { labels: 'x' } as never)).toThrow(CarveOptionError)
+    expect(() => render('x', { social: { mentionUrl: 1 } } as never)).toThrow(CarveOptionError)
+    expect(() => render('x', { social: { other: '' } } as never)).toThrow(CarveOptionError)
+    expect(render('x', { symbols: {}, labels: {}, social: null })).toBe('<p>x</p>')
+  })
+})
+
+describe('the spelling of an include directive', () => {
+  it('C2-B-202, C2-W-058: a path is bare where the bare form holds it, an apostrophe included', () => {
+    expect(format("{{ a'b.crv }}\n")).toBe("{{ a'b.crv }}\n")
+    expect(format('{{ "a b.crv" }}\n')).toBe('{{ "a b.crv" }}\n')
+    expect(format('{{ "a#b.crv" }}\n')).toBe('{{ "a#b.crv" }}\n')
+    expect(format('{{ a\\b.crv }}\n')).toBe('{{ a\\b.crv }}\n')
+  })
+
+  it('C2-H-171, C2-W-058: the renderer shows the directive as the writer writes it', () => {
+    for (const source of ["{{ a'b.crv }}", '{{ "a b.crv" }}', '{{ a.crv #s @lines:1-2 @code }}', '{{ a.crv @lines:"1 - 2" }}', '{{ a.crv @lines:1"2 }}']) {
+      expect(render(source)).toBe(`<p>${format(source).trimEnd()}</p>`)
+    }
+    expect(format('{{ a.crv @lines:1"2 }}')).toBe('{{ a.crv @lines:1"2 }}\n')
+  })
+
+  /** A supplied tree of one include of `a.crv` with the fields `fields`. */
+  const include = (fields: object): DocumentNode => decodeTree(JSON.stringify({
+    type: 'document', astVersion: '2.0', children: [{ type: 'include', path: 'a.crv', ...fields }],
+  }))
+
+  it('C2-A-181, C2-B-204: a reader refuses a typed value outside its shape, and a quoted one reads back as invalid', () => {
+    for (const lines of ["'1", '5-1', '01-2']) expect(() => include({ options: { lines } }), lines).toThrow(CarveTreeError)
+    expect(() => include({ options: { cols: 'x' } })).toThrow(CarveTreeError)
+    expect(include({ options: { lines: '1-2', cols: ['a', 'b'] } }).children[0]).toMatchObject({ options: { lines: '1-2' } })
+    expect(parse('{{ a.crv @lines:"\'1" }}').children[0]).toMatchObject({ invalid: ['@lines:"\'1"'] })
+  })
+
+  it('C2-W-058, C2-A-181: an invalid entry is written as it is, and reported where it does not read back as itself', () => {
+    expect(writeWithDiagnostics(include({ invalid: ['@shift:x', '@size:2'] })).diagnostics).toEqual([])
+    for (const invalid of [['@lines:1-2'], ['@x }}']]) {
+      expect(writeWithDiagnostics(include({ invalid })).diagnostics.map((entry) => entry.code), invalid[0]).toEqual(['field-unspellable'])
+    }
+  })
+})
+
+// The findings of the second code review.
+const BACKTICK = '`'
+const ESCAPED_RUN = `\\${BACKTICK}${BACKTICK}`
+// A quadratic pass over the inputs below takes a minute; a linear one a few dozen milliseconds.
+const LINEAR_BUDGET_MS = 3000
+
+it('C2-B-024: lazy line-block comments grow with source length', () => {
+  const shape = (n: number): string => `- ::: |\n  a\n${'%% c\nb\n'.repeat(n)}`
+  const { ratio, times } = growthRatio(() => { parse(shape(500)) }, () => { parse(shape(8000)) })
+  expect(ratio, times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(48)
+})
+
+it('C2-H-201: capped cross-references grow with their count', () => {
+  const sizes = [4000, 32000]
+  const trees = sizes.map((n) => {
+    const tree = parse(`{#h}\n# ${'T'.repeat(n)}\n\n${'</#h> '.repeat(n)}\n`)
+    tree.srcByteLength = 0
+    return tree
+  })
+  const render = (index: number): void => {
+    const result = renderWithDiagnostics(trees[index]!)
+    expect(result.diagnostics.map((entry) => entry.code)).toContain('derived-text-budget')
+  }
+  expect(linearityExcess(() => render(0), () => render(1), 8)).toBeLessThan(LINEARITY_LIMIT)
+})
+
+for (const [name, shape] of [
+  ['line comments', (n: number): string => 'x\n%% ]\n'.repeat(n)],
+  ['inline comments', (n: number): string => '[x %% ]\n'.repeat(n)],
+] as const) {
+  it(`C2-W-010: ${name} closers grow with source length`, () => {
+    const { ratio, times } = growthRatio(() => { formatWithDiagnostics(shape(125)) }, () => { formatWithDiagnostics(shape(2000)) })
+    expect(ratio, times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(48)
+  })
+}
+
+type Nested = { type: string, value?: string, children: Nested[], [key: string]: unknown }
+
+/** The texts of the cells of the first row of the table that `source` opens. */
+function cellTexts(source: string): string[] {
+  const table = parse(source).children[0] as unknown as Nested
+  return table.children[0]!.children[0]!.children.map((cell) => cell.children.flatMap((block) => block.children.map((node) => node.value ?? '')).join(''))
+}
+
+describe('table rows in linear time', () => {
+  it('C2-B-169: a backtick run behind an escaped backtick protects no pipe without a closer of its length', () => {
+    expect(cellTexts(`| ${ESCAPED_RUN}x | y |`)).toEqual([`${BACKTICK}${BACKTICK}x`, 'y'])
+    expect(cellTexts(`| ${BACKTICK}a | b${BACKTICK} |`)).toHaveLength(1)
+    // A test that runs past its timeout still passes when it never yields, so the time is checked here.
+    const started = performance.now()
+    expect(cellTexts(`|${` ${ESCAPED_RUN}x |`.repeat(20000)}`)).toHaveLength(20000)
+    expect(parse(`| a |\n+${` ${ESCAPED_RUN}x |`.repeat(20000)}`).children).toHaveLength(1)
+    expect(performance.now() - started).toBeLessThan(LINEAR_BUDGET_MS)
+  })
+})
+
+describe('counts that once shared an integer', () => {
+  const firstCell = (source: string): Record<string, unknown> => {
+    const table = parse(source).children[0] as unknown as Nested
+    return table.children[0]!.children[0]!.children[0]! as unknown as Record<string, unknown>
+  }
+
+  it('C2-B-172, C2-A-092: a column span past 65,535 columns keeps its width and spans one row', () => {
+    const cell = firstCell(`|a${'|<'.repeat(65536)}|`)
+    expect(cell.colspan).toBe(65537)
+    expect(cell.rowspan).toBeUndefined()
+  })
+
+  it('C2-B-172: a row span past 65,535 rows keeps its height', () => {
+    expect(firstCell(`| a |\n${'| ^ |\n'.repeat(65536)}`).rowspan).toBe(65537)
+  })
+
+  it('C2-B-178, C2-B-187: head rows and footer rows past 65,535 are counted in full', () => {
+    const groups = (source: string): string[] => (parse(source).children[0] as unknown as Nested).children.map((group) => `${group.type} ${group.children.length}`)
+    expect(groups(`${'|= a |\n'.repeat(65537)}| b |\n`)).toEqual(['table_head 65537', 'table_body 1'])
+    expect(groups(`{footer-rows=65537}\n${'| a |\n'.repeat(65540)}`)).toEqual(['table_body 3', 'table_foot 65537'])
+  })
+})
+
+describe('a lone CR', () => {
+  it('C2-B-010: a lone CR at the end of the input is part of the line', () => {
+    expect(render('a\r')).toBe('<p>a\r</p>')
+    expect(parse('a\r').srcByteLength).toBe(2)
+    expect(parse('a\r', { positions: false }).children).toEqual([{ type: 'paragraph', children: [{ type: 'text', value: 'a\r' }] }])
+    expect(render('a\r\n')).toBe('<p>a</p>')
+    expect(render('- a\r')).toBe('<ul>\n  <li>a\r</li>\n</ul>')
+  })
+
+  it('C2-B-010: a lone CR in an opener line is title text, not the end of the line', () => {
+    expect(parse('::: note "a\rb"\nx\n:::\n').children[0]).toMatchObject({ type: 'admonition', title: [{ type: 'text', value: 'a\rb' }] })
+    expect(parse('::: note "a"\r\nx\n:::\n').children[0]).toMatchObject({ type: 'admonition', title: [{ type: 'text', value: 'a' }] })
+  })
+
+  it('C2-B-010, C2-W-011: a text that ends a line with a lone CR has no spelling, and the writer reports it', () => {
+    expect(writeWithDiagnostics(parse('a\r')).diagnostics.map((finding) => finding.channel)).toEqual(['render-loss'])
+  })
+})
+
+describe('the depth cap over blocks and inlines together', () => {
+  /** The children of the innermost quote of `lines`, each behind `quotes` quote marks. */
+  const inQuotes = (quotes: number, lines: string[]): Nested[] => {
+    let node = parse(lines.map((line) => '> '.repeat(quotes) + line).join('\n'), { positions: false }) as unknown as Nested
+    while (node.children[0]?.type === 'block_quote') node = node.children[0]
+    return node.children
+  }
+
+  it('C2-B-190, C2-I-118: a div title counts no block, so a link forms in it behind 199 quotes', () => {
+    expect(inQuotes(199, ['::: note "[x](/u)"'])[0]!.title).toEqual([{ type: 'link', href: '/u', children: [{ type: 'text', value: 'x' }] }])
+  })
+
+  it('C2-B-190: a description mark that would open a container past the cap is term text, and nothing crashes', () => {
+    expect(inQuotes(199, [':: t', ': d'])).toEqual([{
+      type: 'definition_list',
+      children: [{ type: 'definition_term', children: [{ type: 'text', value: 't' }, { type: 'soft_break' }, { type: 'text', value: ': d' }] }],
+    }])
+    expect(inQuotes(199, [':: t', '', ': d']).map((node) => node.type)).toEqual(['definition_list', 'paragraph'])
+    expect(inQuotes(198, [':: t', ': d'])[0]!.children.map((node) => node.type)).toEqual(['definition_term', 'definition_description'])
+  })
+})
+
+describe('writer output that read back as another tree', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-W-002, C2-W-003, C2-I-017: a lone backtick in emphasis is text, so the emphasis stays bare and reads back', () => {
+    expect(format(`/${BACKSLASH}${BACKTICK}:/`)).toBe(`/${BACKTICK}:/\n`)
+    expect(format(`*${BACKSLASH}${BACKTICK}:*`)).toBe(`*${BACKTICK}:*\n`)
+    expect(writeWithDiagnostics(parse(`/${BACKTICK}:/`)).diagnostics).toEqual([])
+  })
+
+  it('C2-W-002, C2-W-003: a backtick behind a code span is escaped, so the span does not take it', () => {
+    const source = `${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}`
+    expect(format(source)).toBe(`${source}\n`)
+    expect(format(`${source}b`)).toBe(`${source}b\n`)
+    expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
+  })
+
+  it('C2-W-125, case six: the backtick glued behind a code span takes its backslash before the runs before the span are read', () => {
+    for (const source of [`x${BACKTICK}${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}`,
+      `x{*${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}*`, `x(/u)${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}/`]) {
+      expect(format(source), source).toBe(`${source}\n`)
+      expect(referenceForm(`${source}\n`, parse(source)), source).toEqual({ form: `${source}\n` })
+    }
+  })
+
+  it('C2-W-112: a code span with an attribute block is not joined to the code span behind it', () => {
+    const source = `x${BACKTICK}a${BACKTICK}{.c}${BACKTICK}a${BACKTICK}`
+    expect(format(source)).toBe(`${source}\n`)
+    expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
+  })
+
+  it('C2-W-011: an output that reads back as another tree always carries a report', () => {
+    for (const source of ['a\r', `${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}`, `/${BACKSLASH}${BACKTICK}:/`]) {
+      const output = writeWithDiagnostics(parse(source))
+      const tree = (text: string): string => JSON.stringify(parse(text, { positions: false }).children)
+      const same = tree(output.source) === tree(source)
+      expect(same || output.diagnostics.length > 0).toBe(true)
+    }
+  })
+})
+
+describe('what the random writer gates found', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-B-118, C2-W-037: an info string with a backtick has no spelling, and the writer leaves it out of a supplied tree', () => {
+    const syntax = documentOf({ type: 'code_block', value: 'x\n', syntax: `a${BACKTICK}b` })
+    const output = writeWithDiagnostics(syntax)
+    expect(output.source).toBe('```\nx\n```\n')
+    expect(output.diagnostics.map((finding) => finding.code)).toEqual(['field-unspellable'])
+    expect(format(output.source)).toBe(output.source)
+    const title = documentOf({ type: 'code_block', value: 'x\n', syntax: 'js', title: [{ type: 'text', value: `t${BACKTICK}` }] })
+    expect(writeWithDiagnostics(title).source).toBe('```js\nx\n```\n')
+  })
+
+  it('C2-B-108, C2-B-118, C2-I-017: a tilde run with a backtick in its info string is text, and so is the unclosed backtick', () => {
+    const source = `~~~${BACKTICK}\nx\n~~~`
+    expect(render(source)).toBe(`<p>~~~${BACKTICK}\nx\n~~~</p>`)
+    const output = writeWithDiagnostics(parse(source))
+    expect(output.diagnostics).toEqual([])
+    expect(treesEqual(parse(output.source), parse(source))).toBe(true)
+  })
+
+  it('C2-W-016: a braced or editorial comment whose later line would open a block is refused', () => {
+    for (const source of [':: t\n: {%\n- [%}', '[^a]: {#\n- #}', '[^a]: {%\n- a%}', '[^a]: *`\n- `*']) {
+      const output = writeWithDiagnostics(parse(source))
+      expect(output.diagnostics.map((finding) => finding.code)).toContain('field-unspellable')
+    }
+    expect(writeWithDiagnostics(parse('a {% b\n c %}')).diagnostics).toEqual([])
+  })
+
+  it('C2-W-026: a line behind a hard break that would read as a list marker is kept text by an escape', () => {
+    expect(format(`:: t\n: ${BACKSLASH}\n- a`)).toBe(`:: t\n: ${BACKSLASH}\n  ${BACKSLASH}- a\n`)
+    expect(format(`[^a]: ${BACKSLASH}\n1. a`)).toBe(`[^a]: ${BACKSLASH}\n  1${BACKSLASH}. a\n`)
+  })
+
+  it('C2-W-092: of the later lines inside an inline node, the one that opens a block takes the escape', () => {
+    expect(format('[^a]: *a\n{*\n- (*')).toBe(`[^a]: *a\n  {*\n  ${BACKSLASH}- (*\n`)
+    expect(format('[^a]: /)\n}\n- \\{/')).toBe(`[^a]: /)\n  }\n  ${BACKSLASH}- ${BACKSLASH}{/\n`)
+  })
+
+  it('C2-W-125, case three: the colon of a name sigil before the bracket of a footnote reference takes the backslash', () => {
+    expect(format(`${BACKSLASH}:n[^[]`)).toBe(`${BACKSLASH}:n[^[]\n`)
+    expect(format(`:${BACKSLASH}_[^[]`)).toBe(`${BACKSLASH}:_[^[]\n`)
+  })
+
+  it('C2-W-026, C2-W-092: a line that starts inside an inline node and would open a block is escaped', () => {
+    expect(format(':: t\n: ^[\n- ]')).toBe(`:: t\n: ^[\n  ${BACKSLASH}- ]\n`)
+    expect(format('[^a]: /:\n1. a/')).toBe(`[^a]: /:\n  1${BACKSLASH}. a/\n`)
+    expect(format('[^a]: /|\n- +/')).toBe(`[^a]: /|\n  ${BACKSLASH}- +/\n`)
+  })
+
+  it('C2-W-088: a content that opens a block on its own is probed behind a word', () => {
+    expect(format(`/:: ${BACKSLASH}${BACKTICK}a/`)).toBe(`/:: ${BACKTICK}a/\n`)
+    expect(format(`{-${BACKSLASH}${BACKTICK}\n||-}`)).toBe(`{-${BACKTICK}\n||-}\n`)
+    expect(format(`${BACKSLASH}"*${BACKSLASH}${BACKTICK}u*`)).toBe(`${BACKSLASH}"*${BACKTICK}u*\n`)
+  })
+})
+
+describe('one UTF-8 width for positions, the layout record and the writer', () => {
+  it('C2-W-067, C2-B-218: a continuation row behind an unpaired surrogate stays where the record puts it, as U+FFFD', () => {
+    expect(format('| \ud800 |\n+ more |')).toBe('| \ufffd |\n+ more |\n')
+    expect(format('| \ud800 a |\n+ more |')).toBe('| \ufffd a |\n+ more |\n')
+    expect(format('| 😀 a |\n+ more |')).toBe('| 😀 a |\n+ more |\n')
+  })
+
+  it('C2-A-141: an unpaired surrogate is one column, as every code point is', () => {
+    const second = (source: string): unknown => (parse(source).children[0] as unknown as Nested).children[1]!['pos']
+    expect(second('\ud800a *b*')).toMatchObject({ startColumn: 4, startOffset: 5 })
+    expect(second('😀a *b*')).toMatchObject({ startColumn: 4, startOffset: 6 })
+  })
+})
+
+describe('folding and trimming keep the characters the specification keeps', () => {
+  it('C2-I-079: a label folds and trims spaces, tabs and line breaks, and keeps a no-break space', () => {
+    expect(render('[x][ r ]\n\n[r]: /u')).not.toContain('href')
+    expect(render('[x][ r ]\n\n[ r ]: /u')).toBe('<p><a href="/u">x</a></p>')
+    expect(render('[x][ r\n s ]\n\n[r s]: /u')).toBe('<p><a href="/u">x</a></p>')
+    expect(foldLabel(' a \t\n b  ')).toBe('a b')
+    expect(foldLabel(' a ')).toBe(' a ')
+  })
+
+  it('C2-B-084: the expansion of an abbreviation keeps a no-break space at its ends', () => {
+    expect(parse('*[A]:  x ').children[0]).toMatchObject({ type: 'abbreviation_def', expansion: ' x ' })
+    expect(parse('*[A]: x  ').children[0]).toMatchObject({ type: 'abbreviation_def', expansion: 'x' })
+  })
+})
+
+describe('one walker over every slot that holds nodes', () => {
+  const reference = { type: 'link', key: 'r', namespace: 'link', refForm: 'full', children: [{ type: 'text', value: 'x' }] }
+  const definition = { type: 'link_reference_definition', key: 'r', namespace: 'link', href: '/u' }
+  const supplied = (inline: unknown, ...more: unknown[]): DocumentNode => decodeTree(JSON.stringify({
+    type: 'document', astVersion: '2.0', extensions: [{ name: 'a.b', version: '1', required: false, slots: [] }],
+    children: [{ type: 'paragraph', children: [inline] }, ...more],
+  }))
+
+  it('C2-A-024, C2-A-025: resolution reads a reference in a ruby base and in an extension fallback', () => {
+    const ruby = { type: 'ruby', pairs: [{ type: 'ruby_pair', base: [reference], annotation: [{ type: 'text', value: 'a' }] }] }
+    expect(render(supplied(ruby, definition))).toBe('<p><ruby><a href="/u">x</a><rp>(</rp><rt>a</rt><rp>)</rp></ruby></p>')
+    expect(render(supplied({ type: 'inline_extension', name: 'a.b', version: '1', children: [], fallback: [reference] }, definition))).toBe('<p><a href="/u">x</a></p>')
+  })
+
+  it('C2-H-129: a profile filters the fallback of an extension, which the renderer writes', () => {
+    const link = { type: 'link', href: '/u', children: [{ type: 'text', value: 'x' }] }
+    expect(render(supplied({ type: 'inline_extension', name: 'a.b', version: '1', children: [], fallback: [link] }), { profile: 'minimal' })).toBe('<p>x</p>')
+  })
+
+  it('C2-H-024, C2-L-011: numbers count in document order, so a footnote in a title comes before one in the body', () => {
+    const html = render('::: note "T^[t]"\nb^[b]\n:::')
+    expect(html.indexOf('fnref1')).toBeLessThan(html.indexOf('fnref2'))
+    expect(html).toContain('T<a id="fnref1"')
+  })
+
+  it('C2-L-010: a pointer step of a named slot is encoded, and a token is decoded in the order RFC 6901 gives', () => {
+    expect(pointerKey('a/b~c')).toBe('a~1b~0c')
+    expect(pointerToken('a~1b~0c')).toBe('a/b~c')
+    expect(pointerToken('~01')).toBe('~1')
+    const slot = (name: string): unknown => ({ type: 'inline_extension', name: 'a.b', version: '1', children: [],
+      fallback: [], slots: { [name]: [{ type: 'paragraph', children: [] }] } })
+    expect(refusal({ ...inParagraph(slot('a/b')), extensions: [{ name: 'a.b', version: '1', required: false, slots: [] }] }))
+      .toBe('/children/0/children/0/slots/a~1b: not a lowercase slot name')
+  })
+})
+
+describe('fields checked against the node type they stand on', () => {
+  it('C2-A-103, C2-A-117, C2-A-170: a reference or a definition in the namespace of another node type is refused at decode', () => {
+    const link = { type: 'link', key: 'r', namespace: 'footnote', refForm: 'full', children: [{ type: 'text', value: 'x' }] }
+    expect(refusal(inParagraph(link))).toBe('/children/0/children/0/namespace: unknown value "footnote"')
+    expect(refusal(inParagraph({ type: 'footnote_ref', key: 'n', namespace: 'link' }))).toBe('/children/0/children/0/namespace: unknown value "link"')
+    expect(refusal(inParagraph({ type: 'abbreviation', key: 'A', namespace: 'heading' }))).toBe('/children/0/children/0/namespace: unknown value "heading"')
+    const definition = { type: 'document', astVersion: '2.0', children: [{ type: 'link_reference_definition', key: 'r', namespace: 'abbr', href: '/u' }] }
+    expect(refusal(definition)).toBe('/children/0/namespace: unknown value "abbr"')
+    expect(refusal(inParagraph({ ...link, namespace: 'link' }))).toBeNull()
+  })
+})
+
+describe('what the four-token writer gate found', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-I-090, C2-W-088: a name character behind a mention or a tag is escaped, so the name does not take it', () => {
+    expect(format(`x @a${BACKSLASH}_`)).toBe(`x @a${BACKSLASH}_\n`)
+    expect(format(`x ${BACKSLASH}{#a${BACKSLASH}_`)).toBe(`x {#a${BACKSLASH}_\n`)
+  })
+
+  it('C2-W-097: a backslash that ends a text is written as two before punctuation, a space or the end of a line', () => {
+    expect(format(`x(/u)${BACKSLASH}${BACKSLASH}${BACKTICK}/`)).toBe(`x(/u)${BACKSLASH}${BACKSLASH}${BACKTICK}/\n`)
+    expect(format(`a${BACKSLASH}${BACKSLASH}`)).toBe(`a${BACKSLASH}${BACKSLASH}\n`)
+  })
+
+  it('C2-W-088, C2-W-093: a closing mark behind the node is escaped, and a brace inside it, so the node closes where it should', () => {
+    expect(format(`x(/u)${BACKSLASH}{/${BACKSLASH}/`)).toBe(`x({/u)${BACKSLASH}{/}/\n`)
+    expect(format(`x${BACKSLASH}${BACKSLASH}+-${BACKSLASH}+`)).toBe(`x${BACKSLASH}${BACKSLASH}+-${BACKSLASH}+\n`)
+  })
+
+  it('C2-W-088: a construct inside the content takes its escape before the end of the content', () => {
+    expect(format(`x(/u)${BACKSLASH}${BACKTICK}[^/`)).toBe(`x(/u)${BACKTICK}[^/\n`)
+    expect(format(`x(/u)${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKSLASH}/`)).toBe(`x(/u)${BACKTICK}${BACKSLASH}${BACKSLASH}/\n`)
+  })
+
+  it('C2-W-093: a closing mark at the end of the content, glued to the closer, takes the backslash', () => {
+    expect(format(`x(/u)${BACKSLASH}//{/`)).toBe(`x(/u)${BACKSLASH}//{/\n`)
+    expect(format(`x(/u)${BACKSLASH}//}/`)).toBe(`x(/u)${BACKSLASH}//}/\n`)
+  })
+
+  it('C2-W-099: a content that starts with the mark of its opener continues the run, so its first hyphen is escaped', () => {
+    expect(format(`x{-${BACKSLASH}-${BACKSLASH}${BACKTICK}-}`)).toBe(`x{--${BACKTICK}-}\n`)
+  })
+
+  it('C2-W-092: a text that ends before a line break takes no escape for the markup of the next line', () => {
+    expect(format(`x[^\n${BACKSLASH}${BACKTICK}${BACKTICK}`)).toBe(`x[^\n${BACKTICK}${BACKTICK}\n`)
+  })
+})
+
+describe('what the random document gate found', () => {
+  it('C2-W-003, C2-L-021: a fragment that starts an empty cell is joined without a space, so formatting is stable', () => {
+    for (const source of ['||<|\n+a|[|', '||<|\n+a|<|']) {
+      const once = format(source)
+      expect(once).toBe(source.endsWith('[|') ? '| a [ | < |\n+ | |\n' : '| a < | < |\n+ | |\n')
+      expect(format(once)).toBe(once)
+    }
+  })
+})
+
+describe('what the third code review found', () => {
+  const BACKSLASH = '\\'
+  const BOM = '﻿'
+
+  /** The render-loss diagnostics of formatting `source`, as `code path`. */
+  function writerLosses(source: string): string[] {
+    const found = formatWithDiagnostics(source).diagnostics.filter((entry) => entry.channel === 'render-loss')
+    return found.map((entry) => `${entry.code} ${entry.path ?? ''}`)
+  }
+
+  /** Formats `source`, checks C2-W-002 and C2-W-003 with no reported loss, and returns the form. */
+  function faithful(source: string): string {
+    expect(writerLosses(source)).toEqual([])
+    const once = format(source)
+    expect(treesEqual(parse(once), parse(source))).toBe(true)
+    expect(format(once)).toBe(once)
+    return once
+  }
+
+  it('C2-W-125: a lone bracket inside an inline footnote takes the backslash, also inside emphasis', () => {
+    expect(faithful(`^[/[${BACKSLASH}]]/]`)).toBe(`^[/[${BACKSLASH}]]/]\n`)
+    faithful(`^[{/[]${BACKSLASH}]/}]`)
+  })
+
+  it('C2-W-125: a sigil before a footnote reference inside emphasis keeps its backslash', () => {
+    expect(faithful(`/${BACKSLASH}![^^]/`)).toBe(`/${BACKSLASH}![^^]/\n`)
+  })
+
+  it('C2-W-088: escapes are found again in the final spelling, before a code span opener and behind byte-order marks', () => {
+    faithful(`/*{${BACKSLASH}${BACKTICK}(*/${BACKSLASH}${BACKTICK}`)
+    expect(faithful(`${BOM}${BOM}${BACKSLASH}${BACKTICK}`)).toBe(`\n${BOM}${BACKTICK}\n`)
+  })
+
+  it('C2-W-016: a lone CR at the end of a line is refused with field-unspellable; inside a line it is text', () => {
+    expect(writerLosses('a\r')).toEqual(['field-unspellable /children/0/children/0/value'])
+    expect(writerLosses('a\r\r\nb')).toEqual(['field-unspellable /children/0/children/0/value'])
+    expect(faithful('a\rb')).toBe('a\rb\n')
+  })
+
+  it('C2-W-088: many escaped backticks take linear time', () => {
+    const source = `x${`${BACKSLASH}${BACKTICK}`.repeat(20000)}z`
+    const started = performance.now()
+    // C2-I-017: one run of 20,000 backticks has no closer of its length, so it is text.
+    expect(format(source)).toBe(`x${BACKTICK.repeat(20000)}z\n`)
+    expect(performance.now() - started).toBeLessThan(3000)
+  })
+
+  it('C2-A-093, C2-A-161: a metadata field named span is no span mark, so the counts of the cells are compared', () => {
+    const table = (colspan: number): DocumentNode => {
+      const tree = parse('| a | b |')
+      type Level = { children: Level[] } & Record<string, unknown>
+      const cell = (tree.children[0] as unknown as Level).children[0]!.children[0]!.children[0]!
+      cell['colspan'] = colspan
+      cell['metadata'] = { span: 123 }
+      return tree
+    }
+    expect(treesEqual(table(1), table(2))).toBe(false)
+    expect(treesEqual(table(2), table(2))).toBe(true)
+  })
+})
+
+describe('every option is checked against its declared type first', () => {
+  interface OptionRow {
+    name: string
+    kind: string
+    type: string
+    values?: string[]
+  }
+  const rows = (JSON.parse(readFileSync(new URL('../data/options.json', import.meta.url), 'utf8')) as { options: OptionRow[] }).options
+
+  const VALID: Readonly<Record<string, unknown>> = {
+    adapter: 'word', alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', normalize: true, platforms: ['github'],
+    profile: 'minimal', rawHtml: true, renderers: {}, roundtrip: true, rules: { r: 'on' }, sections: false, smartTypography: false,
+    social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
+    allowLosses: ['raw-format-dropped'], maxLosses: 5, softBreak: 'br', codeBlockRenderer: () => undefined,
+  }
+  // Values of the right type that this engine does not offer, or that no stage of it reads.
+  const UNOFFERED: Readonly<Record<string, unknown>> = {}
+  const SAMPLES: readonly [string, unknown][] = [
+    ['a string', 'x'], ['a number', 1], ['a boolean', true], ['a list', ['x']], ['a map', { x: 'y' }], ['a function', () => null],
+    ['a Map', new Map([['a', 'b']])],
+  ]
+  /** Which samples are of the declared type of an option. */
+  function ofType(row: OptionRow, sample: string): boolean {
+    if (row.type === 'boolean') return sample === 'a boolean'
+    if (row.type === 'count') return sample === 'a number'
+    if (row.name === 'codeBlockRenderer') return sample === 'a function'
+    if (row.type === 'list') return sample === 'a list'
+    if (row.type === 'map') return sample === 'a map'
+    if (row.type === 'structure') return sample === 'a map' || (row.name === 'includes' && (sample === 'a string' || sample === 'a function'))
+    return false
+  }
+
+  function outcome(row: OptionRow, value: unknown): string {
+    const options = { [row.name]: value } as never
+    try {
+      if (row.kind === 'format') format('x', options)
+      else if (row.kind === 'parse') parse('x', options)
+      else render('x', options)
+      return 'accepted'
+    } catch (error) {
+      return error instanceof CarveOptionError ? error.message : `other: ${String(error)}`
+    }
+  }
+
+  const typeRefusal = (message: string): boolean =>
+    message.startsWith('option ') && !/unknown option|not an option of|not offered/.test(message) && message !== 'accepted'
+
+  it('C2-H-137: the option list is the 25 of the data file', () => {
+    expect(rows).toHaveLength(25)
+    expect(Object.keys(VALID).sort()).toEqual(rows.map((row) => row.name).sort())
+  })
+
+  for (const row of rows) {
+    it(`C2-H-137: ${row.name} (${row.type}) takes a valid value, refuses each wrong type, and reads null as its spec says`, () => {
+      const lint = row.kind === 'lint' || row.kind === 'import'
+      expect(outcome(row, VALID[row.name])).toBe(lint ? `option ${row.name}: not an option of render` : 'accepted')
+      if (UNOFFERED[row.name] !== undefined) expect(outcome(row, UNOFFERED[row.name])).toBe(`option ${row.name}: not offered by this engine`)
+      for (const [sample, value] of SAMPLES) {
+        if (ofType(row, sample)) continue
+        const message = outcome(row, value)
+        expect(typeRefusal(message), `${row.name} given ${sample}: ${message}`).toBe(true)
+      }
+      const nullable = row.name === 'includes' || row.name === 'social' || row.name === 'codeBlockRenderer'
+      const atNull = outcome(row, null)
+      if (nullable) expect(atNull).toBe('accepted')
+      else expect(typeRefusal(atNull), `${row.name} given null: ${atNull}`).toBe(true)
+    })
+  }
+
+  it('C2-H-137: an unknown option name is refused at every stage', () => {
+    expect(() => parse('x', { colour: true } as never)).toThrow('option colour: unknown option')
+    expect(() => render('x', { colour: true } as never)).toThrow('option colour: unknown option')
+    expect(() => format('x', { colour: true } as never)).toThrow('option colour: unknown option')
+  })
+
+  it('C2-H-137: extensions must be a list, and an object or a Map is refused', () => {
+    expect(() => parse('x', { extensions: {} } as never)).toThrow('option extensions: not a list')
+    expect(() => parse('x', { extensions: new Map([['a', 'b']]) } as never)).toThrow('option extensions: not a list')
+    expect(() => parse('x', { extensions: [{ name: 'a.b' }] } as never)).toThrow('option extensions: an invalid extension registration')
+  })
+})
+
+describe('what the random writer gate found after the third review', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-W-088: a construct that runs on over the closing mark of emphasis takes its escape, so the bare form stays', () => {
+    for (const source of [`/^${BACKSLASH}[/}]`, `/${BACKSLASH}:n[/}]`, `/${BACKSLASH}[^*/.]`, `{=^${BACKSLASH}[=}*]`]) {
+      expect(format(source)).toBe(`${source}\n`)
+    }
+  })
+
+  it('C2-W-088: a content that needs one escape after another takes them all', () => {
+    expect(format(`*${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}}*`)).toBe(`*${BACKTICK}${BACKTICK}}*\n`)
+    expect(format(`{- |${BACKSLASH}${BACKTICK}a-}`)).toBe(`{- |${BACKTICK}a-}\n`)
+  })
+
+  it('C2-W-016: a CR behind spaces at the end of a line, and a line of only a CR, are refused at the text', () => {
+    const codes = (source: string): string[] => formatWithDiagnostics(source).diagnostics.filter((entry) => entry.channel === 'render-loss').map((entry) => entry.code)
+    expect(codes('a \r')).toEqual(['field-unspellable'])
+    expect(codes('a\n\r')).toEqual(['field-unspellable'])
+  })
+
+  it('C2-A-069: a hard break at the end of a line of a line block is written as its backslash', () => {
+    for (const source of [`::: |\n${BACKSLASH}\n:::\n`, `::: |\na ${BACKSLASH}\nb\n:::\n`]) expect(format(source)).toBe(source)
+  })
+
+  it('C2-W-125: a brace before the closing mark takes the backslash, and so does a lone bracket in an inline footnote', () => {
+    expect(format(`/${BACKSLASH}{/[/`)).toBe(`/${BACKSLASH}{/[/\n`)
+    expect(format(`^[${BACKSLASH}[[]]`)).toBe(`^[${BACKSLASH}[[]]\n`)
+  })
+
+  it('C2-W-125: every lone bracket of an inline footnote takes the backslash, also beside an escaped backtick', () => {
+    for (const source of [`^[${BACKSLASH}[${BACKSLASH}${BACKTICK}]`, `^[${BACKSLASH}[${BACKSLASH}[]`, `:n[${BACKSLASH}[${BACKSLASH}${BACKTICK}]`]) {
+      // C2-I-017: the lone backtick is text and takes no backslash.
+      expect(format(source)).toBe(`${source.replace(`${BACKSLASH}${BACKTICK}`, BACKTICK)}\n`)
+    }
+  })
+
+  it('C2-W-005, C2-A-074: a braced comment whose padded line would open a block is written glued to its marks', () => {
+    expect(format('- {%\n-%}')).toBe('- {%\n  -%}\n')
+    expect(treesEqual(parse(format('{%\n:::%}')), parse('{%\n:::%}'))).toBe(true)
+  })
+
+  it('C2-W-069: emphasis glued behind the closer of emphasis is braced', () => {
+    expect(format(`/${BACKSLASH}${BACKTICK}/{/[/}`)).toBe(`/${BACKTICK}/{/[/}\n`)
+  })
+
+  it('C2-W-088: a content that starts with a line break is probed behind a word', () => {
+    expect(format(`{-\n/${BACKSLASH}${BACKTICK}%-}`)).toBe(`{-\n/${BACKTICK}%-}\n`)
+  })
+
+  it('C2-W-016: a paragraph of only a CR is refused at its text', () => {
+    expect(formatWithDiagnostics('\r').diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
+  })
+
+  it('C2-W-088: a bracket run stops at a bracket of another opener', () => {
+    expect(format(`x![^${BACKSLASH}[]`)).toBe(`x![^${BACKSLASH}[]\n`)
+  })
+})
+
+describe('fourth review: a quoted value stays on its line', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-I-069: a backslash at the end of a line does not carry a link title over the line break', () => {
+    expect(render(`[x](u "a${BACKSLASH}\nb")`)).not.toContain('<a ')
+    expect(render(`[x](u "a${BACKSLASH}"b")`)).toBe('<p><a href="u" title="a&quot;b">x</a></p>')
+  })
+
+  it('C2-I-028: a backslash at the end of a line does not carry a quoted attribute value over the line break', () => {
+    expect(render(`${BACKTICK}x${BACKTICK}{title="a${BACKSLASH}\nb"}`)).not.toContain('<code title')
+    expect(render(`${BACKTICK}x${BACKTICK}{title="a${BACKSLASH}"b"}`)).toBe('<p><code title="a&quot;b">x</code></p>')
+  })
+})
+
+
+describe('rule-state option type', () => {
+  it('C2-W-109: rules accepts on and off and refuses booleans', () => {
+    expect(() => checkType('rules', { a: 'on', b: 'off' })).not.toThrow()
+    expect(() => checkType('rules', { a: true })).toThrow(CarveOptionError)
+    expect(() => checkType('rules', { a: 'enabled' })).toThrow(CarveOptionError)
+  })
+})

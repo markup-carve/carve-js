@@ -1,0 +1,199 @@
+// Smart typography (C2-I-104 to C2-I-117). It reads the text that the scan left as text and
+// writes a text span for each plain stretch and a SMART node for each match.
+import { APOSTROPHE, GREATER, HYPHEN, PLUS, QUOTE_MARK } from './chars.ts'
+import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
+import { INLINE_COMMENT, SMART } from './inline-kinds.ts'
+import { type InlineState, TOKEN_END, TOKEN_START, TOKEN_TEXT, TOKEN_WIDTH, writeInlineEvent } from './inline-state.ts'
+import {
+  CHARACTER_CLASSES, CLASS_QUOTE_OPENS_AFTER, CLASS_SMART_TRIGGER,
+  SMART_EM_DASH, SMART_EN_DASH, SMART_GLYPHS, SMART_LEFT_DOUBLE_QUOTE, SMART_PLUS_MINUS, SMART_LEFT_SINGLE_QUOTE,
+  SMART_RIGHT_DOUBLE_QUOTE, SMART_RIGHT_SINGLE_QUOTE, SMART_RIGHTWARDS_ARROW, SMART_RUNS,
+} from './inline-tables.ts'
+import { codePointAt, codePointBefore, isAsciiDigit, isBoundarySpace, NO_CHARACTER } from './unicode.ts'
+
+const ASCII = 128
+const LEFT_SINGLE = 0x2018
+const LEFT_DOUBLE = 0x201c
+const NO_MATCH = -1
+// Whether a character can start a match, as bytes: the text is asked this once per character.
+const TRIGGERS = Uint8Array.from(CHARACTER_CLASSES, (classes) => ((classes & CLASS_SMART_TRIGGER) === 0 ? 0 : 1))
+
+/** Offset in the source of the offset `pos` of the content. Offsets are asked for in rising order. */
+export function toSource(state: InlineState, pos: number): number {
+  let line = state.line
+  while (line + 1 < state.lineCount && state.lineText[line + 1]! <= pos) line++
+  while (line > 0 && state.lineText[line]! > pos) line--
+  state.line = line
+  return state.lineSource[line]! + pos - state.lineText[line]!
+}
+
+function inClass(code: number, mask: number): boolean {
+  return code >= 0 && code < ASCII && (CHARACTER_CLASSES[code]! & mask) !== 0
+}
+
+function isPlusOrHyphen(code: number): boolean {
+  return code === PLUS || code === HYPHEN
+}
+
+/** The character before `pos` in the text stretch that starts at `from`; before `from` it is the state's. */
+function before(state: InlineState, pos: number, from: number): number {
+  return pos > from ? codePointBefore(state.text, pos) : state.previous
+}
+
+/**
+ * C2-I-117: the neighbor behind a run that ends its text stretch at `to`. Only a character of the same text
+ * counts: a braced comment is transparent (C2-I-026), and a delimiter mark or any other node is no neighbor.
+ */
+function runNeighborAfter(state: InlineState, to: number): number {
+  const tokens = state.tokens
+  let at = state.nextToken
+  let pos = to
+  while (at < state.tokenLength && tokens[at] === INLINE_COMMENT && tokens[at + TOKEN_START] === pos) {
+    pos = tokens[at + TOKEN_END]!
+    at += TOKEN_WIDTH
+  }
+  if (pos >= state.end || (at < state.tokenLength && tokens[at + TOKEN_START] === pos && tokens[at] !== TOKEN_TEXT)) return NO_CHARACTER
+  return codePointAt(state.text, pos, state.end)
+}
+
+/**
+ * C2-I-104: a straight quote opens behind whitespace, at the start of a content or of a node, and behind
+ * opening punctuation, an opening straight quote included: its glyph is the neighbor then.
+ */
+function quoteOpens(previous: number): boolean {
+  return isBoundarySpace(previous) || previous === LEFT_SINGLE || previous === LEFT_DOUBLE || inClass(previous, CLASS_QUOTE_OPENS_AFTER)
+}
+
+function writeSmart(state: InlineState, start: number, end: number, kind: number): void {
+  writeInlineEvent(state, eventTag(ENTER, SMART, 0), toSource(state, start), kind)
+  writeInlineEvent(state, eventTag(EXIT, SMART, 0), toSource(state, end), 0)
+}
+
+/** C2-I-111: the dashes of a run of `length` hyphens at `pos`. */
+function writeDashes(state: InlineState, pos: number, length: number): void {
+  // The rule decides the whole run, and once more for the rest behind a leading em dash: it is not asked per dash.
+  const mixed = length % 3 !== 0 && length % 2 !== 0
+  if (mixed) {
+    state.smartKind = SMART_EM_DASH
+    writeSmart(state, pos, pos + 3, SMART_EM_DASH)
+    pos += 3
+    length -= 3
+  }
+  const em = length % 3 === 0
+  const size = em ? 3 : 2
+  state.smartKind = em ? SMART_EM_DASH : SMART_EN_DASH
+  for (; length > 0; pos += size, length -= size) writeSmart(state, pos, pos + size, state.smartKind)
+}
+
+/**
+ * C2-I-111: the hyphen run at `pos`. Returns the offset behind what was written, or the negated end of a
+ * single hyphen, which stays as typed.
+ */
+function hyphens(state: InlineState, pos: number, to: number): number {
+  const text = state.text
+  let end = pos
+  while (end < to && text.charCodeAt(end) === HYPHEN) end++
+  const length = end - pos
+  // C2-I-116: an arrow needs its exact run.
+  if (length === 2 && end < to && text.charCodeAt(end) === GREATER) {
+    flushSpan(state, pos)
+    writeSmart(state, pos, end + 1, SMART_RIGHTWARDS_ARROW)
+    state.smartKind = SMART_RIGHTWARDS_ARROW
+    return end + 1
+  }
+  if (length < 2) return -end
+  flushSpan(state, pos)
+  writeDashes(state, pos, length)
+  return end
+}
+
+/** C2-I-115, C2-I-117: the longest replaced run at `pos`, as an index into SMART_RUNS, or NO_MATCH. */
+function runAt(text: string, pos: number, to: number): number {
+  for (let index = 0; index < SMART_RUNS.length; index++) {
+    const source = SMART_RUNS[index]![0]
+    const end = pos + source.length
+    if (end > to || source.charCodeAt(0) === HYPHEN || !text.startsWith(source, pos)) continue
+    // C2-I-116: a longer hyphen run next to `<` is a dash run.
+    if (source.charCodeAt(source.length - 1) === HYPHEN && end < to && text.charCodeAt(end) === HYPHEN) continue
+    return index
+  }
+  return NO_MATCH
+}
+
+function flushSpan(state: InlineState, end: number): void {
+  if (end > state.textRun) writeInlineEvent(state, eventTag(SPAN, 0, 0), toSource(state, state.textRun), toSource(state, end))
+  state.textRun = end
+}
+
+function quote(state: InlineState, pos: number, from: number, to: number, code: number): number {
+  const opens = quoteOpens(before(state, pos, from))
+  let kind = opens ? SMART_LEFT_DOUBLE_QUOTE : SMART_RIGHT_DOUBLE_QUOTE
+  if (code === APOSTROPHE) {
+    // C2-I-105: before an ASCII digit a single quote is the apostrophe.
+    const next = pos + 1 < to ? codePointAt(state.text, pos + 1, to) : runNeighborAfter(state, to)
+    kind = opens && !isAsciiDigit(next) ? SMART_LEFT_SINGLE_QUOTE : SMART_RIGHT_SINGLE_QUOTE
+  }
+  flushSpan(state, pos)
+  writeSmart(state, pos, pos + 1, kind)
+  state.smartKind = kind
+  return pos + 1
+}
+
+/**
+ * The match at the trigger character at `pos`. Returns the offset behind the match when nodes
+ * were written, `pos` when there is none, and a negative offset behind text to skip.
+ */
+function smartAt(state: InlineState, pos: number, from: number, to: number): number {
+  const text = state.text
+  const code = text.charCodeAt(pos)
+  if (code === QUOTE_MARK || code === APOSTROPHE) return quote(state, pos, from, to, code)
+  if (code === HYPHEN) return hyphens(state, pos, to)
+  const run = runAt(text, pos, to)
+  if (run === NO_MATCH) return pos
+  const [source, kind] = SMART_RUNS[run]!
+  // C2-I-117: the plus-minus sign needs its exact run.
+  const next = pos + 2 < to ? codePointAt(state.text, pos + 2, to) : runNeighborAfter(state, to)
+  if (kind === SMART_PLUS_MINUS && (isPlusOrHyphen(before(state, pos, from)) || isPlusOrHyphen(next))) {
+    return pos
+  }
+  flushSpan(state, pos)
+  writeSmart(state, pos, pos + source.length, kind)
+  state.smartKind = kind
+  return pos + source.length
+}
+
+/** Sets what the next quote or hyphen run sees before it, after a node was written up to `pos`. */
+function afterSmart(state: InlineState, pos: number): void {
+  state.previous = SMART_GLYPHS[state.smartKind]!.codePointAt(0)!
+  state.textRun = pos
+}
+
+/** Writes the text `[from, to)` of the content, with its smart punctuation. */
+export function writeText(state: InlineState, from: number, to: number): void {
+  if (from >= to) return
+  const text = state.text
+  state.textRun = from
+  let start = from
+  for (let pos = from; pos < to;) {
+    const code = text.charCodeAt(pos)
+    if (code >= ASCII || TRIGGERS[code] === 0) {
+      pos++
+      continue
+    }
+    const end = smartAt(state, pos, start, to)
+    if (end > pos) {
+      afterSmart(state, end)
+      start = end
+    }
+    pos = end > pos ? end : Math.max(pos + 1, -end)
+  }
+  if (to > state.textRun) {
+    state.previous = codePointBefore(text, to)
+    flushSpan(state, to)
+  }
+}
+
+/** Sets the typography state as it is at the start of a content, or of the content of a node. */
+export function startOfContent(state: InlineState): void {
+  state.previous = NO_CHARACTER
+}

@@ -1,0 +1,429 @@
+// The 24 options of C2-H-137. An option this engine does not offer is refused, not ignored.
+import {
+  BOOLEAN_DEFAULTS, COUNT_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS,
+  OPTION_TYPES, RENDER_LOSS_CODES,
+} from './option-tables.ts'
+import { type ExtensionDefinition, type ExtensionRenderer } from './extensions/types.ts'
+import { includeSettings, type IncludeSettings } from './include-settings.ts'
+import { type CodeBlockNode } from './ast.ts'
+
+export type HeadingIds = 'off' | 'keep-case' | 'lower' | 'ascii' | 'ascii-lower' | 'ascii-strict' | 'ascii-strict-lower'
+export type Mode = 'interactive' | 'static'
+export type Profile = 'full' | 'article' | 'comment' | 'minimal'
+export type SoftBreak = 'newline' | 'space' | 'br'
+
+/** C2-H-128: a deny list or an allow list of URL schemes. There is no off value. */
+export interface UrlPolicy {
+  deny?: readonly string[]
+  allow?: readonly string[]
+}
+
+/** C2-H-126: what a social resolver is called with; `context` is the host's own value, passed on unread. */
+export interface SocialRequest {
+  kind: 'mention' | 'tag'
+  name: string
+  context?: unknown
+}
+
+/** C2-H-126: URL templates, in which `{name}` stands for the encoded name, or resolvers. */
+export interface Social {
+  mentionUrl?: string
+  tagUrl?: string
+  resolveMention?: (request: SocialRequest) => string | null | undefined
+  resolveTag?: (request: SocialRequest) => string | null | undefined
+  context?: unknown
+}
+
+export interface Options {
+  extensions?: readonly ExtensionDefinition[]
+  includes?: unknown
+  headingIds?: HeadingIds
+  mode?: Mode
+  renderers?: Readonly<Record<string, ExtensionRenderer>>
+  /** Trusted host HTML for ordinary code blocks; undefined selects the core HTML. */
+  codeBlockRenderer?: ((node: Readonly<CodeBlockNode>, defaultHtml: string) => string | null | undefined) | null
+  symbols?: Readonly<Record<string, string>>
+  labels?: Readonly<Record<string, string>>
+  social?: Social | null
+  sourceLines?: boolean
+  sections?: boolean
+  smartTypography?: boolean
+  roundtrip?: boolean
+  rawHtml?: boolean
+  urlPolicy?: UrlPolicy
+  profile?: Profile
+  strictLosses?: boolean
+  /** C2-H-204: render-loss codes left out of the record. */
+  allowLosses?: readonly string[]
+  /** C2-H-205: the cap on the render-loss entries the record keeps. */
+  maxLosses?: number
+  /** C2-H-203: how a soft break is written. */
+  softBreak?: SoftBreak
+  alignTables?: boolean
+  /** C2-W-127: `format` writes as if the parse had no sidecar. */
+  normalize?: boolean
+  rules?: Readonly<Record<string, 'on' | 'off'>>
+  platforms?: readonly string[]
+}
+
+/** The options a parse reads, and whether the tree carries positions (C2-A-138). */
+export interface ParseOptions extends Pick<Options, 'extensions' | 'includes' | 'headingIds'> {
+  positions?: boolean
+}
+
+export type RenderOptions = Omit<Options, 'alignTables' | 'normalize' | 'rules' | 'platforms'>
+
+/** The options with every default filled in. */
+export interface Settings {
+  extensions: readonly ExtensionDefinition[]
+  /** C2-N-003: the resolver and the two limits, or null when nothing is expanded. */
+  includes: IncludeSettings | null
+  renderers: Readonly<Record<string, ExtensionRenderer>>
+  codeBlockRenderer: ((node: Readonly<CodeBlockNode>, defaultHtml: string) => string | null | undefined) | undefined
+  urlPolicy: UrlPolicy
+  headingIds: HeadingIds
+  mode: Mode
+  symbols: Readonly<Record<string, string>>
+  labels: Readonly<Record<string, string>>
+  social: Social | null
+  sourceLines: boolean
+  sections: boolean
+  smartTypography: boolean
+  roundtrip: boolean
+  rawHtml: boolean
+  denied: ReadonlySet<string> | null
+  allowed: ReadonlySet<string> | null
+  profile: Profile
+  strictLosses: boolean
+  /** C2-H-075 order of the semantic span keys, with what extensions add (`ExtensionDefinition.semanticKeys`). */
+  semanticKeys: readonly (readonly [string, string | null])[]
+  /** The quote glyphs of a registered extension, or null for those of C2-H-078. */
+  quotes: readonly [string, string, string, string] | null
+  allowLosses: ReadonlySet<string>
+  maxLosses: number
+  softBreak: SoftBreak
+}
+
+export const CORE_SEMANTIC_KEYS: readonly (readonly [string, string | null])[] = [['abbr', 'title'], ['time', 'datetime'], ['kbd', null]]
+
+/** An option that has an unknown name or value, or that this engine does not offer. */
+export class CarveOptionError extends Error {
+  option: string
+  path: string
+
+  constructor(option: string, message: string) {
+    super(`option ${option}: ${message}`)
+    this.name = 'CarveOptionError'
+    this.option = option
+    this.path = `/${option.replaceAll('~', '~0').replaceAll('/', '~1')}`
+  }
+}
+
+type OptionMap = Readonly<Record<string, unknown>>
+
+function enumValue(options: OptionMap, name: string): string {
+  const value = options[name]
+  if (value === undefined) return ENUM_DEFAULTS.get(name)!
+  if (typeof value !== 'string' || !ENUM_VALUES.get(name)!.includes(value)) {
+    throw new CarveOptionError(name, `unknown value ${JSON.stringify(value)}`)
+  }
+  return value
+}
+
+function booleanValue(options: OptionMap, name: string): boolean {
+  const value = options[name]
+  if (value === undefined) return BOOLEAN_DEFAULTS.get(name)!
+  if (typeof value !== 'boolean') throw new CarveOptionError(name, 'not a boolean')
+  return value
+}
+
+function schemeSet(policy: UrlPolicy, field: 'deny' | 'allow'): ReadonlySet<string> | null {
+  const list = policy[field]
+  return list === undefined ? null : new Set(list.map((scheme) => scheme.toLowerCase()))
+}
+
+/** A record such as an object literal or JSON gives: not an array, a Map or an instance of another class. */
+function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  if (typeof value !== 'object' || value === null) return false
+  const prototype: unknown = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+// The type of the items of each list and map option (spec/0.2/data/options.json).
+const ITEM_TYPES = new Map([
+  ['labels', 'string'], ['symbols', 'string'], ['rules', 'rule-state'], ['platforms', 'string'], ['allowLosses', 'string'],
+])
+const MAX_LOSSES_DEFAULT = COUNT_DEFAULTS.get('maxLosses')!
+const STRUCTURE_NAMES = new Map([
+  ['includes', 'an include root or resolver'], ['social', 'an object'], ['urlPolicy', 'an object with a deny list or an allow list'],
+])
+
+function checkItems(name: string, items: readonly unknown[], what: string): void {
+  const type = ITEM_TYPES.get(name)
+  const valid = items.every((item) => type === 'rule-state' ? item === 'on' || item === 'off' : typeof item === type)
+  if (type !== undefined && !valid) throw new CarveOptionError(name, `not ${what} of ${type}s`)
+}
+
+/** The test of each declared type: the reason a value of the option `name` is refused, or null. */
+const TYPE_CHECKS = new Map<string, (name: string, value: unknown) => string | null>([
+  ['boolean', (_name, value) => (typeof value === 'boolean' ? null : 'not a boolean')],
+  ['count', (_name, value) => (Number.isSafeInteger(value) && (value as number) >= 0 ? null : 'not a count')],
+  ['enum', (name, value) => {
+    if (typeof value === 'string' && ENUM_VALUES.get(name)!.includes(value)) return null
+    return `unknown value ${JSON.stringify(value) ?? typeof value}`
+  }],
+  ['list', (name, value) => {
+    if (!Array.isArray(value)) return 'not a list'
+    checkItems(name, value, 'a list')
+    return null
+  }],
+  ['map', (name, value) => {
+    if (!isPlainObject(value)) return 'not a map'
+    checkItems(name, Object.values(value), 'a map')
+    return null
+  }],
+  ['structure', (name, value) => {
+    const resolver = name === 'includes' && (typeof value === 'string' || typeof value === 'function')
+    return isPlainObject(value) || resolver ? null : `not ${STRUCTURE_NAMES.get(name)!}`
+  }],
+])
+
+/**
+ * C2-H-137: refuses a value that is not of the declared type of the option `name`, before anything
+ * else is read of it. Null is a value only of an option whose default is null.
+ */
+export function checkType(name: string, value: unknown): void {
+  if (value === undefined || (value === null && NULL_DEFAULTS.includes(name))) return
+  const reason = TYPE_CHECKS.get(OPTION_TYPES.get(name)!)!(name, value)
+  if (reason !== null) throw new CarveOptionError(name, reason)
+}
+
+/** C2-H-128: a deny list or an allow list of schemes, each a list of strings. An absent policy is the default deny list. */
+function urlPolicyValue(options: OptionMap): UrlPolicy {
+  const value = options['urlPolicy']
+  if (value === undefined) return {}
+  if (!isPlainObject(value)) throw new CarveOptionError('urlPolicy', 'not an object with a deny list or an allow list')
+  for (const name of Object.keys(value)) {
+    if (name !== 'deny' && name !== 'allow') throw new CarveOptionError('urlPolicy', `unknown field ${name}`)
+    const list = value[name]
+    if (!Array.isArray(list) || !list.every((scheme) => typeof scheme === 'string')) {
+      throw new CarveOptionError('urlPolicy', `${name} is not a list of strings`)
+    }
+  }
+  if (value['deny'] !== undefined && value['allow'] !== undefined) {
+    throw new CarveOptionError('urlPolicy', 'both a deny list and an allow list')
+  }
+  return value as UrlPolicy
+}
+
+/** A map whose values are strings (C2-H-124, C2-H-125). An absent map, or null, is the default. */
+function stringMap(options: OptionMap, name: string): Readonly<Record<string, string>> | undefined {
+  const value = options[name]
+  if (value === undefined || value === null) return undefined
+  if (!isPlainObject(value) || !Object.values(value).every((text) => typeof text === 'string')) {
+    throw new CarveOptionError(name, 'not a map of strings')
+  }
+  return value as Readonly<Record<string, string>>
+}
+
+const SOCIAL_FIELDS = new Map([
+  ['mentionUrl', 'string'], ['tagUrl', 'string'], ['resolveMention', 'function'], ['resolveTag', 'function'], ['context', 'any'],
+])
+const PLACEHOLDER = /\{[A-Za-z0-9_]+\}/g
+
+/** C2-H-126: URL templates and resolvers, or null for none. */
+function socialValue(options: OptionMap): Social | null {
+  const value = options['social']
+  if (value === undefined || value === null) return null
+  if (!isPlainObject(value)) throw new CarveOptionError('social', 'not an object')
+  for (const [name, field] of Object.entries(value)) {
+    const kind = SOCIAL_FIELDS.get(name)
+    if (kind === undefined) throw new CarveOptionError('social', `unknown field ${name}`)
+    if (field !== undefined && kind !== 'any' && typeof field !== kind) throw new CarveOptionError('social', `${name} is not a ${kind}`)
+    // C2-H-126, U-341: `{name}` is the only placeholder of a template.
+    const other = typeof field === 'string' ? field.match(PLACEHOLDER)?.find((placeholder) => placeholder !== '{name}') : undefined
+    if (other !== undefined) throw new CarveOptionError('social', `${name} holds the placeholder ${other}; {name} is the only one`)
+  }
+  return value as Social
+}
+
+/** C2-H-137: refuses a name that is no option and a value of the wrong type. `positions` is a boolean the parse reads. */
+function checkValues(given: OptionMap, names: readonly string[], stage: 'parse' | 'render'): void {
+  for (const name of names) {
+    if (name === 'positions' && stage === 'parse') {
+      if (given[name] !== undefined && typeof given[name] !== 'boolean') throw new CarveOptionError(name, 'not a boolean')
+    } else if (name === 'codeBlockRenderer') {
+      if (given[name] != null && typeof given[name] !== 'function') throw new CarveOptionError(name, 'not a function')
+    } else if (OPTION_KINDS.has(name)) checkType(name, given[name])
+    else throw new CarveOptionError(name, 'unknown option')
+  }
+}
+
+/** C2-H-137: then refuses an option of another stage, and one this engine does not offer. */
+function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
+  const names = Object.keys(given)
+  checkValues(given, names, stage)
+  for (const name of names) {
+    const kind = OPTION_KINDS.get(name)
+    if (kind === 'format' || kind === 'lint' || kind === 'import' || (stage === 'parse' && kind === 'render')) {
+      throw new CarveOptionError(name, `not an option of ${stage}`)
+    }
+  }
+}
+
+/** C2-H-204: each entry is a code of the render-loss channel. */
+function allowLossesValue(value: unknown): readonly string[] {
+  if (value === undefined) return []
+  const list = value as readonly string[]
+  const unknown = list.find((code) => !RENDER_LOSS_CODES.includes(code))
+  if (unknown !== undefined) throw new CarveOptionError('allowLosses', `${JSON.stringify(unknown)} is no render-loss code`)
+  return list
+}
+
+function extensionsValue(value: unknown): readonly ExtensionDefinition[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw new CarveOptionError('extensions', 'not a list')
+  const names = new Set<string>()
+  const claims = new Set<string>()
+  for (const entry of value) {
+    if (!isPlainObject(entry) || typeof entry['name'] !== 'string' || typeof entry['version'] !== 'string' ||
+      !isPlainObject(entry['props']) || !isPlainObject(entry['slots'])) {
+      throw new CarveOptionError('extensions', 'an invalid extension registration')
+    }
+    if (!validQualifiedName(entry['name']) || entry['version'] === '') {
+      throw new CarveOptionError('extensions', 'an invalid extension name or version')
+    }
+    checkRegistrationFields(entry)
+    if (names.has(entry['name'])) throw new CarveOptionError('extensions', `duplicate name ${entry['name']}`)
+    names.add(entry['name'])
+    const key = matcherKey(entry)
+    if (key === null) continue
+    if (claims.has(key)) throw new CarveOptionError('extensions', `duplicate claim ${key}`)
+    claims.add(key)
+  }
+  return value as ExtensionDefinition[]
+}
+
+function matcherKey(entry: Readonly<Record<string, unknown>>): string | null {
+  const matcher = entry['matcher']
+  if (matcher === undefined) return null
+  if (!isPlainObject(matcher) || !['inline', 'div', 'fence'].includes(matcher['form'] as string) ||
+    typeof matcher['name'] !== 'string' || matcher['name'] === '' ||
+    typeof entry['transform'] !== 'function') throw new CarveOptionError('extensions', 'an invalid matcher')
+  return `${matcher['form']}:${matcher['name']}`
+}
+
+function validQualifiedName(name: string): boolean {
+  const parts = name.split('.')
+  if (parts.length < 2) return false
+  return parts.every((part) => {
+    const first = part.charCodeAt(0) | 32
+    if (first < 97 || first > 122) return false
+    for (let at = 1; at < part.length; at++) {
+      const code = part.charCodeAt(at) | 32
+      if ((code < 97 || code > 122) && (code < 48 || code > 57) && code !== 45 && code !== 95) return false
+    }
+    return true
+  })
+}
+
+function checkRegistrationFields(entry: Readonly<Record<string, unknown>>): void {
+  if (entry['documentTransform'] !== undefined && typeof entry['documentTransform'] !== 'function') {
+    throw new CarveOptionError('extensions', 'an invalid document transform')
+  }
+  const props = entry['props']
+  const slots = entry['slots']
+  if (!isPlainObject(props) || !isPlainObject(slots)) return
+  for (const kind of Object.values(props)) {
+    if (!['string', 'number', 'boolean', 'object', 'array'].includes(kind as string)) {
+      throw new CarveOptionError('extensions', 'an invalid prop schema')
+    }
+  }
+  for (const rule of Object.values(slots)) {
+    if (!isPlainObject(rule) || !['block', 'inline', 'block_extension', 'inline_extension'].includes(rule['kind'] as string)) {
+      throw new CarveOptionError('extensions', 'an invalid slot schema')
+    }
+  }
+  checkHostFields(entry)
+}
+
+/** The provisional fields a definition carries for the host: semantic keys and quotes. */
+function checkHostFields(entry: Readonly<Record<string, unknown>>): void {
+  const keys = entry['semanticKeys']
+  if (keys !== undefined && !validSemanticKeys(keys)) throw new CarveOptionError('extensions', 'invalid semantic keys')
+  const quotes = entry['quotes']
+  if (quotes !== undefined && !(Array.isArray(quotes) && quotes.length === 4 && quotes.every((glyph) => typeof glyph === 'string'))) {
+    throw new CarveOptionError('extensions', 'invalid quotes')
+  }
+}
+
+function validSemanticKeys(keys: unknown): boolean {
+  if (!Array.isArray(keys)) return false
+  const names = new Set<string>()
+  for (const pair of keys as unknown[]) {
+    if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || !/^[a-z]+$/.test(pair[0]) ||
+      names.has(pair[0]) || (pair[1] !== null && (typeof pair[1] !== 'string' || !/^[a-z-]+$/.test(pair[1])))) return false
+    names.add(pair[0])
+  }
+  return CORE_SEMANTIC_KEYS.every(([key]) => names.has(key))
+}
+
+/** The last registration of a field wins; null when no extension sets it. */
+function lastField<K extends 'semanticKeys' | 'quotes'>(extensions: readonly ExtensionDefinition[], field: K):
+  NonNullable<ExtensionDefinition[K]> | null {
+  let found: NonNullable<ExtensionDefinition[K]> | null = null
+  for (const entry of extensions) if (entry[field] !== undefined) found = entry[field]
+  return found
+}
+
+
+
+function renderersValue(value: unknown): Readonly<Record<string, ExtensionRenderer>> {
+  if (value === undefined) return {}
+  if (!isPlainObject(value)) throw new CarveOptionError('renderers', 'not a map')
+  for (const [name, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry) || typeof entry['version'] !== 'string' ||
+      (typeof entry['render'] !== 'function' && typeof entry['buildTime'] !== 'function')) {
+      throw new CarveOptionError('renderers', `invalid renderer ${name}`)
+    }
+  }
+  return value as Readonly<Record<string, ExtensionRenderer>>
+}
+
+/**
+ * Checks `options` against the option list and returns them with their defaults. `stage` is
+ * `parse` or `render`: an option of another stage is refused there.
+ */
+export function readOptions(options: object | undefined, stage: 'parse' | 'render'): Settings {
+  const given: OptionMap = (options ?? {}) as OptionMap
+  checkNames(given, stage)
+  const policy = urlPolicyValue(given)
+  const allowed = schemeSet(policy, 'allow')
+  const extensions = extensionsValue(given['extensions'])
+  return {
+    extensions,
+    includes: includeSettings(given['includes'], (reason) => new CarveOptionError('includes', reason)),
+    renderers: renderersValue(given['renderers']),
+    codeBlockRenderer: (given['codeBlockRenderer'] ?? undefined) as Settings['codeBlockRenderer'],
+    urlPolicy: policy,
+    headingIds: enumValue(given, 'headingIds') as HeadingIds,
+    mode: enumValue(given, 'mode') as Mode,
+    symbols: stringMap(given, 'symbols') ?? {},
+    labels: { ...DEFAULT_LABELS, ...stringMap(given, 'labels') },
+    social: socialValue(given),
+    sourceLines: booleanValue(given, 'sourceLines'),
+    sections: booleanValue(given, 'sections'),
+    smartTypography: booleanValue(given, 'smartTypography'),
+    roundtrip: booleanValue(given, 'roundtrip'),
+    rawHtml: booleanValue(given, 'rawHtml'),
+    denied: allowed === null ? schemeSet(policy, 'deny') ?? new Set(DEFAULT_DENIED_SCHEMES) : null,
+    allowed,
+    profile: enumValue(given, 'profile') as Profile,
+    strictLosses: booleanValue(given, 'strictLosses'),
+    semanticKeys: lastField(extensions, 'semanticKeys') ?? CORE_SEMANTIC_KEYS,
+    quotes: lastField(extensions, 'quotes'),
+    allowLosses: new Set(allowLossesValue(given['allowLosses'])),
+    maxLosses: (given['maxLosses'] as number | undefined) ?? MAX_LOSSES_DEFAULT,
+    softBreak: enumValue(given, 'softBreak') as SoftBreak,
+  }
+}

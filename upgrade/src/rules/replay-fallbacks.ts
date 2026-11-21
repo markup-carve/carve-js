@@ -1,0 +1,601 @@
+import { change, type Context, type Visit } from '../context.ts'
+import { type Node01 } from '../engines.ts'
+import { lineEnd, lineOf, lineStart, lineText } from '../source.ts'
+
+/** A quote-shaped line that 0.1 read as paragraph text stays visible below attributes. */
+export function literalQuoteAfterAttributes(ctx: Context): void {
+  const removed = ctx.findings.filter(({ record, edit }) => record.entry === 'U-031' && edit !== null
+    && edit.text === '' && edit.start < edit.end)
+  for (const finding of removed) {
+    const edit = finding.edit!
+    const line = lineOf(ctx.lines, edit.start)
+    if (line < 2 || line > ctx.lines.count || ctx.blocks.leaf[line]?.node.type !== 'paragraph') continue
+    const value = lineText(ctx.lines, line)
+    if (!/^>+[ \t]*$/u.test(value) || !/^\{[^}\n]+\}$/u.test(lineText(ctx.lines, line - 1))) continue
+    finding.edit = { ...edit, text: `${value}\n` }
+    finding.record.message = 'quote-shaped paragraph text kept below its attribute line'
+  }
+}
+
+/** Widen a fence when 0.1 kept an indented run in its body that 0.2 closes. */
+export function innerFenceRun(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'code_block' || node.pos === undefined || node.pos.endLine <= node.pos.startLine + 1) continue
+    const firstLine = node.pos.startLine
+    const lastLine = node.pos.endLine
+    const opener = lineText(ctx.lines, firstLine)
+    const closer = lineText(ctx.lines, lastLine)
+    const start = /^( *)(`{3,})(.*)$/u.exec(opener)
+    if (start === null || closer !== `${start[1]}${start[2]}`) continue
+    let inner = false
+    for (let line = firstLine + 1; line < lastLine; line++) {
+      const value = lineText(ctx.lines, line)
+      if (value.trim() === start[2] && value !== closer) { inner = true; break }
+    }
+    if (!inner) continue
+    const message = 'fence widened so an indented body run stays literal'
+    const first = lineStart(ctx.lines, firstLine) + (start[1] ?? '').length
+    const last = lineStart(ctx.lines, lastLine) + (start[1] ?? '').length
+    change(ctx, 'U-049', first, first, '`', message)
+    change(ctx, 'U-049', last, last, '`', message)
+  }
+}
+
+/** Consecutive old headings need their own boundaries when the second mark is indented. */
+export function siblingHeadingBoundary(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    const previous = visit.siblings[visit.index - 1]
+    if (node.type !== 'heading' || node.pos === undefined || previous?.type !== 'heading'
+      || previous.pos === undefined || previous.pos.endLine + 1 !== node.pos.startLine) continue
+    const line = node.pos.startLine
+    if (!/^ +#{1,6}(?:[ \t]|$)/u.test(lineText(ctx.lines, line))) continue
+    change(ctx, 'U-001', lineStart(ctx.lines, line), lineStart(ctx.lines, line), '\n',
+      'blank line keeps the next heading separate from its sibling')
+  }
+}
+
+function attributeBodyColumn(source: string): number | null {
+  return /^([ \t]*[-*+] +)[ \t]*\{[^}\n]+\}[ \t]*$/u.exec(source)?.[1]?.length ?? null
+}
+
+function emptyAttributeBody(ctx: Context, visit: Visit): { line: number; body: number } | null {
+  const item = visit.node
+  if (item.type !== 'list_item' || item.pos === undefined || (item.children?.length ?? 0) !== 0 || visit.index !== 0
+    || visit.parent?.node.type !== 'list') return null
+  const list = visit.parent.node
+  const before = visit.parent.siblings[visit.parent.index - 1]
+  if (list.pos === undefined || before?.type !== 'definition_list'
+    || before.pos?.endLine !== list.pos.startLine - 1) return null
+  const line = item.pos.startLine
+  const column = attributeBodyColumn(lineText(ctx.lines, line))
+  return column === null ? null : { line, body: lineStart(ctx.lines, line) + column }
+}
+
+/** An old empty list item carrying only unattached attributes keeps its empty body. */
+export function emptyAttributeItemAfterDescription(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const place = emptyAttributeBody(ctx, visit)
+    if (place === null) continue
+    const { line, body } = place
+    change(ctx, 'U-008', lineStart(ctx.lines, line), lineStart(ctx.lines, line), '\n',
+      'blank line ends the description before the next list')
+    change(ctx, 'U-034', body, lineEnd(ctx.lines, line), '{% %}',
+      'unattached attributes of an empty item replaced with an empty body')
+  }
+}
+
+function documentEmptyColonDiv(ctx: Context, visit: Visit, line: number, source: string): void {
+  if (visit.parent?.node.type !== 'document' || !/^ +:::[ \t]*$/u.test(source)
+    || line !== ctx.lines.count || !ctx.src.endsWith('\n')) return
+  const at = lineEnd(ctx.lines, line) + 1
+  change(ctx, 'U-049', at, at, '\n:::\n:::\n', 'empty div written explicitly after the old fence line')
+}
+
+function admonitionEmptyColonDiv(ctx: Context, visit: Visit, line: number, source: string): void {
+  if (visit.parent?.node.type !== 'admonition' || !/^ *:{4,}[ \t]*$/u.test(source)
+    || visit.parent.node.pos?.startLine === undefined) return
+  const first = lineStart(ctx.lines, visit.parent.node.pos.startLine)
+  const opener = lineText(ctx.lines, visit.parent.node.pos.startLine)
+  const prefix = /^ *::: /u.exec(opener)?.[0]
+  if (prefix === undefined) return
+  if (source.trim() === '::::' && opener.startsWith(' ')) {
+    change(ctx, 'U-276', first + prefix.length - 1, first + prefix.length - 1, '::',
+      'outer admonition widened beyond its old empty div')
+    return
+  }
+  if (first !== 0) return
+  change(ctx, 'U-276', first + 3, first + 3, ':', 'outer admonition widened to hold its old empty div')
+  change(ctx, 'U-276', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), ':::\n:::\n::::',
+    'empty div written before the outer admonition closes')
+}
+
+/** Keep a 0.1 empty div when a colon run becomes a closer in 0.2. */
+export function emptyColonDiv(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const div = visit.node
+    if (div.type !== 'div' || div.pos === undefined || div.pos.startLine !== div.pos.endLine
+      || (div.children?.length ?? 0) !== 0) continue
+    const line = div.pos.startLine
+    const source = lineText(ctx.lines, line)
+    documentEmptyColonDiv(ctx, visit, line, source)
+    admonitionEmptyColonDiv(ctx, visit, line, source)
+  }
+}
+
+/** A continued 0.1 head row needs every cell marked as a head after its separator is removed. */
+export function continuedHeaderRow(ctx: Context): void {
+  const removed = new Set(ctx.findings.filter(({ record, edit }) => record.entry === 'U-055'
+    && edit !== null && edit.text === '' && edit.start < edit.end).map(({ edit }) => edit!.start))
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'table_row' || node.pos === undefined || !node.continuationLines) continue
+    const separator = lineStart(ctx.lines, node.pos.endLine + 1)
+    if (!removed.has(separator)) continue
+    const row = lineText(ctx.lines, node.pos.startLine)
+    const pipe = row.indexOf('|')
+    if (pipe < 0 || row[pipe + 1] === '=') continue
+    const at = lineStart(ctx.lines, node.pos.startLine) + pipe + 1
+    change(ctx, 'U-055', at, at, '=', 'continued header row keeps its first cell in the head')
+  }
+}
+
+/** A description after a quoted term starts outside the quote in the old tree. */
+export function descriptionAfterQuotedTerm(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const current = visit.node
+    const before = visit.siblings[visit.index - 1]
+    if (current.type !== 'definition_list' || current.pos === undefined || before?.type !== 'block_quote'
+      || before.pos === undefined || before.pos.endLine + 1 !== current.pos.startLine
+      || !before.children?.some((child) => child.type === 'definition_list')) continue
+    const at = lineStart(ctx.lines, current.pos.startLine)
+    change(ctx, 'U-004', at, at, '\n', 'blank line separates a description from the quoted term above')
+  }
+}
+
+/** Nested old footnote definitions on one line need their outer label at document scope. */
+export function nestedFootnoteAfterItem(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos
+  if (typeof positions !== 'object' || positions === null) return
+  const lines = new Map<number, number>()
+  for (const value of Object.values(positions as Record<string, { startLine: number; startColumn: number }>)) {
+    lines.set(value.startLine, (lines.get(value.startLine) ?? 0) + 1)
+  }
+  for (const [line, count] of lines) {
+    if (count < 2 || line < 2 || ctx.blocks.leaf[line - 1]?.parent?.node.type !== 'list_item') continue
+    const text = lineText(ctx.lines, line)
+    const match = /^ +(?=\[\^[^\]\n]+\]:)/u.exec(text)
+    if (match === null) continue
+    const at = lineStart(ctx.lines, line)
+    change(ctx, 'U-005', at, at + match[0].length, '',
+      'nested footnote labels moved to document scope after the list')
+  }
+}
+
+/** Adjacent old smart punctuation nodes keep their combined glyphs across the upgrade. */
+export function legacyPlusDash(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    const next = visit.siblings[visit.index + 1]
+    if (node.type !== 'smart_punctuation' || node.pos === undefined
+      || next?.type !== 'smart_punctuation' || next.pos === undefined
+      || node.pos.endOffset !== next.pos.startOffset) continue
+    const from = node.pos.startOffset
+    const to = next.pos.endOffset
+    if (ctx.src.slice(from, to) !== '+---') continue
+    change(ctx, 'U-115', from, to, '±–', 'old adjacent smart punctuation kept as its visible glyphs')
+  }
+}
+
+/** A tabbed paragraph below a blank stays in the old footnote body after U-039 moves it. */
+export function tabbedFootnoteContinuation(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos
+  if (typeof positions !== 'object' || positions === null) return
+  const bodyLines = new Set<number>()
+  for (const pos of Object.values(positions as Record<string, { startLine: number; endLine: number }>)) {
+    for (let line = pos.startLine + 1; line <= pos.endLine; line++) {
+      if (lineText(ctx.lines, line - 1).trim() === '' && lineText(ctx.lines, line).startsWith('\t')) bodyLines.add(line)
+    }
+  }
+  for (const finding of ctx.findings) {
+    const edit = finding.edit
+    if (finding.record.entry !== 'U-039' || edit === null || edit.text !== ''
+      || ctx.src.slice(edit.start, edit.end) !== '\t') continue
+    if (!bodyLines.has(lineOf(ctx.lines, edit.start))) continue
+    finding.edit = { ...edit, text: ' ' }
+    finding.record.message = 'tabbed continuation kept inside the old footnote body'
+  }
+}
+
+/** A quote after a description in a footnote needs its own content column. */
+export function footnoteQuoteAfterDescription(ctx: Context): void {
+  const places = ctx.doc.footnoteDefPos
+  if (typeof places !== 'object' || places === null) return
+  const definitions = Object.values(places as Record<string, { startLine: number; endLine: number }>)
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'block_quote' || node.pos === undefined) continue
+    const line = node.pos.startLine
+    if (!definitions.some((pos) => pos.startLine < line && line <= pos.endLine)
+      || ctx.blocks.leaf[line - 1]?.parent?.node.type !== 'definition_list'
+      || !/^ {2,}>/u.test(lineText(ctx.lines, line))) continue
+    const at = lineStart(ctx.lines, line)
+    const moved = ctx.findings.find(({ record, edit }) => record.entry === 'U-039' && edit?.start === at
+      && edit.end === at + 1 && edit.text === '')
+    if (moved?.edit === null || moved?.edit === undefined) continue
+    moved.edit = { ...moved.edit, end: at + 2 }
+    moved.record.message = 'quoted follower moved to the old footnote content column'
+    ctx.findings = ctx.findings.filter(({ record, edit }) => record.entry !== 'U-435' || edit?.start !== at)
+  }
+}
+
+/** A list outside an old note definition stays at document column after the blank. */
+export function listAfterFootnote(ctx: Context): void {
+  const places = ctx.doc.footnoteDefPos
+  if (typeof places !== 'object' || places === null) return
+  const after = new Set(Object.values(places as Record<string, { endLine: number }>).map((pos) => pos.endLine + 2))
+  for (const visit of ctx.visits) {
+    const list = visit.node
+    if (list.type !== 'list' || list.pos === undefined || visit.parent?.node.type !== 'document'
+      || !after.has(list.pos.startLine)) continue
+    const line = list.pos.startLine
+    if (lineText(ctx.lines, line - 1).trim() !== '') continue
+    const match = /^ +(?=[-*+] |[0-9]+[.)] )/u.exec(lineText(ctx.lines, line))
+    if (match === null) continue
+    const at = lineStart(ctx.lines, line)
+    change(ctx, 'U-109', at, at + match[0].length, '',
+      'document list after a footnote moved to column zero')
+  }
+}
+
+/** Compose inline escapes and braced spans without adding a second slash or a source space. */
+export function inlineEditComposition(ctx: Context): void {
+  const escaped = new Set(ctx.findings.filter(({ record, edit }) => record.entry === 'U-274'
+    && edit?.text === '\\' && edit.start === edit.end).map(({ edit }) => edit!.start))
+  ctx.findings = ctx.findings.filter(({ record, edit }) => record.entry !== 'U-070' || edit?.text !== '\\'
+    || !escaped.has(edit.start))
+  for (const finding of ctx.findings) {
+    const edit = finding.edit
+    if (finding.record.entry !== 'U-066' || edit === null || edit.text !== ' {'
+      || ctx.src[edit.start - 1] !== '|') continue
+    finding.edit = { ...edit, text: '{' }
+    finding.record.message = 'braced strike kept beside its preceding pipe without a space'
+  }
+}
+
+/** A removed empty quote marker inside an old footnote must not leave a blank body line. */
+export function emptyQuoteInFootnote(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos
+  if (typeof positions !== 'object' || positions === null) return
+  const spans = Object.values(positions as Record<string, { startLine: number; endLine: number }>)
+  for (const finding of ctx.findings) {
+    const edit = finding.edit
+    if (finding.record.entry !== 'U-038' || edit === null || edit.text !== '') continue
+    const line = lineOf(ctx.lines, edit.start)
+    if (!spans.some((pos) => pos.startLine < line && line < pos.endLine)
+      || !/^[ \t]*>{2,}[ \t]*$/u.test(lineText(ctx.lines, line))
+      || edit.end !== lineEnd(ctx.lines, line) || ctx.src[edit.end] !== '\n') continue
+    finding.edit = { ...edit, end: edit.end + 1 }
+    finding.record.message = 'empty quoted line removed without splitting the old footnote body'
+  }
+}
+
+/** A lazy caption-shaped line stays text in the old quote paragraph. */
+export function lazyCaretAfterQuote(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'block_quote' || node.pos === undefined) continue
+    for (let line = node.pos.startLine + 1; line <= node.pos.endLine; line++) {
+      const text = lineText(ctx.lines, line)
+      if (!/^ *\^ +\S/u.test(text) || !/^ *>/u.test(lineText(ctx.lines, line - 1))) continue
+      const at = lineStart(ctx.lines, line) + text.indexOf('^')
+      change(ctx, 'U-006', at, at, '\\', 'lazy caption-shaped line kept as quote paragraph text')
+    }
+  }
+}
+
+/** A narrow space made these 0.1 link forms literal, including references to such definitions. */
+export function literalNarrowSpaceLinks(ctx: Context): void {
+  if (ctx.findings.some(({ record }) => record.entry === 'U-258')) return
+  const literalRefs = new Set<string>()
+  for (const match of ctx.src.matchAll(/(?<!\\)\[([^\]\n]+)\]:[^\n]*\u202f[^\n]*/gu)) {
+    const start = match.index
+    if (start === undefined) continue
+    literalRefs.add(match[1]!)
+    change(ctx, 'U-132', start, start, '\\', 'old literal reference definition kept as text')
+  }
+  for (const match of ctx.src.matchAll(/(?<!\\)\[[^\]\n]+\]\([^\n)]*\u202f[^\n)]*\)/gu)) {
+    if (match.index !== undefined) change(ctx, 'U-132', match.index, match.index, '\\',
+      'old literal link with a narrow space kept as text')
+  }
+  if (literalRefs.size === 0) return
+  for (const match of ctx.src.matchAll(/(?<!\\)\[[^\]\n]+\]\[([^\]\n]+)\]/gu)) {
+    if (match.index !== undefined && literalRefs.has(match[1]!)) change(ctx, 'U-132', match.index, match.index, '\\',
+      'reference to an old literal definition kept as text')
+  }
+}
+
+/** A document fence after a definition stays outside its description body. */
+export function fenceAfterDescription(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const place = descriptionFence(ctx, visit)
+    if (place !== null) moveFence(ctx, place)
+  }
+}
+
+function descriptionFence(ctx: Context, visit: Visit): { first: number; last: number; indent: number; entry: string;
+  closer: typeof ctx.findings[number] | undefined } | null {
+  const node = visit.node
+  const before = visit.siblings[visit.index - 1]
+  if (node.type !== 'code_block' || node.pos === undefined || before?.type !== 'definition_list'
+    || before.pos?.endLine !== node.pos.startLine - 1 || visit.parent?.node.type !== 'document') return null
+  const first = node.pos.startLine
+  const last = node.pos.endLine
+  const opener = /^( +)(?:`{3,}|~{3,})/u.exec(lineText(ctx.lines, first))
+  if (opener === null) return null
+  const indent = opener[1]!.length
+  const closer = ctx.findings.find(({ record, edit }) => record.entry === 'U-049'
+    && edit?.start === lineEnd(ctx.lines, last) && edit.text.startsWith(`\n${' '.repeat(indent)}`))
+  if (closer === undefined && !ctx.findings.some(({ record, edit }) => record.entry === 'U-116'
+    && edit !== null && lineOf(ctx.lines, edit.start) === first)) return null
+  return { first, last, indent, entry: closer === undefined ? 'U-116' : 'U-049', closer }
+}
+
+function moveFence(ctx: Context, { first, last, indent, entry, closer }: NonNullable<ReturnType<typeof descriptionFence>>): void {
+  change(ctx, entry, lineStart(ctx.lines, first), lineStart(ctx.lines, first) + indent, '\n',
+    'blank line and document column keep the fence outside the description')
+  for (let line = first + 1; line <= last; line++) {
+    const spaces = /^ */u.exec(lineText(ctx.lines, line))![0].length
+    const cut = Math.min(indent, spaces)
+    if (cut === 0) continue
+    change(ctx, entry, lineStart(ctx.lines, line), lineStart(ctx.lines, line) + cut, '',
+      'fence body shifted with its document opener')
+  }
+  if (closer?.edit !== null && closer?.edit !== undefined) {
+    closer.edit = { ...closer.edit, text: closer.edit.text.replace(new RegExp(`^\\n {${indent}}`, 'u'), '\n') }
+  }
+}
+
+/** Literal 0.1 include text keeps its sigil words from becoming 0.2 mentions. */
+export function literalIncludeMentions(ctx: Context): void {
+  if (!ctx.findings.some(({ record }) => record.entry === 'U-011')) return
+  for (let line = 1; line <= ctx.lines.count; line++) {
+    const source = lineText(ctx.lines, line)
+    if (!source.includes('{{') || !source.includes('}}')) continue
+    const start = source.indexOf('{{')
+    const end = source.indexOf('}}', start + 2)
+    if (end < 0) continue
+    for (const match of source.slice(start + 2, end).matchAll(/(?<!\\)@[A-Za-z][A-Za-z0-9-]*/gu)) {
+      const at = lineStart(ctx.lines, line) + start + 2 + match.index
+      change(ctx, 'U-011', at, at, '\\', 'old literal include sigil kept as text')
+    }
+  }
+}
+
+function textOnly(node: Node01): boolean {
+  return (node.children ?? []).every((child) => child.type === 'text' || child.type === 'soft_break'
+    || (child.type === 'emphasis' && textOnly(child)))
+}
+
+/** 0.1 also paired the reversed strong/emphasis delimiters beside U-068. */
+export function flippedStrong(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'strong' || node.pos === undefined || !textOnly(node)
+      || !(node.children ?? []).some((child) => child.type === 'emphasis')) continue
+    const { startOffset: start, endOffset: end } = node.pos
+    if (!ctx.src.startsWith('*/', start) || !ctx.src.startsWith('/*', end - 2)) continue
+    const message = 'the reversed strong and emphasis delimiters use an explicit braced span'
+    change(ctx, 'U-068', start, start + 2, '{*{/', message)
+    change(ctx, 'U-068', end - 2, end, '/}*}', message)
+    for (let at = start + 2; at < end - 2; at++) {
+      if ((ctx.src[at] === '{' || ctx.src[at] === '}') && ctx.src[at - 1] !== '\\') {
+        change(ctx, 'U-068', at, at, '\\', message)
+      }
+    }
+  }
+}
+
+/** An old strong span beginning beside a closer can be nested by the 0.2 bare pairing. */
+export function crossLineStrong(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'strong' || node.pos === undefined || node.attrs === undefined
+      || !node.children?.some((child) => child.type === 'soft_break')) continue
+    const { startOffset: start, endOffset: end } = node.pos
+    const last = node.children.at(-1)
+    const close = last?.pos?.endOffset
+    if (!ctx.src.startsWith('*/', start) || close === undefined || ctx.src[close] !== '*'
+      || ctx.src[close + 1] !== '{' || ctx.src[end - 1] !== '}') continue
+    const message = 'old cross-line strong pairing written as an explicit braced span'
+    change(ctx, 'U-068', start, start + 1, '{*', message)
+    change(ctx, 'U-068', close, close + 1, '*}', message)
+  }
+}
+
+/** A deprecated glued header spelling that 0.1 kept as cell text must stay cell text. */
+export function literalTableHeader(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'table_cell' || node.pos === undefined || node.header === true) continue
+    const { startOffset: start, endOffset: end } = node.pos
+    const value = ctx.src.slice(start, end)
+    const marker = value.indexOf('=~>')
+    if (marker < 0 || value.slice(0, marker).trim() !== '') continue
+    change(ctx, 'U-168', start + marker, start + marker, '\\',
+      'the deprecated glued header spelling is literal cell text in 0.1')
+  }
+}
+
+interface EmptyDefinitionItem {
+  line: number
+  start: number
+  end: number
+  body: string
+  label: string
+}
+
+function emptyDefinitionItem(ctx: Context, node: Node01): EmptyDefinitionItem | null {
+  if (node.type !== 'list_item' || node.pos === undefined || (node.children?.length ?? 0) !== 0
+    || node.pos.startLine !== node.pos.endLine) return null
+  const line = node.pos.startLine
+  const text = ctx.src.slice(node.pos.startOffset, lineEnd(ctx.lines, line))
+  const marker = /^(?:[-+*]|[0-9]+[.)]) +/u.exec(text)
+  if (marker === null) return null
+  const start = node.pos.startOffset + marker[0].length
+  const body = ctx.src.slice(start, lineEnd(ctx.lines, line)).trimEnd()
+  const definition = /^\[([^\]^][^\]]*)\]:[ \t]+\S.*$/u.exec(body)
+  if (definition === null) return null
+  return { line, start, end: lineEnd(ctx.lines, line), body, label: definition[1]!.toLowerCase() }
+}
+
+function repeatedItems(items: EmptyDefinitionItem[]): EmptyDefinitionItem[] {
+  const counts = new Map<string, number>()
+  const keyOf = (item: EmptyDefinitionItem): string => `${item.label}\0${item.body}`
+  for (const item of items) counts.set(keyOf(item), (counts.get(keyOf(item)) ?? 0) + 1)
+  return items.filter((item) => (counts.get(keyOf(item)) ?? 0) > 1)
+}
+
+function rewriteDuplicateGroup(ctx: Context, list: Node01, items: EmptyDefinitionItem[]): { from: number; to: number } | null {
+  if (list.pos === undefined) return null
+  const duplicates = repeatedItems(items)
+  if (duplicates.length < 2) return null
+  const from = lineStart(ctx.lines, list.pos.startLine)
+  const to = lineEnd(ctx.lines, list.pos.endLine)
+  const message = 'duplicate definitions consumed by empty list items lifted above their list'
+  change(ctx, 'U-038', from, from, `${duplicates[0]!.body}\n\n`, message)
+  for (const item of duplicates) change(ctx, 'U-038', item.start, item.end, '{% %}', message)
+  if (list.pos.endLine < ctx.lines.count && lineText(ctx.lines, list.pos.endLine + 1).trim() !== '') {
+    change(ctx, 'U-038', to, to, '\n', message)
+  }
+  return { from, to }
+}
+
+/** Duplicate definitions consumed by empty sibling items in 0.1 move outside their list. */
+export function duplicateItemDefinitions(ctx: Context): void {
+  const prior = ctx.findings.length
+  const groups = new Map<Node01, EmptyDefinitionItem[]>()
+  for (const visit of ctx.visits) {
+    if (visit.parent?.node.type !== 'list') continue
+    const item = emptyDefinitionItem(ctx, visit.node)
+    if (item === null) continue
+    const list = groups.get(visit.parent.node) ?? []
+    list.push(item)
+    groups.set(visit.parent.node, list)
+  }
+  const ranges: { from: number; to: number }[] = []
+  for (const [list, items] of groups) {
+    const range = rewriteDuplicateGroup(ctx, list, items)
+    if (range !== null) ranges.push(range)
+  }
+  if (ranges.length === 0) return
+  const masked = new Uint8Array(ctx.src.length + 1)
+  for (const { from, to } of ranges) masked.fill(1, from, to + 1)
+  ctx.findings = [...ctx.findings.slice(0, prior).filter(({ edit }) => edit === null || masked[edit.start] !== 1),
+    ...ctx.findings.slice(prior)]
+}
+
+function escapeLiteralLinkText(ctx: Context, visit: Visit): void {
+  const node = visit.node
+  if (node.type !== 'text' || node.pos === undefined || visit.parent?.node.type !== 'paragraph') return
+  const { startOffset: start, endOffset: end, startLine } = node.pos
+  const source = ctx.src.slice(start, end)
+  const next = visit.siblings[visit.index + 1]
+  if (next?.type === 'code' && next.pos?.startOffset === end) {
+    const opener = /\[[^\]\n]+\]\([^\)\n]*$/u.exec(source)
+    if (opener?.index !== undefined) change(ctx, 'U-258', start + opener.index, start + opener.index, '\\',
+      'literal link opener escaped so the old code run stays visible')
+  }
+  const line = lineText(ctx.lines, startLine)
+  const prefix = line.match(/^[ \t]*/u)?.[0].length ?? 0
+  if (start !== lineStart(ctx.lines, startLine) + prefix || !/^\[[^\]^\n]+\]:/u.test(source)) return
+  change(ctx, 'U-258', start, start, '\\',
+    'definition-shaped text escaped so 0.2 keeps the 0.1 paragraph')
+}
+
+/** Old paragraph text before an unclosed code span can resemble a 0.2 link opener. */
+export function literalLinkBeforeCode(ctx: Context): void {
+  const unclosed = ctx.visits.some(({ node }) => node.type === 'code' && node.pos !== undefined
+    && ctx.src[node.pos.endOffset - 1] !== '`')
+  if (!unclosed) return
+  for (const visit of ctx.visits) escapeLiteralLinkText(ctx, visit)
+}
+
+function wrappedCodeRow(row: Node01): boolean {
+  const cells = row.cells as Node01[] | undefined
+  return row.type === 'table_row' && typeof row.continuationLines === 'number' && row.continuationLines > 0
+    && cells?.some((cell) => cell.children?.some((child) => child.type === 'code'
+      && Array.isArray(child.cellWraps) && child.cellWraps.length > 0)) === true
+}
+
+function flattenRow(ctx: Context, row: Node01): void {
+  const pos = row.pos!
+  const count = (row.cells as Node01[]).length
+  const first = lineText(ctx.lines, pos.startLine)
+  const pipe = first.indexOf('|')
+  if (pipe < 0) return
+  const prefix = first.slice(0, pipe)
+  const chunks: string[][] = Array.from({ length: count }, () => [])
+  for (let line = pos.startLine; line <= pos.endLine; line++) {
+    const text = lineText(ctx.lines, line)
+    const body = line === pos.startLine ? text.slice(pipe + 1) : text.slice(prefix.length).replace(/^\s*\+\s*/u, '')
+    const parts = body.split('|').slice(0, count)
+    if (parts.length < count) return
+    for (let index = 0; index < count; index++) chunks[index]!.push(parts[index]!.trim())
+  }
+  const from = lineStart(ctx.lines, pos.startLine)
+  const to = lineEnd(ctx.lines, pos.endLine)
+  const cells = chunks.map((parts) => parts.join(' '))
+  change(ctx, 'U-258', from, to, `${prefix}| ${cells.join(' | ')} |`,
+    'code across a continuation row kept on one pipe-table row')
+}
+
+/** C2-B-223 ends inline content at a continuation fragment; one row keeps the old code span. */
+export function wrappedCodeTableRow(ctx: Context): void {
+  for (const { node } of ctx.visits) if (node.pos !== undefined && wrappedCodeRow(node)) flattenRow(ctx, node)
+}
+
+/** U-376 also applies when another rule moves the same abbreviation definition. */
+export function abbreviationSpaces(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'abbreviation_def' || node.pos === undefined) continue
+    const start = node.pos.startOffset
+    const source = ctx.src.slice(start, lineEnd(ctx.lines, node.pos.startLine))
+    const match = /^\*\[[^\]\n]+\]:( {2,})/u.exec(source)
+    if (match?.[1] === undefined) continue
+    const from = start + match[0].length - match[1].length + 1
+    change(ctx, 'U-376', from, from + match[1].length - 1, '',
+      'extra abbreviation separator spaces removed so the expansion keeps its 0.1 title')
+  }
+}
+
+/** An attribute-only line can leave an empty 0.1 quote that 0.2 otherwise drops. */
+export function emptyAttributeQuote(ctx: Context): void {
+  const lines: number[] = []
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'block_quote' || node.pos === undefined || (node.children?.length ?? 0) !== 0
+      || node.pos.startLine !== node.pos.endLine) continue
+    const line = node.pos.startLine
+    if (ctx.blocks.leaf[line - 1]?.node.type !== 'paragraph'
+      || !/^[ \t]*>[ \t]*\{[^}\n]*\}[ \t]*$/u.test(lineText(ctx.lines, line))) continue
+    lines.push(line)
+  }
+  if (lines.length === 0) return
+  const masked = new Uint8Array(ctx.src.length + 1)
+  for (const line of lines) masked.fill(1, lineStart(ctx.lines, line), lineEnd(ctx.lines, line) + 1)
+  ctx.findings = ctx.findings.filter(({ edit }) => edit === null || masked[edit.start] !== 1)
+  for (const line of lines) {
+    change(ctx, 'U-034', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), '\n> ',
+      'an attribute-only quote kept as an empty quote after a paragraph break')
+  }
+}
+
+/** A shifted list marker can still attach to the preceding list across a type boundary. */
+export function siblingListBoundary(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const list = visit.node
+    const above = visit.siblings[visit.index - 1]
+    if (list.type !== 'list' || list.pos === undefined || above?.type !== 'list' || above.pos === undefined
+      || list.ordered === above.ordered || list.pos.startLine !== above.pos.endLine + 1) continue
+    const line = lineText(ctx.lines, list.pos.startLine)
+    const indent = /^ +/u.exec(line)?.[0]
+    if (indent === undefined || !/^(?:[-+*]|[0-9]+[.)]) /u.test(line.slice(indent.length))) continue
+    const start = lineStart(ctx.lines, list.pos.startLine)
+    change(ctx, 'U-023', start, start + indent.length, '\n',
+      'sibling list separated and its marker moved to the list column')
+  }
+}

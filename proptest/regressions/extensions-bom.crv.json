@@ -1,0 +1,8 @@
+{
+  "kind": "tabs-exception",
+  "clause": "C2-A-143",
+  "id": "d4cb54ea3d0fec16",
+  "seed": 1,
+  "inputJson": "\ufeffP",
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198"
+}

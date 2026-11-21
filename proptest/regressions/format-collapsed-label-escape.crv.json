@@ -1,0 +1,11 @@
+{
+  "id": "collapsed-label-escape",
+  "kind": "format-tree-change",
+  "detail": "normalize=true",
+  "seed": 1,
+  "engineCommit": "0653de1d",
+  "inputJson": "[\n\\*][]",
+  "originalBytes": 7,
+  "minimizedBytes": 7,
+  "clause": "C2-W-075"
+}

@@ -1,18 +1,16 @@
 /**
  * Build the browser IIFE bundle, for consumers that load classic scripts
  * rather than ESM (CDN script tags, sandboxed iframes, userscript hosts).
- * It exposes the whole public API surface of `src/index.ts` as a `carve`
+ * It exposes the whole public API surface of `public/index.ts` as a `carve`
  * global:
  *
  *   dist/carve.iife.min.js
  *
- * The entry is deliberately `src/index.ts` unmodified: everything exported
- * there is browser-safe. Node builtins live only in `src/cli.ts` (a separate
- * entry), and `@djot/djot` is dependency-injected rather than imported (see
- * src/portability.ts), so the only bundled dependency is parse5. An entry with
- * a narrower export list would be a second public API surface, and would need
- * its own module in `src/` plus a test asserting its exports - the bundle here
- * is gated against `src/index.ts` precisely because it claims to BE it.
+ * The entry is deliberately `public/index.ts` unmodified: everything exported
+ * there is browser-safe. Node builtins live only in `public/node.ts` and
+ * `cli/` (separate entries). An entry with a narrower export list would be a
+ * second public API surface - the bundle here is gated against
+ * `public/index.ts` precisely because it claims to BE it.
  *
  * esbuild is invoked as a pinned one-off through `npx`, not carried as a
  * devDependency. The spec repo installs this package as a git dependency
@@ -36,7 +34,7 @@ const root = new URL('..', import.meta.url)
 const pkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'))
 
 /**
- * Run the pinned esbuild over `src/index.ts`.
+ * Run the pinned esbuild over `public/index.ts`.
  *
  * @param {object} [options]
  * @param {string} [options.outfile] Where to write, relative to the repo root.
@@ -49,7 +47,7 @@ export function buildBrowserBundle({ outfile = BUNDLE, sourcemap = true, extraAr
   const args = [
     '--yes',
     `esbuild@${ESBUILD_VERSION}`,
-    'src/index.ts',
+    'public/index.ts',
     '--bundle',
     '--format=iife',
     '--global-name=carve',

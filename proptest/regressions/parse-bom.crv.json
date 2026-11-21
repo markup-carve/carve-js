@@ -1,0 +1,11 @@
+{
+  "kind": "parse-invalid-tree",
+  "detail": "CarveTreeError: /children/0/pos: start coordinates disagree with the source",
+  "seed": 2575534,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "originalBytes": 633,
+  "minimizedBytes": 4,
+  "clause": "C2-A-143",
+  "inputJson": "\ufeffP",
+  "id": "de2b8ea85570bd4b"
+}

@@ -186,7 +186,11 @@ export function expectScansLinearly(
   expectBuiltInputScansLinearly(
     convert,
     (repeats) => prefix + fragment.repeat(repeats) + suffix,
-    { ...(options.minSampleMs === undefined ? {} : { minSampleMs: options.minSampleMs }), label: options.label ?? fragment, ...(options.smallRepeats === undefined ? {} : { smallRepeats: options.smallRepeats }) },
+    {
+      ...(options.minSampleMs === undefined ? {} : { minSampleMs: options.minSampleMs }),
+      label: options.label ?? fragment,
+      ...(options.smallRepeats === undefined ? {} : { smallRepeats: options.smallRepeats }),
+    },
   )
 }
 

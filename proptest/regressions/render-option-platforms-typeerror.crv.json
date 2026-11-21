@@ -1,0 +1,13 @@
+{
+  "kind": "option-invalid-error",
+  "detail": "platforms: TypeError: options.platforms?.includes is not a function\nTypeError: options.platforms?.includes is not a function\n    at active (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/lint/lint.ts:16:61)\n    at runNodeRules (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/lint/lint.ts:74:44)\n    at visit (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/lint/lint.ts:103:3)\n    at file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/lint/lint.ts:86:34\n    at forEachSlot (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast.ts:212:5)\n    at visitChildren (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/lint/lint.ts:79:3)\n    at visit (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/lint/lint.ts:104:3)\n    at file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/lint/lint.ts:86:34\n    at forEachSlot (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/src/ast.ts:212:5)\n    at visitChildren (file:///home/marknb/work/lanes/cx-proptest-1794696020/carve-js/v2/lint/lint.ts:79:3)",
+  "seed": 208802195,
+  "runSeed": 1794696020,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "<",
+  "originalBytes": 4096,
+  "minimizedBytes": 1,
+  "minimizationTimedOut": false,
+  "clause": "C2-H-137 C2-W-109",
+  "id": "75a7b6e2bb472ff2"
+}

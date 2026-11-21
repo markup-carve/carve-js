@@ -1,0 +1,268 @@
+name: engine
+
+# Full engine checks after next2 pushes and manual dispatch. The default-branch
+# nightly dispatcher starts this workflow on next2. Three-line enumeration stays in `npm test`.
+on:
+  schedule:
+    - cron: '15 3 * * *'
+  push:
+    branches: [next2]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  extension-migration:
+    name: extension migration typecheck, lint, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/engine-gate.mjs full extension-migration
+  ast-schema-crosscheck:
+    name: AST schema agreement, 100,000 mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The schema and the reader of the pinned commit, not of the moving branch head.
+      - name: Pinned specification commit
+        id: pin
+        run: echo "commit=$(node -p "require('./data/spec-pin.json').commit")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: markup-carve/carve
+          ref: ${{ steps.pin.outputs.commit }}
+          path: carve
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install spec cross-check dependencies
+        run: npm ci --allow-git=all
+        working-directory: carve
+
+      - run: node scripts/engine-gate.mjs full ast-schema-crosscheck
+  enumerate:
+    name: enumerator, four lines
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full enumerate
+  enumerate-inline:
+    name: inline enumerator, five tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full enumerate-inline
+  stress-inline:
+    name: inline stress shapes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full stress-inline
+  conformance:
+    name: examples of the specification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - name: Pinned specification commit
+        id: pin
+        run: echo "commit=$(node -p "require('./data/spec-pin.json').commit")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: markup-carve/carve
+          ref: ${{ steps.pin.outputs.commit }}
+          path: carve-spec
+
+      - run: node scripts/engine-gate.mjs full conformance
+        env:
+          CARVE_SPEC_DIR: carve-spec
+  enumerate-tree:
+    name: tree and HTML properties, three lines and four tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full enumerate-tree
+  fuzz-tree:
+    name: tree reader fuzz, 20,000 mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full fuzz-tree
+  writer-gates:
+    name: writer gates, examples, three lines and a random run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full writer-gates
+  writer-gates-tokens:
+    name: writer gates, four tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full writer-gates-tokens
+  stress-tree:
+    name: tree and HTML stress shapes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full stress-tree
+  benchmark:
+    name: benchmark (prints, never fails on a number)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/engine-gate.mjs full benchmark
+  proptest:
+    name: source property tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix import --ignore-scripts
+      - run: node scripts/engine-gate.mjs full proptest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: proptest-findings
+          path: proptest/findings
+
+  report-full-result:
+    name: report full engine result
+    if: always()
+    needs: [extension-migration, ast-schema-crosscheck, enumerate, enumerate-inline, stress-inline, conformance, enumerate-tree, fuzz-tree, writer-gates, writer-gates-tokens, stress-tree, benchmark, proptest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Open, update, or close the gate issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/engine-gate-issue.mjs

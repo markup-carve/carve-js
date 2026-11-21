@@ -1,0 +1,770 @@
+// The block nodes as Carve source: the layout of C2-W-017 to C2-W-034 and the canonical forms of
+// C2-W-035 to C2-W-060. A block writes its lines behind `prefix`, the prefix of its containers.
+import {
+  type AbbreviationDefNode, type AdmonitionNode, type BlockQuoteNode, captionOf, type CaptionNode, childNodes, type CodeBlockNode,
+  type CommentNode, type DefinitionDescriptionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode, type DivNode,
+  type FigureGroupNode, type FootnoteNode, type FrontmatterNode, type HeadingNode, type IncludeNode,
+  type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
+  type ParagraphNode, type RawBlockNode, type TableNode, type BlockExtensionNode,
+} from './ast.ts'
+import { isClaimableName } from './ast-validate.ts'
+import { treesEqual } from './ast-json.ts'
+import { plainText } from './ast-text.ts'
+import { includeSource, unreadField } from './include.ts'
+import { isRegionMarkerLine } from './include-source.ts'
+import { isFenceWord } from './opener.ts'
+import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
+import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
+import { BARE_BREAKS, bracedComment, IN_FIGURE_GROUP, lineCommentText, writeContent, writeInlines } from './write-inline.ts'
+import { listMarkers, sameListKind } from './write-lists.ts'
+import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
+import { AFTER_MARK, AS_CONTENT, AS_INLINES, AS_LINE, IN_TITLE, LINE_START, planLeaf, unplanned } from './write-plan.ts'
+import { parseChunk } from './write-check.ts'
+import { canonicalExtensionBody, sourceCoreEquivalent } from './write-extension-source.ts'
+import { longestBareRun } from './write-fences.ts'
+import { tableAttribute, writeTable } from './write-table.ts'
+
+/** A writer per block type, each of which reads a node of its own type. */
+type BlockWriters = { [T in keyof NodeOfType]?: (w: Writer, node: NodeOfType[T], prefix: string, flags: number) => void }
+
+const MIN_RUN = 3
+const MAX_HEADING_LEVEL = 6
+/** C2-W-028: the blank lines that keep two lists of one kind apart. */
+const LIST_BOUNDARY_BLANKS = 3
+const NONE: readonly never[] = []
+
+/** C2-W-047: the attributes of a block, as one brace block on the line above it. */
+export function attributeLine(w: Writer, node: Node, prefix: string, extra?: BlockParts): void {
+  if (w.prewrittenAttributes === node) { w.prewrittenAttributes = null; return }
+  const block = braceBlock(node, extra)
+  if (block !== '') emit(w, prefix, block)
+}
+
+function isFenced(w: Writer, node: Node): boolean {
+  return w.facts?.get(node)?.fenced === true
+}
+
+/** C2-W-039: whether `node` is written with a colon run. */
+function hasColonRun(w: Writer, node: Node): boolean {
+  const type = node.type
+  if (type === 'block_quote') return isFenced(w, node)
+  return type === 'div' || type === 'admonition' || type === 'directive' || type === 'figure_group' || type === 'line_block'
+}
+
+/** The longest colon run among the blocks below `node`, or 0. */
+function runsBelow(w: Writer, node: Node): number {
+  const known = w.colonRuns.get(node)
+  if (known !== undefined) return known
+  let longest = 0
+  for (const child of childNodes(node)) {
+    longest = Math.max(longest, hasColonRun(w, child) ? runsBelow(w, child) + 1 : runsBelow(w, child))
+  }
+  // A run has at least three colons, so the first level counts three.
+  if (longest > 0 && longest < MIN_RUN) longest = MIN_RUN
+  w.colonRuns.set(node, longest)
+  return longest
+}
+
+/** C2-W-039: the shortest colon run of at least three that is longer than the run of every div inside. */
+function colonRun(w: Writer, node: Node): string {
+  return ':'.repeat(Math.max(MIN_RUN, runsBelow(w, node) + 1))
+}
+
+/**
+ * C2-W-005: a fence at the end of a list, a quote or another body that a comment line follows
+ * as a sibling is written without its closer. The comment line then ends the body with the fence
+ * (C2-B-111, C2-B-135); behind a closed fence it would be a child of the body (C2-B-138).
+ */
+function isLeftOpen(w: Writer, node: Node): boolean {
+  return (w.forms.get(node) ?? 0) > 0
+}
+
+/** The lines of a verbatim value. C2-W-033: a value with no final line break is written with one. */
+function valueLines(w: Writer, node: CodeBlockNode | RawBlockNode | FrontmatterNode): string[] {
+  const value = node.value
+  if (value === '') return []
+  const lines = value.split('\n')
+  if (lines[lines.length - 1] === '') lines.pop()
+  else lose(w, node, 'value')
+  return lines
+}
+
+/**
+ * C2-W-040: the quoted title and the label of an opener. `title` is the title as its text, and
+ * `spelled` as it stands between the quotes. A field the opener cannot hold is left out.
+ */
+function openerTail(
+  w: Writer, node: CodeBlockNode | DivNode | AdmonitionNode | DirectiveNode, title: string | null, spelled: string,
+): string {
+  let out = ''
+  if (title !== null && title.includes('\n')) lose(w, node, 'title')
+  else if (title !== null) out += ` "${spelled}"`
+  const label = node.groupLabel
+  if (label === undefined) return out
+  if (label.includes(']') || label.includes('\n')) lose(w, node, 'groupLabel')
+  else out += ` [${label}]`
+  return out
+}
+
+/** C2-B-120: a title of the opener is text. Other inline nodes, which a supplied tree may hold, are written as their plain text. */
+function codeTitle(w: Writer, node: CodeBlockNode): string | null {
+  const title = node.title
+  if (title === undefined) return null
+  if (title.some((part) => part.type !== 'text')) lose(w, node, 'title')
+  return plainText(title)
+}
+
+/**
+ * C2-W-037: an info string that holds a backtick has no spelling, since a backtick run with one opens
+ * no fence (C2-B-118). A parse never gives one; for a supplied tree it is left out and reported.
+ */
+function spellableInfo(w: Writer, node: CodeBlockNode, field: string, value: string | null): string | null {
+  if (value === null || !value.includes('`')) return value
+  lose(w, node, field)
+  return null
+}
+
+/**
+ * C2-W-037, C2-B-117: a language outside the characters of `language_word` reads back as a shorter word and further
+ * words, so it has no spelling either: a parse never gives one, and for a supplied tree it is left out and reported.
+ */
+function fenceInfo(w: Writer, node: CodeBlockNode | RawBlockNode): string {
+  if (node.type === 'raw_block') {
+    // C2-B-116: a raw block needs its format, so a format the reader would cut short is written as it is and reported.
+    if (!isFenceWord(node.format, true)) lose(w, node, 'format')
+    return `=${node.format}`
+  }
+  const syntax = node.syntax ?? ''
+  if (syntax === '' || isFenceWord(syntax, false)) return syntax
+  lose(w, node, 'syntax')
+  return ''
+}
+
+/** C2-W-037, C2-W-038, C2-W-040: a code block, and a raw block as the fence with `=` and its format. */
+function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string): void {
+  attributeLine(w, node, prefix)
+  const continuation = w.lead !== null && w.lead.startsWith('[^') && prefix.length > 2 ? ' '.repeat(w.lead.length) : prefix
+  const lines = valueLines(w, node)
+  const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
+  let info = fenceInfo(w, node)
+  if (node.type === 'code_block') {
+    const title = spellableInfo(w, node, 'title', codeTitle(w, node))
+    // C2-B-120: the title reads escapes, as a quoted attribute value does.
+    info += openerTail(w, node, title, title === null ? '' : quoted(title).slice(1, -1))
+  }
+  emit(w, prefix, run + info)
+  for (const line of lines) emit(w, continuation, line)
+  if (!isLeftOpen(w, node)) emit(w, continuation, run)
+}
+
+/** C2-W-059: a line comment, and a comment block with the shortest percent run its body allows. */
+function comment(w: Writer, node: CommentNode, prefix: string): void {
+  const value = node.value
+  attributeLine(w, node, prefix)
+  if (node.form !== 'block') {
+    if (value.includes('\n')) lose(w, node, 'value')
+    emit(w, prefix, node.form === 'braced' ? bracedComment(value) : lineCommentText(w, node, value))
+    return
+  }
+  const lines = value === '' ? [] : value.split('\n')
+  const run = '%'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 37) + 1))
+  emit(w, prefix, run)
+  for (const line of lines) emit(w, prefix, line)
+  if (!isLeftOpen(w, node)) emit(w, prefix, run)
+}
+
+/** C2-W-052: the bare opener for YAML, and the format name glued to it for every other format. */
+function frontmatter(w: Writer, node: FrontmatterNode, prefix: string): void {
+  emit(w, prefix, node.format === 'yaml' ? '---' : `---${node.format}`)
+  for (const line of valueLines(w, node)) emit(w, prefix, line)
+  emit(w, prefix, '---')
+}
+
+function textLeaf(
+  w: Writer, node: ParagraphNode | HeadingNode | DefinitionTermNode, prefix: string, flags: number, mark: string, indent: string,
+): void {
+  if (node.children.length === 0) return lose(w, node, null)
+  attributeLine(w, node, prefix)
+  if (node.type === 'paragraph') notePlace(w, node, prefix)
+  w.lead = (w.lead ?? prefix) + mark
+  const start = node.type === 'paragraph' ? LINE_START : AFTER_MARK
+  emitLines(w, prefix, indent, planLeaf(w, node.children, flags, writeContent(w, node.children, flags), AS_CONTENT, start))
+}
+
+/** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
+function heading(w: Writer, node: HeadingNode, prefix: string, flags: number): void {
+  let level = node.level
+  if (level > MAX_HEADING_LEVEL) {
+    lose(w, node, 'level')
+    level = MAX_HEADING_LEVEL
+  }
+  textLeaf(w, node, prefix, flags, `${'='.repeat(level)} `, ' '.repeat(level + 1))
+}
+
+/** C2-W-058: an include directive in the spelling the renderer shows too (C2-H-171). */
+function include(w: Writer, node: IncludeNode, prefix: string, flags: number): void {
+  attributeLine(w, node, prefix)
+  // C2-B-202, C2-W-117: an empty path and a path with a line break have no spelling.
+  if (node.path === '' || node.path.includes('\n')) lose(w, node, 'path')
+  const source = includeSource(node, w.facts?.get(node)?.optionSpelling)
+  const unread = unreadField(node, source)
+  if (unread !== null) lose(w, node, unread)
+  emit(w, prefix, source)
+  // C2-N-080: the caption of a code include stands below its directive.
+  caption(w, node.caption, prefix, flags)
+}
+
+/**
+ * C2-W-055, C2-W-117: `*[key]:`, one space and the expansion. A line break of a supplied expansion is written as a
+ * space, and spaces and tabs at its end are left out, since they end the line (C2-W-022); both are reported.
+ */
+function abbreviationDefinition(w: Writer, node: AbbreviationDefNode, prefix: string): void {
+  attributeLine(w, node, prefix)
+  const expansion = node.expansion.replaceAll('\n', ' ')
+  let end = expansion.length
+  while (end > 0 && (expansion[end - 1] === ' ' || expansion[end - 1] === '\t')) end--
+  if (end < node.expansion.length || expansion !== node.expansion) lose(w, node, 'expansion')
+  emit(w, prefix, `*[${node.key}]: ${expansion.slice(0, end)}`)
+}
+
+/** C2-W-056: a link definition; its attributes stand on the line above (C2-B-106). */
+/** C2-I-079: a key of only spaces, tabs and line feeds folds to nothing, and its brackets are text. */
+function loseBlankKey(w: Writer, node: LinkReferenceDefinitionNode | FootnoteNode): void {
+  for (const char of node.key) if (char !== ' ' && char !== '\t' && char !== '\n') return
+  lose(w, node, 'key')
+}
+
+/** C2-I-013: a backslash before a parenthesis or a backslash would read as an escape, so it is escaped. */
+function definitionDestination(href: string): string {
+  let out = ''
+  for (let at = 0; at < href.length; at++) {
+    const char = href[at]!
+    if (char === '\\' && at + 1 < href.length && '()\\'.includes(href[at + 1]!)) out += '\\'
+    out += char
+  }
+  return out
+}
+
+function linkDefinition(w: Writer, node: LinkReferenceDefinitionNode, prefix: string): void {
+  attributeLine(w, node, prefix)
+  loseBlankKey(w, node)
+  const href = definitionDestination(node.href)
+  if (href === '') lose(w, node, 'href')
+  const authored = node.tooltip
+  const title = authored === undefined ? '' : ` ${quoted(authored)}`
+  // C2-W-022: a definition with no destination ends at its colon.
+  emit(w, prefix, `[${node.key}]:${href === '' && title === '' ? '' : ' '}${href}${title}`)
+}
+
+/** C2-W-024, C2-W-027: the blocks of a body behind its marker, the first on the marker line. */
+function body(
+  w: Writer, node: FootnoteNode | ListItemNode | DefinitionDescriptionNode, prefix: string, flags: number, mark: string, width: number,
+  tight: boolean,
+): void {
+  // C2-W-033, C2-B-229: a body opened on the marker line of another body, behind its task box or its attributes, has
+  // its content column behind its own marker there, so its continuation lines stand at that column.
+  const behind = w.lead === null ? 0 : Math.max(0, w.lead.length - prefix.length)
+  w.lead = (w.lead ?? prefix) + mark
+  writeBlocks(w, node.children, prefix + ' '.repeat(behind + width), flags, tight)
+  if (w.lead === null) return
+  // C2-W-057: an empty body has no spelling.
+  lose(w, node, null)
+  emit(w, prefix, '')
+}
+
+function footnote(w: Writer, node: FootnoteNode, prefix: string, flags: number): void {
+  attributeLine(w, node, prefix)
+  loseBlankKey(w, node)
+  const mark = `[^${node.key}]: `
+  // C2-B-067: a description list opened on the marker line takes its descriptions at its own column.
+  const width = node.children[0]?.type === 'definition_list' ? mark.length : 2
+  body(w, node, prefix, flags, mark, width, false)
+}
+
+/** C2-W-025, C2-B-040: an uppercase marker with a dot, a letter or a roman numeral, takes two spaces. */
+function markerGap(marker: string): string {
+  const code = marker.charCodeAt(0)
+  return marker.length >= 2 && marker.endsWith('.') && code >= 65 && code <= 90 ? '  ' : ' '
+}
+
+function listItem(w: Writer, node: ListItemNode, prefix: string, flags: number, marker: string, tight: boolean): void {
+  // C2-W-051: the attributes of an item are glued to its marker.
+  const head = marker + braceBlock(node)
+  const gap = markerGap(marker)
+  // C2-W-046: the task box holds the character of `task.mark`.
+  const task = node.task
+  const box = task === undefined ? '' : `[${task.mark}] `
+  w.bareDotLead = marker === '.'
+  body(w, node, prefix, flags, head + gap + box, marker.length + gap.length, tight)
+}
+
+/** The brace block above a list: its attributes, and the start value that no marker carries (C2-W-044). */
+function listAttributes(node: ListNode, start: string | null): string {
+  return braceBlock(node, start === null ? {} : { keys: [['start', start]] })
+}
+
+function list(w: Writer, node: ListNode, prefix: string, flags: number): void {
+  const items = node.children
+  if (items.length === 0) return lose(w, node, null)
+  const numbering = listMarkers(w, node)
+  const block = listAttributes(node, numbering.start)
+  if (w.prewrittenAttributes === node) w.prewrittenAttributes = null
+  else if (block !== '') emit(w, prefix, block)
+  const tight = node.spacing !== 'loose'
+  for (let at = 0; at < items.length; at++) {
+    // C2-W-030: a loose list has one blank line between all of its items.
+    if (at > 0 && !tight) emit(w, prefix, '')
+    listItem(w, items[at]!, prefix, flags, numbering.markers[at]!, tight)
+  }
+}
+
+/** C2-W-060, C2-W-114: terms and descriptions with no blank line between them. */
+function definitionList(w: Writer, node: DefinitionListNode, prefix: string, flags: number): void {
+  const entries = node.children
+  if (entries.length === 0) return lose(w, node, null)
+  attributeLine(w, node, prefix)
+  writeSiblings(w, entries, prefix, flags, ENTRIES)
+}
+
+/** A block between an opener and a closer of one colon run. C2-W-032: an empty body is one blank line. */
+function fenced(w: Writer, node: Node, prefix: string, opener: string, blankWhenEmpty: boolean, write: () => void): void {
+  const run = colonRun(w, node)
+  emit(w, prefix, run + opener)
+  const mark = w.lines.length
+  write()
+  if (w.lines.length === mark && blankWhenEmpty) emit(w, prefix, '')
+  emit(w, prefix, run)
+}
+
+/** C2-W-031, C2-W-082: a quote with `>` lines, or as a quote fence where the sidecar records that form. */
+function blockQuote(w: Writer, node: BlockQuoteNode, prefix: string, flags: number): void {
+  attributeLine(w, node, prefix)
+  const children = node.children
+  if (isFenced(w, node)) {
+    fenced(w, node, prefix, ' >', false, () => writeBlocks(w, children, prefix, flags, false))
+    return caption(w, node.caption, prefix, flags)
+  }
+  if (children.length === 0) {
+    emit(w, prefix, '>')
+    return caption(w, node.caption, prefix, flags)
+  }
+  w.lead = `${w.lead ?? prefix}> `
+  writeBlocks(w, children, `${prefix}> `, flags, false)
+  if (w.lead !== null) emit(w, prefix, '')
+  caption(w, node.caption, prefix, flags)
+}
+
+function titleTail(w: Writer, node: DivNode | AdmonitionNode | DirectiveNode, flags: number): string {
+  const inlines = node.title
+  // C2-B-119: the quoted title is one line of inline content behind the opener.
+  const title = inlines === undefined ? null : planLeaf(w, inlines, flags, writeInlines(w, inlines, flags), AS_INLINES, IN_TITLE)
+  return openerTail(w, node, title, title ?? '')
+}
+
+/** C2-W-039: the name of a plain div is its first class, where that class can be a name with no other meaning. */
+function divName(w: Writer, node: DivNode): string | null {
+  const first = node.attrs?.classes?.[0]
+  if (first === undefined || !isName(first) || DIV_KINDS.has(first)) return null
+  return w.extensions.some((extension) => extension.matcher?.form === 'div' && extension.matcher.name === first) ? null : first
+}
+
+/** C2-W-081: the opener of a hard-break block stands for the class, which it adds last (C2-A-068). */
+function usesHardBreakOpener(w: Writer, node: DivNode): boolean {
+  const classes = node.attrs?.classes ?? NONE
+  if (classes[classes.length - 1] !== HARD_BREAKS_CLASS || node.title !== undefined || node.groupLabel !== undefined) return false
+  return w.facts?.get(node)?.hardBreakOpener ?? true
+}
+
+function div(w: Writer, node: DivNode, prefix: string, flags: number): void {
+  const classes = node.attrs?.classes ?? NONE
+  if (usesHardBreakOpener(w, node)) {
+    attributeLine(w, node, prefix, { skipClasses: [classes.length - 1] })
+    // C2-W-080: behind the opener a hard break is the bare line ending. In the class form it keeps its backslash (C2-W-079).
+    return fenced(w, node, prefix, ' \\', true, () => writeBlocks(w, node.children, prefix, flags | BARE_BREAKS, false))
+  }
+  const write = (): void => writeBlocks(w, node.children, prefix, flags, false)
+  const named = divName(w, node)
+  const name = w.prewrittenAttributes === node && named !== null && braceBlock(node, { skipClasses: [0] }) === ''
+    ? null : named
+  attributeLine(w, node, prefix, name === null ? {} : { skipClasses: [0] })
+  fenced(w, node, prefix, (name === null ? '' : ` ${name}`) + titleTail(w, node, flags), true, write)
+}
+
+/** C2-W-039: an admonition and a directive are named by their kind. */
+function namedDiv(w: Writer, node: AdmonitionNode | DirectiveNode, prefix: string, flags: number): void {
+  attributeLine(w, node, prefix)
+  if (node.type === 'directive' && node.tocTarget !== undefined) lose(w, node, 'tocTarget')
+  const opener = ` ${node.kind}${titleTail(w, node, flags)}`
+  fenced(w, node, prefix, opener, true, () => writeBlocks(w, node.children, prefix, flags, false))
+}
+
+/** C2-W-053: `^`, one space and the content, directly below the block. */
+function caption(w: Writer, node: CaptionNode | undefined, prefix: string, flags: number): void {
+  if (node === undefined) return
+  if (node.short !== undefined) lose(w, node, 'short')
+  const blocks = node.children
+  // C2-W-012: the content of two former blocks is kept apart by a space.
+  if (blocks.length !== 1) lose(w, node, null)
+  const parts: string[] = []
+  for (const block of blocks) {
+    if (holdsMarkBeforeNumber(childNodes(block))) unplanned(w, 'caption number')
+    parts.push(planLeaf(w, childNodes(block), flags, writeContent(w, childNodes(block), flags), AS_CONTENT, AFTER_MARK))
+  }
+  w.lead = `${w.lead ?? prefix}^ `
+  emitLines(w, prefix, '  ', parts.join(' '))
+}
+
+/** C2-B-207: a `#` of top-level text before the number mark, which the reader would take as the mark. */
+function holdsMarkBeforeNumber(nodes: readonly Node[]): boolean {
+  for (const node of nodes) {
+    if (node.type === 'caption_number') return false
+    if (node.type === 'text' && node.value.includes('#')) return true
+  }
+  return false
+}
+
+/** The number of comments at the end of `nodes`. */
+function trailingComments(nodes: readonly Node[]): number {
+  let count = 0
+  while (count < nodes.length && nodes[nodes.length - 1 - count]!.type === 'comment') count++
+  return count
+}
+
+/** C2-W-059: the comments between a figure group and its caption stand between the closer and the caption line. */
+function figureGroup(w: Writer, node: FigureGroupNode, prefix: string, flags: number): void {
+  // C2-B-127: the nested group is written as its opener, which reads back as a div.
+  if ((flags & IN_FIGURE_GROUP) !== 0) lose(w, node, null)
+  attributeLine(w, node, prefix)
+  const children = node.children
+  const captionNode = node.caption
+  const after = captionNode === undefined ? 0 : trailingComments(children)
+  const inside = children.slice(0, children.length - after)
+  fenced(w, node, prefix, ' figure', true, () => writeBlocks(w, inside, prefix, flags | IN_FIGURE_GROUP, false))
+  for (const late of children.slice(children.length - after)) if (late.type === 'comment') comment(w, late, prefix)
+  caption(w, captionNode, prefix, flags)
+}
+
+/**
+ * C2-W-059, C2-A-082: a code block that carries a caption, then the comments that follow it as its siblings, then the
+ * caption, with no blank line between. Returns the index of the last of those comments.
+ */
+function captionedCode(w: Writer, nodes: readonly Node[], at: number, prefix: string, flags: number): number {
+  const node = nodes[at]!
+  if (node.type !== 'code_block') return at
+  codeBlock(w, node, prefix)
+  let last = at
+  for (let next = nodes[last + 1]; next?.type === 'comment' && next.form === 'line'; next = nodes[last + 1]) {
+    comment(w, next, prefix)
+    last++
+  }
+  caption(w, node.caption, prefix, flags)
+  return last
+}
+
+/** C2-W-032, C2-W-080: one line of source per `line`; an empty line block has its closer below its opener. */
+function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number): void {
+  attributeLine(w, node, prefix)
+  fenced(w, node, prefix, ' |', false, () => {
+    for (const line of node.children) {
+      if (line.type === 'comment') {
+        comment(w, line, prefix)
+        continue
+      }
+      const last = line.children[line.children.length - 1]
+      const lazy = last?.type === 'comment' && last.form === 'line' ? last : null
+      const children = lazy === null ? line.children : line.children.slice(0, -1)
+      emit(w, prefix, lineContent(w, children, flags | BARE_BREAKS))
+      if (lazy !== null) lazyComment(w, lazy, prefix)
+    }
+  })
+}
+
+/**
+ * C2-B-024: a line comment at the end of a line of a stanza is a lazy comment-only line, which its containers do not
+ * own. At the top level every line is owned, so it has no spelling there.
+ */
+function lazyComment(w: Writer, node: CommentNode, prefix: string): void {
+  if (prefix === '') return lose(w, node, null)
+  if (node.value.includes('\n')) lose(w, node, 'value')
+  emit(w, '', lineCommentText(w, node, node.value.replaceAll('\n', ' ')))
+}
+
+/** A line of a line block. A hard break at its end is the backslash that ends its source line, behind the text as it is. */
+function lineContent(w: Writer, nodes: readonly Node[], flags: number): string {
+  if (nodes[nodes.length - 1]?.type !== 'hard_break') {
+    return planLeaf(w, nodes, flags, writeContent(w, nodes, flags), AS_CONTENT, LINE_START)
+  }
+  return planLeaf(w, nodes, flags, `${writeInlines(w, nodes.slice(0, -1), flags)}\\`, AS_LINE, LINE_START)
+}
+
+/** C2-A-175: a node with no spelling of its own is its children, or its fallback. */
+function childrenOnly(w: Writer, node: Node, prefix: string, flags: number): void {
+  lose(w, node, null)
+  const fallback = 'fallback' in node ? node.fallback : undefined
+  writeBlocks(w, fallback ?? childNodes(node), prefix, flags, false)
+}
+
+function sourceLines(body: string): string[] {
+  const lines = body.split('\n')
+  if (lines.at(-1) === '') lines.pop()
+  return lines
+}
+
+function extensionSpelling(node: BlockExtensionNode): string | null {
+  const source = node.source
+  if (source === undefined || source.form === 'inline') return null
+  // C2-X-023: a name no matcher claims reads back as another core node, so only the fallback is written.
+  if (!isClaimableName(source.form, source.name, source.title !== undefined || source.groupLabel !== undefined)) return null
+  const lines = sourceLines(source.body)
+  const mark = source.form === 'div' ? ':' : '`'
+  const run = mark.repeat(Math.max(MIN_RUN, longestBareRun(lines, mark.charCodeAt(0)) + 1))
+  const title = source.title === undefined ? '' : ` ${quoted(source.title)}`
+  const label = source.groupLabel === undefined ? '' : ` [${source.groupLabel}]`
+  const opener = source.form === 'div' ? `${run} ${source.name}${title}${label}` : `${run}${source.name}${title}${label}`
+  return [opener, ...lines, run].join('\n') + '\n'
+}
+
+function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, flags: number): void {
+  const spelling = extensionSpelling(node)
+  if (spelling !== null && canonicalExtensionBody(node)) {
+    let same = false
+    try {
+      const attrs = braceBlock(node)
+      const probe = attrs === '' ? spelling : `${attrs}\n${spelling}`
+      const parsed = parseChunk(w, probe, null).children[0]
+      same = w.extensions.length === 0 ? sourceCoreEquivalent(node, parsed) : parsed !== undefined && treesEqual(node, parsed)
+    } catch { same = false }
+    if (same) {
+      attributeLine(w, node, prefix)
+      for (const line of spelling.trimEnd().split('\n')) emit(w, prefix, line)
+      return
+    }
+  }
+  lose(w, node, null)
+  writeBlocks(w, node.fallback, prefix, flags, false)
+}
+
+function table(w: Writer, node: TableNode, prefix: string, flags: number): void {
+  writeTable(w, node, prefix, flags)
+  caption(w, node.caption, prefix, flags)
+}
+
+const WRITERS: BlockWriters = {
+  paragraph: (w, node, prefix, flags) => {
+    textLeaf(w, node, prefix, flags, '', '')
+    caption(w, node.caption, prefix, flags)
+  },
+  heading,
+  thematic_break: (w, node, prefix) => {
+    attributeLine(w, node, prefix)
+    emit(w, prefix, '***')
+  },
+  code_block: (w, node, prefix, flags) => {
+    codeBlock(w, node, prefix)
+    caption(w, node.caption, prefix, flags)
+  },
+  raw_block: codeBlock,
+  comment,
+  frontmatter,
+  include,
+  link_reference_definition: linkDefinition,
+  abbreviation_def: abbreviationDefinition,
+  footnote,
+  list,
+  definition_term: (w, node, prefix, flags) => textLeaf(w, node, prefix, flags, ':: ', '   '),
+  definition_description: (w, node, prefix, flags) => body(w, node, prefix, flags, ': ', 2, false),
+  definition_list: definitionList,
+  block_quote: blockQuote,
+  div,
+  admonition: namedDiv,
+  directive: namedDiv,
+  figure_group: figureGroup,
+  line_block: lineBlock,
+  table,
+  block_extension: blockExtension,
+}
+
+/** Writes `node` by the writer of its type. False where its type has none. */
+function writeOwn<T extends keyof NodeOfType>(w: Writer, type: T, node: NodeOfType[T], prefix: string, flags: number): boolean {
+  const writer = WRITERS[type]
+  if (writer === undefined) return false
+  writer(w, node, prefix, flags)
+  return true
+}
+
+function writeBlock(w: Writer, node: Node, prefix: string, flags: number): void {
+  if (!writeOwn(w, node.type, node, prefix, flags)) childrenOnly(w, node, prefix, flags)
+}
+
+const LAZY_CONTAINERS: readonly string[] = [
+  'list', 'list_item', 'block_quote', 'definition_list', 'definition_description', 'footnote',
+]
+/** The containers that an indent or a mark keeps open, so that a comment-only line below one stays in it (C2-B-138). */
+const OPEN_CONTAINERS: readonly string[] = ['list', 'list_item', 'definition_list', 'definition_description', 'footnote']
+const OPAQUE: readonly string[] = ['code_block', 'raw_block']
+
+/**
+ * Whether a comment-only line directly below `node` would be read into it: as a lazy line of the
+ * text leaf it ends in (C2-B-024), or as a child of a table (C2-A-086).
+ */
+function takesLineBelow(w: Writer, node: Node): boolean {
+  const type = node.type
+  // C2-B-137, C2-B-138: a comment-only line below a heading is a child of the heading, whatever its indent.
+  if (type === 'paragraph' || type === 'heading' || type === 'definition_term' || type === 'table' || captionOf(node) !== undefined) {
+    return true
+  }
+  if (!LAZY_CONTAINERS.includes(type) || isFenced(w, node)) return false
+  // A line without the quote mark directly below a quote stays in it (C2-B-138); a blank line ends the quote.
+  if (type === 'block_quote') return true
+  const children = childNodes(node)
+  const last = children[children.length - 1]
+  return last !== undefined && takesLineBelow(w, last)
+}
+
+function isOpenContainer(w: Writer, node: Node): boolean {
+  return OPEN_CONTAINERS.includes(node.type) && !isFenced(w, node)
+}
+
+/** The fence that ends the open container `node`, or null. */
+function lastFence(w: Writer, node: Node): Node | null {
+  let at = node
+  while (isOpenContainer(w, at)) {
+    const children = childNodes(at)
+    const last = children[children.length - 1]
+    if (last === undefined) return null
+    at = last
+  }
+  return OPAQUE.includes(at.type) || (at.type === 'comment' && at.form === 'block') ? at : null
+}
+
+function isCommentLine(node: Node | undefined): boolean {
+  return node !== undefined && node.type === 'comment' && node.form !== 'block'
+}
+
+/** The index of the first block behind `at` that is no comment line, or `nodes.length`. */
+export function commentLinesEnd(nodes: readonly Node[], at: number): number {
+  let next = at + 1
+  while (isCommentLine(nodes[next])) next++
+  return next
+}
+
+/** C2-W-059: the blank lines before the comment `node`, which follows `before`. */
+function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
+  // C2-W-059: a line comment after a code block with a caption stands between its closer and the caption line.
+  if (before.type === 'code_block' && before.caption !== undefined && node.type === 'comment' && node.form === 'line') return 0
+  // C2-W-034: a region marker is read into no container, so it ends the one above with the usual blank line.
+  if (isCommentLine(node) && isOpenContainer(w, before) && !isRegionMarker(node)) {
+    // C2-B-138: the line stays in the container, unless it ends a fence that the container ends with.
+    if (lastFence(w, before) !== null) return 0
+    lose(w, node, null)
+    return 1
+  }
+  return takesLineBelow(w, before) || (w.forms.get(node) ?? 0) > 0 ? 1 : 0
+}
+
+/** C2-W-034, C2-B-137: a region marker line ends the leaf and the unowned containers above it, so it keeps its line. */
+function isRegionMarker(node: Node): boolean {
+  if (node.type !== 'comment' || node.form !== 'line') return false
+  const line = `%% ${node.value}`
+  return isRegionMarkerLine(line, 0, line.length)
+}
+
+export function followingAttributes(w: Writer, node: Node | undefined): string {
+  if (node?.type === 'list') return listAttributes(node, listMarkers(w, node).start)
+  if (node?.type === 'div') {
+    const classes = node.attrs?.classes ?? NONE
+    if (usesHardBreakOpener(w, node)) return braceBlock(node, { skipClasses: [classes.length - 1] })
+    const name = divName(w, node)
+    const block = braceBlock(node, name === null ? {} : { skipClasses: [0] })
+    return block === '' && name !== null ? braceBlock(node) : block
+  }
+  if (node?.type === 'table') return tableAttribute(w, node) || '{footer-rows=0}'
+  return node === undefined ? '' : braceBlock(node)
+}
+
+/** The layout of a list of siblings: the blocks of a container, of a tight item, or the entries of a description list. */
+const BLOCKS = 0
+const TIGHT_ITEM = 1
+const ENTRIES = 2
+
+/** C2-W-017, C2-W-018, C2-W-028, C2-W-059: the blank lines between `before` and the block `node` below it. */
+export function blankLinesBetween(w: Writer, before: Node, list: Node | null, node: Node, nested: boolean): number {
+  if (node.type === 'comment') return blankLinesBeforeComment(w, before, node)
+  if (list !== null && sameListKind(w, list, node)) return LIST_BOUNDARY_BLANKS
+  if (list?.type === 'list' && node.type === 'list' && list.marker.kind === 'ordered' &&
+    node.marker.kind === 'ordered' && list.marker.style !== node.marker.style &&
+    list.marker.delimiter === node.marker.delimiter) {
+    // The next list's attribute line would be a lazy line of the open paragraph above it (C2-B-024).
+    return listAttributes(node, listMarkers(w, node).start) !== '' && takesLineBelow(w, list) ? 1 : 0
+  }
+  return nested ? 0 : 1
+}
+
+/** C2-W-018: whether `node`, the second block of a tight item, is a nested list directly below the first paragraph. */
+function isNestedList(w: Writer, before: Node, node: Node, at: number): boolean {
+  if (at !== 1 || node.type !== 'list' || before.type !== 'paragraph') return false
+  // C2-B-015: only a bullet or a first marker with the value 1 opens a list below a paragraph.
+  if (node.marker.kind === 'ordered' && (node.marker.start ?? 1) !== 1) return false
+  // An attribute line directly below the paragraph would be a lazy line of it (C2-B-024).
+  return listAttributes(node, listMarkers(w, node).start) === ''
+}
+
+/** C2-B-138: the fence an open container ends with takes its other spelling where a comment line follows the container. */
+function markFenceBeforeComment(w: Writer, node: Node, next: Node | undefined): void {
+  if (!isCommentLine(next) || !isOpenContainer(w, node)) return
+  const fence = lastFence(w, node)
+  if (fence !== null) w.forms.set(fence, 1)
+}
+
+// `following` is the block behind the comment lines after `at`.
+function beforeSibling(w: Writer, nodes: readonly Node[], at: number, before: Node | null,
+  list: Node | null, prefix: string, layout: number, following: Node | undefined): void {
+  const node = nodes[at]!
+  const attributes = isCommentLine(node) && before !== null && isOpenContainer(w, before)
+    && w.prewrittenAttributes !== following ? followingAttributes(w, following) : ''
+  if (before !== null) {
+    const nested = layout === ENTRIES || (layout === TIGHT_ITEM && isNestedList(w, before, node, at))
+    // C2-B-024, Example 264: an attribute line directly below an open paragraph is a lazy line of it, so one blank line
+    // closes the container before the attribute lines of the next block that stand above a comment (C2-W-122).
+    const blanks = attributes !== '' ? 1 : w.prewrittenAttributes === node ? 0 : blankLinesBetween(w, before, list, node, nested)
+    for (let blank = blanks; blank > 0; blank--) emit(w, prefix, '')
+  }
+  if (attributes !== '' && following !== undefined) {
+    emit(w, prefix, attributes)
+    w.prewrittenAttributes = following
+  }
+}
+
+function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags: number, layout: number): void {
+  let before: Node | null = null
+  // The last block that is no comment: comments do not keep two lists apart (C2-B-053).
+  let list: Node | null = null
+  // Kept across a run of comment lines, which is walked once rather than once per comment.
+  let after = -1
+  for (let at = 0; at < nodes.length; at++) {
+    const node = nodes[at]!
+    const start = w.lines.length
+    const next = nodes[at + 1]
+    if (after <= at) after = commentLinesEnd(nodes, at)
+    beforeSibling(w, nodes, at, before, list, prefix, layout, nodes[after])
+    markFenceBeforeComment(w, node, next)
+    const written = w.lines.length
+    if (node.type === 'code_block' && node.caption !== undefined) at = captionedCode(w, nodes, at, prefix, flags)
+    else writeBlock(w, node, prefix, flags)
+    if (w.lines.length === written) {
+      // C2-W-029: a block that writes nothing leaves no blank line behind.
+      w.lines.length = start
+      continue
+    }
+    before = node
+    if (node.type !== 'comment') list = node
+  }
+}
+
+/**
+ * Writes sibling blocks with the blank lines between them. In a tight list the nested list that
+ * follows the first paragraph of its item takes no blank line (C2-W-018).
+ */
+export function writeBlocks(w: Writer, nodes: readonly Node[], prefix: string, flags: number, tight: boolean): void {
+  writeSiblings(w, nodes, prefix, flags, tight ? TIGHT_ITEM : BLOCKS)
+}

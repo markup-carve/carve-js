@@ -1,315 +1,419 @@
+import { readFileSync } from 'node:fs'
+import { Ajv2020 } from 'ajv/dist/2020.js'
 import { describe, expect, it } from 'vitest'
-
 import {
-  carveToAnsi,
-  carveToAstJson,
-  carveToHtml,
-  carveToMarkdown,
-  carveToPlainText,
-  type CarveExtension,
-  type Document,
-} from '../src/index.js'
+  CarveOptionError, CarveTreeError, decodeTree, format, lint, parse, parseTree, parseWithLayout, render,
+  parseWithDiagnostics,
+  renderWithDiagnostics, tabsExtensions, tabsRenderer, treesEqual, validateLayout, validateTree,
+  writeWithDiagnostics, type BlockExtensionNode, type DocumentNode, type ExtensionDefinition,
+} from '../src/index.ts'
+import { calloutExtension, calloutRenderer, diagramExtension, diagramRenderer } from './support/extensions.ts'
 
-describe('extension transforms', () => {
-  it('runs afterParse for every extension before any beforeRender', () => {
-    const order: string[] = []
-    const extA: CarveExtension = {
-      name: 'a',
-      afterParse(doc) {
-        order.push('after-a')
-        return doc
-      },
-      beforeRender(doc) {
-        order.push('before-a')
-        return doc
-      },
-    }
-    const extB: CarveExtension = {
-      name: 'b',
-      afterParse(doc) {
-        order.push('after-b')
-        return doc
-      },
-      beforeRender(doc) {
-        order.push('before-b')
-        return doc
-      },
-    }
-    carveToHtml('hi', { extensions: [extA, extB] })
-    expect(order).toEqual(['after-a', 'after-b', 'before-a', 'before-b'])
+const source = ':::: tabs\n::: tab "Install"\nRun setup.\n:::\n\n::: tab "Use"\nOpen the app.\n:::\n::::\n'
+const html = '<div class="tabs" role="group" aria-label="Tabs"><input type="radio" name="tabs-1" id="tabs-1-0" checked>'
+  + '<label for="tabs-1-0">Install</label><input type="radio" name="tabs-1" id="tabs-1-1"><label for="tabs-1-1">Use</label>'
+  + '<div class="tab-panel" role="group" aria-label="Install"><p>Run setup.</p></div>'
+  + '<div class="tab-panel" role="group" aria-label="Use"><p>Open the app.</p></div></div>'
+const fallbackHtml = '<p><strong>Install</strong></p>\n<p>Run setup.</p>\n<p><strong>Use</strong></p>\n<p>Open the app.</p>'
+
+function paragraph(value: string) {
+  return { type: 'paragraph' as const, children: [{ type: 'text' as const, value }] }
+}
+
+function expectedTab(title: string, body: string): BlockExtensionNode {
+  return { type: 'block_extension', name: 'carve.tab', version: '1', children: [],
+    slots: { title: [{ type: 'text', value: title }], body: [paragraph(body)] },
+    fallback: [{ type: 'paragraph', children: [{ type: 'strong', children: [{ type: 'text', value: title }] }] }, paragraph(body)],
+    source: { form: 'div', name: 'tab', title, body: `${body}\n` } }
+}
+
+function tabsTree(): DocumentNode {
+  return parseTree(source, { extensions: tabsExtensions, positions: false }).document
+}
+
+function outer(document: DocumentNode): BlockExtensionNode {
+  const node = document.children[0]
+  if (node?.type !== 'block_extension') throw new Error('the first block is not an extension')
+  return node
+}
+
+describe('the extension interface', () => {
+  it('C2-W-107: an ordinary attribute named for a registered inline matcher remains on a span', () => {
+    const samp: ExtensionDefinition = { ...calloutExtension, name: 'test.samp', matcher: { form: 'inline', name: 'samp' } }
+    const input = '[x]{samp=a}'
+    const document = parseTree(input, { extensions: [samp], positions: false }).document
+    expect(document.children[0]).toMatchObject({ type: 'paragraph', children: [
+      { type: 'span', attrs: { keyValues: [['samp', 'a']] } },
+    ] })
+    expect(lint(input, { extensions: [samp] }).filter((entry) => entry.code === 'semantic-attribute-value-ignored')).toEqual([])
   })
 
-  it('lets beforeRender mutate the tree', () => {
-    const ext: CarveExtension = {
-      name: 'upper',
-      beforeRender(doc) {
-        const walk = (n: unknown) => {
-          if (!n || typeof n !== 'object') return
-          const node = n as unknown as {
-            type?: string
-            value?: string
-            children?: unknown[]
-            content?: unknown[]
-          }
-          if (node.type === 'text' && typeof node.value === 'string') {
-            node.value = node.value.toUpperCase()
-          }
-          if (Array.isArray(node.children)) node.children.forEach(walk)
-          if (Array.isArray(node.content)) node.content.forEach(walk)
-        }
-        doc.children.forEach(walk)
-        return doc
-      },
-    }
-    expect(carveToHtml('hi', { extensions: [ext] }).trim()).toBe('<p>HI</p>')
+  it('C2-X-023: an unknown extension source form is written without a loss when its body is canonical', () => {
+    const bare = { type: 'document', astVersion: '2.0', extensions: [
+      { name: 'ex.box', version: '1', required: false, slots: ['s'] },
+    ], children: [{ type: 'block_extension', name: 'ex.box', version: '1', children: [],
+      fallback: [paragraph('f')], source: { form: 'div', name: 'box', body: 'x\n' } }] }
+    const div = writeWithDiagnostics(decodeTree(JSON.stringify(bare)))
+    expect(div.source).toBe('::: box\nx\n:::\n')
+    expect(div.diagnostics).toEqual([])
+    bare.children[0]!.source.form = 'fence'
+    bare.children[0]!.source.name = 'py'
+    const fence = writeWithDiagnostics(decodeTree(JSON.stringify(bare)))
+    expect(fence.source).toBe('```py\nx\n```\n')
+    expect(fence.diagnostics).toEqual([])
   })
 
-  it('hands beforeRender the options the conversion was called with', () => {
-    // carve#1007 / carve-js#871. A hook that renders something of its own - the
-    // injected table-of-contents nav is the one in this package - had no way to
-    // render it the way the caller asked, because the hook took the document and
-    // nothing else. It now takes a read-only CONTEXT, whose `options` is that
-    // view.
-    let seen: Record<string, unknown> | undefined
-    const ext: CarveExtension = {
-      name: 'peek',
-      beforeRender(doc, ctx) {
-        seen = ctx.options as unknown as Record<string, unknown>
-        return doc
-      },
-    }
-    carveToHtml('hi', { extensions: [ext], symbols: { ok: 'OK' }, allowRawHtml: false })
-    expect(seen).toBeDefined()
-    expect(seen!['symbols']).toEqual({ ok: 'OK' })
-    expect(seen!['allowRawHtml']).toBe(false)
+  it('C2-X-023: a noncanonical source body falls back', () => {
+    const tree = { type: 'document', astVersion: '2.0', extensions: [
+      { name: 'ex.box', version: '1', required: false, slots: ['s'] },
+    ], children: [{ type: 'block_extension', name: 'ex.box', version: '1', children: [],
+      fallback: [paragraph('f')], source: { form: 'div', name: 'box', body: 'a\n\n\nb\n' } }] }
+    const result = writeWithDiagnostics(decodeTree(JSON.stringify(tree)))
+    expect(result.source).toBe('f\n')
+    expect(result.diagnostics.map((entry) => entry.code)).toContain('structure-unspellable')
   })
 
-  it('the options handed to beforeRender are frozen and are not the caller object', () => {
-    // The hook reads the options; it does not get to change them. carve-rs found
-    // the shape from the other side: a guard sitting BEHIND the hooks can be
-    // talked out of its own input by a hook that clears the field it reads. Here
-    // the renderer is handed the CALLER's object a few lines later, so the hook
-    // is handed a frozen copy and the two are not the same object.
-    let frozen: boolean | undefined
-    let threw: boolean | undefined
-    let sameObject: boolean | undefined
-    let sawTheOption: unknown
-    const ext: CarveExtension = {
-      name: 'tamper',
-      beforeRender(doc, ctx) {
-        // Checked BEFORE the freeze assertion, because `Object.isFrozen` says
-        // true of `undefined` too - without these two the row would pass against
-        // an engine that hands the hook nothing at all.
-        sameObject = (ctx.options as unknown) === (caller as unknown)
-        sawTheOption = ctx.options.allowRawHtml
-        frozen = Object.isFrozen(ctx.options) && Object.isFrozen(ctx)
-        try {
-          ;(ctx.options as { allowRawHtml?: boolean }).allowRawHtml = true
-          threw = false
-        } catch {
-          threw = true
-        }
-        return doc
-      },
+  it('C2-X-031: a thirty-third qualified extension in slots is refused', () => {
+    let child: BlockExtensionNode | undefined
+    for (let depth = 0; depth < 33; depth++) {
+      child = { type: 'block_extension', name: 'ex.box', version: '1', children: [],
+        fallback: [paragraph('f')], ...(child === undefined ? {} : { slots: { s: [child] } }) }
     }
-    const caller: { extensions: CarveExtension[]; allowRawHtml: boolean } = {
-      extensions: [ext],
-      allowRawHtml: false,
-    }
-    const out = carveToHtml('`<b>x</b>`{=html}\n', caller)
-    expect(sawTheOption).toBe(false)
-    expect(sameObject).toBe(false)
-    expect(frozen).toBe(true)
-    expect(threw).toBe(true)
-    // The caller's own object is untouched, and the render still escaped.
-    expect(caller.allowRawHtml).toBe(false)
-    expect(out).toContain('&lt;b&gt;x&lt;/b&gt;')
-    // CONTROL: with raw HTML allowed the same document passes it through, so the
-    // row above is the option doing the work rather than an escape everywhere.
-    expect(carveToHtml('`<b>x</b>`{=html}\n', { allowRawHtml: true })).toContain('<b>x</b>')
+    const tree = { type: 'document', astVersion: '2.0',
+      extensions: [{ name: 'ex.box', version: '1', required: false, slots: ['s'] }], children: [child] }
+    expect(() => decodeTree(JSON.stringify(tree))).toThrow(/extension.*deeper than 32/u)
   })
 
-  it('the effective mode is the caller mode on HTML and interactive on every other target', () => {
-    // Static rendering is an HTML-only concern (spec 2.5): the Markdown,
-    // plain-text and ANSI renderers reach the same end by flattening and never
-    // consult the mode. Reporting a caller's `mode: "static"` to a hook on those
-    // targets would invite it to degrade output that is not degraded, and one
-    // options object reused across formats would stop producing the same
-    // non-HTML bytes.
-    const seen: { target: string; mode: string; isStatic: boolean }[] = []
-    const ext: CarveExtension = {
-      name: 'peek-mode',
-      beforeRender(doc, ctx) {
-        seen.push({ target: ctx.targetIsHtml ? 'html' : 'other', mode: ctx.mode, isStatic: ctx.isStatic })
-        return doc
-      },
+  it('C2-X-047: the tabs group uses the configured label', () => {
+    const input = ':::: tabs\n::: tab "/A/ b"\nx\n:::\n::::\n'
+    const html = render(input, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer },
+      labels: { tabsGroup: 'Reiter' } })
+    expect(html).toContain('role="group" aria-label="Reiter"')
+  })
+
+  it('C2-X-038 validates a transformed child in its declared parent slot', () => {
+    const child: ExtensionDefinition = { name: 'test.child', version: '1',
+      matcher: { form: 'div', name: 'child' }, parent: { name: 'test.parent', slot: 'body' }, props: {}, slots: {},
+      transform: (claim) => claim.form === 'div' ? { type: 'block_extension', name: 'test.child', version: '1',
+        children: [], fallback: structuredClone(claim.body) } : null }
+    const parent: ExtensionDefinition = { name: 'test.parent', version: '1',
+      matcher: { form: 'div', name: 'parent' }, props: {}, slots: { body: { kind: 'block' } }, children: 'none',
+      transform: (claim) => claim.form === 'div' ? { type: 'block_extension', name: 'test.parent', version: '1',
+        children: [], slots: { body: claim.body }, fallback: structuredClone(claim.body) } : null }
+    const input = '::: parent\n::: child\nHi\n:::\n:::\n'
+    const document = parseTree(input, { extensions: [child, parent] }).document
+    expect(document.children[0]?.type).toBe('block_extension')
+    if (document.children[0]?.type === 'block_extension') {
+      expect(document.children[0].slots?.body?.[0]?.type).toBe('block_extension')
     }
-    const opts = { extensions: [ext], mode: 'static' as const }
-    carveToHtml('hi', opts)
-    expect(seen.pop()).toEqual({ target: 'html', mode: 'static', isStatic: true })
-    carveToMarkdown('hi', opts)
-    expect(seen.pop()).toEqual({ target: 'other', mode: 'interactive', isStatic: false })
-    carveToPlainText('hi', opts)
-    expect(seen.pop()).toEqual({ target: 'other', mode: 'interactive', isStatic: false })
-    carveToAnsi('hi', opts)
-    expect(seen.pop()).toEqual({ target: 'other', mode: 'interactive', isStatic: false })
-    carveToAstJson('hi', opts)
-    expect(seen.pop()).toEqual({ target: 'other', mode: 'interactive', isStatic: false })
-    // CONTROL: with no mode at all the HTML target reports the default, so the
-    // rows above are the caller's value arriving rather than a constant.
-    carveToHtml('hi', { extensions: [ext] })
-    expect(seen.pop()).toEqual({ target: 'html', mode: 'interactive', isStatic: false })
+    expect(() => validateTree(document, undefined, undefined, [child, parent])).not.toThrow()
+    const orphan = parseWithDiagnostics('::: child\nHi\n:::\n', { extensions: [child, parent] })
+    expect(orphan.document.children[0]?.type).toBe('div')
+    expect(orphan.diagnostics.map((entry) => entry.code)).toContain('extension-fallback-rendered')
   })
-
-  it('a hook emitting HTML reads targetIsHtml and leaves the source node for the other targets', () => {
-    // This is the accessor a bare options parameter had no answer for, and the
-    // reason the contract carries a context rather than the options alone
-    // (carve#1007). The transform below is the shape a client-script extension
-    // has: it replaces its fence with markup only the HTML target can use, and
-    // on Markdown/plain/ANSI it must leave the fence alone so that renderer
-    // emits the source the author wrote.
-    const ext: CarveExtension = {
-      name: 'myuml',
-      beforeRender(doc, ctx) {
-        if (!ctx.targetIsHtml) return doc
-        doc.children = doc.children.map((node) =>
-          node.type === 'code_block' && (node as { lang?: string }).lang === 'myuml'
-            ? { type: 'raw_block', format: 'html', content: '<div class="myuml">DIAGRAM</div>' }
-            : node,
-        ) as typeof doc.children
-        return doc
-      },
-    }
-    const src = '```myuml\nA -> B\n```\n'
-    const html = carveToHtml(src, { extensions: [ext] })
-    expect(html).toContain('<div class="myuml">DIAGRAM</div>')
-    expect(html).not.toContain('A -&gt; B')
-    // The non-HTML targets keep the source. Each asserts the ABSENCE of the
-    // HTML as well, because that is what a hook told the target was HTML would
-    // write into them.
-    const md = carveToMarkdown(src, { extensions: [ext] })
-    expect(md).toContain('A -> B')
-    expect(md).not.toContain('<div class="myuml">')
-    const plain = carveToPlainText(src, { extensions: [ext] })
-    expect(plain).toContain('A -> B')
-    expect(plain).not.toContain('<div class="myuml">')
-  })
-
-  it('CONTROL a beforeRender declared with one parameter still runs', () => {
-    // A control, and it passes against the pre-fix engine too - that is what it
-    // is for. The parameter is additive: every hook written against the old
-    // one-argument shape is called exactly as before, and nothing in this
-    // package requires a hook to declare it.
-    const ext: CarveExtension = {
-      name: 'one-arg',
-      beforeRender(doc: Document): Document {
-        doc.children.push({ type: 'paragraph', children: [{ type: 'text', value: 'added' }] })
-        return doc
-      },
-    }
-    expect(carveToHtml('hi', { extensions: [ext] })).toContain('<p>added</p>')
-  })
-})
-
-describe('extension renderers', () => {
-  it('uses a registered renderer for its extension name', () => {
-    const yt: CarveExtension = {
-      name: 'youtube',
-      renderers: {
-        youtube: (node, ctx) =>
-          `<iframe data-id="${ctx.escapeAttr(ctx.renderInlines(node.content))}"></iframe>`,
-      },
-    }
-    expect(carveToHtml(':youtube[abc123]', { extensions: [yt] }).trim()).toBe(
-      '<p><iframe data-id="abc123"></iframe></p>',
-    )
-  })
-
-  it('falls back to the generic span when no renderer matches', () => {
-    // There is no built-in rendering left to fall back TO: PART 9 §10 moved
-    // every `:name[…]` handler out of core.
-    expect(carveToHtml(':kbd[x]').trim()).toBe('<p><span class="ext-kbd">x</span></p>')
-  })
-})
-
-describe('block renderers', () => {
-  it('lets an extension take over a core block node type', () => {
-    const wrap: CarveExtension = {
-      name: 'wrap',
-      blockRenderers: {
-        block_quote: (_node, ctx) => `${ctx.indent(ctx.level)}<aside>!</aside>`,
-      },
-    }
-    expect(carveToHtml('> hi', { extensions: [wrap] }).trim()).toBe('<aside>!</aside>')
-  })
-
-  it('renders children through the core renderer at the right level', () => {
-    const box: CarveExtension = {
-      name: 'box',
-      blockRenderers: {
-        div: (node, ctx) => {
-          const kids = ctx.renderChildren(
-            (node as unknown as { children: never[] }).children,
-            ctx.level + 1,
-          )
-          return `${ctx.indent(ctx.level)}<box>\n${kids}\n${ctx.indent(ctx.level)}</box>`
+  it.each(['wrong type', 'wrong value', 'wrong slot', 'undeclared name', 'cycle'] as const)(
+    'C2-X-022, C2-X-038: a transform with %s returns its core fallback and a diagnostic', flaw => {
+      const definition: ExtensionDefinition = {
+        name: 'test.bad', version: '1', matcher: { form: 'div', name: 'bad' }, props: {}, slots: {},
+        transform: () => {
+          const node: BlockExtensionNode = { type: 'block_extension', name: 'test.bad', version: '1',
+            children: [], fallback: [paragraph('safe')] }
+          if (flaw === 'wrong type') return { ...node, type: 'inline_extension' } as never
+          if (flaw === 'wrong value') return undefined as never
+          if (flaw === 'wrong slot') return { ...node, slots: { unknown: [paragraph('bad')] } }
+          if (flaw === 'undeclared name') return { ...node, name: 'test.other' }
+          node.children.push(node)
+          return node
         },
-      },
-    }
-    expect(carveToHtml(':::\nhi\n:::', { extensions: [box] }).trim()).toBe(
-      ['<box>', '  <p>hi</p>', '</box>'].join('\n'),
-    )
+      }
+      const input = '::: bad\nHi\n:::\n'
+      const tree = parseTree(input, { extensions: [definition] }).document
+      expect(tree.children[0]?.type).toBe('div')
+      expect(() => validateTree(tree, undefined, undefined, [definition])).not.toThrow()
+      expect(parseWithDiagnostics(input, { extensions: [definition] }).diagnostics)
+        .toMatchObject([{ code: 'extension-fallback-rendered', path: '/children/0' }])
+    })
+  it('C2-X-001, C2-X-002, C2-X-018: a claim declares its qualified name and exact version on the root', () => {
+    expect(tabsTree().extensions).toEqual([
+      { name: 'carve.tab', version: '1', required: false, slots: ['title', 'body'] },
+      { name: 'carve.tabs', version: '1', required: false, slots: ['tabs'] },
+    ])
+    expect(outer(tabsTree())).toMatchObject({ name: 'carve.tabs', version: '1' })
   })
 
-  it('falls through to the core renderer when the block renderer returns undefined', () => {
-    const onlyEmpty: CarveExtension = {
-      name: 'only-empty',
-      blockRenderers: {
-        paragraph: (node) =>
-          (node as unknown as { children: unknown[] }).children.length === 0 ? '<empty>' : undefined,
-      },
+  it('C2-X-003, C2-X-004, C2-X-012: required unknown names fail and optional unknown names use a fallback', () => {
+    const unknown: DocumentNode = { type: 'document', astVersion: '2.0',
+      extensions: [{ name: 'test.missing', version: '1', required: false, slots: [] }],
+      children: [{ type: 'block_extension', name: 'test.missing', version: '1', children: [], fallback: [paragraph('safe')] }] }
+    expect(renderWithDiagnostics(unknown)).toMatchObject({ html: '<p>safe</p>',
+      diagnostics: [{ code: 'extension-fallback-rendered', path: '/children/0' }] })
+    unknown.extensions = [{ name: 'test.missing', version: '1', required: true, slots: [] }]
+    expect(() => render(unknown)).toThrow(CarveTreeError)
+    expect(parse('::: tab "Orphan"\nBody\n:::\n', { extensions: tabsExtensions }).children[0]?.type).toBe('div')
+  })
+
+  it('C2-X-005, C2-X-008, C2-X-009, C2-X-013, C2-X-016: matching follows the parsed div opener', () => {
+    const one = '::: tabs\n::: tab "One"\nBody\n:::\n:::\n'
+    expect(outer(parse(one, { extensions: tabsExtensions })).name).toBe('carve.tabs')
+    expect(parse('{.tabs}\n::: \n::: tab "One"\nBody\n:::\n:::\n', { extensions: tabsExtensions }).children[0]?.type)
+      .toBe('div')
+    expect(parse('::: tabs\nOther\n:::\n', { extensions: tabsExtensions }).children[0]?.type).toBe('div')
+    expect(parse('Text\n', { extensions: tabsExtensions, positions: false }).children[0]).toEqual(paragraph('Text'))
+  })
+
+  it('C2-X-006, C2-X-007, C2-X-010, C2-X-011, C2-X-015: inline and fence matchers use the same interface', () => {
+    const extensions = [calloutExtension, diagramExtension]
+    const inline = parse(':callout[Hi]{.mark}\n', { extensions, positions: false })
+    expect(inline.children[0]).toMatchObject({ type: 'paragraph', children: [{ type: 'inline_extension',
+      name: 'test.callout', version: '1', props: { tone: 'note' }, slots: { label: [{ type: 'text', value: 'Hi' }] },
+      source: { form: 'inline', name: 'callout', body: 'Hi' }, attrs: { classes: ['mark'] } }] })
+    const fence = parse('```diagram "Flow" [G]\na -> b\n```\n', { extensions, positions: false })
+    expect(fence.children[0]).toMatchObject({ type: 'block_extension', name: 'test.diagram', version: '1',
+      payload: [{ format: 'text/plain', value: 'a -> b\n' }],
+      source: { form: 'fence', name: 'diagram', title: 'Flow', groupLabel: 'G', body: 'a -> b\n' } })
+  })
+
+  it('C2-X-014, C2-X-029: duplicate claims fail before parsing and repeated transforms agree', () => {
+    const duplicate: ExtensionDefinition = { ...calloutExtension, name: 'test.other' }
+    expect(() => parse('', { extensions: [calloutExtension, duplicate] })).toThrow(CarveOptionError)
+    expect(parse(':callout[Hi]\n', { extensions: [calloutExtension], positions: false }))
+      .toEqual(parse(':callout[Hi]\n', { extensions: [calloutExtension], positions: false }))
+  })
+
+  it('C2-X-017: a transform result depends only on its claimed subtree', () => {
+    const first = parse('Before\n\n:callout[Hi]\n', { extensions: [calloutExtension], positions: false })
+    const second = parse('Different context\n\n:callout[Hi]\n', { extensions: [calloutExtension], positions: false })
+    expect(first.children[1]).toEqual(second.children[1])
+  })
+
+  it('C2-X-019, C2-X-020, C2-X-021, C2-X-022: props, ordered slots, payload and fallback validate', () => {
+    const tree = parseTree('```diagram\na -> b\n```\n', { extensions: [diagramExtension], positions: false }).document
+    expect(() => validateTree(tree, undefined, undefined, [diagramExtension])).not.toThrow()
+    const node = outer(tree)
+    node.payload = [{ format: 'text/plain', value: null }]
+    expect(() => validateTree(tree, undefined, undefined, [diagramExtension])).toThrow('/children/0/payload/0/value')
+    delete node.payload
+    node.fallback = [{ type: 'block_extension', name: 'test.diagram', version: '1', children: [], fallback: [] }]
+    expect(() => validateTree(tree, undefined, undefined, [diagramExtension])).toThrow('does not stand here')
+  })
+
+  it('C2-X-023, C2-X-032, C2-X-035, C2-X-036: no renderer resolves and renders the fallback', () => {
+    expect(renderWithDiagnostics(source, { extensions: tabsExtensions })).toMatchObject({ html: fallbackHtml,
+      diagnostics: [{ code: 'extension-fallback-rendered', path: '/children/0' }] })
+    const blocked = ':::: tabs\n::: tab "One"\n[x](javascript:alert)\n:::\n::::\n'
+    expect(render(blocked, { extensions: tabsExtensions })).toContain('href=""')
+    expect(render(blocked, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })).toContain('href=""')
+  })
+
+  it('C2-X-034, C2-H-082: the fallback escapes text and applies the URL policy', () => {
+    const document: DocumentNode = { type: 'document', astVersion: '2.0',
+      extensions: [{ name: 'test.unknown', version: '1', required: false, slots: [] }],
+      children: [{ type: 'block_extension', name: 'test.unknown', version: '1', children: [],
+        fallback: [{ type: 'paragraph', children: [
+          { type: 'text', value: '<script>' },
+          { type: 'link', href: 'javascript:alert(1)', children: [{ type: 'text', value: 'click' }] },
+        ] }] }] }
+    expect(render(document)).toBe('<p>&lt;script&gt;<a href="">click</a></p>')
+  })
+
+  it('C2-X-036: the article profile degrades raw content in slots and fallback', () => {
+    const input = ':::: tabs\n::: tab "One"\n`<i>`{=html}\n:::\n::::\n'
+    const options = { extensions: tabsExtensions, profile: 'article' as const, rawHtml: true }
+    expect(render(input, options)).toContain('&lt;i&gt;')
+    expect(render(input, { ...options, renderers: { 'carve.tabs': tabsRenderer } })).toContain('&lt;i&gt;')
+  })
+
+  it('C2-X-024, C2-X-025, C2-X-026, C2-X-027: source records and the writer carry the nested canonical divs', () => {
+    const document = tabsTree()
+    expect(outer(document).source).toEqual({ form: 'div', name: 'tabs',
+      body: '::: tab "Install"\nRun setup.\n:::\n\n::: tab "Use"\nOpen the app.\n:::\n' })
+    expect(writeWithDiagnostics(document, { extensions: tabsExtensions })).toEqual({ source, diagnostics: [] })
+  })
+
+  it('C2-X-028, C2-X-049: absent or inconsistent source writes fallback with a reported loss', () => {
+    const document = tabsTree()
+    delete outer(document).source
+    const absent = writeWithDiagnostics(document, { extensions: tabsExtensions })
+    expect(absent.diagnostics.map((entry) => entry.code)).toContain('structure-unspellable')
+    expect(absent.source).toContain('*Install*')
+    const inconsistent = tabsTree()
+    const node = outer(inconsistent)
+    if (node.source !== undefined) node.source.body = 'not the tabs\n'
+    expect(writeWithDiagnostics(inconsistent, { extensions: tabsExtensions }).diagnostics.map((entry) => entry.code))
+      .toContain('structure-unspellable')
+  })
+
+  it('C2-X-030, C2-X-031: extension nesting and decoded payload and source body are bounded', () => {
+    const document = tabsTree()
+    const node = outer(document)
+    node.source = { form: 'div', name: 'tabs', body: 'x'.repeat(8 * 1024 * 1024 + 1) }
+    expect(() => validateTree(document, undefined, undefined, tabsExtensions)).toThrow('source body above 8 MiB')
+    delete node.source
+    node.payload = [{ format: 'text/plain', value: 'x'.repeat(8 * 1024 * 1024 + 1) }]
+    expect(() => validateTree(document, undefined, undefined, tabsExtensions)).toThrow('payload above 8 MiB')
+  })
+
+  it('C2-X-033, C2-X-034, C2-X-043, C2-X-044, C2-X-047, C2-X-048: tabs HTML is byte for byte', () => {
+    expect(render(source, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })).toBe(html)
+    const two = render(`${source}\n${source}`, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })
+    expect(two).toContain('name="tabs-2" id="tabs-2-0"')
+    expect(two.match(/id="tabs-1-0"/g)).toHaveLength(1)
+  })
+
+  it('C2-X-037: equality compares source, props, slots, payload and fallback', () => {
+    const a = tabsTree()
+    const b = tabsTree()
+    expect(treesEqual(a, b)).toBe(true)
+    outer(b).props = { changed: true }
+    expect(treesEqual(a, b)).toBe(false)
+  })
+
+  it('C2-X-038, C2-X-046: known slots, prop types and tab placement are checked', () => {
+    const document = tabsTree()
+    outer(document).slots = { tabs: [paragraph('wrong')] }
+    expect(() => validateTree(document, undefined, undefined, tabsExtensions)).toThrow('does not stand here')
+    const orphan = tabsTree()
+    const tab = outer(orphan).slots?.['tabs']?.[0]
+    if (tab?.type !== 'block_extension') throw new Error('no tab')
+    orphan.children = [tab]
+    expect(() => validateTree(orphan, undefined, undefined, tabsExtensions)).toThrow('outside its parent slot')
+  })
+
+  it('C2-X-039, C2-X-040, C2-X-041, C2-X-042, C2-X-045: the worked tree is byte for byte', () => {
+    const install = expectedTab('Install', 'Run setup.')
+    const use = expectedTab('Use', 'Open the app.')
+    expect(tabsTree()).toEqual({ type: 'document', astVersion: '2.0', srcByteLength: Buffer.byteLength(source),
+      extensions: [{ name: 'carve.tab', version: '1', required: false, slots: ['title', 'body'] },
+        { name: 'carve.tabs', version: '1', required: false, slots: ['tabs'] }],
+      children: [{ type: 'block_extension', name: 'carve.tabs', version: '1', children: [], slots: { tabs: [install, use] },
+        fallback: [...install.fallback, ...use.fallback], source: { form: 'div', name: 'tabs',
+          body: '::: tab "Install"\nRun setup.\n:::\n\n::: tab "Use"\nOpen the app.\n:::\n' } }] })
+  })
+
+  it('C2-X-040: a missing or empty title and extra body blocks leave a core div', () => {
+    for (const body of ['::: tab\nBody\n:::', '::: tab ""\nBody\n:::', '::: tab "One"\nBody\n:::\n\nOutside']) {
+      expect(parse(`:::: tabs\n${body}\n::::\n`, { extensions: tabsExtensions }).children[0]?.type).toBe('div')
     }
-    expect(carveToHtml('hi', { extensions: [onlyEmpty] }).trim()).toBe('<p>hi</p>')
+  })
+
+  it('C2-X-047: an absent title on a supplied tab uses a numbered label', () => {
+    const document = tabsTree()
+    const tab = outer(document).slots?.['tabs']?.[0]
+    if (tab?.type !== 'block_extension') throw new Error('no tab')
+    delete tab.slots?.['title']
+    expect(render(document, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })).toContain('>Tab 1</label>')
+  })
+
+  it('C2-X-049: the two writer gates hold with and without extensions registered', () => {
+    const once = format(source, { extensions: tabsExtensions })
+    expect(once).toBe(source)
+    expect(format(once, { extensions: tabsExtensions })).toBe(once)
+    expect(treesEqual(parse(once, { extensions: tabsExtensions }), parse(source, { extensions: tabsExtensions }))).toBe(true)
+    const core = format(source)
+    expect(format(core)).toBe(core)
+    expect(treesEqual(parse(core), parse(source))).toBe(true)
+  })
+
+  it('C2-X-031, C2-X-045: claimed nodes retain positions and a valid layout record', () => {
+    const result = parseWithLayout(source, { extensions: tabsExtensions })
+    expect(outer(result.document).pos).toMatchObject({ startOffset: 0, endOffset: source.length - 1 })
+    expect(result.layout.nodes.some((entry) => entry.path === '/children/0')).toBe(true)
+    expect(result.layout.nodes.some((entry) => entry.path === '/children/0/slots/tabs/0')).toBe(true)
+    expect(() => validateLayout(result.layout)).not.toThrow()
+  })
+
+  it('C2-X-033, C2-X-034: the second extensions render through host escaping and write their claims', () => {
+    const extensions = [calloutExtension, diagramExtension]
+    const renderers = { 'test.callout': calloutRenderer, 'test.diagram': diagramRenderer }
+    expect(render(':callout[<em>]\n', { extensions, renderers })).toBe('<p><span class="callout">&lt;em&gt;</span></p>')
+    expect(render('```diagram\na < b\n```\n', { extensions, renderers })).toContain('a &lt; b')
+    for (const text of [':callout[Hi]\n', ':callout[Hi ]\n', '```diagram\na -> b\n```\n']) {
+      const document = parse(text, { extensions, positions: false })
+      const written = writeWithDiagnostics(document, { extensions })
+      expect(written.diagnostics).toEqual([])
+      expect(treesEqual(document, parse(written.source, { extensions, positions: false }))).toBe(true)
+    }
+  })
+
+  it('C2-X-003: decoding checks a required name against the registered exact version', () => {
+    const document = tabsTree()
+    if (document.extensions === undefined) throw new Error('no declarations')
+    document.extensions[1] = { name: 'carve.tabs', version: '2', required: true, slots: ['tabs'] }
+    expect(() => decodeTree(JSON.stringify(document), undefined, tabsExtensions)).toThrow('unknown required extension')
+  })
+
+  it('C2-X-019, C2-X-038: source produced extension trees agree with the specification schema', () => {
+    const schema = JSON.parse(readFileSync(new URL('../data/ast-schema.json', import.meta.url), 'utf8')) as object
+    const valid = new Ajv2020({ strict: true }).compile(schema)
+    const inputs = [
+      tabsTree(),
+      parse(':callout[Hi]\n', { extensions: [calloutExtension], positions: false }),
+      parse('```diagram\na -> b\n```\n', { extensions: [diagramExtension], positions: false }),
+    ]
+    for (const input of inputs) expect(valid(input), JSON.stringify(valid.errors?.[0])).toBe(true)
+  })
+
+  it('C2-A-190 to C2-A-209: declared standard data uses its value schema and placement', () => {
+    const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [paragraph('Draft')],
+      extensions: ['carve.source', 'carve.style', 'carve.annotation']
+        .map((name) => ({ name, version: '1', required: false, slots: [] })),
+      data: { 'carve.style': { page: { widthPt: 595, heightPt: 842,
+        marginsPt: { top: 72, right: 72, bottom: 72, left: 72 } } } } }
+    const child = document.children[0]
+    if (child === undefined) throw new Error('missing paragraph')
+    child.data = { 'carve.source': { format: 'docx', locator: { part: 'word/document.xml' },
+      importer: { name: 'tester', version: '1' } }, 'carve.annotation': { ids: ['comment-7'] } }
+    expect(() => validateTree(document)).not.toThrow()
+    document.data = { 'carve.style': { page: { widthPt: -1, heightPt: 842, marginsPt: {} } } }
+    expect(() => validateTree(document)).toThrow('positive number')
+    delete document.data
+    child.data = { 'carve.style': { namedStyles: {} } }
+    expect(() => validateTree(document)).toThrow('only on the root')
+  })
+
+  it('C2-A-192 and C2-A-193: page furniture is silent in HTML and a reported writer loss', () => {
+    const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [],
+      metadata: { headers: [{ placement: 'default', children: [paragraph('Report')] }], footers: [] } }
+    expect(renderWithDiagnostics(document)).toEqual({ html: '', diagnostics: [], suppressedDiagnostics: 0 })
+    expect(writeWithDiagnostics(document).diagnostics).toMatchObject([
+      { code: 'field-unspellable', path: '/metadata/headers' },
+      { code: 'field-unspellable', path: '/metadata/footers' },
+    ])
   })
 })
 
-describe('extension worked example: heading collector', () => {
-  it('collects heading text via afterParse and injects a paragraph via beforeRender', () => {
-    const titles: string[] = []
-    const toc: CarveExtension = {
-      name: 'toc',
-      afterParse(doc) {
-        for (const b of doc.children) {
-          if (b.type === 'heading') {
-            titles.push(
-              b.children
-                .map((n) => ('value' in n && typeof n.value === 'string' ? n.value : ''))
-                .join(''),
-            )
-          }
-        }
-        return doc
-      },
-      beforeRender(doc) {
-        ;(doc.children as Document['children']).unshift({
-          type: 'paragraph',
-          children: [{ type: 'text', value: `TOC: ${titles.join(', ')}` }],
-        })
-        return doc
-      },
-    }
-    const html = carveToHtml('# Alpha\n\n# Beta', { extensions: [toc] })
-    expect(html).toContain('<p>TOC: Alpha, Beta</p>')
+describe('one view of an extension node', () => {
+  const noted = ':::: tabs\n::: tab "A"\n# Head\n\nBody[^m] see </#Head>.\n:::\n::::\n\n[^m]: M note.\n'
+
+  it('C2-X-032: without a renderer resolution visits the fallback alone', () => {
+    const result = renderWithDiagnostics(noted, { extensions: tabsExtensions })
+    expect(result.html).toContain('<h1 id="Head">Head</h1>')
+    expect(result.html).toContain('<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> see <a href="#Head">Head</a>')
+    expect(result.html.split('role="doc-backlink"')).toHaveLength(2)
+    expect(result.diagnostics.map((entry) => entry.code)).not.toContain('duplicate-id')
   })
 
-  it('replaces every placeholder occurrence in renderer-configured URL templates', () => {
-    expect(
-      carveToHtml('Hey @john.doe, see #release-1.0.', {
-        mentionUrl: '/users/{name}?q={name}',
-        tagUrl: '/topics/{name}?tag={name}',
-      }).trim(),
-    ).toBe(
-      '<p>Hey <a class="mention" href="/users/john.doe?q=john.doe">@john.doe</a>, see <a class="tag" href="/topics/release-1.0?tag=release-1.0">#release-1.0</a>.</p>',
-    )
+  it('C2-X-032: with a renderer resolution visits the slots and not the fallback', () => {
+    const result = renderWithDiagnostics(noted, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })
+    expect(result.html).toContain('<h1 id="Head">Head</h1>')
+    expect(result.html).toContain('see <a href="#Head">Head</a>')
+    expect(result.html.split('role="doc-backlink"')).toHaveLength(2)
+    expect(result.diagnostics).toEqual([])
+  })
+
+  it('C2-H-165: a degraded block extension gives the degraded blocks of its fallback', () => {
+    const tabs = ':::: tabs\n::: tab "A"\n# Head\n\nBody\n:::\n::::\n'
+    expect(render(tabs, { extensions: tabsExtensions, profile: 'comment' })).toBe('<p>A</p>\n<p># Head</p>\n<p>Body</p>')
+  })
+
+  it('C2-A-058: the tabs transform writes no empty props, slots or payload', () => {
+    const tree = parse(':::: tabs\n::: tab "A"\n:::\n::::\n', { extensions: tabsExtensions })
+    expect(() => validateTree(tree, undefined, undefined, tabsExtensions)).not.toThrow()
+  })
+
+  it('C2-L-011: the layout of a tabs document is accepted by its own reader', () => {
+    const { layout } = parseWithLayout(`${noted}[x]: /u\n`, { extensions: tabsExtensions })
+    expect(layout.nodes.some((entry) => entry.path.includes('/fallback'))).toBe(false)
+    expect(() => validateLayout(layout)).not.toThrow()
   })
 })

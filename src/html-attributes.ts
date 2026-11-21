@@ -1,0 +1,616 @@
+// Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
+import {
+  type Block, type BlockExtensionNode, type DocumentNode, type InlineExtensionNode, type ListItemNode, type Node, type ParagraphNode,
+} from './ast.ts'
+import { addFinding, type Findings } from './diagnostics.ts'
+import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
+import { stringOffsetOfByte, utf8Length } from './positions.ts'
+import { type Settings, type UrlPolicy } from './options.ts'
+import { DROPPED_NAMES, DROPPED_PREFIXES, PROBE_REMOVED, STYLE_PATTERNS, URL_LIST_ATTRIBUTES } from './render-tables.ts'
+import { type Resolution } from './resolve.ts'
+import { BIDI_FIRST, isAsciiLetter, isBidiControl } from './unicode.ts'
+
+/** The state of one render. */
+export interface Render {
+  taskLabels: ReadonlyMap<ListItemNode, string> | undefined
+  extensionIds: number
+  /** The ids in use, each hyphen-led prefix of them, and the order of additions, so a failed renderer can undo its own. */
+  usedIds: { ids: Set<string>, prefixes: Set<string>, log: [Set<string>, string][] }
+  renderExtension: (node: BlockExtensionNode | InlineExtensionNode, level?: number) => string | null
+  settings: Settings
+  resolution: Resolution
+  /** The output: every line with a line break before it, so the first character is cut off at the end. */
+  out: string
+  /** The lines written so far. */
+  count: number
+  losses: Findings
+  /** C2-H-163: the `rel` value the profile writes on every link, or the empty string. */
+  linkRel: string
+  /** C2-H-167: whether the profile admits a link, which a linked mention or tag is. */
+  linksAllowed: boolean
+  /** Open links around the node that is written (C2-H-081), and open `abbr` spans (C2-H-099). */
+  linkDepth: number
+  /** C2-H-088: note marks awaiting the close of the enclosing link. */
+  linkNotes: string[]
+  abbrDepth: number
+  /** The paragraph that takes the backlinks of the note that is written, and their text (C2-H-091). */
+  backlinkHost: ParagraphNode | null
+  backlinks: string
+  /** C2-H-172: false where the text nodes are known to hold no bidirectional control. */
+  bidi: boolean
+  /** C2-H-080: descriptions awaiting the end of the containing block. */
+  longDescriptions: Block[][]
+  /** C2-H-201: the tree, its budget for derived text (-1 until a node draws), what remains, and whether one did not fit. */
+  document: DocumentNode
+  source: string | number | undefined
+  derivedBudget: number
+  derivedLeft: number
+  derivedReported: boolean
+  xrefTextCache: Map<string, { escaped: string, bytes: number }>
+  /** C2-H-019: the paragraphs a profile left writing nothing, whose refused destinations are reported once. */
+  silenced: Set<Node>
+}
+
+/** An attribute name and its value. A null value writes the bare name (C2-H-117). */
+export type Pair = readonly [string, string | null]
+
+/** What an element adds to the attributes its node carries. */
+export interface TagParts {
+  /** C2-H-010: written first, in the order given. A structural name replaces an authored key. */
+  structural?: Pair[]
+  /** Written with the structural ones, but the values are authored, so they pass the filter of C2-H-161 (C2-H-075). */
+  derived?: (readonly [string, string])[]
+  /** The id to write in place of the authored one, or null for none. */
+  id?: string | null
+  /** C2-H-012: classes before and behind the ones the author wrote. */
+  base?: readonly string[]
+  last?: readonly string[]
+  /** Written behind the authored keys. An authored key of the same name replaces one. */
+  generated?: Pair[]
+  /** C2-H-015: an `align` key is written as a `text-align` declaration. */
+  alignStyle?: boolean
+  /** Declarations that follow the authored `style` (C2-H-057). */
+  style?: string
+  /** C2-H-032: the item declaration precedes an authored style. */
+  styleFirst?: boolean
+  /** C2-H-011: the id stands before the structural attributes, or the class does. */
+  idFirst?: boolean
+  classFirst?: boolean
+  /** The node writes no authored attributes on this element. */
+  bare?: boolean
+  /** A block element, which carries its source line under `sourceLines` (C2-H-016). */
+  block?: boolean
+  /** The node of the tree a loss is reported on, where the node given is a copy of it. */
+  origin?: Node
+  /** Authored keys that are never written, whatever their letter case (C2-H-058). */
+  withheld?: readonly string[]
+}
+
+// C2-H-115: the reserved names of the carriers; C2-H-116 drops an authored one on every render.
+const CARRIERS = new Set([
+  'data-marker', 'data-carve-explicit-id', 'data-carve-generated-id', 'data-carve-ref', 'data-carve-ref-collapsed',
+  'data-carve-autolink', 'data-carve-footnote-label', 'data-carve-inline-footnote', 'data-carve-raw',
+  'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight', 'data-carve-xref', 'data-carve-caption-number',
+  'data-carve-div', 'data-carve-line-block', 'data-carve-src', 'data-carve-ref-shortcut',
+])
+const DENIED_BY_DEFAULT: ReadonlySet<string> = new Set(DEFAULT_DENIED_SCHEMES)
+const ALIGN_VALUES = ['left', 'right', 'center']
+const SPACE_CODE = 32
+const GREATER_CODE = 62
+const NO_BREAK_SPACE_CODE = 0xa0
+const DELETE_CODE = 0x7f
+const COLON_CODE = 58
+const COMMA_CODE = 44
+const BACKSLASH_CODE = 92
+const MAX_ESCAPE_DIGITS = 6
+const MAX_CODE_POINT = 0x10ffff
+const REPLACEMENT = '\ufffd'
+
+// From this length on a search for each of the four characters is cheaper than a look at every character.
+const SEARCH_LENGTH = 24
+
+/** True when `text` holds none of the characters that C2-H-002 escapes. */
+function isClean(text: string): boolean {
+  if (text.indexOf('&') >= 0 || text.indexOf('<') >= 0 || text.indexOf('>') >= 0 || text.indexOf('\u00a0') >= 0) return false
+  for (let at = 0; at < text.length; at++) {
+    const code = text.charCodeAt(at)
+    if (code >= 32 && code < 127) continue
+    if (invalidHtmlWidth(text, at) > 0) return false
+  }
+  return true
+}
+
+/** C2-H-176: the width of a source character that HTML cannot carry literally. */
+function invalidSurrogateWidth(text: string, at: number, code: number): number {
+  if (code >= 0xdc00) {
+    const before = text.charCodeAt(at - 1)
+    return before >= 0xd800 && before <= 0xdbff ? 0 : 1
+  }
+  const next = text.charCodeAt(at + 1)
+  if (!(next >= 0xdc00 && next <= 0xdfff)) return 1
+  return (code & 0x3f) === 0x3f && (next === 0xdffe || next === 0xdfff) ? 2 : 0
+}
+
+function invalidHtmlWidth(text: string, at: number): number {
+  const code = text.charCodeAt(at)
+  if (code < 32) return code === 9 || code === 10 || code === 12 || code === 13 ? 0 : 1
+  if (code >= 127 && code <= 159) return 1
+  if (code >= 0xfdd0 && code <= 0xfdef) return 1
+  if (code >= 0xfffe && code <= 0xffff) return 1
+  return code >= 0xd800 && code <= 0xdfff ? invalidSurrogateWidth(text, at, code) : 0
+}
+
+/**
+ * C2-H-002: the three markup characters and the no-break space. The text keeps its bidirectional
+ * controls, so this is for text known to hold none and for the text of a roundtrip carrier (C2-H-172).
+ */
+export function escapeCarrierText(text: string): string {
+  if (text.length >= SEARCH_LENGTH && isClean(text)) return text
+  let out = ''
+  let from = 0
+  for (let at = 0; at < text.length; at++) {
+    const code = text.charCodeAt(at)
+    if (code > GREATER_CODE && code < 127) continue
+    const invalid = code < 32 || code >= 127 ? invalidHtmlWidth(text, at) : 0
+    if (invalid > 0) {
+      out += text.slice(from, at) + '\ufffd'
+      at += invalid - 1
+      from = at + 1
+      continue
+    }
+    const entity = textEntity(code)
+    if (entity === '') continue
+    out += text.slice(from, at) + entity
+    from = at + 1
+  }
+  return from === 0 ? text : out + text.slice(from)
+}
+
+/** C2-H-172: true when `text` holds a bidirectional control. Nine searches are cheaper than a look at each character. */
+function hasBidiControl(text: string): boolean {
+  return text.indexOf('\u202a') >= 0 || text.indexOf('\u202b') >= 0 || text.indexOf('\u202c') >= 0 || text.indexOf('\u202d') >= 0
+    || text.indexOf('\u202e') >= 0 || text.indexOf('\u2066') >= 0 || text.indexOf('\u2067') >= 0 || text.indexOf('\u2068') >= 0
+    || text.indexOf('\u2069') >= 0
+}
+
+/**
+ * C2-H-002 and C2-H-172: a text node or a code span, escaped and, unless the render knows that the
+ * inline content holds none, without its bidirectional controls.
+ */
+export function escapeTextNode(r: Render, text: string): string {
+  return r.bidi ? escapeText(text) : escapeCarrierText(text)
+}
+
+/**
+ * C2-H-002 and C2-H-172: text written between tags, escaped and without its bidirectional controls,
+ * which are never written there. A short text is read once for both.
+ */
+export function escapeText(text: string): string {
+  if (text.length >= SEARCH_LENGTH && !hasBidiControl(text)) return escapeCarrierText(text)
+  let out = ''
+  let from = 0
+  for (let at = 0; at < text.length; at++) {
+    const code = text.charCodeAt(at)
+    if (code > GREATER_CODE && code < 127) continue
+    const invalid = code < 32 || code >= 127 ? invalidHtmlWidth(text, at) : 0
+    if (invalid > 0) {
+      out += text.slice(from, at) + '\ufffd'
+      at += invalid - 1
+      from = at + 1
+      continue
+    }
+    const entity = textEntity(code)
+    if (entity === '' && (code < BIDI_FIRST || !isBidiControl(code))) continue
+    out += text.slice(from, at) + entity
+    from = at + 1
+  }
+  return from === 0 ? text : out + text.slice(from)
+}
+
+function textEntity(code: number): string {
+  if (code > GREATER_CODE) return code === NO_BREAK_SPACE_CODE ? '&nbsp;' : ''
+  if (code === 38) return '&amp;'
+  if (code === 60) return '&lt;'
+  if (code === 62) return '&gt;'
+  return ''
+}
+
+function attributeEntity(code: number): string {
+  if (code === 34) return '&quot;'
+  if (code === 39) return '&apos;'
+  return code === 0xa0 ? '' : textEntity(code)
+}
+
+/** C2-H-003: the five characters of an attribute value. A no-break space stays the character. */
+export function escapeAttribute(text: string): string {
+  let out = ''
+  let from = 0
+  for (let at = 0; at < text.length; at++) {
+    const code = text.charCodeAt(at)
+    if (code > GREATER_CODE && code < 127) continue
+    const invalid = code < 32 || code >= 127 ? invalidHtmlWidth(text, at) : 0
+    if (invalid > 0) {
+      out += text.slice(from, at) + '\ufffd'
+      at += invalid - 1
+      from = at + 1
+      continue
+    }
+    const entity = attributeEntity(code)
+    if (entity === '') continue
+    out += text.slice(from, at) + entity
+    from = at + 1
+  }
+  return from === 0 ? text : out + text.slice(from)
+}
+
+/** C2-H-132: a render loss on `node`, or on the document when it is null. */
+export function loss(r: Render, node: Node | null, code: string, message: string, severity: 'error' | 'warning' = 'warning'): void {
+  addFinding(r.losses, node, { code, severity, channel: 'render-loss', message })
+}
+
+function isSchemeCharacter(code: number): boolean {
+  return isAsciiLetter(code) || (code >= 48 && code <= 57) || code === 43 || code === 45 || code === 46
+}
+
+/** C2-H-159: a character that is removed from a destination before its scheme is read. */
+function isProbeRemoved(code: number): boolean {
+  if (code > SPACE_CODE && code < DELETE_CODE) return false
+  for (const [from, to] of PROBE_REMOVED) if (code >= from && code <= to) return true
+  return false
+}
+
+/** C2-H-159: the scheme of `url` in lower case, or the empty string when it has none. */
+export function urlScheme(url: string): string {
+  let removed = false
+  for (let at = 0, length = 0; at < url.length; at++) {
+    const code = url.charCodeAt(at)
+    if (isProbeRemoved(code)) removed = true
+    else if (code === COLON_CODE) return length === 0 ? '' : schemeText(url, at, removed)
+    else if (length++ === 0 ? !isAsciiLetter(code) : !isSchemeCharacter(code)) return ''
+  }
+  return ''
+}
+
+/** C2-H-159, C2-H-173: whether a URL sink passes the same scheme test as the HTML renderer. */
+export function isUrlAllowed(url: string, policy: UrlPolicy = {}): boolean {
+  const scheme = urlScheme(url)
+  if (scheme === '') return true
+  if (policy.allow !== undefined) return policy.allow.some((allowed) => allowed.toLowerCase() === scheme)
+  const denied = policy.deny ?? DEFAULT_DENIED_SCHEMES
+  return !denied.some((item) => item.toLowerCase() === scheme)
+}
+
+/** The scheme that ends before `colon`, in lower case and without the characters that C2-H-159 removes. */
+function schemeText(url: string, colon: number, removed: boolean): string {
+  if (!removed) return url.slice(0, colon).toLowerCase()
+  let scheme = ''
+  for (let at = 0; at < colon; at++) if (!isProbeRemoved(url.charCodeAt(at))) scheme += url[at]!
+  return scheme.toLowerCase()
+}
+
+/** C2-H-160: whether the scheme of `url` passes the URL policy. A URL with no scheme passes. */
+function schemePasses(r: Render, url: string): boolean {
+  return passesPolicy(r.settings, url)
+}
+
+/** C2-H-160: whether the scheme of `url` passes the URL policy of `settings`. */
+export function passesPolicy(settings: Pick<Settings, 'allowed' | 'denied'>, url: string): boolean {
+  const scheme = urlScheme(url)
+  if (scheme === '') return true
+  return settings.allowed !== null ? settings.allowed.has(scheme) : !settings.denied!.has(scheme)
+}
+
+/** C2-H-160: a destination the policy denies is written as the empty string, and the denial is reported on `node`. */
+export function destination(r: Render, url: string, node: Node): string {
+  return isDenied(r, url, node) ? '' : url
+}
+
+/** C2-H-160: whether the policy denies `url`, with nothing reported. */
+export function deniesUrl(r: Render, url: string): boolean {
+  return !schemePasses(r, url)
+}
+
+/** C2-H-160: whether the policy denies `url`, which is then reported on `node`. */
+export function isDenied(r: Render, url: string, node: Node): boolean {
+  if (schemePasses(r, url)) return false
+  loss(r, node, 'destination-denied', node.type === 'image'
+    ? 'Blanked a denied image source' : 'Blanked a denied destination scheme', 'error')
+  const entry = r.losses.entries.at(-1)!
+  const field = node.type === 'link' ? 'href' : node.type === 'image' ? 'src' : undefined
+  if (field !== undefined) {
+    r.losses.steps ??= new Map()
+    r.losses.steps.set(entry, `/${field}`)
+  }
+  if (typeof r.source === 'string' && node.pos !== undefined) {
+    const start = r.source.indexOf(url, stringOffsetOfByte(r.source, node.pos.startOffset))
+    if (start >= 0) entry.range = { startOffset: utf8Length(r.source.slice(0, start)),
+      endOffset: utf8Length(r.source.slice(0, start + url.length)) }
+  }
+  return true
+}
+
+/** C2-H-161: true when the text of `value[start, end)` before its first colon is a scheme of the default deny list. */
+function hasDeniedPrefix(value: string, start: number, end: number): boolean {
+  let prefix = ''
+  for (let at = start; at < end; at++) {
+    const code = value.charCodeAt(at)
+    if (code === COLON_CODE) return DENIED_BY_DEFAULT.has(prefix)
+    if (!isProbeRemoved(code)) prefix += value[at]!.toLowerCase()
+  }
+  return false
+}
+
+function isAsciiWhitespace(code: number): boolean {
+  return code === SPACE_CODE || (code >= 9 && code <= 13 && code !== 11)
+}
+
+/** C2-H-161: true when `fails` holds for one entry of a list of URLs. `commas` also separate entries. */
+function listHas(value: string, commas: boolean, fails: (start: number, end: number) => boolean): boolean {
+  let start = 0
+  for (let at = 0; at <= value.length; at++) {
+    const code = at < value.length ? value.charCodeAt(at) : SPACE_CODE
+    if (!isAsciiWhitespace(code) && !(commas && code === COMMA_CODE)) continue
+    if (at > start && fails(start, at)) return true
+    start = at + 1
+  }
+  return false
+}
+
+function listHasDeniedPrefix(value: string, commas: boolean): boolean {
+  return listHas(value, commas, (start, end) => hasDeniedPrefix(value, start, end))
+}
+
+/**
+ * C2-H-159, C2-H-161: the value of a URL list attribute, empty when one of its tokens fails the URL policy. A token that
+ * fails is a destination the policy denies, reported as one (C2-H-160).
+ */
+function urlListValue(r: Render, name: string, value: string, origin: Node | null): string {
+  const commas = URL_LIST_ATTRIBUTES.get(name)
+  if (commas === undefined || value === '') return value
+  if (!listHas(value, commas, (start, end) => !schemePasses(r, value.slice(start, end)))) return value
+  loss(r, origin, 'destination-denied', 'Blanked a denied destination scheme', 'error')
+  return ''
+}
+
+function hexValue(code: number): number {
+  if (code >= 48 && code <= 57) return code - 48
+  const lower = code | 32
+  return lower >= 97 && lower <= 102 ? lower - 87 : -1
+}
+
+/** C2-H-162: the character a CSS escape at `at`, behind the backslash, stands for, and the offset behind the escape. */
+function cssEscape(value: string, at: number): [string, number] {
+  let code = 0
+  let p = at
+  while (p < value.length && p - at < MAX_ESCAPE_DIGITS && hexValue(value.charCodeAt(p)) >= 0) {
+    code = code * 16 + hexValue(value.charCodeAt(p))
+    p++
+  }
+  if (p === at) {
+    // A backslash before a line break stands for nothing, and before any other character for that character.
+    const next = value[at] ?? ''
+    return [next === '\n' ? '' : next, at + 1]
+  }
+  // One whitespace character behind the digits belongs to the escape.
+  if (p < value.length && isAsciiWhitespace(value.charCodeAt(p))) p++
+  return [code === 0 || code > MAX_CODE_POINT ? REPLACEMENT : String.fromCodePoint(code), p]
+}
+
+/** C2-H-162: `value` with its CSS escapes decoded, its whitespace removed and its ASCII letters in lower case. */
+function cssProbe(value: string): string {
+  let decoded = ''
+  for (let at = 0; at < value.length;) {
+    if (value.charCodeAt(at) !== BACKSLASH_CODE) {
+      decoded += value[at++]!
+      continue
+    }
+    const [char, next] = cssEscape(value, at + 1)
+    decoded += char
+    at = next
+  }
+  let compact = ''
+  for (const char of decoded) if (char.trim() !== '') compact += char.toLowerCase()
+  return compact
+}
+
+function hasDangerousCss(value: string): boolean {
+  const probe = cssProbe(value)
+  return STYLE_PATTERNS.some((pattern) => probe.includes(pattern))
+}
+
+/**
+ * C2-H-161, C2-H-162: the value of an authored key as it is written, which is empty when it fails a test. Every
+ * authored value reaches the output through here: the keys, the classes, the language, `rel` and the derived values.
+ */
+export function keyValue(name: string, value: string): string {
+  // Only a value with a colon has a scheme to test, and only `style` has other tests.
+  if (name !== 'style' && !value.includes(':')) return value
+  const commas = URL_LIST_ATTRIBUTES.get(name)
+  // The whole value is tested too: a scheme split by a separator, `java script:`, fails as it does in a single URL.
+  if (hasDeniedPrefix(value, 0, value.length) || (commas !== undefined && listHasDeniedPrefix(value, commas))) return ''
+  return name === 'style' && hasDangerousCss(value) ? '' : value
+}
+
+/** C2-H-161: event handlers and the injection sinks are not written, whatever their value. */
+function isBlockedName(name: string): boolean {
+  return DROPPED_NAMES.includes(name) || DROPPED_PREFIXES.some((prefix) => name.startsWith(prefix))
+}
+
+function withDeclaration(style: string, declaration: string): string {
+  const authored = style.trim()
+  if (authored === '') return declaration
+  return `${authored}${authored.endsWith(';') ? '' : ';'} ${declaration}`
+}
+
+/** The attributes of one element as they are collected: no name twice, compared without regard to case (C2-H-013). */
+class AttributeList {
+  text = ''
+  private readonly used = new Set<string>()
+
+  has(name: string): boolean {
+    return this.used.has(name.toLowerCase())
+  }
+
+  claim(name: string): void {
+    this.used.add(name.toLowerCase())
+  }
+
+  add(name: string, value: string | null): void {
+    if (this.has(name)) return
+    this.claim(name)
+    this.text += value === null ? ` ${name}` : ` ${name}="${escapeAttribute(value)}"`
+  }
+}
+
+function addClasses(list: AttributeList, node: Node | null, parts: TagParts): void {
+  const authored = parts.bare === true ? [] : node?.attrs?.classes ?? []
+  if (authored.length === 0 && parts.base === undefined && parts.last === undefined) return
+  // A class that occurs twice is written once, at its first place, as in 0.1. An authored one that fails C2-H-161 is left out.
+  const classes = new Set(parts.base)
+  for (const name of authored) if (keyValue('class', name) !== '') classes.add(name)
+  for (const name of parts.last ?? []) classes.add(name)
+  if (classes.size > 0) list.add('class', [...classes].join(' '))
+}
+
+/** C2-H-015: an `align` value with ASCII whitespace trimmed and ASCII letters lowered. */
+function foldedAlign(value: string): string {
+  return value.replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '').replace(/[A-Z]/g, (letter) => letter.toLowerCase())
+}
+
+/** The declarations that follow the authored style: the alignment of C2-H-015 and those the element gives. */
+function styleDeclarations(keyValues: [string, string][], parts: TagParts): string {
+  let declarations = parts.style ?? ''
+  if (parts.alignStyle !== true) return declarations
+  for (const [key, value] of keyValues) {
+    if (key.toLowerCase() === 'align' && ALIGN_VALUES.includes(foldedAlign(value))) declarations = `text-align: ${foldedAlign(value)};`
+  }
+  return declarations
+}
+
+/** What the keys of one node give the `style` attribute: the declarations they add, and whether one of them is `style`. */
+interface StyleFacts {
+  declarations: string
+  hasStyle: boolean
+}
+
+/** The value of the `style` key: the declarations of the other keys follow what the author wrote. */
+function styleValue(value: string, declarations: string, first: boolean): string {
+  const written = keyValue('style', value)
+  if (first && declarations !== '') return written === '' ? declarations : `${declarations}; ${written}`
+  return declarations === '' ? written : withDeclaration(written, declarations)
+}
+
+function addKeyValue(
+  r: Render, list: AttributeList, [key, value]: [string, string], parts: TagParts, style: StyleFacts, origin: Node | null,
+): void {
+  const name = key.toLowerCase()
+  if (isBlockedName(name) || list.has(name)) return
+  if (CARRIERS.has(name)) {
+    loss(r, origin, 'carrier-attribute-dropped',
+      `Dropped the authored attribute ${key}: the name is reserved for roundtrip import`)
+    if (typeof r.source === 'string' && origin?.pos !== undefined) {
+      const start = r.source.indexOf(key, stringOffsetOfByte(r.source, origin.pos.startOffset))
+      if (start >= 0) r.losses.entries.at(-1)!.range = { startOffset: utf8Length(r.source.slice(0, start)),
+        endOffset: utf8Length(r.source.slice(0, start + key.length + (value === '' ? 0 : value.length + 1))) }
+    }
+    return
+  }
+  if (name === 'style') return list.add(key, styleValue(value, style.declarations, parts.styleFirst === true))
+  if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(foldedAlign(value))) {
+    return list.add(key, urlListValue(r, name, keyValue(name, value), origin))
+  }
+  if (!style.hasStyle) list.add('style', style.declarations)
+}
+
+function addKeyValues(r: Render, list: AttributeList, keyValues: [string, string][], parts: TagParts, origin: Node | null): void {
+  const hasStyle = keyValues.some(([key]) => key.toLowerCase() === 'style')
+  const style: StyleFacts = { declarations: styleDeclarations(keyValues, parts), hasStyle }
+  for (const pair of keyValues) addKeyValue(r, list, pair, parts, style, origin)
+  if (style.declarations !== '') list.add('style', style.declarations)
+}
+
+/** The id an element writes: the one its parts name, or the authored one. */
+function writtenId(node: Node | null, parts: TagParts): string | undefined {
+  if (parts.id !== undefined) return parts.id ?? undefined
+  return parts.bare === true ? undefined : node?.attrs?.id
+}
+
+/** C2-H-016: the source line of a block element, or null. */
+function sourceLine(r: Render, node: Node | null, parts: TagParts): string | null {
+  if (!r.settings.sourceLines || parts.block !== true || node?.pos === undefined) return null
+  return String(node.pos.startLine)
+}
+
+/** C2-H-018: a node whose element carries attributes, a language or a direction (C2-A-031). */
+export function carriesAttributes(node: Node): boolean {
+  return node.attrs !== undefined || node.lang !== undefined || node.dir !== undefined
+}
+
+/** The authored parts behind the id: the classes, the language and the keys. */
+function addAuthored(r: Render, list: AttributeList, node: Node | null, parts: TagParts): void {
+  const authored = parts.bare === true ? null : node
+  addClasses(list, node, parts)
+  if (authored?.lang !== undefined) list.add('lang', keyValue('lang', authored.lang))
+  // C2-H-009, C2-H-013: the direction follows the language, and the field replaces an authored `dir` key.
+  if (authored?.dir !== undefined) list.add('dir', authored.dir)
+  const keyValues = authored?.attrs?.keyValues
+  if (keyValues !== undefined || parts.style !== undefined) addKeyValues(r, list, keyValues ?? [], parts, parts.origin ?? node)
+}
+
+/** True when an element writes its structural attributes and nothing else, which holds for most links and images. */
+function isStructuralOnly(r: Render, node: Node | null, parts: TagParts): boolean {
+  if (node !== null && parts.bare !== true && carriesAttributes(node)) return false
+  if (parts.id !== undefined && parts.id !== null) return false
+  if (parts.base !== undefined || parts.last !== undefined || parts.generated !== undefined || parts.style !== undefined) return false
+  if (parts.derived !== undefined && parts.derived.length > 0) return false
+  return !(r.settings.sourceLines && parts.block === true)
+}
+
+/** The structural attributes as they stand. An element names none of them twice. */
+function structuralText(pairs: Pair[]): string {
+  let text = ''
+  for (const [name, value] of pairs) text += value === null ? ` ${name}` : ` ${name}="${escapeAttribute(value)}"`
+  return text
+}
+
+/** C2-H-075, C2-H-161: an attribute whose value the element takes from an authored key passes the filter of that key. */
+function addDerived(list: AttributeList, parts: TagParts): void {
+  for (const [name, value] of parts.derived ?? []) list.add(name, keyValue(name.toLowerCase(), value))
+}
+
+/** C2-H-009: the attributes of one element, each with a leading space. */
+export function attributes(r: Render, node: Node | null, parts: TagParts): string {
+  if (isStructuralOnly(r, node, parts)) return structuralText(parts.structural ?? [])
+  const list = new AttributeList()
+  const id = writtenId(node, parts)
+  if (parts.idFirst === true && id !== undefined) list.add('id', id)
+  if (parts.classFirst === true) addClasses(list, node, parts)
+  for (const [name, value] of parts.structural ?? []) list.add(name, value)
+  addDerived(list, parts)
+  // The source line is structural, so it replaces an authored key, and it is written last.
+  const line = sourceLine(r, node, parts)
+  if (line !== null) list.claim('data-source-line')
+  for (const name of parts.withheld ?? []) list.claim(name)
+  if (id !== undefined) list.add('id', id)
+  addAuthored(r, list, node, parts)
+  for (const [name, value] of parts.generated ?? []) list.add(name, value)
+  if (line !== null) list.text += ` data-source-line="${line}"`
+  return list.text
+}
+
+/** C2-H-139: the attribute block of an unresolved reference as text, in the fixed order. */
+export function attributeBlockText(node: Node): string {
+  const parts: string[] = []
+  const attrs = node.attrs
+  if (attrs?.id !== undefined) parts.push(`#${attrs.id}`)
+  for (const name of attrs?.classes ?? []) parts.push(`.${name}`)
+  if (node.lang !== undefined) parts.push(`:${node.lang}`)
+  for (const [key, value] of attrs?.keyValues ?? []) parts.push(keyText(key, value))
+  return parts.length === 0 ? '' : `{${parts.join(' ')}}`
+}
+
+function keyText(key: string, value: string): string {
+  if (value === '') return key
+  const plain = !/[\s"'\\|}]/.test(value)
+  return plain ? `${key}=${value}` : `${key}="${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+}

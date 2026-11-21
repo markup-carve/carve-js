@@ -1,0 +1,66 @@
+// The lint data model trims trailing spaces and tabs by a scan from the end: an end-anchored /[ \t\r]+$/ retries
+// from every character of a run that text follows, which made lint quadratic on a div opener line of tabs.
+import { describe, expect, it } from 'vitest'
+import { lint } from '../src/index.ts'
+import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.ts'
+import { TableLines } from '../lint/data-table.ts'
+import { itemOwnerOf } from '../lint/data-model.ts'
+
+const codes = (source: string) => lint(source, {}).map(d => `${d.code}@${d.range?.startOffset}-${d.range?.endOffset}`)
+
+it('resolves colon ancestors once across all nested block owners', () => {
+  class CountedTypes extends Map<string, string> {
+    reads = 0
+    override get(path: string): string | undefined { this.reads++; return super.get(path) }
+  }
+  const types = new CountedTypes()
+  const item = '/children/0'
+  types.set(item, 'list_item')
+  let path = item
+  const owners = []
+  for (let at = 0; at < 160; at++) {
+    path += '/children/0'
+    types.set(path, 'div')
+    owners.push({ path, type: 'div' })
+  }
+  for (const owner of owners) expect(itemOwnerOf(owner, types)).toEqual({ path: item, type: 'list_item' })
+  expect(types.reads).toBeLessThan(owners.length * 3)
+})
+
+describe('lint data model on opener lines', () => {
+  it('reads an opener with trailing spaces and tabs as before', () => {
+    expect(codes('::: d \t\r\nx\n:::\n')).toEqual(codes('::: d\nx\n:::\n'))
+  })
+
+  perfIt('scales linearly on a div opener line of tabs before text', () => {
+    expectBuiltInputScansLinearly(source => { lint(source, {}) }, count => `::: d${'\t'.repeat(count)}x\n:::\n`,
+      { label: 'div opener tabs', smallRepeats: 2_000 })
+  })
+
+  perfIt('scales by bytes on nested colon fence staircases', () => {
+    expectBuiltInputScansLinearly(source => { lint(source, {}) }, count =>
+      Array.from({ length: count }, (_, at) => `${':'.repeat(count + 3 - at)} c\n`).join('') + '@\n',
+      { label: 'nested colon fence descriptions', smallRepeats: 36, largeRepeats: 144 })
+  })
+})
+
+// A line maps to its pipe table by an index built once, not by a scan over the tables per lookup.
+describe('lint data model on tables', () => {
+  perfIt('scales linearly on the table of every line of many pipe tables', () => {
+    const body = { raw_body: '| a |' }
+    expectBuiltInputScansLinearly(source => {
+      const tables: [number, number, string][] = Array.from(source, (_, at) => [at, at, `/children/${at}`])
+      const lines = new TableLines(tables, { count: source.length, at: () => body })
+      for (let at = 0; at < source.length; at++) lines.pathOf(at)
+    }, count => 'x'.repeat(count), { label: 'pipe tables', smallRepeats: 5_000 })
+  })
+})
+
+// The content of a line behind its quote marks is read without a backtracking scan of a space run inside it.
+describe('lint data model on long lines', () => {
+  perfIt('scales linearly on a line with a run of spaces inside it, below a definition list', () => {
+    expectBuiltInputScansLinearly(source => { lint(source, {}) }, count => `:: t\n: d\n\na${' '.repeat(count)}b\n`,
+      { label: 'inner space run', smallRepeats: 2_000 })
+  })
+})
+

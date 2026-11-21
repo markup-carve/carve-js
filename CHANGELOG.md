@@ -9,6 +9,28 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Breaking
+
+- The package is the Carve 0.2 engine. The 0.2 API moves from the `./v2` entry to the package root and `./v2/node` to `./node`; the 0.1 root API and its `./node` entry are removed, and `./prettier` is a 0.2 plugin now. [docs/api.md](docs/api.md) maps each 0.1 call to its replacement; the Markdown, plain-text and ANSI writers are #5057.
+- The `carve` bin is the 0.2 command line (formerly `carve2`); `carve2` is removed. `carve upgrade` rewrites 0.1 documents.
+- `dist/carve.iife.min.js` (the `carve` global, `unpkg` and `jsdelivr`) exposes the 0.2 API.
+- The GitHub Action drops the `from-djot` and `portable` inputs, and the pre-commit hooks `carve-lint-from-djot` and `carve-lint-portable` are removed: 0.2 has no Djot divergence lint.
+- A `codeBlockRenderer` result that is neither text nor nothing throws `CarveOptionError` instead of `TypeError` (C2-H-207).
+
+### Added
+
+- Render options `softBreak` (`newline`, `space`, `br`), `allowLosses` and `maxLosses` (default 100), also read by `importDocument`; the command line takes `--soft-break` (C2-H-203 to C2-H-205).
+- `positionOf(source, offset)`: the line and column of C2-T-041 for a UTF-8 byte offset.
+- `diffTree`, `applyPatch`, `sourceFingerprint`, `treeFingerprint` and `CarvePatchError`: a JSON Patch over the encoded tree, refused when the tree fingerprint differs or the result does not decode; `carve diff [--json]` writes it.
+- `@markup-carve/carve/upgrade`: `upgrade(source, { edits })`, the 0.1 to 0.2 upgrade with its report and, on request, the edits as byte ranges with their upgrade rows (#5054).
+- `@markup-carve/carve/prettier`: a Prettier 3 plugin on `format`, with `carveAlignTables` and `carveNormalize` (#5063).
+- `VERSION`, `SPEC_VERSION`, `NODE_TYPES`, `headingId(text, options)` and `includeRegion(text, name, { code })` (#5059); `includeDependencies(tree, { ranges: true })` gives each directive's byte range.
+- `fileSystemResolver(root, { maxFileBytes, allowAbsolute })` from `./node`.
+
+### Added
+
+- The 0.2 `carve` program brings back 0.1 commands: `carve flatten` writes a document with its includes expanded, `carve fix` (also `carve lint --fix`, with `--write`) rewrites Markdown and Djot habits to the replacement their lint rule names, and `carve upgrade --migrate` respells references that miss their target only by case. `-o/--output` on `render`, `fmt` and `import`, `--strict` on `render` and `lint`, and `lint --ignore FILE-ID` are back too. See [docs/cli.md](docs/cli.md).
+
 ## [0.1.17] - 2026-11-12
 
 This patch release restores the 0.1.15 speed of `carveToHtml` on nested lists after a blank line and fixes the position-free writer around comments in list items.

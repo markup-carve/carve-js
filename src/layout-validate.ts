@@ -1,0 +1,236 @@
+// The reader side of the source-layout record (C2-L-007 to C2-L-012, C2-L-020, C2-L-027): a record
+// that the document refuses fails with a typed error that names the field and what was wrong.
+import { isRecord } from './ast.ts'
+import { LAYOUT_VERSION, type SourceLayout } from './layout.ts'
+import { utf8Length } from './positions.ts'
+import { INCLUDE_OPTIONS } from './render-tables.ts'
+
+/** A record that a reader refuses. `path` is an RFC 6901 pointer to the field inside the record. */
+export class CarveLayoutError extends Error {
+  path: string
+  reason: string
+
+  constructor(path: string, reason: string) {
+    super(`${path === '' ? '/' : path}: ${reason}`)
+    this.name = 'CarveLayoutError'
+    this.path = path
+    this.reason = reason
+  }
+}
+
+type Fields = Record<string, unknown>
+type Check = (value: unknown, path: string) => void
+
+const ROOT_FIELDS = ['version', 'encoding', 'source', 'lineEndings', 'bom', 'nodes']
+const LINE_ENDINGS = ['none', 'lf', 'crlf', 'cr', 'mixed']
+const ENCODINGS = ['utf-8', 'base64']
+const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+const WRAP_FIELDS = ['line', 'path', 'offset', 'row']
+
+function fail(path: string, reason: string): never {
+  throw new CarveLayoutError(path, reason)
+}
+
+const checkBoolean: Check = (value, path) => {
+  if (typeof value !== 'boolean') fail(path, 'is not a boolean')
+}
+
+const checkString: Check = (value, path) => {
+  if (typeof value !== 'string') fail(path, 'is not a string')
+}
+
+function checkCount(value: unknown, path: string, minimum = 0): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum) fail(path, `is not an integer of at least ${minimum}`)
+  return value
+}
+
+function oneOf(values: readonly string[]): Check {
+  return (value, path) => {
+    if (typeof value !== 'string' || !values.includes(value)) fail(path, `is not one of ${values.join(', ')}`)
+  }
+}
+
+/** C2-L-010: the empty string, or parts that each start with a slash, in which a tilde stands before 0 or 1. */
+const checkPointer: Check = (value, path) => {
+  if (typeof value !== 'string') fail(path, 'is not a string')
+  if (value !== '' && !value.startsWith('/')) fail(path, 'is not a JSON Pointer')
+  for (let at = value.indexOf('~'); at >= 0; at = value.indexOf('~', at + 1)) {
+    if (value[at + 1] !== '0' && value[at + 1] !== '1') fail(path, 'is not a JSON Pointer')
+  }
+}
+
+/** C2-L-020: `line`, `path` and `offset`, an optional `row`, and the list sorted by `line`. */
+const checkWraps: Check = (value, path) => {
+  if (!Array.isArray(value)) fail(path, 'is not a list')
+  let line = 0
+  value.forEach((wrap: unknown, index) => {
+    const at = `${path}/${index}`
+    if (!isRecord(wrap)) fail(at, 'is not an object')
+    for (const key of Object.keys(wrap)) if (!WRAP_FIELDS.includes(key)) fail(`${at}/${key}`, 'is not a field of a wrap')
+    const own = checkCount(wrap['line'], `${at}/line`, 1)
+    if (own < line) fail(`${at}/line`, 'is not sorted by line')
+    line = own
+    checkPointer(wrap['path'], `${at}/path`)
+    checkCount(wrap['offset'], `${at}/offset`)
+    if (wrap['row'] !== undefined) checkCount(wrap['row'], `${at}/row`)
+  })
+}
+
+const checkOptionSpelling: Check = (value, path) => {
+  if (!isRecord(value)) fail(path, 'is not an object')
+  for (const [name, written] of Object.entries(value)) {
+    if (!INCLUDE_OPTIONS.has(name)) fail(`${path}/${name}`, 'is not an include option')
+    checkString(written, `${path}/${name}`)
+  }
+}
+
+/** C2-L-009: the facts an entry may have, each with the check of its value. */
+const FACTS = new Map<string, Check>([
+  ['bare', checkBoolean],
+  ['fenced', checkBoolean],
+  ['hardBreakOpener', checkBoolean],
+  ['wraps', checkWraps],
+  ['continuationLines', (value, path) => void checkCount(value, path)],
+  ['rawRef', checkString],
+  ['optionSpelling', checkOptionSpelling],
+  ['sourceFormat', oneOf(['pipe', 'csv', 'tsv'])],
+  ['headerRows', (value, path) => void checkCount(value, path)],
+  ['markerRaw', checkString],
+  ['markerColumn', (value, path) => void checkCount(value, path)],
+  ['contentColumn', (value, path) => void checkCount(value, path)],
+  ['continuationStyle', oneOf(['lazy', 'indent', 'marker_line', 'none'])],
+  ['blankLinesBefore', (value, path) => void checkCount(value, path)],
+  ['blankLinesAfter', (value, path) => void checkCount(value, path)],
+  ['openerRaw', checkString],
+  ['closerRaw', checkString],
+  ['metadataSeparatorRaw', checkString],
+  ['attachment', oneOf(['preceding', 'none'])],
+])
+
+/** C2-L-027: the two runs come as a pair, and the opener is never empty. */
+function checkFence(entry: Fields, path: string): void {
+  const opener = entry['openerRaw']
+  if ((opener === undefined) !== (entry['closerRaw'] === undefined)) fail(path, 'openerRaw and closerRaw come as a pair')
+  if (opener === '') fail(`${path}/openerRaw`, 'is empty')
+}
+
+/** Checks one entry and returns its path. `length` is the byte length of the source (C2-L-012). */
+function checkEntry(entry: unknown, path: string, length: number): string {
+  if (!isRecord(entry)) fail(path, 'is not an object')
+  checkPointer(entry['path'], `${path}/path`)
+  const start = checkCount(entry['startByte'], `${path}/startByte`)
+  const end = checkCount(entry['endByte'], `${path}/endByte`)
+  if (start > end) fail(`${path}/startByte`, 'is behind endByte')
+  if (end > length) fail(`${path}/endByte`, 'is past the end of the source')
+  for (const key of Object.keys(entry)) {
+    if (key === 'path' || key === 'startByte' || key === 'endByte') continue
+    const check = FACTS.get(key)
+    if (check === undefined) fail(`${path}/${key}`, 'is not a field of a node entry')
+    check(entry[key], `${path}/${key}`)
+  }
+  checkFence(entry, path)
+  return entry['path'] as string
+}
+
+function checkRoot(record: Fields): void {
+  for (const key of ROOT_FIELDS) if (record[key] === undefined) fail(`/${key}`, 'is missing')
+  for (const key of Object.keys(record)) if (!ROOT_FIELDS.includes(key)) fail(`/${key}`, 'is not a field of the record')
+  // C2-L-008.
+  if (record['version'] !== LAYOUT_VERSION) fail('/version', `version ${String(record['version'])} is not implemented`)
+  oneOf(ENCODINGS)(record['encoding'], '/encoding')
+  checkString(record['source'], '/source')
+  oneOf(LINE_ENDINGS)(record['lineEndings'], '/lineEndings')
+  checkBoolean(record['bom'], '/bom')
+  if (!Array.isArray(record['nodes'])) fail('/nodes', 'is not a list')
+}
+
+// The slots of a node in the order in which the source holds them.
+const SLOT_ORDER = ['title', 'children', 'caption', 'columns']
+
+function compareSegments(a: string, b: string): number {
+  const numberA = Number(a)
+  const numberB = Number(b)
+  if (Number.isInteger(numberA) && Number.isInteger(numberB)) return numberA - numberB
+  const slot = SLOT_ORDER.indexOf(a) - SLOT_ORDER.indexOf(b)
+  if (slot !== 0) return slot
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+/** C2-L-011: below 0 when the node at `a` comes before the node at `b` in a walk, a node before the nodes inside it. */
+export function compareDocumentOrder(a: string, b: string): number {
+  const left = a.split('/')
+  const right = b.split('/')
+  for (let at = 0; at < left.length && at < right.length; at++) {
+    const order = compareSegments(left[at]!, right[at]!)
+    if (order !== 0) return order
+  }
+  return left.length - right.length
+}
+
+/** The six bits of the base64 digit at `at` of `text`, or -1 for padding. */
+function digit(text: string, at: number, padding: boolean): number {
+  const value = BASE64.indexOf(text[at] ?? '')
+  if (value >= 0 || (padding && text[at] === '=')) return value
+  return fail('/source', `is not base64: ${JSON.stringify(text[at])} at ${at}`)
+}
+
+/** C2-L-056: the bytes of a base64 source in the alphabet of RFC 4648, section 4, with padding. */
+function base64Bytes(text: string): Uint8Array {
+  if (text.length % 4 !== 0) fail('/source', 'is not base64: its length is not a multiple of 4')
+  const padding = text.endsWith('==') ? 2 : text.endsWith('=') ? 1 : 0
+  const bytes = new Uint8Array(text.length / 4 * 3 - padding)
+  for (let at = 0; at < text.length; at += 4) {
+    const last = at + 4 === text.length
+    const bits = digit(text, at, false) << 18 | digit(text, at + 1, false) << 12
+      | Math.max(0, digit(text, at + 2, last && padding === 2)) << 6 | Math.max(0, digit(text, at + 3, last && padding > 0))
+    const out = at / 4 * 3
+    bytes[out] = bits >> 16
+    if (out + 1 < bytes.length) bytes[out + 1] = bits >> 8 & 0xff
+    if (out + 2 < bytes.length) bytes[out + 2] = bits & 0xff
+  }
+  return bytes
+}
+
+/** C2-L-012, C2-L-056: the byte length of the input: its UTF-8 bytes, or the bytes of a base64 source. */
+function inputLength(record: Fields): number {
+  const source = record['source'] as string
+  if (record['encoding'] === 'utf-8') return utf8Length(source)
+  const bytes = base64Bytes(source)
+  let wellFormed = true
+  try {
+    STRICT_UTF8.decode(bytes)
+  } catch {
+    wellFormed = false
+  }
+  if (wellFormed) fail('/encoding', 'is base64 for bytes that are well-formed UTF-8')
+  return bytes.length
+}
+
+/** Returns `value` as a record, or throws a `CarveLayoutError` for a record the document refuses. */
+export function validateLayout(value: unknown): SourceLayout {
+  if (!isRecord(value)) fail('', 'the record is not an object')
+  checkRoot(value)
+  const length = inputLength(value)
+  let previous: string | null = null
+  ;(value['nodes'] as unknown[]).forEach((entry, index) => {
+    const path = checkEntry(entry, `/nodes/${index}`, length)
+    const node = entry as Fields
+    if (Array.isArray(node['wraps'])) {
+      for (let wrapIndex = 0; wrapIndex < node['wraps'].length; wrapIndex++) {
+        const wrap = node['wraps'][wrapIndex] as Fields
+        const offset = wrap['offset'] as number
+        // Migration without source has a synthetic empty span while the wrap still indexes a text value.
+        if (length > 0 && offset > (node['endByte'] as number) - (node['startByte'] as number)) {
+          fail(`/nodes/${index}/wraps/${wrapIndex}/offset`, 'is past the source span of its cell')
+        }
+      }
+    }
+    // C2-L-011: in document order, each path once.
+    if (previous !== null && compareDocumentOrder(path, previous) <= 0) {
+      fail(`/nodes/${index}/path`, path === previous ? 'is a duplicate path' : 'is not in document order')
+    }
+    previous = path
+  })
+  return value as unknown as SourceLayout
+}

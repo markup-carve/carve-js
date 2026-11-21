@@ -1,0 +1,11 @@
+{
+  "id": "f7aaad9577601810",
+  "kind": "format-no-final-lf",
+  "detail": "normalize=false",
+  "seed": 1,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "",
+  "originalBytes": 0,
+  "minimizedBytes": 0,
+  "clause": "C2-W-022"
+}

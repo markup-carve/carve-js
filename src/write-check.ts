@@ -1,0 +1,1408 @@
+// The escaping test of the writer (C2-W-088 to C2-W-091): the written blocks are parsed again
+// and compared with the tree they were written from. Where the parse reads a construct that the
+// tree does not hold, the opener of that construct takes a backslash; where a construct of the
+// tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
+import {
+  captionOf, childNodes, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord, type Node,
+  type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
+} from './ast.ts'
+import { buildSource } from './ast-blocks.ts'
+import { applyExtensions } from './extensions/claims.ts'
+import { AST_RESULTS } from './ast-tables.ts'
+import { sourceCoreEquivalent } from './write-extension-source.ts'
+import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
+import { firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
+import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
+import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
+
+/** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
+export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys,
+  positions = true): DocumentNode {
+  const cacheable = positions && src.length <= 8192 && w.extensions.length === 0 && w.abbreviations.size === 0 &&
+    (linkKeys === null || linkKeys.size === 0)
+  if (cacheable) {
+    const cached = w.parseCache.get(src)
+    if (cached !== undefined) return cached
+  }
+  w.parses++
+  w.work.chars += src.length
+  const extensions = w.extensions
+  const parsed = applyExtensions(buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys), extensions).document
+  if (cacheable) {
+    if (w.parseCache.size >= 128) w.parseCache.clear()
+    w.parseCache.set(src, parsed)
+  }
+  return parsed
+}
+
+/** The tree of the whole written document, for the check of C2-W-144; it is no repair parse of a group. */
+export function parseWritten(w: Writer, src: string): DocumentNode {
+  const extensions = w.extensions
+  return applyExtensions(buildSource(src, true, w.abbreviations, null, extensions.length > 0, w.linkKeys), extensions).document
+}
+
+/** C2-W-133: whether the repair of the group has parsed more than its limit. */
+export function exhausted(w: Writer): boolean {
+  return w.work.chars > w.work.limit
+}
+
+/** One comparison of written blocks with their parse: what it asks the next write to change. */
+export interface Check {
+  w: Writer
+  escapes: [TextNode, number][]
+  /** Escapes of an earlier round that did not help and are taken back (C2-W-088). */
+  retracted: [TextNode, number][]
+  /** The escapes among `escapes` that a node which did not form asked for, which the test of C2-W-088 decides. */
+  trials: [TextNode, number][]
+  /** The escapes asked for and the escapes taken back, by text node, for the test whether an offset is escaped. */
+  marks: Map<TextNode, Map<number, boolean>>
+  forms: Node[]
+  respelled: Set<Node>
+  /** A block read back as another block, so the blocks behind it were not compared one by one. */
+  misaligned: boolean
+  /** What no change repairs. It is reported when a round asks for no change. */
+  losses: [Node, string | null][]
+  /** The flags the content under comparison was written with: in a table cell, inside emphasis, inside strong. */
+  flags: number
+  /** C2-A-093: the counts of a cell are a resolution result in a table that has span marks. */
+  spanMarks: boolean
+  /** The node whose inline content is under comparison. */
+  owner: Node | null
+  /** The escapes among `escapes` that open a run of escapes in one round (`extendChains`), with the construct each one stops. */
+  chains: [TextNode, number, Node][]
+  /** The written group the parse under comparison was made of, or null in a probe of part of it. */
+  source: string | null
+}
+
+export function createCheck(w: Writer): Check {
+  return {
+    w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
+    spanMarks: false, owner: null, chains: [], source: null,
+  }
+}
+
+/** The number of changes the comparison has asked for so far. */
+function changes(c: Check): number {
+  return c.escapes.length + c.forms.length + c.retracted.length
+}
+
+// C2-A-162: positions and the results of resolution are not compared.
+const NODE_SLOTS: readonly string[] = ['children', 'caption']
+const IGNORED_DATA = new Set(['carve.source', 'carve.style', 'carve.annotation'])
+
+type Fields = Record<string, unknown>
+
+function sameList(a: readonly unknown[], b: unknown): boolean {
+  return Array.isArray(b) && a.length === b.length && a.every((item, at) => sameValue(item, b[at]))
+}
+
+function sameFields(left: Fields, right: Fields): boolean {
+  for (const name in left) if (!skipped(left, name, false) && left[name] !== undefined && !sameValue(left[name], right[name])) return false
+  for (const name in right) if (!skipped(right, name, false) && right[name] !== undefined && left[name] === undefined) return false
+  return true
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a)) return sameList(a, b)
+  return isRecord(a) && isRecord(b) ? sameFields(a, b) : a === b
+}
+
+/** C2-A-162: only typed nodes have geometry and the generated resolution results. */
+function skipped(node: Fields, name: string, spanMarks: boolean): boolean {
+  const type = node['type']
+  if (typeof type !== 'string' || !AST_RESULTS.has(type)) return false
+  if (name === 'pos' || name === 'segments' || name === 'srcByteLength') return true
+  const result = AST_RESULTS.get(type)?.find((entry) => entry.field === name)
+  if (result === undefined) return false
+  if (result.when === 'reference use') return node['key'] !== undefined
+  if (result.when === 'derived from authored span mark') return spanMarks
+  return true
+}
+
+function isCompared(c: Check, node: Node, name: string): boolean {
+  if (NODE_SLOTS.includes(name)) return false
+  if (name === 'data' && node.data !== undefined && Object.keys(node.data).every((key) => IGNORED_DATA.has(key))) return false
+  if (name === 'title') return titleOf(node) === undefined
+  return !isRecord(node) || !skipped(node, name, c.spanMarks)
+}
+
+/** C2-W-136: the `attrs` of `e` without the keys the writer reported and did not write, as the parse holds them. */
+function writtenAttrs(c: Check, e: Node): unknown {
+  const keys = c.w.lostKeys.get(e)
+  const attrs = e.attrs
+  if (keys === undefined || attrs === undefined) return attrs
+  const keyValues = (attrs.keyValues ?? []).filter(([key]) => !keys.includes(key))
+  const rest: Fields = { ...attrs, keyValues: keyValues.length === 0 ? undefined : keyValues }
+  return rest['id'] === undefined && (attrs.classes ?? []).length === 0 && keyValues.length === 0 ? undefined : rest
+}
+
+/** The name of the first field in which `e` and `a` differ, or null. */
+function differingField(c: Check, e: Node, a: Node): string | null {
+  // Every node is a record; the guard gives the fields of both by name.
+  if (!isRecord(e) || !isRecord(a)) return null
+  for (const name in e) {
+    const value = name === 'attrs' ? writtenAttrs(c, e) : e[name]
+    if (value !== undefined && isCompared(c, e, name) && !sameValue(value, a[name])) return name
+  }
+  for (const name in a) {
+    if (a[name] !== undefined && e[name] === undefined && isCompared(c, a, name)) return name
+  }
+  return null
+}
+
+/** Asks for the other spelling of `node`. */
+function changeForm(c: Check, node: Node): void {
+  c.forms.push(node)
+  c.respelled.add(node)
+}
+
+function mark(c: Check, node: TextNode, at: number, escaped: boolean): void {
+  const marks = c.marks.get(node) ?? new Map<number, boolean>()
+  marks.set(at, escaped)
+  c.marks.set(node, marks)
+}
+
+function isEscaped(c: Check, node: TextNode, at: number): boolean {
+  const asked = c.marks.get(node)?.get(at)
+  if (asked !== undefined) return asked
+  const written = c.w.escapes.get(node) ?? []
+  return written[firstFrom(written, at)] === at
+}
+
+/** Asks for a backslash before the character `at` of the text node. False where that character takes none. */
+function escapeAt(c: Check, node: TextNode, at: number): boolean {
+  const value = node.value
+  if (at < 0 || at >= value.length || !isAsciiPunctuation(value.charCodeAt(at)) || isEscaped(c, node, at)) return false
+  c.escapes.push([node, at])
+  mark(c, node, at, true)
+  return true
+}
+
+/**
+ * The offsets at which a line that reads as a block opener can be made text, best first (C2-W-092).
+ * C2-W-099: of a hyphen run the second hyphen. An ordered marker is escaped at its delimiter,
+ * since a backslash before a digit or a letter is no escape (C2-I-012).
+ */
+function openerOffsets(value: string): number[] {
+  const offsets: number[] = []
+  if (value.startsWith('--')) offsets.push(1)
+  offsets.push(0)
+  let end = 0
+  while (end < value.length && isAsciiAlphanumeric(value.charCodeAt(end))) end++
+  if (end > 0 && (value[end] === '.' || value[end] === ')')) offsets.push(end)
+  return offsets
+}
+
+/** The line that starts at `nodes[from]` opened a block: escapes its opener (C2-W-090, C2-W-092). */
+function escapeLineStart(c: Check, nodes: readonly Node[], from: number, owner: Node): void {
+  c.misaligned = true
+  const first = nodes[from]
+  if (first?.type === 'text') for (const at of openerOffsets(first.value)) if (escapeAt(c, first, at)) return
+  for (let at = from + 1; at < nodes.length && !isBreak(nodes[at]); at++) {
+    const node = nodes[at]
+    if (node?.type === 'text' && escapeAt(c, node, 0)) return
+  }
+  // The markup of the first node of the line reads as a block opener: its other spelling may not (C2-W-005).
+  if (first !== undefined && hasOtherForm(c, first)) changeForm(c, first)
+  else c.losses.push([first ?? owner, null])
+}
+
+function hasOtherForm(c: Check, node: Node): boolean {
+  if ((c.w.forms.get(node) ?? 0) > 0 || c.respelled.has(node)) return false
+  if (node.type === 'emphasis' || node.type === 'strong' || node.type === 'comment') return true
+  return 'key' in node && node.key !== undefined && c.w.facts?.get(node)?.rawRef !== undefined
+}
+
+/** The last text node below `node`, or `node` itself where it is one. */
+function lastText(node: Node | undefined): TextNode | null {
+  let at = node
+  for (;;) {
+    if (at === undefined) return null
+    if (at.type === 'text') return at
+    const children = childNodes(at)
+    at = children[children.length - 1]
+  }
+}
+
+const CR = 13
+
+/** Whether `value` holds, from `at` on, spaces or tabs and then a CR. */
+function endsLineWithCr(value: string, at: number): boolean {
+  let k = at
+  while (value[k] === ' ' || value[k] === '\t') k++
+  return value.charCodeAt(k) === CR
+}
+
+/** The characters that read on into markup that stands directly behind them: `\\(`, `![`, `^[`, `$` and a backtick run. */
+const JOINING = '\\!^$`'
+/** The closing mark of each node that has one, for the escape of that mark in its content (C2-W-093). */
+const CLOSING_MARKS = new Map([
+  ['emphasis', '/'], ['strong', '*'], ['underline', '_'], ['strike', '~'], ['highlight', '='], ['superscript', '^'], ['subscript', ','],
+  ['insert', '+'], ['delete', '-'], ['span', ']'], ['link', ']'], ['inline_footnote', ']'], ['inline_extension', ']'],
+])
+
+/**
+ * Asks for a backslash in `text` where its end reads on into the markup behind it: before a last
+ * character that joins that markup, or else before its last opening brace, which may open a brace
+ * form that takes the markup (C2-I-043).
+ */
+function escapeEnd(c: Check, text: TextNode | null, braces: boolean): boolean {
+  if (text === null) return false
+  const value = text.value
+  if (value !== '' && JOINING.includes(value[value.length - 1]!) && escapeAt(c, text, value.length - 1)) return true
+  return braces && escapeAt(c, text, value.lastIndexOf('{'))
+}
+
+/** Asks for a backslash before the first bare closing mark of `e` in its content, or before the first bracket in it. */
+function escapeInContent(c: Check, e: Node): boolean {
+  const mark = CLOSING_MARKS.get(e.type)
+  if (mark === undefined || !('children' in e)) return false
+  return escapeMark(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
+}
+
+/** Whether the text before `es[i]` ends in a character that reads on into the markup of `es[i]` (C2-W-125). */
+function joinsNext(es: readonly Node[], i: number): boolean {
+  const value = i > 0 ? lastText(es[i - 1])?.value ?? '' : ''
+  return value !== '' && JOINING.includes(value[value.length - 1]!)
+}
+
+/**
+ * C2-W-125: a closer, or a lone bracket, of the node around `e` stands in the content of `e` and ended
+ * that node early, as a `]` inside emphasis inside an inline footnote. Its first one takes the backslash.
+ */
+function escapeOwnerMark(c: Check, e: Node): boolean {
+  const mark = c.owner === null ? undefined : CLOSING_MARKS.get(c.owner.type)
+  if (mark === undefined || !('children' in e)) return false
+  return escapeMark(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
+}
+
+/** Asks for the escape that keeps the text before `es[i]` from reading on into its opening markup. */
+function escapeBefore(c: Check, es: readonly Node[], i: number): boolean {
+  const before = i > 0 ? lastText(es[i - 1]) : null
+  return escapeEnd(c, before, true) || escapeNameSigil(c, before, es[i]!)
+}
+
+/** C2-W-125, case three: the sigil `:name` glued before the bracket of `e` reads it as an extension, so its colon takes the backslash. */
+function escapeNameSigil(c: Check, text: TextNode | null, e: Node): boolean {
+  if (text === null || !writeInlines(c.w, [e], c.flags).startsWith('[')) return false
+  const value = text.value
+  let start = value.length
+  while (start > 0 && isExtensionNameChar(value.charCodeAt(start - 1))) start--
+  // C2-I-094: the name starts with a letter or `_`.
+  while (start < value.length && (value[start] === '-' || (value.charCodeAt(start) >= 48 && value.charCodeAt(start) <= 57))) start++
+  return start < value.length && value[start - 1] === ':' && escapeAt(c, text, start - 1)
+}
+
+/** C2-I-094: a character of the name of an inline extension after its first. */
+function isExtensionNameChar(code: number): boolean {
+  return isAsciiAlphanumeric(code) || code === 95 || code === 45
+}
+
+/**
+ * C2-W-099, C2-W-093: a content that starts with the mark of its own opener continues the run of
+ * that mark, as `{-` and a hyphen read as a dash, so the first character of the content takes the backslash.
+ */
+function escapeContentStart(c: Check, e: Node): boolean {
+  const mark = CLOSING_MARKS.get(e.type)
+  const first = 'children' in e ? e.children[0] : undefined
+  return mark !== undefined && mark !== ']' && first?.type === 'text' && first.value.startsWith(mark) && escapeAt(c, first, 0)
+}
+
+function escapeFootnoteBrace(c: Check, e: Node): boolean {
+  if (e.type !== 'inline_footnote') return false
+  const first = e.children[0]
+  const last = e.children.at(-1)
+  if (first?.type !== 'text' || last?.type !== 'comment' || last.form !== 'line') return false
+  if (!e.children.some((node) => node.type === 'strong' || node.type === 'emphasis')) return false
+  const brace = first.value.search(/\{[*/]/)
+  return brace >= 0 && escapeAt(c, first, brace)
+}
+
+/**
+ * Asks for the escape of the first character of the text behind `es[i]`, which can read on into its
+ * markup: a name character behind a mention or a tag, a mark behind a closing mark, or the neighbor
+ * that decides a smart punctuation mark (C2-I-104, C2-W-125).
+ */
+function escapeAfter(c: Check, es: readonly Node[], i: number): boolean {
+  const next = textAt(es, i + 1)
+  return next !== null && escapeAt(c, next, 0)
+}
+
+/** Asks for the escape that keeps the end of the content of `es[i]` from reading on into its closing markup. */
+function escapeInside(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]
+  return escapeEnd(c, e !== undefined && 'children' in e ? lastText(e) : null, true)
+}
+
+/** C2-W-125, case five: a closer in content precedes a brace that follows the node. */
+function escapeCloserBeforeBrace(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]
+  const next = es[i + 1]
+  if (e === undefined || next?.type !== 'text' || !next.value.startsWith('}')) return false
+  if (lastText(e)?.value.includes('{') !== true) return false
+  return escapeInContent(c, e)
+}
+
+/**
+ * The node `es[i]` did not read back. The ways to make it form are tried one per round: an escape
+ * before it, an escape at the end of its content, then its other spelling without those escapes,
+ * then the escapes again, then an escape of its closing mark in its content. An escape that did
+ * not help is taken back (C2-W-088).
+ */
+function respell(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]!
+  // A node that the writer reported as lost when it wrote it reads back as something else, and nothing repairs that.
+  if (c.w.lost.has(e)) return false
+  const attempt = c.w.attempts.get(e) ?? { step: 0, escapes: [] }
+  c.w.attempts.set(e, attempt)
+  const before = c.escapes.length
+  while (attempt.step < RESPELL_STEPS.length) {
+    const step = RESPELL_STEPS[attempt.step++]!
+    if (!step(c, es, i, attempt)) continue
+    for (let at = before; at < c.escapes.length; at++) {
+      attempt.escapes.push(c.escapes[at]!)
+      if (step !== escapeLoneBracket) c.trials.push(c.escapes[at]!)
+    }
+    return true
+  }
+  c.losses.push([e, null])
+  return false
+}
+
+type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) => boolean
+
+// C2-W-088: the leftmost construct takes the backslash first, so a construct inside the content is
+// escaped before the end of the content and the text behind the node.
+const RESPELL_STEPS: readonly RespellStep[] = [
+  escapeBefore,
+  (c, es, i) => escapeContentStart(c, es[i]!),
+  (c, es, i) => escapeFootnoteBrace(c, es[i]!),
+  (c, es, i) => escapeContentConstruct(c, es[i]!),
+  escapeAcrossCloser,
+  escapeInside,
+  escapeCloserBeforeBrace,
+  escapeAfter,
+  (c, es, i) => escapeContentLine(c, es[i]!),
+  (c, es, i) => escapeOwnerMark(c, es[i]!),
+  (c, es, i, attempt) => {
+    if (!hasOtherForm(c, es[i]!)) return false
+    for (const escape of attempt.escapes) {
+      c.retracted.push(escape)
+      mark(c, escape[0], escape[1], false)
+    }
+    attempt.escapes = []
+    changeForm(c, es[i]!)
+    return true
+  },
+  escapeBefore,
+  escapeInside,
+  (c, es, i) => escapeInContent(c, es[i]!),
+  escapeLoneBracket,
+]
+
+/**
+ * C2-W-125: a lone bracket in the content of an inline footnote or extension, where its closer was not asked for.
+ * The clause places it for the node that did not form, so it is no trial: the test of a trial takes
+ * out the escapes behind it, which this one may need.
+ */
+function escapeLoneBracket(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]!
+  if ((e.type !== 'inline_footnote' && e.type !== 'inline_extension') || !('children' in e)) return false
+  // Each bracket that no later `]` of the content closes; where every one is closed, the first.
+  const open: [TextNode, number][] = []
+  for (const text of textsBelow(e)) {
+    for (let at = 0; at < text.value.length; at++) {
+      const char = text.value[at]
+      if ((char !== '[' && char !== ']') || isEscaped(c, text, at)) continue
+      if (char === '[') open.push([text, at])
+      else open.pop()
+    }
+  }
+  let asked = false
+  for (const [text, at] of open) asked = escapeAt(c, text, at) || asked
+  return asked || escapeMark(c, e.children as Node[], 0, 0, '[')
+}
+
+/** The flags the content of `e` is written with. */
+function contentFlags(c: Check, e: Node): number {
+  return c.flags | (e.type === 'emphasis' ? IN_EMPHASIS : e.type === 'strong' ? IN_STRONG : e.type === 'link' ? IN_BRACKET : 0)
+}
+
+// The rounds of one probe: past it, the step runs again in the next round of the writer.
+const MAX_PROBE_ROUNDS = 32
+
+type Takes = (node: TextNode, at: number) => boolean
+
+/**
+ * The writer of a probe of the inlines `expected`: its own attempts, losses and escapes, so that what
+ * it finds stays out of this round until it is taken over. Only the escapes of the probed text nodes
+ * are read, so only those are copied.
+ */
+function probeWriter(c: Check, expected: readonly Node[]): Writer {
+  const escapes = new Map<TextNode, number[]>()
+  for (const text of expected.flatMap((node) => (node.type === 'text' ? [node] : textsBelow(node)))) {
+    const own = c.w.escapes.get(text)
+    if (own !== undefined) escapes.set(text, [...own])
+  }
+  return { ...c.w, escapes, attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost),
+    lostKeys: new Map(c.w.lostKeys) }
+}
+
+/** Where a probe is made, which fixes the escapes it may take over: the content of a node, or the content across its closer. */
+type ProbeSite = 'content' | 'across'
+
+/**
+ * C2-W-088 on the inlines `expected` of `e` written and parsed on their own: while the parse holds a
+ * construct that the tree does not, the opener of the leftmost one takes the backslash and they are
+ * parsed again. The escapes that `takes` accepts go to `c` as escapes of this round. Null where the
+ * inlines do not read as one paragraph, which tells nothing; otherwise whether an escape was asked for.
+ * The comparison inside a probe probes the next level of nesting, so a probe is made once for each
+ * state it reads (`probeKey`) and replayed after; without that, its cost grows with 3 to the power of the depth.
+ */
+function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: number, site: ProbeSite, takes: Takes): boolean | null {
+  const key = probeKey(c, e, expected, flags, site)
+  const known = c.w.probes.get(key)
+  if (known !== undefined) {
+    for (const [node, at] of known.taken) escapeAt(c, node, at)
+    return known.found
+  }
+  const before = c.escapes.length
+  const found = runProbe(c, e, expected, flags, takes)
+  // A probe cut short by the limit is not kept: its group is refused (C2-W-133).
+  if (!exhausted(c.w)) c.w.probes.set(key, { found, taken: c.escapes.slice(before) })
+  return found
+}
+
+function runProbe(c: Check, e: Node, expected: readonly Node[], flags: number, takes: Takes): boolean | null {
+  const w = probeWriter(c, expected)
+  let found = false
+  for (let round = 0; round < MAX_PROBE_ROUNDS; round++) {
+    // C2-W-133: past the repair limit the group is refused after this round, so nothing more is probed.
+    if (exhausted(c.w)) return found
+    const taken = probeRound(c, w, e, expected, flags, takes)
+    // A first parse that is no paragraph, or that differs where no escape helps, as a content that starts with a
+    // line break, tells nothing.
+    if (taken === null) return round === 0 ? null : found
+    if (taken.length === 0) return found
+    found = true
+    // One copy and one sort per node and round: one per escape made a node with many escapes quadratic.
+    const added = new Map<TextNode, number[]>()
+    for (const [node, at] of taken) {
+      const list = added.get(node) ?? [...(w.escapes.get(node) ?? [])]
+      list.push(at)
+      added.set(node, list)
+    }
+    for (const [node, list] of added) w.escapes.set(node, list.sort((x, y) => x - y))
+  }
+  return found
+}
+
+/** One round of a probe: the escapes it takes over into `c`, or null where its parse tells nothing. */
+function probeRound(c: Check, w: Writer, e: Node, expected: readonly Node[], flags: number, takes: Takes): [TextNode, number][] | null {
+  const source = `${writeInlines(w, expected, flags)}\n`
+  const parsed = parseChunk(c.w, source).children
+  const block = parsed[0]
+  if (parsed.length !== 1 || block?.type !== 'paragraph') return null
+  const probe = createCheck(w)
+  probe.flags = flags
+  probe.source = source
+  compareInlines(probe, expected, block.children, e)
+  extendChains(probe)
+  const taken = probe.escapes.filter(([node, at]) => takes(node, at) && escapeAt(c, node, at))
+  return taken.length === 0 && probe.losses.length > 0 ? null : taken
+}
+
+/** The id of `node` for the keys of the probes: one per node object. */
+function nodeIdOf(w: Writer, node: Node): number {
+  const known = w.nodeIds.get(node)
+  if (known !== undefined) return known
+  const id = w.nodeIds.size
+  w.nodeIds.set(node, id)
+  return id
+}
+
+/**
+ * The text `value` that stands in a probe for markup beside `anchor`, as the word before a content. A probe below
+ * may escape it, so a probe made again must see the same node, or its result names a node no longer written.
+ */
+function standIn(w: Writer, anchor: Node, role: string, value: string): TextNode {
+  const roles = w.standIns.get(anchor) ?? new Map<string, TextNode>()
+  w.standIns.set(anchor, roles)
+  const name = `${role} ${value}`
+  const known = roles.get(name)
+  if (known !== undefined) return known
+  const node: TextNode = { type: 'text', value }
+  roles.set(name, node)
+  return node
+}
+
+/**
+ * The state a probe reads, as a key: the site, the flags, the probed node and its state, the inlines,
+ * and of each node below them what the writer and `c` hold for it. The rest of what the writer reads is fixed for one write.
+ */
+function probeKey(c: Check, e: Node, expected: readonly Node[], flags: number, site: ProbeSite): string {
+  const w = c.w
+  // The comparison reads the form of `e` itself where its content ends early (`closedEarly`).
+  const parts: unknown[] = [site, flags, nodeIdOf(w, e), nodeState(c, e)]
+  for (const node of expected) parts.push(nodeIdOf(w, node))
+  const pending = [...expected]
+  for (;;) {
+    const node = pending.pop()
+    if (node === undefined) break
+    for (const child of childNodes(node)) pending.push(child)
+    const state = nodeState(c, node)
+    if (state !== null) parts.push(nodeIdOf(w, node), state)
+  }
+  return JSON.stringify(parts)
+}
+
+/** What the writer and the comparison `c` hold for `node`, or null where it holds nothing. */
+function nodeState(c: Check, node: Node): unknown[] | null {
+  const w = c.w
+  const escapes = node.type === 'text' ? w.escapes.get(node) : undefined
+  const marks = node.type === 'text' ? c.marks.get(node) : undefined
+  const form = w.forms.get(node)
+  const keys = w.lostKeys.get(node)
+  const lost = w.lost.has(node)
+  if (escapes === undefined && marks === undefined && form === undefined && keys === undefined && !lost) return null
+  return [escapes, marks === undefined ? undefined : [...marks], form, keys, lost]
+}
+
+/**
+ * C2-W-088: the content of `e`, written and parsed on its own, holds a construct that the tree
+ * does not, such as a code span that runs on over the closing mark of `e`. The opener of the
+ * leftmost one takes the backslash, then that of the next. A content that does not read as one
+ * paragraph tells nothing.
+ */
+function escapeContentConstruct(c: Check, e: Node): boolean {
+  if (!('children' in e) || e.children.length === 0) return false
+  // A content that opens a block on its own line is read again behind a word, which opens none, and
+  // then with its line breaks as spaces, so that no later line opens one either.
+  const word: Node = standIn(c.w, e, 'word', 'x')
+  const flat = e.children.map((node): Node => (node.type === 'soft_break' ? standIn(c.w, node, 'space', ' ') : node))
+  // A content that starts with a line break reads as a paragraph only behind the word.
+  const variants = isBreak(e.children[0]) ? [[word, ...e.children], [word, ...flat]] : [e.children, [word, ...e.children], [word, ...flat]]
+  for (const expected of variants) {
+    const found = probeEscapes(c, e, expected, contentFlags(c, e), 'content', () => true)
+    if (found !== null) return found
+  }
+  return false
+}
+
+/**
+ * C2-W-088: a construct that opens in the content of the paired node `es[i]` and runs on over its
+ * closing mark into the inlines behind it, as `^[` in emphasis before a `]` behind it, keeps the
+ * node from forming. The content, the closing mark as text and the inlines behind it are probed together.
+ */
+function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]!
+  if (!isPairedMark(e) || !textsBelow(e).some((text) => opensAcross(text.value))) return false
+  const flags = contentFlags(c, e)
+  const spelled = writeInlines(c.w, [e], c.flags)
+  const content = writeInlines(c.w, e.children, flags)
+  const suffix = e.type === 'link' ? spelled.slice(1 + content.length) :
+    spelled.slice(spelled.length - (spelled.length - content.length) / 2)
+  const closer: Node = standIn(c.w, e, 'closer', suffix)
+  const word: Node = standIn(c.w, e, 'word', 'x')
+  let end = i + 1
+  // A label or a bracket pair can run on over a line break (C2-I-076).
+  while (end < es.length && end - i <= MAX_ACROSS) end++
+  const inlines = [...e.children, closer, ...es.slice(i + 1, end)]
+  // The stand-ins for markup take no escape, and neither does a mark of the node in its content,
+  // which asks for the braced form instead (C2-W-069).
+  const mark = CLOSING_MARKS.get(e.type)
+  const own = new Set(textsBelow(e))
+  const takes = (node: TextNode, at: number): boolean => node !== closer && node !== word && !(own.has(node) && node.value[at] === mark)
+  // Bare, a name sigil keeps its boundary; behind a word, no block opens and a leading space stays.
+  return probeEscapes(c, e, inlines, flags, 'across', takes) === true ||
+    probeEscapes(c, e, [word, ...inlines], flags, 'across', takes) === true
+}
+
+// The inlines behind a node that a probe across its closing mark reads, at most.
+const MAX_ACROSS = 16
+
+/** Whether `value` holds the opener of a construct that can run on over a closing mark: a bracket, a backtick, `<`, `{`, `$` or `:`. */
+function opensAcross(value: string): boolean {
+  for (const opener of '[`<{$:') if (value.includes(opener)) return true
+  return false
+}
+
+/** The text nodes below `node`. */
+function textsBelow(node: Node): TextNode[] {
+  return childNodes(node).flatMap((child) => (child.type === 'text' ? [child] : textsBelow(child)))
+}
+
+// The nodes spelled with one mark before and one after their content, or with a brace around those marks.
+const PAIRED_MARKS: readonly string[] = [
+  'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete', 'link',
+]
+
+function isPairedMark(node: Node): node is Node & { children: Node[] } {
+  return PAIRED_MARKS.includes(node.type) && 'children' in node
+}
+
+/**
+ * C2-W-026, C2-W-092: a line inside the content of `e` that has the shape of a block opener may
+ * have opened a block and so ended `e`. The first such line takes the escape of its opener; the
+ * test of C2-W-088 then decides whether it was asked for.
+ */
+function escapeContentLine(c: Check, e: Node): boolean {
+  if (!('children' in e)) return false
+  const nodes = e.children
+  for (let at = 0; at < nodes.length; at++) {
+    const node = nodes[at]!
+    if ('children' in node && escapeContentLine(c, node)) return true
+    const next = nodes[at + 1]
+    if (!isBreak(node) || next?.type !== 'text' || !hasOpenerShape(next) || !opensBlockAlone(c, nodes, at + 1)) continue
+    for (const offset of openerOffsets(next.value)) if (escapeAt(c, next, offset)) return true
+  }
+  return false
+}
+
+/** Whether the line that starts at `nodes[from]`, written alone, opens a block: its parse is no single paragraph. */
+function opensBlockAlone(c: Check, nodes: readonly Node[], from: number): boolean {
+  let end = from
+  while (end < nodes.length && !isBreak(nodes[end])) end++
+  const line = writeInlines(c.w, nodes.slice(from, end), c.flags)
+  const known = c.w.lineOpens.get(line)
+  if (known !== undefined || exhausted(c.w)) return known ?? false
+  const blocks = parseChunk(c.w, line).children
+  const opens = blocks.length !== 1 || blocks[0]!.type !== 'paragraph'
+  c.w.lineOpens.set(line, opens)
+  return opens
+}
+
+/** How far behind the start of the construct `a` its opener takes the backslash (C2-W-090, C2-W-099). */
+function openerShift(a: Node): number {
+  if (a.type === 'image' || a.type === 'literal_inline' || a.type === 'inline_footnote') return 1
+  if (a.type === 'math') return a.display ? 2 : 1
+  if (a.type !== 'smart_punctuation') return 0
+  const source = a.source
+  // The second hyphen, also of the braced en dash `{--}` (C2-I-043).
+  return source.startsWith('{-') ? 2 : source.startsWith('-') ? 1 : 0
+}
+
+/** The text of `e` holds, at `at`, what the parse read as the construct `a`. */
+function escapeOpener(c: Check, e: TextNode, at: number, a: Node): void {
+  const value = e.value
+  let start = at
+  // C2-I-023: a line comment takes the spaces before it.
+  while (start < value.length && (value[start] === ' ' || value[start] === '\t')) start++
+  const shifted = start + openerShift(a)
+  if (escapeAt(c, e, shifted)) {
+    const opener = value[shifted]
+    if ((opener === '[' && isChainOpener(a)) || (opener === '`' && SPAN_TYPES.includes(a.type))) c.chains.push([e, shifted, a])
+  } else if (!escapeAt(c, e, start)) c.losses.push([e, 'value'])
+}
+
+/**
+ * Whether the construct `a` forms from a bracket whatever lies between it and its closer: an inline
+ * link, image, span or inline footnote, and a full or collapsed reference, all of which a closer
+ * takes from the nearest bare bracket before it, and a footnote reference, whose label any later
+ * `[^` before the closer also gives (C2-I-076, C2-I-087).
+ */
+function isChainOpener(a: Node): boolean {
+  if (a.type === 'footnote_ref') return true
+  if (a.type !== 'link' && a.type !== 'image' && a.type !== 'span' && a.type !== 'inline_footnote') return false
+  return !('key' in a && a.key !== undefined) ||
+    ('refForm' in a && (a.refForm === 'full' || a.refForm === 'collapsed' || a.refForm === 'shortcut'))
+}
+
+/** Whether the content of `node`, its text or the alternative text of an image, holds `]`, which may close a bracket of it. */
+function holdsCloser(node: Node): boolean {
+  if (node.type === 'image' && node.alt?.includes(']') === true) return true
+  return childNodes(node).some((child) => (child.type === 'text' ? child.value.includes(']') : holdsCloser(child)))
+}
+
+/**
+ * The bracket at `at` of the text `node` opened the construct `a`, which `isChainOpener` names.
+ * Once it is escaped, another bare bracket of the same run forms the same construct with the same
+ * closer, so the procedure of C2-W-088 escapes the brackets of the run one per parse, and they are
+ * placed in one round. A closer takes the nearest open bracket before it, so the brackets of the
+ * run before it form in turn. The brackets behind it were open but past the depth limit of 200
+ * where no `]` of the content closes them (C2-I-118), and they form in turn too. The label of a
+ * footnote reference holds every later `[^` of the run, and it forms only from those.
+ */
+function escapeBrackets(c: Check, node: TextNode, at: number, a: Node): void {
+  const value = node.value
+  const [start, end] = bracketRun(value, at)
+  // The closer stands in this text: one in a later node, such as a code span, can be taken from it by another construct.
+  if (!value.includes(']', end)) return
+  if (a.type === 'footnote_ref') return escapeLabels(c, node, at, end)
+  // Only a bracket with the sigil of this one opens the same construct, and a bare `[^` opens no bracket pair (C2-I-087).
+  const sigil = sigilOf(value, at)
+  const opens = (k: number): boolean => sigilOf(value, k) === sigil && (sigil === '^' || value[k + 1] !== '^')
+  for (let k = at - 1; k >= start; k--) {
+    if (value[k] !== '[') continue
+    if (!opens(k)) break
+    escapeAt(c, node, k)
+  }
+  // Behind it, a bracket that the content closes stops the run.
+  if (holdsCloser(a)) return
+  for (let k = at + 1; k < end; k++) {
+    if (value[k] !== '[') continue
+    if (!opens(k)) return
+    escapeAt(c, node, k)
+  }
+}
+
+/** The image or footnote sigil glued before the bracket at `at`, or none. */
+function sigilOf(value: string, at: number): string {
+  const before = value[at - 1]
+  return before === '!' || before === '^' ? before : ''
+}
+
+/** The start and the end of the run of brackets around `at`, each with an image or footnote sigil at most. */
+function bracketRun(value: string, at: number): [number, number] {
+  const inRun = (k: number): boolean => value[k] === '[' || ((value[k] === '!' || value[k] === '^') && value[k + 1] === '[')
+  let start = at
+  while (start > 0 && inRun(start - 1)) start--
+  let end = at + 1
+  while (end < value.length && inRun(end)) end++
+  return [start, end]
+}
+
+/** The `[^` behind the footnote reference at `at`, up to the run end `end`, each with more of the run behind it for a label (C2-I-079). */
+function escapeLabels(c: Check, node: TextNode, at: number, end: number): void {
+  const value = node.value
+  for (let k = at + 1; k < end; k++) {
+    if (value[k] !== '[') continue
+    if (value[k + 1] !== '^' || k + 2 >= end) return
+    escapeAt(c, node, k)
+  }
+}
+
+// The constructs a backtick run opens, alone or behind `!` or `$` (C2-I-014, C2-I-018).
+const SPAN_TYPES: readonly string[] = ['code', 'literal_inline', 'math']
+
+interface BacktickIndex {
+  offsets: Map<number, number>
+  lastBare: number
+}
+
+/** C2-W-088: source offsets and the last bare backtick, read once for all chains in a comparison. */
+function backtickIndex(source: string, wanted: number[]): BacktickIndex {
+  const offsets = new Map<number, number>()
+  const bytes = [...new Set(wanted)].sort((a, b) => a - b)
+  let next = 0
+  let byte = 0
+  let slashes = 0
+  let lastBare = -1
+  for (let at = 0; at < source.length;) {
+    const units = isSecondHalf(source, at + 1) ? 2 : 1
+    const width = units === 2 ? 4 : unitBytes(source, at)
+    while (next < bytes.length && bytes[next]! < byte + width) offsets.set(bytes[next++]!, at)
+    const char = source[at]
+    if (char === '`' && slashes % 2 === 0) lastBare = at
+    slashes = char === '\\' ? slashes + 1 : 0
+    byte += width
+    at += units
+  }
+  while (next < bytes.length) offsets.set(bytes[next++]!, source.length)
+  return { offsets, lastBare }
+}
+
+/** C2-W-088: each equal-length run before the last one becomes the next opener when the one before it is escaped. */
+function escapeFollowingRuns(c: Check, node: TextNode, from: number, width: number): void {
+  const value = node.value
+  const starts: number[] = []
+  for (let start = value.indexOf('`', from); start >= 0;) {
+    let end = start + 1
+    while (value[end] === '`') end++
+    if (end - start !== width) return
+    starts.push(start)
+    start = value.indexOf('`', end)
+  }
+  for (let at = 0; at + 1 < starts.length; at++) escapeAt(c, node, starts[at]!)
+}
+
+/**
+ * The backtick at `at` of the text `node` opened the code span `a`, which has no closing run: no
+ * bare backtick stands behind its run in the written group. Escaped, the shorter run behind it
+ * opens a span to the same end, which changes nothing before it, so the procedure of C2-W-088
+ * escapes each backtick of the run in turn (C2-I-017). They are placed in one round.
+ */
+function escapeBackticks(c: Check, node: TextNode, at: number, a: Node, index: BacktickIndex | null): void {
+  const source = c.source
+  const value = node.value
+  let run = at
+  while (value[run] === '`') run++
+  if (source === null) return
+  if (a.pos === undefined || index === null) {
+    escapeFollowingRuns(c, node, run, run - at)
+    return
+  }
+  let start = source.indexOf('`', index.offsets.get(a.pos.startOffset) ?? source.length)
+  if (start < 0) return
+  const end = start + run - at
+  while (start < end && source[start] === '`') start++
+  if (start !== end || source[end] === '`') return
+  if (index.lastBare >= end) return
+  for (let k = at + 1; k < run; k++) escapeAt(c, node, k)
+}
+
+/** Extends the escapes of `chains` that this round places by the escapes the procedure would place behind each, one per parse. */
+export function extendChains(c: Check): void {
+  if (c.chains.length === 0) return
+  const placed = new Map<TextNode, Set<number>>()
+  for (const [node, at] of c.escapes) placed.set(node, (placed.get(node) ?? new Set()).add(at))
+  const backticks = c.chains.filter(([node, at, a]) => placed.get(node)?.has(at) === true && node.value[at] === '`' &&
+    a.pos !== undefined)
+  const offsets = backticks.flatMap(([, , a]) => a.pos === undefined ? [] : [a.pos.startOffset])
+  const index = c.source === null || offsets.length === 0 ? null : backtickIndex(c.source, offsets)
+  for (const [node, at, a] of c.chains) {
+    if (placed.get(node)?.has(at) !== true) continue
+    if (node.value[at] === '`') escapeBackticks(c, node, at, a, index)
+    else escapeBrackets(c, node, at, a)
+  }
+}
+
+/** The cursor of a comparison of two inline lists: the next node of each, and the offset in a text of each. */
+interface Cursor {
+  i: number
+  vi: number
+  j: number
+  aj: number
+  /** The last node of the expected list that started where a node of the parse starts, and the byte offset of that start, or -1. */
+  anchor: number
+  anchorByte: number
+}
+
+function isPaired(node: Node): node is EmphasisNode | StrongNode {
+  return node.type === 'emphasis' || node.type === 'strong'
+}
+
+/** Asks for a backslash before the first bare `mark` in the text below `nodes`, from the offset `from` of the first node on. */
+function escapeMark(c: Check, nodes: readonly Node[], start: number, from: number, mark: string): boolean {
+  for (let at = start; at < nodes.length; at++) {
+    const node = nodes[at]!
+    if (node.type !== 'text') {
+      if ('children' in node && escapeMark(c, node.children, 0, 0, mark)) return true
+      continue
+    }
+    const value = node.value
+    for (let k = value.indexOf(mark, at === start ? from : 0); k >= 0; k = value.indexOf(mark, k + 1)) if (escapeAt(c, node, k)) return true
+  }
+  return false
+}
+
+/**
+ * The content of an emphasis or strong node ended in the parse at the offset `vi` of `es[i]`: a
+ * delimiter in the content closed it. C2-W-069: the braced form holds such content; where the
+ * node is braced already, the delimiter takes a backslash (C2-W-093).
+ */
+function closedEarly(c: Check, es: readonly Node[], i: number, vi: number, owner: Node): void {
+  const mark = CLOSING_MARKS.get(owner.type)
+  if (isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
+  else if (mark === undefined || !escapeMark(c, es, i, vi, mark)) c.losses.push([owner, null])
+}
+
+/**
+ * The start of the line that ended the leaf, from the first line `from` that the parse does not
+ * hold. C2-B-102: a block takes the attribute lines directly above it, so the line that opened
+ * the block is the first one behind such lines.
+ */
+function openerLine(es: readonly Node[], from: number): number {
+  let at = from
+  while (at + 2 < es.length && isBraceLine(es[at]) && isBreak(es[at + 1])) at += 2
+  return at
+}
+
+function isBraceLine(node: Node | undefined): boolean {
+  return node?.type === 'text' && node.value.startsWith('{') && node.value.endsWith('}')
+}
+
+/** The content of `owner` ended in the parse before the expected node `es[i]`. */
+function endedEarly(c: Check, es: readonly Node[], i: number, owner: Node): void {
+  // C2-W-016: a line that holds only a CR, and spaces, is a blank line once the line ending takes the CR.
+  const line = isBreak(es[i]) ? es[i + 1] : undefined
+  if (line?.type === 'text' && endsLineWithCr(line.value, 0)) {
+    c.losses.push([line, 'value'])
+    return
+  }
+  // C2-W-097: a backslash at the end of the text before took the markup of this node. A line break has no markup to take.
+  if (i > 0 && !isBreak(es[i]) && escapeEnd(c, lastText(es[i - 1]), false)) return
+  // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
+  if (i > 0 && isBreak(es[i - 1])) escapeLineStart(c, es, openerLine(es, i), owner)
+  else if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, i, 0, owner)
+  else if (isBreak(es[i]) && i + 1 < es.length) escapeLineStart(c, es, openerLine(es, i + 1), owner)
+  else c.losses.push([es[i] ?? owner, null])
+}
+
+/** Steps over the characters that the expected text `e` and the parsed text `a` share at the cursor. False where they differ. */
+function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolean {
+  const value = e.value
+  const other = a.value
+  const length = Math.min(value.length - at.vi, other.length - at.aj)
+  for (let k = 0; k < length; k++) {
+    if (value.charCodeAt(at.vi + k) === other.charCodeAt(at.aj + k)) continue
+    // The parse read a character of the text as markup, such as a backslash before punctuation (C2-W-097).
+    if (!escapeAt(c, e, at.vi + k)) c.losses.push([e, 'value'])
+    return false
+  }
+  at.vi += length
+  at.aj += length
+  if (at.aj === other.length) {
+    at.j++
+    at.aj = 0
+  }
+  return true
+}
+
+/**
+ * Compares the expected text at the cursor with the parse. Returns false where the lists cannot
+ * be compared further.
+ */
+/** The parse ended inside the text node `es[at.i]` of `owner`. */
+function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node): boolean {
+  // C2-W-016: a CR that ends a line is read as part of the line ending, and no spelling keeps it,
+  // nor the spaces before it, which then end the line.
+  if (es[at.i]?.type === 'text' && endsLineWithCr((es[at.i] as TextNode).value, at.vi)) {
+    c.losses.push([es[at.i]!, 'value'])
+    return false
+  }
+  // C2-W-093: the node before took this text into its content, its mark closing the node in place of the node's own.
+  if (at.vi === 0 && at.i > 0 && startsWithCloser(es[at.i - 1]!, es[at.i]) && escapeAt(c, es[at.i] as TextNode, 0)) return false
+  // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
+  if (at.vi === 0 && at.i > 0 && isBreak(es[at.i - 1])) escapeLineStart(c, es, openerLine(es, at.i), owner)
+  else if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
+  else c.losses.push([owner, null])
+  return false
+}
+
+/** Whether `next` is text that starts with the closing mark of `node`. */
+function startsWithCloser(node: Node, next: Node | undefined): boolean {
+  const mark = CLOSING_MARKS.get(node.type)
+  return mark !== undefined && next?.type === 'text' && next.value.startsWith(mark)
+}
+
+/** The text node `es[at.i]` is matched to its end; the parse may hold more text behind it. */
+function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor, owner: Node): boolean {
+  at.i++
+  at.vi = 0
+  if (at.aj === 0 || es[at.i]?.type === 'text') return true
+  // The parse has more text here: the node after the text did not form. At the end of the content
+  // the closing mark did not close, as a mark of the content glued to it makes a longer run (C2-W-093).
+  if (es[at.i] === undefined) {
+    // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark.
+    if (!escapeInContent(c, owner) && !escapeEnd(c, lastText(owner), true)) c.losses.push([owner, null])
+  }
+  else if (at.j + 1 >= as.length && isPaired(owner) && !joinsNext(es, at.i)) closedEarly(c, es, at.i, 0, owner)
+  else return respell(c, es, at.i) && stepOver(c, es, as, at)
+  return false
+}
+
+function matchText(c: Check, e: TextNode, es: readonly Node[], as: readonly Node[], at: Cursor, owner: Node): boolean {
+  const value = e.value
+  const a = as[at.j]
+  if (a === undefined) return parseEndsInText(c, es, at, owner)
+  if (a.type !== 'text') return skipConstruct(c, e, es, a, at)
+  if (!matchCharacters(c, e, a, at)) return false
+  return at.vi < value.length || afterTextNode(c, es, as, at, owner)
+}
+
+/**
+ * The node `es[at.i]` did not form, so its markup stands in the text of the parse. Steps over it
+ * there, so that one round also finds what behind it did not read back (C2-W-091). False where
+ * the text of the parse does not hold the node as it was written.
+ */
+function stepOver(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
+  const a = as[at.j]
+  const spelled = writeInlines(c.w, [es[at.i]!], c.flags)
+  // An escape in the node is one character of the text, so the two do not compare by length.
+  if (a?.type !== 'text' || spelled.includes('\\') || !a.value.startsWith(spelled, at.aj)) return false
+  at.aj += spelled.length
+  if (at.aj === a.value.length) {
+    at.j++
+    at.aj = 0
+  }
+  at.i++
+  return true
+}
+
+/** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
+function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor): boolean {
+  if (comparisonBehindQuote(es[at.i - 2], es[at.i - 1], e, at.vi, a)) escapeAt(c, e, at.vi + 1)
+  else escapeOpener(c, e, at.vi, a)
+  const pos = a.pos
+  if (pos === undefined) return false
+  const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, c.flags)
+  if (end < 0) return false
+  at.vi = end
+  at.j++
+  if (at.vi === e.value.length) {
+    at.i++
+    at.vi = 0
+  }
+  return true
+}
+
+/** C2-W-125, case seven: escaping a comparison's first character would turn the preceding right quote left. */
+function comparisonBehindQuote(prior: Node | undefined, before: Node | undefined,
+  text: TextNode, at: number, parsed: Node): boolean {
+  const neighbor = prior?.type === 'text' ? prior.value.at(-1) : undefined
+  return before?.type === 'smart_punctuation' &&
+    (before.kind === 'right_single_quote' || before.kind === 'right_double_quote') &&
+    (neighbor === '/' || neighbor === '-') &&
+    parsed.type === 'smart_punctuation' &&
+    (parsed.kind === 'not_equal' || parsed.kind === 'less_than_or_equal' || parsed.kind === 'greater_than_or_equal') &&
+    '!<>'.includes(text.value[at] ?? '') && text.value[at + 1] === '='
+}
+
+/**
+ * Whether the parse read `es[i]` differently because of the text beside it, which then takes a
+ * backslash. C2-I-036: a brace block in the text behind a host was read as its attributes.
+ * C2-I-105: the side a quote opens to, and the length of a dash, follow from the characters around.
+ */
+function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Node): boolean {
+  const next = textAt(es, i + 1)
+  if (next !== null && !sameValue(e.attrs, a.attrs) && next.value.startsWith('{')) return escapeAt(c, next, 0)
+  // C2-I-015: a backtick behind a closing run makes it longer, so the span reads on into the text behind it.
+  // C2-I-090: a name character behind a mention or a tag makes the name longer.
+  if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
+  if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
+  if (next !== null && escapeSmartNeighbor(c, next)) return true
+  const before = textAt(es, i - 1)
+  return before !== null && escapeAt(c, before, before.value.length - 1)
+}
+
+function escapeSmartNeighbor(c: Check, next: TextNode): boolean {
+  return moveSigilEscape(c, next) || escapeComparison(c, next) || escapeAt(c, next, 0)
+}
+
+/** C2-W-125, case seven: the second character of a comparison sign can take the escape without flipping a quote. */
+function escapeComparison(c: Check, next: TextNode): boolean {
+  const value = next.value
+  if (value.length < 2 || !'!<>'.includes(value[0]!) || value[1] !== '=') return false
+  return escapeAt(c, next, 1)
+}
+
+/**
+ * C2-W-125, case seven: the escape of the sigil opener `:name[` at the start of `next` changed the
+ * direction of the quote before it, so the backslash goes before the bracket of that opener.
+ */
+function moveSigilEscape(c: Check, next: TextNode): boolean {
+  const value = next.value
+  if (value[0] !== ':' || !isEscaped(c, next, 0)) return false
+  let bracket = 1
+  while (bracket < value.length && isExtensionNameChar(value.charCodeAt(bracket))) bracket++
+  if (bracket === 1 || value[bracket] !== '[' || isEscaped(c, next, bracket)) return false
+  c.retracted.push([next, 0])
+  mark(c, next, 0, false)
+  return escapeAt(c, next, bracket)
+}
+
+/** Whether the text `next` can read on into the end of the spelling of `node`: a closing backtick run, or a name. */
+function readsOn(node: Node, next: TextNode): boolean {
+  if (node.attrs !== undefined) return false
+  if (node.type === 'mention' || node.type === 'tag') return true
+  return (node.type === 'code' || node.type === 'literal_inline' || node.type === 'math') && next.value.startsWith('`')
+}
+
+function textAt(nodes: readonly Node[], at: number): TextNode | null {
+  const node = nodes[at]
+  return node?.type === 'text' ? node : null
+}
+
+function isLostCode(c: Check, node: Node | undefined): boolean {
+  return node !== undefined && node.type === 'code' && c.w.lost.has(node)
+}
+
+/** Compares an expected node that is no text with the parse. Returns false where the lists cannot be compared further. */
+function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], at: Cursor, owner: Node): boolean {
+  const a = as[at.j]
+  if (a === undefined) {
+    endedEarly(c, es, at.i, owner)
+    return false
+  }
+  if (a.type !== e.type || at.aj > 0) return respell(c, es, at.i) && stepOver(c, es, as, at)
+  if (isLostCode(c, es[at.i + 1])) {
+    // C2-W-112: the code spans behind this one were written into it and reported.
+    at.i++
+    while (isLostCode(c, es[at.i])) at.i++
+    at.j++
+    return true
+  }
+  if (readsNeighbor(c, e, es, at.i, a)) return false
+  repairCommentCloser(c, es, at.i, e, a)
+  compareInline(c, e, a)
+  at.i++
+  at.j++
+  return true
+}
+
+function repairCommentCloser(c: Check, es: readonly Node[], at: number, expected: Node, actual: Node): void {
+  if (expected.type !== 'comment' || actual.type !== 'comment' || expected.form !== 'line') return
+  if (!expected.value.includes(']') && actual.value.includes(']')) {
+    if (!repairBracketBeforeComment(c, es, at)) repairBraceBeforeComment(c, es, at)
+    return
+  }
+  if (!expected.value.includes(']') || actual.value.includes(']')) return
+  const before = es[at - 1]
+  if (before?.type !== 'text') return
+  for (const bracket of bracketsBeforeComment(before.value)) if (escapeAt(c, before, bracket)) return
+}
+
+/** The adjacent open braces remain text when the final bracket or caret keeps the comment inside its bracket. */
+function repairBracketBeforeComment(c: Check, es: readonly Node[], at: number): boolean {
+  const before = es[at - 1]
+  if (before?.type !== 'text' || !before.value.includes('[{*{*')) return false
+  if (before.value.slice(before.value.lastIndexOf('[')).includes('{*')) return false
+  const last = before.value.length - 1
+  return (before.value[last] === ']' || before.value[last] === '^') && escapeAt(c, before, last)
+}
+
+function bracketsBeforeComment(value: string): number[] {
+  const open: number[] = []
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === '[') open.push(index)
+    else if (value[index] === ']' && open.length > 0) open.pop()
+  }
+  return open
+}
+
+function repairBraceBeforeComment(c: Check, es: readonly Node[], at: number): void {
+  for (let index = at - 1; index >= 0; index--) {
+    const node = es[index]
+    if (node?.type === 'soft_break' || node?.type === 'hard_break') return
+    if (node?.type !== 'text') continue
+    for (let brace = node.value.length - 2; brace >= 0; brace--) {
+      if (node.value[brace] === '{' && '*/-='.includes(node.value[brace + 1]!) && escapeAt(c, node, brace)) return
+    }
+  }
+}
+
+/** Notes the place of the cursor where both lists start a node there. A line break ends the line the offsets hold on. */
+function setAnchor(es: readonly Node[], as: readonly Node[], at: Cursor): void {
+  if (at.vi !== 0 || at.aj !== 0) return
+  const pos = as[at.j]?.pos
+  if (isBreak(es[at.i])) at.anchor = -1
+  else if (pos !== undefined) {
+    at.anchor = at.i
+    at.anchorByte = pos.startOffset
+  }
+}
+
+/**
+ * After the two lists could not be compared further: moves the cursor to the next node of the
+ * expected list at whose start, on the same line, a node of the parse starts too. Both lists
+ * are parses of one source, so they can be compared again from there, and one round finds the
+ * other deviations of the line (C2-W-091). False where there is no such place.
+ */
+/** The first parsed node from `j` on that starts at `offset` or later. */
+function firstNodeFrom(as: readonly Node[], j: number, offset: number): number {
+  while (j < as.length && (as[j]!.pos?.startOffset ?? -1) < offset) j++
+  return j
+}
+
+function resumeAt(at: Cursor, i: number, j: number): boolean {
+  at.i = i
+  at.j = j
+  at.vi = 0
+  at.aj = 0
+  return true
+}
+
+function resync(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
+  const failed = as[at.j]?.pos
+  if (at.anchor < 0 || failed === undefined) return false
+  let offset = at.anchorByte
+  let j = at.j
+  for (let k = at.anchor; k < es.length && !isBreak(es[k]); k++) {
+    j = firstNodeFrom(as, j, offset)
+    if (k > at.i && offset >= failed.endOffset && as[j]?.pos?.startOffset === offset) return resumeAt(at, k, j)
+    offset += utf8Length(writeInlines(c.w, [es[k]!], c.flags))
+  }
+  return false
+}
+
+function compareInlines(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
+  const outer = c.owner
+  c.owner = owner
+  compareList(c, es, as, owner)
+  c.owner = outer
+}
+
+function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
+  const at: Cursor = { i: 0, vi: 0, j: 0, aj: 0, anchor: -1, anchorByte: 0 }
+  while (at.i < es.length) {
+    setAnchor(es, as, at)
+    const e = es[at.i]!
+    const more = e.type === 'text' ? matchText(c, e, es, as, at, owner) : matchNode(c, e, es, as, at, owner)
+    if (!more && !resync(c, es, as, at)) return
+  }
+  if (at.j < as.length) c.losses.push([owner, null])
+}
+
+/** Compares a node that the writer took from the sidecar as it was typed: any difference sends it back to the tree form. */
+function compareRaw(c: Check, e: Node, a: Node): void {
+  const probe = createCheck(c.w)
+  probe.flags = c.flags
+  compareFields(probe, e, a)
+  if ('children' in e) compareInlines(probe, e.children, childNodes(a), e)
+  // A difference behind another change of this round may come from that change, so the next round decides.
+  if (changes(probe) + probe.losses.length > 0 && changes(c) === 0) changeForm(c, e)
+  else if (changes(probe) + probe.losses.length > 0) c.misaligned = true
+}
+
+function compareFields(c: Check, e: Node, a: Node): void {
+  const field = differingField(c, e, a)
+  if (field !== null) c.losses.push([e, field])
+}
+
+function compareInline(c: Check, e: Node, a: Node): void {
+  if (sourceCoreEquivalent(e, a)) return
+  if ('key' in e && e.key !== undefined && hasOtherForm(c, e)) return compareRaw(c, e, a)
+  compareFields(c, e, a)
+  if (!('children' in e)) return
+  const outer = c.flags
+  if (e.type === 'emphasis') c.flags |= IN_EMPHASIS
+  else if (e.type === 'strong') c.flags |= IN_STRONG
+  else if (e.type === 'link') c.flags |= IN_BRACKET
+  compareInlines(c, e.children, childNodes(a), e)
+  c.flags = outer
+}
+
+/** The block `e` read back as a block of another type. */
+function blockMismatch(c: Check, e: Node): void {
+  c.misaligned = true
+  // C2-W-092: the first line of a paragraph read as a block opener.
+  if (e.type === 'paragraph' && e.children.length > 0) escapeLineStart(c, e.children, 0, e)
+  else c.losses.push([e, null])
+}
+
+/** The block `e` has no block in the parse: the block above it took its lines. */
+function missingBlock(c: Check, e: Node): void {
+  // C2-W-016: a paragraph whose line holds only a CR, and spaces, is a blank line once the line ending takes the CR.
+  const first = e.type === 'paragraph' ? e.children[0] : undefined
+  if (first?.type === 'text' && endsLineWithCr(first.value, 0)) {
+    c.losses.push([first, 'value'])
+    return
+  }
+  // C2-W-092: a paragraph that reads as a line of the block above. C2-W-059: a comment stands behind a blank line instead.
+  if (e.type === 'paragraph' && e.children.length > 0) escapeLineStart(c, e.children, 0, e)
+  else if (hasOtherForm(c, e)) changeForm(c, e)
+  else c.losses.push([e, null])
+}
+
+function hasSpanMarks(table: TableNode): boolean {
+  for (const group of table.children) {
+    if (group.type !== 'comment' && group.children.some(rowHasSpanMarks)) return true
+  }
+  return false
+}
+
+function rowHasSpanMarks(row: TableRowNode | CommentNode): boolean {
+  return row.type === 'table_row' && row.children.some((cell) => cell.span !== undefined)
+}
+
+function compareSlots(c: Check, e: Node, a: Node): void {
+  const title = titleOf(e)
+  const parsedTitle = titleOf(a)
+  if (title !== undefined) compareInlines(c, title, parsedTitle ?? [], e)
+  else if (parsedTitle !== undefined) c.losses.push([e, 'title'])
+  const caption = captionOf(e)
+  const parsedCaption = captionOf(a)
+  if (caption !== undefined && parsedCaption !== undefined) compareBlock(c, caption, parsedCaption)
+  else if (caption !== parsedCaption) c.losses.push([caption ?? e, caption === undefined ? 'caption' : null])
+}
+
+/** Compares one block with its parse. Returns false where the blocks behind it cannot be compared. */
+function compareBlock(c: Check, e: Node, a: Node): boolean {
+  if (c.w.lost.has(e)) return true
+  if (sourceCoreEquivalent(e, a)) return true
+  if (e.type !== a.type) {
+    blockMismatch(c, e)
+    return false
+  }
+  const marks = c.spanMarks
+  const flags = c.flags
+  if (e.type === 'table' && a.type === 'table') c.spanMarks = hasSpanMarks(e) || hasSpanMarks(a)
+  if (e.type === 'table_cell') c.flags |= IN_CELL
+  compareFields(c, e, a)
+  if (isInlineParent(e)) compareInlines(c, e.children, childNodes(a), e)
+  // C2-N-081: the children of an include are a result of its expansion, which the source does not hold.
+  else if (e.type !== 'include') compareBlocks(c, childNodes(e), childNodes(a), e)
+  compareSlots(c, e, a)
+  c.spanMarks = marks
+  c.flags = flags
+  return true
+}
+
+/** The places at which the parse `node` has a paragraph, and the lines at which it has a block, from the blocks below it. */
+function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: Set<number>): void {
+  for (const block of childNodes(node)) {
+    const pos = block.pos
+    if (pos !== undefined) {
+      lines.add(pos.startLine - offset)
+      if (block.type === 'paragraph') paragraphs.add((pos.startLine - offset) * PLACE_COLUMNS + pos.startColumn - 1)
+    }
+    if (!isInlineParent(block)) readStarts(block, offset, paragraphs, lines)
+    const caption = captionOf(block)
+    if (caption !== undefined) readStarts(caption, offset, paragraphs, lines)
+  }
+}
+
+/** Whether the text at the start of a line has the shape of a block opener: punctuation, or a marker of digits or letters. */
+function hasOpenerShape(node: Node | undefined): boolean {
+  const value = node?.type === 'text' ? node.value : ''
+  if (value === '') return node !== undefined && node.type !== 'text'
+  return !isAsciiAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
+}
+
+/** Whether the escapes of this round already touch `node`. */
+function isPending(c: Check, node: Node | undefined): boolean {
+  return node?.type === 'text' && c.marks.has(node)
+}
+
+/**
+ * Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a
+ * block. A line can start inside an inline node, such as emphasis or an inline footnote over two lines.
+ */
+function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>): void {
+  const top = e.children
+  if (!paragraphs.has(place) && hasOpenerShape(top[0]) && !isPending(c, top[0])) escapeLineStart(c, top, 0, e)
+  let line = Math.floor(place / PLACE_COLUMNS)
+  const visit = (nodes: readonly Node[]): void => {
+    for (let at = 0; at < nodes.length; at++) {
+      const node = nodes[at]!
+      if ('children' in node) visit(node.children)
+      if (!isBreak(node)) continue
+      line++
+      if (lines.has(line) && hasOpenerShape(nodes[at + 1]) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
+    }
+  }
+  visit(top)
+}
+
+/**
+ * After a block read back as another block, the blocks behind it are not compared one by one.
+ * This finds the other lines of the group that opened a block, by the lines at which the parse
+ * `parsed` has one, so that one round escapes all of them (C2-W-092). `offset` is the line of
+ * the parse at which the group starts.
+ */
+export function escapeOpeners(c: Check, parsed: DocumentNode, offset: number): void {
+  if (!c.misaligned) return
+  const paragraphs = new Set<number>()
+  const lines = new Set<number>()
+  readStarts(parsed, offset, paragraphs, lines)
+  for (const [node, place] of c.w.starts) {
+    if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, paragraphs, lines)
+  }
+}
+
+/** Compares the blocks `es` of `owner`, as they were written, with their parse `as`. */
+export function compareBlocks(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
+  const before = changes(c)
+  const count = Math.min(es.length, as.length)
+  for (let at = 0; at < count; at++) if (!compareBlock(c, es[at]!, as[at]!)) return
+  // What a lost block was written as has its own count of blocks.
+  if (es.length === as.length || changes(c) > before || es.some((e) => c.w.lost.has(e))) return
+  // A line of a line block that reads as its closer ends the block (C2-B-123).
+  const missing = es[as.length]
+  // The blocks below differ in number, so a line of one of them may have opened a block (C2-W-092).
+  c.misaligned = true
+  if (owner.type === 'line_block' && missing !== undefined) escapeLineStart(c, childNodes(missing), 0, missing)
+  else if (es.length > as.length) missingBlock(c, es[as.length]!)
+  else c.losses.push([owner, null])
+}

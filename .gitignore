@@ -4,12 +4,13 @@ coverage/
 .vitest-cache/
 *.log
 .DS_Store
-# Generated demo output (regenerable via examples/static-mode-demo.mjs)
-examples/static-mode-demo.*.html
-
 # Working design docs - never committed
 docs/superpowers/
 
 # Scratch files (`_`-prefixed) are never part of the repository.
 _*
 !_*/
+
+# Written in CI for the cross-check of the specification (scripts/write-example-inputs.ts).
+/data/examples.json
+build/
