@@ -165,3 +165,17 @@ function flattenRow(ctx: Context, row: Node01): void {
 export function wrappedCodeTableRow(ctx: Context): void {
   for (const { node } of ctx.visits) if (node.pos !== undefined && wrappedCodeRow(node)) flattenRow(ctx, node)
 }
+
+/** U-376 also applies when another rule moves the same abbreviation definition. */
+export function abbreviationSpaces(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'abbreviation_def' || node.pos === undefined) continue
+    const start = node.pos.startOffset
+    const source = ctx.src.slice(start, lineEnd(ctx.lines, node.pos.startLine))
+    const match = /^\*\[[^\]\n]+\]:( {2,})/u.exec(source)
+    if (match?.[1] === undefined) continue
+    const from = start + match[0].length - match[1].length + 1
+    change(ctx, 'U-376', from, from + match[1].length - 1, '',
+      'extra abbreviation separator spaces removed so the expansion keeps its 0.1 title')
+  }
+}

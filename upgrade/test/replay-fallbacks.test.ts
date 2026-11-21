@@ -45,4 +45,13 @@ describe('replay fallback families', () => {
     expect(result.output).toBe('\n> | x y | a `b c` |\n')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
+
+  it('combines abbreviation separator cleanup with definition and attribute moves', () => {
+    const input = ' *[HTML]:  Long Form\n{#_id ._c _k=1 _="on click"}\n\nThe [HTML]{.x} key.\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-376')
+    expect(result.output).toContain('*[HTML]: Long Form')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
 })
