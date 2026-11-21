@@ -17,6 +17,18 @@ export function literalQuoteAfterAttributes(ctx: Context): void {
   }
 }
 
+/** The longest backtick run of the body that 0.2 would close the fence at, 0 for none; the fence must exceed it. */
+function longestBodyRun(ctx: Context, firstLine: number, lastLine: number, width: number): number {
+  const closer = lineText(ctx.lines, lastLine)
+  let longest = 0
+  for (let line = firstLine + 1; line < lastLine; line++) {
+    const value = lineText(ctx.lines, line)
+    const run = /^[ \t]*(`+)[ \t]*$/u.exec(value)?.[1]?.length ?? 0
+    if (run >= width && value !== closer) longest = Math.max(longest, run)
+  }
+  return longest
+}
+
 /** Widen a fence when 0.1 kept an indented run in its body that 0.2 closes. */
 export function innerFenceRun(ctx: Context): void {
   for (const { node } of ctx.visits) {
@@ -27,17 +39,14 @@ export function innerFenceRun(ctx: Context): void {
     const closer = lineText(ctx.lines, lastLine)
     const start = /^( *)(`{3,})(.*)$/u.exec(opener)
     if (start === null || closer !== `${start[1]}${start[2]}`) continue
-    let inner = false
-    for (let line = firstLine + 1; line < lastLine; line++) {
-      const value = lineText(ctx.lines, line)
-      if (value.trim() === start[2] && value !== closer) { inner = true; break }
-    }
-    if (!inner) continue
+    const longest = longestBodyRun(ctx, firstLine, lastLine, start[2]!.length)
+    if (longest === 0) continue
+    const marks = '`'.repeat(longest + 1 - start[2]!.length)
     const message = 'fence widened so an indented body run stays literal'
     const first = lineStart(ctx.lines, firstLine) + (start[1] ?? '').length
     const last = lineStart(ctx.lines, lastLine) + (start[1] ?? '').length
-    change(ctx, 'U-049', first, first, '`', message)
-    change(ctx, 'U-049', last, last, '`', message)
+    change(ctx, 'U-049', first, first, marks, message)
+    change(ctx, 'U-049', last, last, marks, message)
   }
 }
 
@@ -291,24 +300,36 @@ export function lazyCaretAfterQuote(ctx: Context): void {
   }
 }
 
+const VERBATIM: ReadonlySet<string> = new Set(['code', 'code_block', 'math', 'raw_inline', 'raw_block'])
+
+/** Whether `at` is inside the text of a 0.1 code, math or raw node, where a backslash would be text. */
+function verbatimAt(ctx: Context): (at: number) => boolean {
+  const ranges: [number, number][] = []
+  for (const { node } of ctx.visits) {
+    if (VERBATIM.has(node.type) && node.pos !== undefined) ranges.push([node.pos.startOffset, node.pos.endOffset])
+  }
+  return (at) => ranges.some(([start, end]) => start <= at && at < end)
+}
+
 /** A narrow space made these 0.1 link forms literal, including references to such definitions. */
 export function literalNarrowSpaceLinks(ctx: Context): void {
   if (ctx.findings.some(({ record }) => record.entry === 'U-258')) return
+  const verbatim = verbatimAt(ctx)
   const literalRefs = new Set<string>()
   for (const match of ctx.src.matchAll(/(?<!\\)\[([^\]\n]+)\]:[^\n]*\u202f[^\n]*/gu)) {
     const start = match.index
-    if (start === undefined) continue
+    if (start === undefined || verbatim(start)) continue
     literalRefs.add(match[1]!)
     change(ctx, 'U-132', start, start, '\\', 'old literal reference definition kept as text')
   }
   for (const match of ctx.src.matchAll(/(?<!\\)\[[^\]\n]+\]\([^\n)]*\u202f[^\n)]*\)/gu)) {
-    if (match.index !== undefined) change(ctx, 'U-132', match.index, match.index, '\\',
+    if (match.index !== undefined && !verbatim(match.index)) change(ctx, 'U-132', match.index, match.index, '\\',
       'old literal link with a narrow space kept as text')
   }
   if (literalRefs.size === 0) return
   for (const match of ctx.src.matchAll(/(?<!\\)\[[^\]\n]+\]\[([^\]\n]+)\]/gu)) {
-    if (match.index !== undefined && literalRefs.has(match[1]!)) change(ctx, 'U-132', match.index, match.index, '\\',
-      'reference to an old literal definition kept as text')
+    if (match.index !== undefined && literalRefs.has(match[1]!) && !verbatim(match.index)) change(ctx, 'U-132',
+      match.index, match.index, '\\', 'reference to an old literal definition kept as text')
   }
 }
 
@@ -356,6 +377,7 @@ function moveFence(ctx: Context, { first, last, indent, entry, closer }: NonNull
 /** Literal 0.1 include text keeps its sigil words from becoming 0.2 mentions. */
 export function literalIncludeMentions(ctx: Context): void {
   if (!ctx.findings.some(({ record }) => record.entry === 'U-011')) return
+  const verbatim = verbatimAt(ctx)
   for (let line = 1; line <= ctx.lines.count; line++) {
     const source = lineText(ctx.lines, line)
     if (!source.includes('{{') || !source.includes('}}')) continue
@@ -364,7 +386,7 @@ export function literalIncludeMentions(ctx: Context): void {
     if (end < 0) continue
     for (const match of source.slice(start + 2, end).matchAll(/(?<!\\)@[A-Za-z][A-Za-z0-9-]*/gu)) {
       const at = lineStart(ctx.lines, line) + start + 2 + match.index
-      change(ctx, 'U-011', at, at, '\\', 'old literal include sigil kept as text')
+      if (!verbatim(at)) change(ctx, 'U-011', at, at, '\\', 'old literal include sigil kept as text')
     }
   }
 }

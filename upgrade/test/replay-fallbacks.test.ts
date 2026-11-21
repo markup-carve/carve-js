@@ -279,4 +279,46 @@ describe('replay fallback families', () => {
     expect(result.output).toBe('1. ordered\n1. ordered\n\n*  > > quote\nQ  \n- item\n')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
+
+  it.each([
+    '{.c}\n>\npara\n',
+    '{#_id ._c _k=1 _="on click"}\n> > \npara\n',
+    '{.c}\n\n>\t>\npara\n',
+    '> {.c}\n',
+    '> > {.c}\n',
+    '> {.c}\n\n> para\n',
+    '> {.c}\n\npara\n',
+  ])('keeps the empty quote an attribute line stands above or in: %j', (input) => {
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('widens a fence past the longest indented body run', () => {
+    const input = '```\na\n  ```\n  ````\n```\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('`````\na\n  ```\n  ````\n`````\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it.each([
+    ['a code span', 'see `[t](u v)` and `[text][r]` here\n'],
+    ['a code block', '```\n[q]: a b\n[x](a b)\n```\n'],
+  ])('leaves narrow-space link text in %s as it is', (_, tail) => {
+    const input = `[t](u v) and [ok](u-v)\n\n[r]: https://e.com /path\n[text][r]\n\n${tail}`
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it.each([
+    ['a code span', 'see `{{ x @code:js }}` here\n'],
+    ['a code block', '```\n{{ x @code:js }}\n```\n'],
+  ])('leaves include-shaped text in %s as it is', (_, tail) => {
+    const input = `:: t\n{{ data/p2.csv  @code:csv @lines:00-2 }}\n\n${tail}`
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
 })

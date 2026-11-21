@@ -2,12 +2,18 @@
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
-import { insideQuotes, isAttributeGap, isBlankInQuotes, isGap, removeLine } from './lines.ts'
+import { quotePrefix } from './blank-lines.ts'
+import { insideQuotes, isAttributeGap, isBlankInQuotes, isGap, quoteDepth, removeLine } from './lines.ts'
 
-/** The first line after `line` that is not blank, or 0 at the end of the text. */
-function nextText(ctx: Context, line: number): number {
+/** Whether `text` is blank inside `depth` quotes; quote marks past that depth open an empty quote. */
+function blankAt(text: string, depth: number): boolean {
+  return isBlankInQuotes(text) && quoteDepth(text) <= depth
+}
+
+/** The first line after `line` that is not blank inside `depth` quotes, or 0 at the end of the text. */
+function nextText(ctx: Context, line: number, depth: number): number {
   for (let at = line + 1; at <= ctx.lines.count; at++) {
-    if (!isBlankInQuotes(lineText(ctx.lines, at))) return at
+    if (!blankAt(lineText(ctx.lines, at), depth)) return at
   }
   return 0
 }
@@ -17,21 +23,48 @@ function nextText(ctx: Context, line: number): number {
  * blank lines between it and its block go, and a line that reaches no block goes itself.
  */
 function detached(ctx: Context, line: number): void {
+  const attribute = line
+  const depth = quoteDepth(lineText(ctx.lines, line))
   // The repairs read past comment lines, which 0.2 removes in place (C2-B-138).
   if (ctx.repairs === true) while (line < ctx.lines.count && insideQuotes(lineText(ctx.lines, line + 1)).trim().startsWith('%%')) line++
-  if (!isBlankInQuotes(lineText(ctx.lines, line + 1)) && line < ctx.lines.count) return
-  const next = nextText(ctx, line)
+  if (!blankAt(lineText(ctx.lines, line + 1), depth) && line < ctx.lines.count) return
+  const next = nextText(ctx, line, depth)
+  if (keptQuote(ctx, attribute, line, next, depth)) return
   if (next === 0) {
-    let first = line
-    while (first > 1 && isGap(ctx, first - 1) && isBlank(lineText(ctx.lines, first - 1))) first--
-    for (let at = first; at <= ctx.lines.count; at++)
-      removeLine(ctx, 'U-034', at, 'attribute line that reaches no block removed')
+    removeToEnd(ctx, line)
     return
   }
   // A line of no leaf block, a div opener among them, is taken by the late pass, which verifies it.
   if (!ctx.late && isGap(ctx, next) && !isAttributeGap(ctx, next)) return
   for (let at = line + 1; at < next; at++)
     removeLine(ctx, 'U-031', at, 'blank line between the attribute line and its block removed')
+}
+
+/** U-034: the attribute line reaches no block, so it goes with the blank lines around it. */
+function removeToEnd(ctx: Context, line: number): void {
+  let first = line
+  while (first > 1 && isGap(ctx, first - 1) && isBlank(lineText(ctx.lines, first - 1))) first--
+  for (let at = first; at <= ctx.lines.count; at++)
+    removeLine(ctx, 'U-034', at, 'attribute line that reaches no block removed')
+}
+
+/** Whether the quote of an attribute line at `depth` ends before `next`, its first line that is not blank. */
+function quoteEnds(ctx: Context, line: number, next: number, depth: number): boolean {
+  if (next === 0) return true
+  for (let at = line + 1; at < next; at++) if (quoteDepth(lineText(ctx.lines, at)) < depth) return true
+  return false
+}
+
+/**
+ * 0.1 kept the quote of an attribute line that reaches no block in it, as an empty quote: only the attribute
+ * text goes. Below a paragraph line the late pass keeps it (emptyAttributeQuote).
+ */
+function keptQuote(ctx: Context, attribute: number, line: number, next: number, depth: number): boolean {
+  if (depth === 0 || !quoteEnds(ctx, line, next, depth) || ctx.blocks.leaf[attribute - 1]?.node.type === 'paragraph') return false
+  const text = lineText(ctx.lines, attribute)
+  const start = lineStart(ctx.lines, attribute) + quotePrefix(text, depth).length
+  change(ctx, 'U-034', start, lineEnd(ctx.lines, attribute), '', 'attribute line that reaches no block of its quote removed')
+  return true
 }
 
 /** U-032: a valid attribute block is all on one line (C2-I-028). */
