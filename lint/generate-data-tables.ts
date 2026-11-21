@@ -188,8 +188,9 @@ class Compiler {
   list(arg: Expr): string { return typeof arg === 'string' ? this.field(arg) : this.value(arg) }
 
   find(arg: Expr): string {
-    const spec = arg as { in: Expr, where: Expr }
-    return `findIn(${this.value(spec.in)}, (item) => ${this.test(spec.where)})`
+    const spec = arg as { in: Expr, where: Expr, field?: string }
+    const keys = (spec.field ?? '').split('.').filter((part) => part !== '').map((part) => literal(/^-?\d+$/.test(part) ? Number(part) : part))
+    return this.at(`findIn(${this.value(spec.in)}, (item) => ${this.test(spec.where)})`, keys)
   }
 
   count(arg: Expr): string {

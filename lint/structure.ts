@@ -152,9 +152,10 @@ function unattachedInline(node: Node, path: string, context: LintContext): void 
     // carve#6350: a brace that opens no valid block claims nothing, so a block inside it is still read.
     if (readAttributeBlock(source, at, end, emptyMemo(), null) !== end) continue
     const lineStart = at === 0 && opensLine(path, context)
-    if (!lineStart) context.report('unattached-inline-attribute', range[0] + at, range[0] + end, path)
+    const runEnd = attributeBlocksEnd(source, at, source.length)
+    if (!lineStart) context.report('unattached-inline-attribute', range[0] + at, range[0] + runEnd, path)
     // The run that opens a paragraph line is block-marker-as-text's finding, glued blocks included.
-    at = (lineStart && host === 'paragraph' ? attributeBlocksEnd(source, 0, source.length) : end) - 1
+    at = (lineStart && host !== 'paragraph' ? end : runEnd) - 1
   }
 }
 
