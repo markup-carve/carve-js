@@ -375,11 +375,50 @@ function emptyInclude(line: Line, context: LintContext): void {
   }
 }
 
+/** The first `mark` or line feed at or after `from`, or the end of `text`. */
+function stopAt(text: string, from: number, mark: number): number {
+  for (let at = from; at < text.length; at++) {
+    const code = text.charCodeAt(at)
+    if (code === mark || code === 10) return at
+  }
+  return text.length
+}
+
+/** What `linkGapAt` found last: the `]` or line feed, the end of the gap behind that `]`, and the `)` or line feed. */
+interface LinkGapScan { close: number, gapOf: number, gapEnd: number, paren: number }
+
+// A match at `open` of /\[([^\]\n]+)\][ \t]+\(([^)\n]*)\)/: the index of its `(`, or -1, with its `)` at `scan.paren`.
+// Every `[` before one `]` shares that bracket, its gap and its `)`, so the scan keeps them rather than finding
+// them again per `[`, which made a run of brackets quadratic.
+function linkGapAt(text: string, open: number, scan: LinkGapScan): number {
+  if (scan.close <= open) scan.close = stopAt(text, open + 1, 93)
+  const close = scan.close
+  if (close === open + 1 || text.charCodeAt(close) !== 93) return -1
+  if (scan.gapOf !== close) {
+    scan.gapOf = close
+    scan.gapEnd = close + 1
+    while (text[scan.gapEnd] === ' ' || text[scan.gapEnd] === '\t') scan.gapEnd++
+  }
+  const gapEnd = scan.gapEnd
+  if (gapEnd === close + 1 || text[gapEnd] !== '(') return -1
+  if (scan.paren <= gapEnd) scan.paren = stopAt(text, gapEnd + 1, 41)
+  return text.charCodeAt(scan.paren) === 41 ? gapEnd : -1
+}
+
 function linkGap(line: Line, context: LintContext): void {
   if (!line.paragraph) return
-  for (const match of line.text.matchAll(/\[([^\]\n]+)\][ \t]+\(([^)\n]*)\)/g)) {
-    if (match[2]!.trim() === '') continue
-    context.report('link-gap-before-destination', line.start + match.index, line.start + match.index + match[0].length, line.path)
+  const text = line.text
+  const scan: LinkGapScan = { close: -1, gapOf: -1, gapEnd: -1, paren: -1 }
+  for (let open = text.indexOf('['); open !== -1;) {
+    const destination = linkGapAt(text, open, scan)
+    if (destination === -1) {
+      open = text.indexOf('[', open + 1)
+      continue
+    }
+    if (text.slice(destination + 1, scan.paren).trim() !== '') {
+      context.report('link-gap-before-destination', line.start + open, line.start + scan.paren + 1, line.path)
+    }
+    open = text.indexOf('[', scan.paren + 1)
   }
 }
 
