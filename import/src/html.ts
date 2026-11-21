@@ -307,7 +307,8 @@ function headingLevel(node: Html.Element): number | undefined {
   return level !== undefined && level > 6 ? level : undefined
 }
 
-const SECTION_CARRIERS: ReadonlySet<string> = new Set(['data-carve-explicit-id', 'data-carve-generated-id'])
+// `data-carve-src` is removed on any element without a report (C2-H-120).
+const SECTION_CARRIERS: ReadonlySet<string> = new Set(['data-carve-explicit-id', 'data-carve-generated-id', 'data-carve-src'])
 
 /** C2-M-027: a render writes no attribute but the id on the section it opens at a heading; C2-M-009 reports other carriers. */
 function sectionAttributes(node: Html.Element, context: HtmlContext): void {

@@ -108,6 +108,10 @@ describe('C2-H-186 carriers', () => {
     expect(read('<section data-carve-generated-id id="t"><h2>T</h2></section>').messages).toEqual([])
   })
 
+  it('C2-H-120 data-carve-src on a section that opens at a heading is removed without a report', () => {
+    expect(read('<section data-carve-src="3:1" id="t"><h2>T</h2></section>').messages).toEqual([])
+  })
+
   it('C2-H-186 data-carve-ref gives a full reference and its key', () => {
     expect(back('[a][b]\n\n[b]: /u\n')).toEqual([])
     expect(ignored('<p><a href="/u" data-carve-ref="a  b">x</a></p>', 'data-carve-ref')).toBe(true)
