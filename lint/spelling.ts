@@ -133,38 +133,6 @@ function spacedBreak(line: Line, context: LintContext): void {
   if (isSpacedRun(text)) context.report('deprecated-spaced-thematic-break', start, start + text.length, line.path)
 }
 
-/** The characters that open an attribute block after its brace: a class, an id or a key. */
-function opensAttributes(code: number): boolean {
-  return code === 46 || code === 35 || code === 95 || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
-}
-
-function tildeFence(line: Line, context: LintContext): void {
-  if (!line.paragraph) return
-  const layoutStart = context.layouts.get(line.path)?.startByte
-  const first = layoutStart === undefined ? undefined : context.chars[layoutStart]
-  const candidate = first !== undefined && first >= line.start && first < line.end
-    ? { text: line.text.slice(first - line.start).trimEnd(), start: first }
-    : contentLine(line)
-  const { text, start } = candidate
-  const report = (what: string): void => context.report('block-marker-as-text', start, start + text.length, line.path, { what })
-  const firstText = firstLineOfPath(line.path, context) === line.number
-  if (text.startsWith('~~~') && firstText) return report('a tilde fence')
-  if (/^:{3,}\S/.test(text) && firstText) return report('a colon fence')
-  // C2-B-090: a brace run that opened a braced inline form is no attribute line that failed.
-  if (text.startsWith('{') && opensAttributes(text.charCodeAt(1)) && !isAttributeLine(text, 0, text.length)
-    && !context.state.spanStarts.has(start)) {
-    report('an attribute line')
-  }
-}
-
-function htmlComment(line: Line, context: LintContext): void {
-  const at = line.text.indexOf('<!--')
-  if (at < 0 || !line.paragraph) return
-  const end = line.text.indexOf('-->', at + 4)
-  if (end < 0) return
-  context.report('html-comment-renders-as-text', line.start + at, line.start + end + 3, line.path)
-}
-
 /** The end of the tag-shaped text at `at`, or -1: a `<` before a letter or `/`, up to the next `>`. */
 function tagEnd(text: string, at: number): number {
   const after = text[at + 1]
@@ -450,13 +418,6 @@ function quoteFenceSibling(line: Line, context: LintContext): void {
   reportLine('quote-fence-ends-the-quote-above', line, context)
 }
 
-function regionAsText(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
-  if (line.paragraph && /^(?:(?:\/\/|--|\/\*|<!--)[ \t]*)?#(?:end)?region(?![A-Za-z0-9_])/i.test(text)) {
-    context.report('region-marker-renders-as-text', start, start + text.length, line.path)
-  }
-}
-
 function captionLooking(line: Line, context: LintContext): void {
   if (!line.paragraph) return
   const { text, start } = lineText(line)
@@ -737,8 +698,6 @@ export const LINE_RULES: readonly Rule[] = [
   spacedRule('thematic-break-spelling', thematicBreak),
   spacedRule('setext-heading-underline', setextHeading),
   spacedRule('deprecated-spaced-thematic-break', spacedBreak),
-  spacedRule('block-marker-as-text', tildeFence),
-  spacedRule('html-comment-renders-as-text', htmlComment),
   spacedRule('bare-html-tag', bareHtml),
   spacedRule('empty-reference-definition', emptyReference),
   spacedRule('table-shaped-paragraph', tableShaped),
@@ -757,7 +716,6 @@ export const LINE_RULES: readonly Rule[] = [
   spacedRule('github-alert-marker', githubAlert),
   spacedRule('djot-heading-continuation', djotHeadingContinuation),
   spacedRule('quote-fence-ends-the-quote-above', quoteFenceSibling),
-  spacedRule('region-marker-renders-as-text', regionAsText),
   spacedRule('caption-looking-paragraph', captionLooking),
   spacedRule('colon-fence-length-mismatch', colonFenceLength),
   spacedRule('description-separator-below-content-column', descriptionColumn),

@@ -9,7 +9,7 @@ import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 import { append } from '../src/append.ts'
-import { DATA_RULE_IDS, dataRulesOn, runDataRules, startDataWalk } from './data-rules.ts'
+import { DATA_ONLY, dataRulesOn, fromData, runDataRules, startDataWalk } from './data-rules.ts'
 
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
@@ -116,7 +116,7 @@ function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
   const byType = new Map<Node['type'], Rule[]>()
   const data = dataRulesOn()
   for (const rule of NODE_RULES) {
-    if (!active(rule.id, options) || data && DATA_RULE_IDS.has(rule.id)) continue
+    if (!active(rule.id, options) || fromData(rule.id, data)) continue
     for (const type of rule.nodes ?? []) {
       const rules = byType.get(type)
       if (rules === undefined) byType.set(type, [rule])
@@ -146,13 +146,6 @@ function visitChildren(node: Node, path: string, context: LintContext, controls:
   }, SOURCE_ORDER)
 }
 
-function markSpanStarts(children: readonly Node[], context: LintContext): void {
-  for (const child of children) {
-    const at = child.type === 'text' || child.pos === undefined ? undefined : context.chars[child.pos.startOffset]
-    if (at !== undefined) context.state.spanStarts.add(at)
-  }
-}
-
 function markDescriptionAndCloser(node: Node, context: LintContext): void {
   const pos = node.pos
   if (pos === undefined) return
@@ -169,21 +162,10 @@ function collectKeys(node: Node, path: string, context: LintContext): void {
   else if (node.type === 'link_reference_definition') context.state.referenceDefinitions.push({ node, path })
 }
 
-// C2-A-039: of two nodes with one id, the first is its anchor.
-function addId(id: string, node: Node, context: LintContext): void {
-  context.state.ids.add(id)
-  if (!context.state.idOwners.has(id)) context.state.idOwners.set(id, node.type)
-}
-
 function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
   context.nodeTypes.set(path, node.type)
   collectKeys(node, path, context)
-  if (node.attrs?.id !== undefined) addId(node.attrs.id, node, context)
   if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
-  if (node.type === 'paragraph') markSpanStarts(node.children, context)
-  if (node.type === 'heading' && node.generatedId !== undefined) {
-    addId(node.generatedId, node, context)
-  }
   const pos = node.pos
   markDescriptionAndCloser(node, context)
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
@@ -332,12 +314,11 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     source, ...position, leafMask: new Uint8Array(source.length), options, layouts, nodeTypes: new Map(),
     nodeRules: nodeRulesByType(options),
     diagnostics: [], findingLines: [],
-    state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, firstHeading: null, referenceUrls: new Set(), ids: new Set(),
-      idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
+    state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, firstHeading: null, referenceUrls: new Set(),
+      footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
       descriptionStarts: new Set(),
       containerClosers: new Set(),
-      spanStarts: new Set(),
-      usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [], unresolvedReferences: [],
+      usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [],
       footnoteDefinitions: [] },
     report(id, start, end, path, values = {}, index = 0) {
       const boundedStart = Math.max(0, Math.min(start, source.length))
@@ -372,20 +353,22 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
   const data = dataRulesOn()
   // The default rule set is the same on every call, so its compiled rule lists are kept.
   const defaults = options.rules === undefined && options.platforms === undefined
-  const walk = data ? startDataWalk(parsed.document, context, (id) => active(id, options), defaults) : undefined
+  const runsFromData = (id: RuleId): boolean => active(id, options) && fromData(id, data)
+  const walk = startDataWalk(parsed.document, context, runsFromData, defaults && data)
   if (walk !== undefined) context.dataWalk = walk
   visit(parsed.document, '', context, controls)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
-  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !(data && DATA_RULE_IDS.has(rule.id)))
+  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !fromData(rule.id, data))
   for (const line of scanLines) {
     if (line.opaque) continue
     for (const rule of activeLineRules) rule.checkLine?.(line, context)
   }
-  if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, (id) => active(id, options), defaults)
+  if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, runsFromData, defaults && data)
   const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
   return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
 }
 
-export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES]
+// The rows of DATA_ONLY have no hand-written rule; data/lint-model.json implements them.
+export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES, ...[...DATA_ONLY].map((id) => ({ id: id as RuleId }))]
 export type { LintOptions } from './types.ts'
