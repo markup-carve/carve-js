@@ -307,9 +307,16 @@ function headingLevel(node: Html.Element): number | undefined {
   return level !== undefined && level > 6 ? level : undefined
 }
 
-/** C2-M-027: a render writes no attribute but the id on the section it opens at a heading. */
+// `data-carve-src` is removed on any element without a report (C2-H-120).
+const SECTION_CARRIERS: ReadonlySet<string> = new Set(['data-carve-explicit-id', 'data-carve-generated-id', 'data-carve-src'])
+
+/** C2-M-027: a render writes no attribute but the id on the section it opens at a heading; C2-M-009 reports other carriers. */
 function sectionAttributes(node: Html.Element, context: HtmlContext): void {
   for (const entry of node.attrs) {
+    if (CARRIERS.has(entry.name) && !SECTION_CARRIERS.has(entry.name)) {
+      ignoredCarrier(context, node, entry.name, 'a section reads only the id carriers')
+      continue
+    }
     if (entry.name === 'id' || CARRIERS.has(entry.name) || droppedAttribute(entry.name, entry.value) !== undefined) continue
     report(context, node, 'import-attribute-dropped', `Attribute ${entry.name} of a section dropped`)
   }

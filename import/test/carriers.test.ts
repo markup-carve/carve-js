@@ -96,6 +96,22 @@ describe('C2-H-186 carriers', () => {
     expect(ignored('<section data-carve-generated-id id="x"><p>a</p></section>', 'data-carve-generated-id')).toBe(true)
   })
 
+  const misplaced = ['data-carve-source-level', 'data-carve-tight', 'data-carve-ref']
+  it.each(misplaced)('C2-M-009 %s on a section that opens at a heading is reported as ignored', (name) => {
+    const html = `<section ${name}="1" id="t"><h2>T</h2><p>x</p></section>`
+    expect(ignored(html, name)).toBe(true)
+    const heading = first(html)
+    expect(heading?.type === 'heading' ? heading.level : 'none').toBe(2)
+  })
+
+  it('C2-M-009 the id carriers of a section that opens at a heading are read, not reported', () => {
+    expect(read('<section data-carve-generated-id id="t"><h2>T</h2></section>').messages).toEqual([])
+  })
+
+  it('C2-H-120 data-carve-src on a section that opens at a heading is removed without a report', () => {
+    expect(read('<section data-carve-src="3:1" id="t"><h2>T</h2></section>').messages).toEqual([])
+  })
+
   it('C2-H-186 data-carve-ref gives a full reference and its key', () => {
     expect(back('[a][b]\n\n[b]: /u\n')).toEqual([])
     expect(ignored('<p><a href="/u" data-carve-ref="a  b">x</a></p>', 'data-carve-ref')).toBe(true)
