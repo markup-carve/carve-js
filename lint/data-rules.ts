@@ -1,4 +1,5 @@
 import { type RuleId } from './catalog.ts'
+import { type ModelAttribute, attributeRecords } from './data-attributes.ts'
 import { buildModel, DataWalk, type LineModel, type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
 import { DATA_RULES, type DataRule, useRecords, VERBATIM_LEAVES } from './data-tables.ts'
 import { type LintContext } from './types.ts'
@@ -7,6 +8,7 @@ import { type Node } from '../src/ast.ts'
 type LineRun = (self: ModelLine, path: string, context: LintContext) => void
 type BlockRun = (self: ModelBlock, path: string, context: LintContext) => void
 type InlineRun = (self: ModelInline, path: string, context: LintContext) => void
+type AttributeRun = (self: ModelAttribute, path: string, context: LintContext) => void
 
 /** The ids of the catalog rows that `data/lint-model.json` states as data. */
 export const DATA_RULE_IDS: ReadonlySet<string> = new Set(DATA_RULES.map((rule) => rule.id))
@@ -15,6 +17,12 @@ interface Active {
   lines: DataRule[]
   blocks: DataRule[]
   inline: Map<string, InlineRun[]>
+  attributes: DataRule[]
+  /** The attribute record kinds the attribute rules can match, or every kind. */
+  kinds: Set<string>
+  allKinds: boolean
+  /** The attribute rules per owner type, in catalog order. */
+  byOwner: Map<string, AttributeRun[]>
   /** The block and inline types that lookups read, whose records are made with or without a rule of their own. */
   needBlocks: Set<string>
   needInline: Set<string>
@@ -36,6 +44,11 @@ function addRule(out: Active, rule: DataRule): void {
   for (const type of rule.needs.inline) out.needInline.add(type)
   if (rule.over === 'line') out.lines.push(rule)
   else if (rule.over === 'inline') for (const type of rule.types ?? []) push(out.inline, type, rule.run)
+  else if (rule.over === 'attribute') {
+    out.attributes.push(rule)
+    if (rule.only === undefined) out.allKinds = true
+    else for (const kind of rule.only) out.kinds.add(kind)
+  }
   else out.blocks.push(rule)
 }
 
@@ -48,7 +61,9 @@ function activeRules(active: (id: RuleId) => boolean, defaults: boolean): Active
   const key = on.map((value) => (value ? '1' : '0')).join('')
   let out = activeCache.get(key)
   if (out === undefined) {
-    out = { lines: [], blocks: [], inline: new Map(), needBlocks: new Set(), needInline: new Set(), byLeaf: new Map(), byBlock: new Map() }
+    out = { lines: [], blocks: [], inline: new Map(), attributes: [], kinds: new Set(), allKinds: false,
+      byOwner: new Map(), needBlocks: new Set(), needInline: new Set(),
+      byLeaf: new Map(), byBlock: new Map() }
     for (const [index, rule] of DATA_RULES.entries()) if (on[index]) addRule(out, rule)
     activeCache.set(key, out)
   }
@@ -83,6 +98,24 @@ function blockRuns(rules: Active, type: string, parent: string): BlockRun[] {
   return runs
 }
 
+function ownerRuns(rules: Active, type: string): AttributeRun[] {
+  let runs = rules.byOwner.get(type)
+  if (runs !== undefined) return runs
+  runs = []
+  for (const rule of rules.attributes) if (rule.over === 'attribute' && rule.types?.includes(type) !== false) runs.push(rule.run)
+  rules.byOwner.set(type, runs)
+  return runs
+}
+
+function runAttributes(walk: DataWalk, rules: Active, context: LintContext): void {
+  let owner: ModelAttribute['owner'] | undefined
+  let runs: AttributeRun[] = []
+  for (const record of attributeRecords(walk.attributed, context, rules.allKinds ? undefined : rules.kinds)) {
+    if (record.owner !== owner) runs = ownerRuns(rules, (owner = record.owner).type)
+    for (const run of runs) run(record, owner.path, context)
+  }
+}
+
 function runLines(model: LineModel<BlockRun>, rules: Active, context: LintContext): void {
   if (rules.lines.length === 0) return
   for (const line of model.lines.all()) {
@@ -107,14 +140,17 @@ function runInline(walk: DataWalk, rules: Active, context: LintContext): void {
 export function startDataWalk(document: Node, context: LintContext, active: (id: RuleId) => boolean,
   defaults: boolean): DataWalk | undefined {
   const rules = activeRules(active, defaults)
-  if (rules.lines.length === 0 && rules.blocks.length === 0 && rules.inline.size === 0) return undefined
+  const model = rules.lines.length > 0 || rules.blocks.length > 0 || rules.inline.size > 0
+  if (!model && rules.attributes.length === 0) return undefined
   rules.walkTypes ??= new Set([...rules.inline.keys(), ...rules.needInline])
-  return new DataWalk(document, rules.walkTypes, context)
+  return new DataWalk(document, rules.walkTypes, context, rules.attributes.length > 0, model)
 }
 
 /** Run the data rules that `active` keeps on the model of the parsed document, walked by the lint visit. */
 export function runDataRules(walk: DataWalk, context: LintContext, active: (id: RuleId) => boolean, defaults: boolean): void {
   const rules = activeRules(active, defaults)
+  if (rules.attributes.length > 0) runAttributes(walk, rules, context)
+  if (rules.lines.length === 0 && rules.blocks.length === 0 && rules.inline.size === 0) return
   const model = buildModel(walk.walked, context, (type, parent) => blockRuns(rules, type, parent), rules.needBlocks)
   useRecords(model.blocks, walk.inline)
   let commentPaths: Map<number, string> | undefined

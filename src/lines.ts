@@ -47,7 +47,7 @@ function afterMarkerSpace(src: string, markerEnd: number, end: number, spaces: n
  * and the other quote (C2-I-033), and an unquoted one an opening brace (C2-I-032); whether the block is
  * valid is read by the attribute grammar.
  */
-function braceBlockEnd(src: string, pos: number, end: number): number {
+export function braceBlockEnd(src: string, pos: number, end: number): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACE_OPEN) return -1
   const first = src.charCodeAt(pos + 1)
   // `{%` starts a braced comment and `{{` an include directive.

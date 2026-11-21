@@ -21,11 +21,12 @@ export function emptyMemo(): AttributeMemo {
   return { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
 }
 
+/** The parts of a block, each with its source span `[start, end)`; a key also with the end of its name. */
 export interface AttributeSink {
-  id(name: string): void
-  className(name: string): void
-  lang(tag: string): void
-  key(key: string, value: string): void
+  id(name: string, start?: number, end?: number): void
+  className(name: string, start?: number, end?: number): void
+  lang(tag: string, start?: number, end?: number): void
+  key(key: string, value: string, start?: number, keyEnd?: number, end?: number): void
 }
 
 function inClass(code: number, mask: number): boolean {
@@ -80,8 +81,8 @@ function readPart(text: string, pos: number, end: number, memo: AttributeMemo, s
   if (code === HASH || code === DOT) {
     const after = classRunEnd(text, pos + 1, end, CLASS_NAME)
     if (after === pos + 1) return NONE
-    if (sink !== null && code === HASH) sink.id(text.slice(pos + 1, after))
-    if (sink !== null && code === DOT) sink.className(text.slice(pos + 1, after))
+    if (sink !== null && code === HASH) sink.id(text.slice(pos + 1, after), pos, after)
+    if (sink !== null && code === DOT) sink.className(text.slice(pos + 1, after), pos, after)
     return after
   }
   if (code === COLON) return readLanguage(text, pos + 1, end, sink)
@@ -96,7 +97,7 @@ function readLanguage(text: string, pos: number, end: number, sink: AttributeSin
     if (after === p + 1) return NONE
     p = after
   }
-  if (sink !== null) sink.lang(text.slice(pos, p))
+  if (sink !== null) sink.lang(text.slice(pos, p), pos - 1, p)
   return p
 }
 
@@ -106,11 +107,11 @@ function readValue(text: string, pos: number, equals: number, end: number, memo:
   if (first === QUOTE_MARK || first === APOSTROPHE) {
     const close = quotedValueEnd(text, equals + 1, end, memo)
     if (close === NONE) return NONE
-    sink?.key(text.slice(pos, equals), unescape(text, equals + 2, close))
+    sink?.key(text.slice(pos, equals), unescape(text, equals + 2, close), pos, equals, close + 1)
     return close + 1
   }
   const after = unquotedValueEnd(text, equals + 1, end, memo)
-  if (after !== NONE) sink?.key(text.slice(pos, equals), text.slice(equals + 1, after))
+  if (after !== NONE) sink?.key(text.slice(pos, equals), text.slice(equals + 1, after), pos, equals, after)
   return after
 }
 
@@ -120,7 +121,7 @@ function readKey(text: string, pos: number, end: number, memo: AttributeMemo, si
   if (keyEnd < end && text.charCodeAt(keyEnd) === EQUALS) return readValue(text, pos, keyEnd, end, memo, sink)
   // C2-I-031: a bare key does not start with an underscore.
   if (!inClass(text.charCodeAt(pos), CLASS_BARE_KEY_FIRST)) return NONE
-  sink?.key(text.slice(pos, keyEnd), '')
+  sink?.key(text.slice(pos, keyEnd), '', pos, keyEnd, keyEnd)
   return keyEnd
 }
 
