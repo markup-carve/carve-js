@@ -8,8 +8,11 @@ export const CARRIERS: ReadonlySet<string> = new Set([
   'data-marker', 'data-carve-explicit-id', 'data-carve-generated-id', 'data-carve-ref', 'data-carve-ref-collapsed',
   'data-carve-ref-shortcut', 'data-carve-autolink', 'data-carve-footnote-label', 'data-carve-inline-footnote',
   'data-carve-raw', 'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight', 'data-carve-xref',
-  'data-carve-caption-number', 'data-carve-div', 'data-carve-line-block', 'data-carve-src',
+  'data-carve-caption-number', 'data-carve-div', 'data-carve-line-block', 'data-carve-src', 'data-carve-source-level',
 ])
+
+/** C2-H-186: the level of a heading before `headingShift` (C2-H-208); only a heading reads it. */
+export const SOURCE_LEVEL = 'data-carve-source-level'
 
 /** A note of the footnote section, by the id of its item (C2-H-089). */
 export interface NoteEntry { item: Html.Element, label?: string, inline: boolean }
@@ -135,6 +138,7 @@ function isAuthored(item: { name: string, value: string }, omit: readonly string
  */
 export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyled = false): MappedAttrs {
   const styled = alignStyled && alignStyle(attr(node, 'style')) !== undefined
+  if (!omit.includes(SOURCE_LEVEL) && has(node, SOURCE_LEVEL)) ignoredCarrier(context, node, SOURCE_LEVEL, 'the element is no heading')
   const entries: [string, string][] = []
   for (const item of node.attrs) {
     if (!isAuthored(item, omit)) continue

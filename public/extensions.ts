@@ -35,8 +35,8 @@ export {
 } from '../src/extensions/citations.ts'
 export { type TableOfContentsOptions, tableOfContents, tocPlacement, tocRenderers } from '../src/extensions/navigation/toc.ts'
 export {
-  headingLevelShift, type HeadingLevelShiftOptions, headingNumbers, type HeadingNumbersOptions, headingPermalinks,
-  type HeadingPermalinksOptions, headingReference, type HeadingReferenceOptions,
+  headingNumbers, type HeadingNumbersOptions, headingPermalinks, type HeadingPermalinksOptions, headingReference,
+  type HeadingReferenceOptions,
 } from '../src/extensions/navigation/headings.ts'
 export {
   autolink, type AutolinkOptions, externalLinks, type ExternalLinksOptions, linkPolicy, type LinkPolicyOptions,

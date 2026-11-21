@@ -8,7 +8,7 @@ import { validateTree } from '../ast-validate.ts'
 import { DERIVED_TEXT_BYTES } from '../derived-text.ts'
 import { type Diagnostic, type Findings, locateFindings } from '../diagnostics.ts'
 import { isUrlAllowed } from '../html-attributes.ts'
-import { CarveOptionError, type UrlPolicy } from '../options.ts'
+import { CarveOptionError, checkType, type UrlPolicy } from '../options.ts'
 import { utf8Length } from '../positions.ts'
 import { resolve, type Resolution } from '../resolve.ts'
 import { smartGlyph } from '../ast-text.ts'
@@ -100,8 +100,11 @@ export function eachNode(root: Node, visit: (node: Node) => void): void {
   }
 }
 
-/** Refuses an options value that is not an object, an unknown name, or a value of the wrong kind. */
-export function checkExportOptions(options: unknown, own: readonly string[] = []): void {
+/**
+ * Refuses an options value that is not an object, an unknown name, or a value of the wrong kind. `own` names further
+ * boolean options; `headingShift` is an option of the Markdown export only (C2-H-209).
+ */
+export function checkExportOptions(options: unknown, own: readonly string[] = [], target?: ExportTarget): void {
   if (options === undefined) return
   if (typeof options !== 'object' || options === null || Array.isArray(options)) throw new CarveOptionError('options', 'not an object')
   for (const [name, value] of Object.entries(options)) {
@@ -109,6 +112,7 @@ export function checkExportOptions(options: unknown, own: readonly string[] = []
     if (name === 'smartTypography' || name === 'strictLosses' || own.includes(name)) {
       if (typeof value !== 'boolean') throw new CarveOptionError(name, 'not a boolean')
     } else if (name === 'urlPolicy') checkPolicy(value)
+    else if (name === 'headingShift' && target === 'markdown') checkType(name, value)
     else throw new CarveOptionError(name, 'unknown option')
   }
 }

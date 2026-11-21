@@ -204,14 +204,26 @@ function idCarriers(r: Render, node: HeadingNode): Pair[] {
   return [[node.attrs?.id === undefined ? 'data-carve-generated-id' : 'data-carve-explicit-id', null]]
 }
 
+/** C2-H-208: under `roundtrip` a shifted heading carries its level before the shift. */
+function sourceLevel(r: Render, node: HeadingNode): number | undefined {
+  const level = node.level - r.settings.headingShift
+  return r.settings.roundtrip && r.settings.headingShift !== 0 && level >= 1 ? level : undefined
+}
+
 /** C2-H-021: `h1` to `h6`, and above them a `div` that keeps the true level. `inSection`: the section carries the id. */
 function headingHtml(r: Render, node: HeadingNode, inSection: boolean): string {
   const level = node.level
   const name = level <= MAX_HEADING_ELEMENT ? `h${level}` : 'div'
+  const source = sourceLevel(r, node)
   // The heading of a section that carries no attribute of its own, which is the usual one.
-  if (inSection && level <= MAX_HEADING_ELEMENT && isPlain(r, node)) return `<${name}>${inlineHtml(r, node.children)}</${name}>`
-  const structural: Pair[] = level <= MAX_HEADING_ELEMENT ? [] : [['role', 'heading'], ['aria-level', String(level)]]
-  if (!inSection) structural.push(...idCarriers(r, node))
+  if (inSection && level <= MAX_HEADING_ELEMENT && source === undefined && isPlain(r, node)) {
+    return `<${name}>${inlineHtml(r, node.children)}</${name}>`
+  }
+  const element: Pair[] = level <= MAX_HEADING_ELEMENT ? [] : [['role', 'heading'], ['aria-level', String(level)]]
+  const carriers = inSection ? [] : idCarriers(r, node)
+  // The source level follows the id carrier and stands before the role (C2-H-208).
+  const structural = source === undefined ? [...element, ...carriers]
+    : [...carriers, ['data-carve-source-level', String(source)] as Pair, ...element]
   const parts: TagParts = { structural, id: inSection ? null : headingId(node) ?? null, alignStyle: true }
   return `<${name}${tag(r, node, parts)}>${inlineHtml(r, node.children)}</${name}>`
 }

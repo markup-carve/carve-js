@@ -10,7 +10,7 @@ import { type DocumentTransform } from '../src/api.ts'
 import { type ExtensionDefinition, type ExtensionRenderer } from '../src/extensions/types.ts'
 import {
   autolink, citations, codeCallouts, codeGroup, colorSwatch, defaultAttributes, details, externalLinks, glossary,
-  headingLevelShift, headingNumbers, headingPermalinks, headingReference, index, inlineFootnotesToParentheses,
+  headingNumbers, headingPermalinks, headingReference, index, inlineFootnotesToParentheses,
   linkPolicy, listTable, mathBlock, mermaid, semanticSpan, smartQuotes, spoiler, tabNormalize, tableOfContents,
   tocPlacement, tocRenderers, wikilinks,
 } from '../public/extensions.ts'
@@ -61,7 +61,6 @@ const CONFIGS: readonly (readonly [string, () => Registration])[] = [
   ['headingNumbers', () => registration(headingNumbers())],
   ['headingPermalinks', () => registration(headingPermalinks())],
   ['headingReference', () => registration(headingReference())],
-  ['headingLevelShift', () => registration(headingLevelShift())],
   ['autolink', () => registration(autolink())],
   ['externalLinks', () => registration(externalLinks())],
   ['linkPolicy', () => registration(linkPolicy())],

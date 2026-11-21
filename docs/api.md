@@ -97,9 +97,21 @@ codes the host accepts: they are left out of the diagnostics and never fail a `s
 `maxLosses` keeps the first losses, 100 by default, and counts the rest in `suppressedDiagnostics` (C2-H-205).
 `importDocument` reads `allowLosses`, `maxLosses` and `labels` too. Supply the same `labels` map used to render HTML so generated accessible names are recognized during import. `lint` reads `headingIds` so fragment checks use the ids the renderer generates; the CLI flag is `carve lint --heading-ids lower`.
 
+### Heading shift
+
+`headingShift` moves every heading down by 0 to 5 levels (default 0), for a page whose template writes its own title
+as the `<h1>`: with `headingShift: 1`, `= A` renders as `<h2>`. It runs after includes and resolution and before the
+first document transform, so the sections and every extension see the shifted levels, and an extension option that
+names heading levels (`tableOfContents` `minLevel` and `maxLevel`, `headingPermalinks` `levels`, `headingNumbers`
+`minLevel`) names the shifted ones. Text and ids do not change. A level above 6 is written as
+`<div role="heading" aria-level="N">` and reported once as `heading-shift-above-6`. Under `roundtrip` each heading
+carries `data-carve-source-level`, which the HTML importer reads back. `parse`, `format` and `lint` refuse the option,
+and the CLI flag is `carve render --heading-shift=1` (C2-H-208). It replaces the 0.1 `headingLevelShift()` extension.
+
 ```ts
 import { render, renderWithDiagnostics } from '@markup-carve/carve'
 
+if (render('= A\n', { headingShift: 1 }) !== '<section id="A">\n  <h2>A</h2>\n</section>') throw new Error('headingShift')
 if (render('a\nb', { softBreak: 'br' }) !== '<p>a<br>\nb</p>') throw new Error('softBreak')
 const result = renderWithDiagnostics('[a](javascript:x)', { allowLosses: ['destination-denied'], strictLosses: true })
 if (result.diagnostics.length !== 0 || result.html === '') throw new Error('allowLosses')
@@ -380,7 +392,8 @@ old and new host HTML. The command line spelling is `carve upgrade --registered-
 | `tabs` | `tabsExtensions`, `tabsRenderer` | provisional |
 | `fencedRender`, `mermaid`, `d2`, `graphviz`, `wavedrom`, `abc`, `plantuml`, `vegaLite`, `chart`, `presets`, `mathBlock`, `codeGroup`, `codeCallouts` | same names from `@markup-carve/carve/extensions` | provisional; each returns `{ extensions, renderers }`, see [fenced renderers](fenced-renderers.md) |
 | `glossary`, `index`, `citations` | same names from `@markup-carve/carve/extensions` | provisional; each returns `{ extensions, renderers, transforms }`, see [glossary, index and citations](extensions-reference.md) |
-| `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingNumbers`, `headingLevelShift`, `externalLinks`, `autolink` | `@markup-carve/carve/extensions` | provisional; see [Standard extensions: navigation](extensions-navigation.md) |
+| `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingNumbers`, `externalLinks`, `autolink` | `@markup-carve/carve/extensions` | provisional; see [Standard extensions: navigation](extensions-navigation.md) |
+| `headingLevelShift` | the `headingShift` option | a count from 0 to 5, default 0; a level above 6 is no longer merged into 6 (C2-H-208) |
 | `parseWithProvenance`, `astNodePaths`, `readNodeIdentity`, `toNodeIdentity`, `readAnnotationRanges`, `toAnnotationRanges`, `readProvenance`, `toProvenance`, `toAuthoredProvenance`, `AstSidecarError` | gone | `validateTree` and `decodeTree` accept an optional annotation-range sidecar as `annotations`; node identity and provenance have no 0.2 call or schema; a diagnostic names its node by an RFC 6901 `path` |
 | `createEditorSession`, `EditorChangeError` | same names | snapshots hold the 0.2 tree; plain paragraph edits reuse unchanged nodes |
 | `tryRenderHtmlStreaming` | `tryRenderHtmlStreaming` | calls the sink once after rendering the whole HTML document |

@@ -19,13 +19,15 @@ if (!toAnsi(tree).output.includes('\x1b[1mthis\x1b[0m')) throw new Error('ansi')
 
 ## Options
 
-All three calls take the same options. An unknown option is refused with `CarveOptionError`.
+All three calls take the same options, and `toMarkdown` also takes `headingShift`. An unknown option is refused with
+`CarveOptionError`.
 
 | Option | Default | Effect |
 |---|---|---|
 | `smartTypography` | `true` | Writes the glyph of smart punctuation (`–`, `…`, `“`); `false` writes the characters as typed. |
 | `strictLosses` | `false` | Throws `CarveExportError` (with `diagnostics`) instead of returning a result that lost something. |
 | `urlPolicy` | `{}` | `{ deny }` or `{ allow }` lists of schemes. A denied destination is written empty and reported. |
+| `headingShift` | `0` | Markdown only: moves every heading down by 0 to 5 levels, as the render option does. A level above 6 is written as `######` and reported once as `heading-shift-above-6`. `toPlainText` and `toAnsi` refuse it, whatever its value (C2-H-209). |
 
 ## Losses
 
@@ -47,6 +49,7 @@ tree has positions, its byte `range`. The codes:
 | `destination-denied` | all | a destination the URL policy denies |
 | `include-unresolved` | all | an include that was not expanded, written as its source line |
 | `derived-text-budget` | all | abbreviation expansions and cross-reference labels past the derived-text budget |
+| `heading-shift-above-6` | markdown | a heading that `headingShift` moved above level 6, written at level 6 |
 
 ## What Markdown cannot express
 

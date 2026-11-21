@@ -652,7 +652,7 @@ describe('every option is checked against its declared type first', () => {
     adapter: 'word', alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', normalize: true, platforms: ['github'],
     profile: 'minimal', rawHtml: true, renderers: {}, roundtrip: true, rules: { r: 'on' }, sections: false, smartTypography: false,
     social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
-    allowLosses: ['raw-format-dropped'], maxLosses: 5, softBreak: 'br', codeBlockRenderer: () => undefined,
+    allowLosses: ['raw-format-dropped'], maxLosses: 5, softBreak: 'br', codeBlockRenderer: () => undefined, headingShift: 1,
   }
   // Values of the right type that this engine does not offer, or that no stage of it reads.
   const UNOFFERED: Readonly<Record<string, unknown>> = {}
@@ -686,8 +686,8 @@ describe('every option is checked against its declared type first', () => {
   const typeRefusal = (message: string): boolean =>
     message.startsWith('option ') && !/unknown option|not an option of|not offered/.test(message) && message !== 'accepted'
 
-  it('C2-H-137: the option list is the 25 of the data file', () => {
-    expect(rows).toHaveLength(25)
+  it('C2-H-137: the option list is the 26 of the data file', () => {
+    expect(rows).toHaveLength(26)
     expect(Object.keys(VALID).sort()).toEqual(rows.map((row) => row.name).sort())
   })
 

@@ -48,3 +48,20 @@ describe('render --to', () => {
     expect(refused.stderr).toContain('bad value for --to: pdf')
   })
 })
+
+describe('render --heading-shift (C2-H-208, C2-H-209)', () => {
+  it('shifts the Markdown export, and the plain-text and ANSI exports refuse it with usage', () => {
+    expect(cli(['render', '--to', 'markdown', '--heading-shift=1'], '= T\n')).toMatchObject({ status: 0, stdout: '## T\n' })
+    for (const target of ['plain', 'ansi']) {
+      const refused = cli(['render', '--to', target, '--heading-shift=0'], '= T\n')
+      expect(refused.status).toBe(2)
+      expect(refused.stderr).toMatch(/^carve\[usage\]:/u)
+    }
+  })
+
+  it('reports a level the shift raises above 6, and fails it under --strict-losses', () => {
+    const lost = cli(['render', '--heading-shift=1', '--strict-losses'], '====== T\n')
+    expect(lost.status).toBe(1)
+    expect(lost.stderr).toContain('heading-shift-above-6')
+  })
+})

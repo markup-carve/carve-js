@@ -7,7 +7,7 @@ import * as api from '../public/index.ts'
 import * as extensions from '../public/extensions.ts'
 import { CarveOptionError, parse, render, renderWithDiagnostics } from '../public/index.ts'
 import {
-  autolink, externalLinks, headingLevelShift, headingNumbers, headingPermalinks, headingReference, linkPolicy,
+  autolink, externalLinks, headingNumbers, headingPermalinks, headingReference, linkPolicy,
   tableOfContents, tocPlacement, tocRenderers,
 } from '../public/extensions.ts'
 
@@ -16,9 +16,11 @@ const DOC = '= Intro\n\nText.\n\n== Usage\n\n=== Deep\n\n== Next\n'
 describe('the extensions entry', () => {
   it('exports the navigation extensions, which the core entry does not load', () => {
     expect(Object.keys(extensions)).toEqual(expect.arrayContaining([
-      'autolink', 'externalLinks', 'headingLevelShift', 'headingNumbers', 'headingPermalinks', 'headingReference',
+      'autolink', 'externalLinks', 'headingNumbers', 'headingPermalinks', 'headingReference',
       'linkPolicy', 'tableOfContents', 'tocPlacement', 'tocRenderers',
     ]))
+    // C2-H-208: the core option headingShift replaced it in 0.2.
+    expect(Object.keys(extensions)).not.toContain('headingLevelShift')
     expect(Object.keys(api)).not.toContain('tableOfContents')
   })
 
@@ -197,12 +199,12 @@ describe('headingNumbers', () => {
   })
 })
 
-describe('headingLevelShift', () => {
-  it('moves headings down, to at most level 6', () => {
-    expect(render('= A\n\n====== F\n', { extensions: [headingLevelShift()] })).toBe(
-      '<section id="A">\n  <h2>A</h2>\n  <section id="F">\n    <h6>F</h6>\n  </section>\n</section>')
-    expect(render('= A\n', { extensions: [headingLevelShift({ shift: 9 })] })).toContain('<h6>A</h6>')
-    expect(render('= A\n', { extensions: [headingLevelShift({ shift: -2 })] })).toContain('<h1>A</h1>')
+describe('headingShift', () => {
+  it('C2-H-208: shifts before every document transform, so the numbers do not depend on the registration order', () => {
+    const doc = '= A\n\n== B\n'
+    expect(render(doc, { headingShift: 1, extensions: [headingNumbers({ minLevel: 2 })] })).toContain(
+      '<h3><span class="section-number">1.1</span> B</h3>')
+    expect(render(doc, { headingShift: 1, extensions: [headingPermalinks({ levels: [1] })] })).not.toContain('permalink')
   })
 })
 

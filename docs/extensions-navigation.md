@@ -29,11 +29,14 @@ if (!html.includes('<a href="#Usage">Section 1.1 - Usage</a>')) throw new Error(
 | `tocPlacement()` | Writes a table of contents at each `::: toc` directive, from the headings at any depth | `{depth=N}` or `{from=X to=Y}` on the directive |
 | `headingPermalinks()` | Appends a link to its own id to each heading | `symbol`, `cssClass`, `ariaLabel`, `levels`, `prepend`, `showOnHover`, `copyToClipboard` |
 | `headingNumbers()` | Numbers the sections in a `<span class="section-number">` and writes `</#id>` as "Section 1.2 - Title" | `minLevel`, `label`, `crossref` (`number`, `number-title`, `title`) |
-| `headingLevelShift()` | Moves every heading down, to at most level 6 | `shift` (0 to 5, default 1) |
 | `headingReference()` | Gives a class to each reference link that a heading resolves, such as `[Setup][]` | `cssClass` (default `heading-ref`) |
 | `externalLinks()` | Sets `target` and `rel` on links to `http` and `https` URLs | `target` (`''` removes it), `rel`, `nofollow` |
 | `linkPolicy()` | Writes a link, autolink or image whose URL the policy refuses as its text, and adds `rel` to the others | `allowedSchemes`, `deniedSchemes`, `allowedDomains`, `deniedDomains`, `allowExternal`, `allowInternal`, `rel`, `baseHost` |
 | `autolink()` | Links bare URLs and email addresses in text | `allowedSchemes` (default `https`, `http`, `mailto`) |
+
+The core render option `headingShift` (C2-H-208) shifts the headings before the first of these transforms runs, so
+`minLevel`, `maxLevel` and `levels` name the shifted levels: with `headingShift: 1`, `headingPermalinks({ levels: [1] })`
+matches no heading. The 0.1 `headingLevelShift()` extension is gone; use the option.
 
 Without `tocRenderers`, a table of contents writes its fallback, the same list in a `<div>`, and the render reports
 `extension-fallback-rendered`. Without `tocPlacement()`, a `::: toc` directive stays the core `<div class="toc">`.

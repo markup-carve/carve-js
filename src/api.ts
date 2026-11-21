@@ -20,6 +20,7 @@ import { base64, mapPositions, type SourceText, sourceText } from './byte-source
 import { append } from './append.ts'
 import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { denseListHtml } from './fast-dense-list.ts'
+import { firstAboveSix, HEADING_SHIFT_CODE, headingShiftMessage, shiftHeadings } from './heading-shift.ts'
 
 export { type ParsedTree } from './ast-blocks.ts'
 
@@ -204,6 +205,7 @@ function renderStage(resolved: ResolvedTree): { html: string, losses: Findings }
 function renderProfiled(resolved: ResolvedTree): { html: string, losses: Findings } {
   const { document, settings } = resolved
   const losses: Findings = { entries: [...resolved.losses.entries], nodes: [...resolved.losses.nodes] }
+  if (settings.headingShift !== 0) reportShiftAboveSix(document, settings.headingShift, losses)
   const rule = profileRule(settings)
   if (rule === NO_PROFILE) return renderDocument(document, settings, resolved.resolution, losses, resolved.bidi, resolved.source)
   const run = applyProfile(document, settings.profile, rule, losses, resolved.resolution.xrefText, settings)
@@ -213,6 +215,14 @@ function renderProfiled(resolved: ResolvedTree): { html: string, losses: Finding
   } finally {
     run.restore()
   }
+}
+
+/** C2-H-208: one entry, at the first heading the shift raised above level 6. */
+function reportShiftAboveSix(document: DocumentNode, shift: number, losses: Findings): void {
+  const node = firstAboveSix(document)
+  if (node === undefined) return
+  losses.entries.push({ code: HEADING_SHIFT_CODE, severity: 'warning', channel: 'render-loss', message: headingShiftMessage(shift) })
+  losses.nodes.push(node)
 }
 
 /** The parse stage: the tree of `src` before resolution (C2-A-106). Positions are on unless `positions` is false. */
@@ -227,8 +237,28 @@ export function parseTree(src: string | Uint8Array, options?: ParseOptions): Par
  */
 export function resolveTree(input: ParsedTree | DocumentNode, options?: RenderOptions): ResolvedTree {
   const settings = readOptions(options, 'render')
-  const parsed = 'type' in input ? inputStage(input, settings) : input
-  return resolveStage(parsed, settings)
+  if ('type' in input) return shiftedResolve(inputStage(input, settings), settings, true, settings.headingShift)
+  // A parsed tree is resolved in place and its facts hold its nodes, so it is not copied: a second call shifts by the difference.
+  const applied = PARSED_SHIFT.get(input.document) ?? 0
+  const resolved = resolveStage(input, settings)
+  if (settings.headingShift !== applied) shiftHeadings(resolved.document, settings.headingShift - applied)
+  PARSED_SHIFT.set(input.document, settings.headingShift)
+  return resolved
+}
+
+/** The heading shift `resolveTree` has applied to each parsed tree it resolved in place. */
+const PARSED_SHIFT = new WeakMap<DocumentNode, number>()
+
+/** C2-H-208: resolution, then the heading shift. A supplied tree is the caller's, so it shifts on a copy. */
+function shiftedResolve(parsed: ParsedTree, settings: Settings, supplied: boolean, shift: number): ResolvedTree {
+  if (shift === 0) return resolveStage(parsed, settings)
+  const resolved = resolveStage(supplied ? { ...parsed, document: cloneTree(parsed.document) } : parsed, settings)
+  shiftHeadings(resolved.document, shift)
+  return resolved
+}
+
+function isSupplied(input: string | Uint8Array | DocumentNode): input is DocumentNode {
+  return typeof input !== 'string' && !(input instanceof Uint8Array)
 }
 
 /**
@@ -440,13 +470,15 @@ function sourceLayout(source: SourceText, document: DocumentNode, trace: LayoutT
 export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode, options?: RenderOptions): RenderOutput {
   const settings = readOptions(options, 'render')
   const registered = registeredTransforms(settings)
-  if (registered.length > 0) return transformedRender(input, registered, settings)
+  if (registered.length > 0) return transformedRender(input, withShift(registered, settings), settings)
   return plainRender(input, settings)
 }
 
-function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings, validated = false): RenderOutput {
+/** `shift`: the heading shift still to apply, 0 for a view that a transform has already shifted. */
+function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings, validated = false,
+  shift = settings.headingShift): RenderOutput {
   const parsed = inputStage(input, settings, true, validated)
-  const resolved = resolveStage(parsed, settings)
+  const resolved = shiftedResolve(parsed, settings, isSupplied(input), shift)
   const rendered = renderStage(resolved)
   const diagnostics = [...parseDiagnostics(resolved, parsed), ...locateFindings(resolved.document, rendered.losses)]
   if (settings.strictLosses) for (const entry of diagnostics) {
@@ -535,6 +567,14 @@ function applyDocumentTransforms(view: DocumentNode, transforms: readonly Docume
   return { view, failures, validated, changed }
 }
 
+/** C2-H-208: the core heading shift, which runs before every document transform. */
+function headingShiftTransform(shift: number): DocumentTransform {
+  return { name: 'carve.headingShift', transform(view) {
+    shiftHeadings(view, shift)
+    return view
+  } }
+}
+
 /** C2-X-053: the document transforms of the registered extensions, in registration order. */
 function registeredTransforms(settings: Settings): DocumentTransform[] {
   const transforms: DocumentTransform[] = []
@@ -544,12 +584,21 @@ function registeredTransforms(settings: Settings): DocumentTransform[] {
   return transforms
 }
 
+/** C2-H-208: the heading shift runs before every document transform; with none, the render shifts in place. */
+function withShift(transforms: DocumentTransform[], settings: Settings): DocumentTransform[] {
+  return transforms.length === 0 || settings.headingShift === 0 ? transforms
+    : [headingShiftTransform(settings.headingShift), ...transforms]
+}
+
 /** C2-X-053 to C2-X-055: transforms run in registration order on a copy, leaving the authored tree intact. */
 export function renderWithDocumentTransforms(
   input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], options?: RenderOptions,
 ): RenderOutput {
   const settings = readOptions(options, 'render')
-  return transformedRender(input, [...registeredTransforms(settings), ...transforms], settings)
+  const all = [...registeredTransforms(settings), ...transforms]
+  // With no transform the shift runs in place, as in renderWithDiagnostics.
+  if (all.length === 0 && settings.headingShift !== 0) return plainRender(input, settings)
+  return transformedRender(input, withShift(all, settings), settings)
 }
 
 /** Reuse the resolved view when no transform changed it and its output has no positional loss. */
@@ -579,7 +628,7 @@ function transformedRender(
     const direct = unchangedViewRender(resolved, sourceDiagnostics, failures, settings)
     if (direct !== undefined) return direct
   }
-  const rendered = plainRender(view, settings, validated)
+  const rendered = plainRender(view, settings, validated, 0)
   const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
   ])))
@@ -609,10 +658,10 @@ export function render(input: string | Uint8Array | DocumentNode, options?: Rend
   }
   const registered = registeredTransforms(settings)
   if (registered.length > 0) {
-    const output = transformedRender(input, registered, settings, false)
+    const output = transformedRender(input, withShift(registered, settings), settings, false)
     const lost = output.diagnostics.filter((entry) => entry.channel === 'render-loss')
     if (settings.strictLosses && lost.length > 0) throw new CarveRenderError(lost)
     return output.html
   }
-  return renderTree(resolveStage(inputStage(input, settings), settings))
+  return renderTree(shiftedResolve(inputStage(input, settings), settings, isSupplied(input), settings.headingShift))
 }

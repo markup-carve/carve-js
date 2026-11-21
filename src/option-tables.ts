@@ -8,6 +8,7 @@ export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
   ["codeBlockRenderer", "render"],
   ["extensions", "parse"],
   ["headingIds", "resolution"],
+  ["headingShift", "render"],
   ["includes", "parse"],
   ["labels", "render"],
   ["maxLosses", "render"],
@@ -37,6 +38,7 @@ export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
   ["codeBlockRenderer", "structure"],
   ["extensions", "list"],
   ["headingIds", "enum"],
+  ["headingShift", "count"],
   ["includes", "structure"],
   ["labels", "map"],
   ["maxLosses", "count"],
@@ -89,16 +91,22 @@ export const BOOLEAN_DEFAULTS: ReadonlyMap<string, boolean> = new Map([
 ])
 
 export const COUNT_DEFAULTS: ReadonlyMap<string, number> = new Map([
+  ["headingShift", 0],
   ["maxLosses", 100],
+])
+
+/** The largest value of each count option that has one; a larger value is refused. */
+export const COUNT_MAXIMA: ReadonlyMap<string, number> = new Map([
+  ["headingShift", 5],
 ])
 
 /** C2-H-204: the codes of the render-loss channel, the values `allowLosses` takes. */
 export const RENDER_LOSS_CODES: readonly string[] = [
   "carrier-attribute-dropped", "derived-text-budget", "destination-denied", "extension-fallback-rendered", "extension-renderer-failed",
-  "extension-transform-failed", "field-unspellable", "import-attribute-dropped", "import-carrier-ignored", "import-destination-denied",
-  "import-element-dropped", "import-element-mapped", "import-structure-repaired", "import-whitespace-normalized",
-  "include-expanded-roundtrip", "include-unresolved", "profile-construct-degraded", "raw-format-dropped", "structure-unspellable",
-  "writer-refused",
+  "extension-transform-failed", "field-unspellable", "heading-shift-above-6", "import-attribute-dropped", "import-carrier-ignored",
+  "import-destination-denied", "import-element-dropped", "import-element-mapped", "import-structure-repaired",
+  "import-whitespace-normalized", "include-expanded-roundtrip", "include-unresolved", "profile-construct-degraded", "raw-format-dropped",
+  "structure-unspellable", "writer-refused",
 ]
 
 /** C2-H-125: the English strings the engine writes itself. */

@@ -1,7 +1,7 @@
-// The 24 options of C2-H-137. An option this engine does not offer is refused, not ignored.
+// The 26 options of C2-H-137. An option this engine does not offer is refused, not ignored.
 import {
-  BOOLEAN_DEFAULTS, COUNT_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS,
-  OPTION_TYPES, RENDER_LOSS_CODES,
+  BOOLEAN_DEFAULTS, COUNT_DEFAULTS, COUNT_MAXIMA, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS,
+  OPTION_KINDS, OPTION_TYPES, RENDER_LOSS_CODES,
 } from './option-tables.ts'
 import { type ExtensionDefinition, type ExtensionRenderer } from './extensions/types.ts'
 import { includeSettings, type IncludeSettings } from './include-settings.ts'
@@ -59,6 +59,8 @@ export interface Options {
   maxLosses?: number
   /** C2-H-203: how a soft break is written. */
   softBreak?: SoftBreak
+  /** C2-H-208: levels every heading of the render view moves down, 0 to 5. */
+  headingShift?: number
   alignTables?: boolean
   /** C2-W-127: `format` writes as if the parse had no sidecar. */
   normalize?: boolean
@@ -102,6 +104,7 @@ export interface Settings {
   allowLosses: ReadonlySet<string>
   maxLosses: number
   softBreak: SoftBreak
+  headingShift: number
 }
 
 export const CORE_SEMANTIC_KEYS: readonly (readonly [string, string | null])[] = [['abbr', 'title'], ['time', 'datetime'], ['kbd', null]]
@@ -154,6 +157,7 @@ const ITEM_TYPES = new Map([
   ['labels', 'string'], ['symbols', 'string'], ['rules', 'rule-state'], ['platforms', 'string'], ['allowLosses', 'string'],
 ])
 const MAX_LOSSES_DEFAULT = COUNT_DEFAULTS.get('maxLosses')!
+const HEADING_SHIFT_DEFAULT = COUNT_DEFAULTS.get('headingShift')!
 const STRUCTURE_NAMES = new Map([
   ['includes', 'an include root or resolver'], ['social', 'an object'], ['urlPolicy', 'an object with a deny list or an allow list'],
 ])
@@ -167,7 +171,11 @@ function checkItems(name: string, items: readonly unknown[], what: string): void
 /** The test of each declared type: the reason a value of the option `name` is refused, or null. */
 const TYPE_CHECKS = new Map<string, (name: string, value: unknown) => string | null>([
   ['boolean', (_name, value) => (typeof value === 'boolean' ? null : 'not a boolean')],
-  ['count', (_name, value) => (Number.isSafeInteger(value) && (value as number) >= 0 ? null : 'not a count')],
+  ['count', (name, value) => {
+    if (!Number.isSafeInteger(value) || (value as number) < 0) return 'not a count'
+    const maximum = COUNT_MAXIMA.get(name)
+    return maximum === undefined || (value as number) <= maximum ? null : `above its maximum ${maximum}`
+  }],
   ['enum', (name, value) => {
     if (typeof value === 'string' && ENUM_VALUES.get(name)!.includes(value)) return null
     return `unknown value ${JSON.stringify(value) ?? typeof value}`
@@ -425,5 +433,6 @@ export function readOptions(options: object | undefined, stage: 'parse' | 'rende
     allowLosses: new Set(allowLossesValue(given['allowLosses'])),
     maxLosses: (given['maxLosses'] as number | undefined) ?? MAX_LOSSES_DEFAULT,
     softBreak: enumValue(given, 'softBreak') as SoftBreak,
+    headingShift: (given['headingShift'] as number | undefined) ?? HEADING_SHIFT_DEFAULT,
   }
 }

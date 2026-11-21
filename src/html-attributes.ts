@@ -91,7 +91,7 @@ const CARRIERS = new Set([
   'data-marker', 'data-carve-explicit-id', 'data-carve-generated-id', 'data-carve-ref', 'data-carve-ref-collapsed',
   'data-carve-autolink', 'data-carve-footnote-label', 'data-carve-inline-footnote', 'data-carve-raw',
   'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight', 'data-carve-xref', 'data-carve-caption-number',
-  'data-carve-div', 'data-carve-line-block', 'data-carve-src', 'data-carve-ref-shortcut',
+  'data-carve-div', 'data-carve-line-block', 'data-carve-src', 'data-carve-ref-shortcut', 'data-carve-source-level',
 ])
 const DENIED_BY_DEFAULT: ReadonlySet<string> = new Set(DEFAULT_DENIED_SCHEMES)
 const ALIGN_VALUES = ['left', 'right', 'center']

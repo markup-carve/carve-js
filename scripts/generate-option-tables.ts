@@ -15,6 +15,7 @@ interface OptionRow {
   kind: string
   type: string
   values?: string[]
+  maximum?: number
   default: unknown
 }
 
@@ -58,6 +59,12 @@ export function generateOptionTables(json: string): string {
     '',
     'export const COUNT_DEFAULTS: ReadonlyMap<string, number> = new Map([',
     ...counts.map((option) => `  [${JSON.stringify(option.name)}, ${JSON.stringify(option.default)}],`),
+    '])',
+    '',
+    '/** The largest value of each count option that has one; a larger value is refused. */',
+    'export const COUNT_MAXIMA: ReadonlyMap<string, number> = new Map([',
+    ...counts.filter((option) => option.maximum !== undefined)
+      .map((option) => `  [${JSON.stringify(option.name)}, ${JSON.stringify(option.maximum)}],`),
     '])',
     '',
     '/** C2-H-204: the codes of the render-loss channel, the values `allowLosses` takes. */',
