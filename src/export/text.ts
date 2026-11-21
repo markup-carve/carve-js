@@ -449,7 +449,7 @@ const INLINES: NodeHandlers<string, TextState> = {
   inline_footnote: (node, s) => noteRef(s, node),
   abbreviation: (node, s) => {
     const term = clean(s, node.key)
-    const expansion = node.expansion
+    const expansion = node.expansion ?? s.x.resolution.expansionOf.get(node)
     if (s.abbrDepth > 0 || expansion === undefined || !drawDerived(s.x, node, expansion)) return term
     s.expanded.add(pairKey(node.key, expansion))
     return `${term}${style(s, ` (${clean(s, expansion)})`, DIM)}`

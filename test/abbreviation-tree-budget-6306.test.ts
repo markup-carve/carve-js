@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { encodeTree, parse, parseTree, render } from '../src/index.ts'
+import { toAnsi, toMarkdown, toPlainText } from '../src/export/index.ts'
 
 type Abbreviation = { type: 'abbreviation', key: string, namespace: 'abbr', expansion?: string }
 
@@ -44,5 +45,16 @@ describe('C2-I-098: copied abbreviation expansions use one parse budget', () => 
     const source = `*[A]: ${'x'.repeat(2 * n)}\n\n${'A '.repeat(n)}`
     const json = encodeTree(parseTree(source).document)
     expect(json.length).toBeLessThan(2_000_000)
+  })
+
+  it('resolves an omitted copy for Markdown, plain text and ANSI export', () => {
+    const expansion = 'x'.repeat(100_000)
+    const source = `*[A]: ${expansion}\n\n[^n]: ${'A '.repeat(11)}\n\nA\n`
+    const document = parse(source)
+    const body = document.children.find((node) => node.type === 'paragraph')
+    expect(body?.type === 'paragraph' && body.children[0]?.type === 'abbreviation' && body.children[0].expansion).toBeUndefined()
+    expect(toMarkdown(document).output).toContain(`<abbr title="${expansion}">A</abbr>`)
+    expect(toPlainText(document).output).toContain(`A (${expansion})`)
+    expect(toAnsi(document).output).toContain(expansion)
   })
 })
