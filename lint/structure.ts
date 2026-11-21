@@ -1,6 +1,6 @@
 import { forEachSlot, type Node } from '../src/ast.ts'
 import { emptyMemo, readAttributeBlock } from '../src/attributes.ts'
-import { isAttributeLine } from '../src/lines.ts'
+import { attributeBlocksEnd, braceBlockEnd, isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { quotesAbove } from './ancestry.ts'
 import { readPrefix } from '../src/layout-lines.ts'
@@ -113,20 +113,31 @@ function referencesPlacement(node: Node, path: string, context: LintContext): vo
 // carve#6176: every inline content of text, a description's through its paragraphs.
 const INLINE_HOSTS: ReadonlySet<string> = new Set(['paragraph', 'heading', 'definition_term', 'cell_paragraph'])
 
+function opensLine(path: string, context: LintContext): boolean {
+  const cut = path.lastIndexOf('/children/') + '/children/'.length
+  const index = Number(path.slice(cut))
+  const before = context.nodeTypes.get(`${path.slice(0, cut)}${index - 1}`)
+  return index === 0 || before === 'soft_break' || before === 'hard_break'
+}
+
 function unattachedInline(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const parent = path.slice(0, path.lastIndexOf('/children/'))
-  if (!INLINE_HOSTS.has(context.nodeTypes.get(parent) ?? '')) return
+  const host = context.nodeTypes.get(parent) ?? ''
+  if (!INLINE_HOSTS.has(host)) return
   const source = raw(node, context)
   const range = bounds(node, context)
   if (range === null) return
+  const scans = new Map<number, number>()
   for (let at = source.indexOf('{'); at >= 0; at = source.indexOf('{', at + 1)) {
-    const end = source.indexOf('}', at + 1)
-    if (at < 1 || end < 0 || escaped(source, at)) continue
-    const block = source.slice(at, end + 1)
-    if (isAttributeLine(block, 0, block.length)) context.report('unattached-inline-attribute',
-      range[0] + at, range[0] + end + 1, path)
-    at = end
+    const end = braceBlockEnd(source, at, source.length, scans)
+    if (end < 0 || escaped(source, at)) continue
+    // carve#6350: a brace that opens no valid block claims nothing, so a block inside it is still read.
+    if (readAttributeBlock(source, at, end, emptyMemo(), null) !== end) continue
+    const lineStart = at === 0 && opensLine(path, context)
+    if (!lineStart) context.report('unattached-inline-attribute', range[0] + at, range[0] + end, path)
+    // The run that opens a paragraph line is block-marker-as-text's finding, glued blocks included.
+    at = (lineStart && host === 'paragraph' ? attributeBlocksEnd(source, 0, source.length) : end) - 1
   }
 }
 
