@@ -559,11 +559,11 @@ function rule6(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
   if (!(test(K26, self.text) && !test(K27, self.raw_body))) return
   if (K28.has(self.leaf)) {
-    context.report("blockquote-marker-without-space", num(self.start), (num(self.start) + lenOf(trimEnd(str(self.text)))), path, { "text": String(trimEnd(str(self.text)).slice(1)) }, 0)
+    context.report("blockquote-marker-without-space", num(self.start), (num(self.body_start) + lenOf(self.raw_body)), path, { "text": String(str(self.raw_body).slice(1)) }, 0)
     return
   }
   if (same(self.leaf, "frontmatter")) {
-    context.report("blockquote-marker-without-space", num(self.start), (num(self.start) + lenOf(trimEnd(str(self.text)))), path, { "text": String(trimEnd(str(self.text)).slice(1)) }, 1)
+    context.report("blockquote-marker-without-space", num(self.start), (num(self.body_start) + lenOf(self.raw_body)), path, { "text": String(str(self.raw_body).slice(1)) }, 1)
     return
   }
 }
