@@ -88,17 +88,28 @@ function afterMarks(text: string, count: number): number {
 }
 
 /** U-016: in a quote the `+` line becomes a marked blank line and the block takes the marks. */
+/** The block starts right after the marks, or 0.2 reads it as a later block of an item there. */
+function closeUpMarks(ctx: Context, line: number, depth: number, message: string): void {
+  const text = lineText(ctx.lines, line)
+  const after = afterMarks(text, depth)
+  const spaces = indentOf(text.slice(after))
+  const start = lineStart(ctx.lines, line)
+  if (spaces > 1) change(ctx, 'U-016', start + after + 1, start + after + spaces, '', message)
+}
+
 function plusInQuote(ctx: Context, quote: Visit, child: Node01, line: number): void {
   const message = '+ line replaced by a quoted blank line, the block given the quote mark'
-  if (ctx.repairs !== true) {
-    const marks = '>'.repeat(quotesOf(quote).length + 1)
-    change(ctx, 'U-016', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), marks, message)
-    for (let at = child.pos!.startLine; at <= child.pos!.endLine; at++) {
-      const start = lineStart(ctx.lines, at)
-      change(ctx, 'U-016', start, start, isBlank(lineText(ctx.lines, at)) ? marks : marks + ' ', message)
-    }
-    return
+  if (ctx.repairs === true) { plusInQuoteKeepingMarks(ctx, quote, child, line, message); return }
+  const marks = '>'.repeat(quotesOf(quote).length + 1)
+  change(ctx, 'U-016', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), marks, message)
+  for (let at = child.pos!.startLine; at <= child.pos!.endLine; at++) {
+    const start = lineStart(ctx.lines, at)
+    change(ctx, 'U-016', start, start, isBlank(lineText(ctx.lines, at)) ? marks : marks + ' ', message)
   }
+}
+
+/** The repairs of U-016: a line keeps the marks it has and the indent of a quote inside a body. */
+function plusInQuoteKeepingMarks(ctx: Context, quote: Visit, child: Node01, line: number, message: string): void {
   const depth = quotesOf(quote).length + 1
   const marks = '>'.repeat(depth)
   // A quote inside a body keeps the body's indent on the lines it is given.
@@ -111,11 +122,7 @@ function plusInQuote(ctx: Context, quote: Visit, child: Node01, line: number): v
     const have = Math.max(0, quoteMarks(text) - (child.type === 'block_quote' ? 1 : 0))
     const start = lineStart(ctx.lines, at)
     if (have >= depth) {
-      // The block starts right after the marks, or 0.2 reads it as a later block of an item there.
-      if (at !== child.pos!.startLine || have > depth) continue
-      const after = afterMarks(text, depth)
-      const spaces = indentOf(text.slice(after))
-      if (spaces > 1) change(ctx, 'U-016', start + after + 1, start + after + spaces, '', message)
+      if (at === child.pos!.startLine && have === depth) closeUpMarks(ctx, at, depth, message)
       continue
     }
     const added = '>'.repeat(depth - have)

@@ -181,6 +181,11 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const id = entryOf(ctx, span, depth)
   const end = Math.max(containerEnd(ctx, span, depth, cut, ends), enclosing.get(span)?.last ?? 0)
   ends.set(span.first, end)
+  place(ctx, id, span, cut, end, message)
+}
+
+/** Writes the definition of `span` after the line `end` of its container. */
+function place(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
   const quote = top === false && ctx.repairs === true ? emptyNestedQuote(ctx, span) : ''
   if (quote !== '') moveAfter(ctx, id, span, cut, end, message, quote)
   else if (end === span.last) hoistLast(ctx, id, span, cut, message)

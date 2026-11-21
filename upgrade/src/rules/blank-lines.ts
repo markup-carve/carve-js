@@ -138,9 +138,11 @@ export function emptyQuoteChain(ctx: Context, line: number): number {
   let visit = ctx.visits.find(({ node }) => node.type === 'block_quote' && node.children?.length === 0
     && node.pos?.startLine === line)
   let count = 0
-  while (visit?.node.type === 'block_quote' && visit.node.pos?.startLine === line && (count === 0 || visit.node.children?.length === 1)) {
+  const opens = (at: Visit | undefined): boolean => at?.node.type === 'block_quote' && at.node.pos?.startLine === line
+    && (count === 0 || at.node.children?.length === 1)
+  while (opens(visit)) {
     count++
-    visit = visit.parent ?? undefined
+    visit = visit!.parent ?? undefined
   }
   return visit?.node.type === 'block_quote' ? count : 0
 }
@@ -205,10 +207,7 @@ export function blankLines(ctx: Context): void {
     const above = ctx.blocks.leaf[line - 1]!
     const below = ctx.blocks.leaf[line]
     if (below === null || below === undefined) {
-      const next = ctx.blocks.leaf[line + 1]
-      if (attributeLine(ctx, above, line) && ctx.repairs === true && next !== null && next !== undefined && next.node.pos!.startLine === line + 1) {
-        outOfDescription(ctx, ancestor(above, 'list_item') === null ? 'U-003' : 'U-033', above, next, line, line + 1)
-      }
+      attributeAbove(ctx, above, line)
       continue
     }
     if (below === above || below.node.pos!.startLine !== line) continue
@@ -224,8 +223,18 @@ export function blankLines(ctx: Context): void {
       prefix + '\n',
       'blank line put above a block that 0.2 reads as a lazy line directly under text'
     )
-    if (ctx.repairs === true && !DEFINITIONS.has(below.node.type) && !notes.has(line)) outOfDescription(ctx, entry, above, below, line, line)
+    if (ctx.repairs === true && !DEFINITIONS.has(below.node.type) && !notes.has(line)) {
+      outOfDescription(ctx, entry, above, below, line, line)
+    }
   }
+}
+
+/** An attribute line under text, and with the repairs the block it belongs to after a description list. */
+function attributeAbove(ctx: Context, above: Visit, line: number): void {
+  if (!attributeLine(ctx, above, line) || ctx.repairs !== true) return
+  const next = ctx.blocks.leaf[line + 1]
+  if (next === null || next === undefined || next.node.pos!.startLine !== line + 1) return
+  outOfDescription(ctx, ancestor(above, 'list_item') === null ? 'U-003' : 'U-033', above, next, line, line + 1)
 }
 
 /**
