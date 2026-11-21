@@ -40,6 +40,14 @@ it('C2-W-088 repairs the superscript paragraph in rounds bounded by its nesting 
   expect(result.stats.parses).toBeLessThan(325)
 })
 
+it('C2-W-088 retains the repair across repeated paragraphs at 32 KB', () => {
+  const { input: paragraph } = caseOf('CC-1566')
+  const input = paragraph.repeat(12)
+  const result = formatWithDiagnostics(input)
+  expect(result.diagnostics.filter((entry) => entry.channel === 'render-loss')).toEqual([])
+  expect(treesEqual(parse(result.source), parse(input))).toBe(true)
+})
+
 it('C2-W-125 keeps bracket pairs on opposite sides of a nested link separate', () => {
   const { input, expected } = caseOf('CC-1567')
   expect(formatWithDiagnostics(input)).toEqual({ source: expected, diagnostics: [] })
