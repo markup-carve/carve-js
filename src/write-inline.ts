@@ -470,12 +470,18 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
  */
 function collapsedContent(node: LinkNode, content: string, flags: number): string {
   const key = node.key
-  if (node.refForm !== 'collapsed' || key === undefined || (flags & IN_CELL) !== 0 || foldLabel(content) === key) return content
+  if ((node.refForm !== 'collapsed' && node.refForm !== 'shortcut') || key === undefined || (flags & IN_CELL) !== 0 ||
+    foldLabel(content) === key) return content
   const children: ParagraphNode = { type: 'paragraph', children: node.children }
-  for (const candidate of [escapedLike(content, key), key]) {
-    if (candidate !== null && readsAsCollapsed(candidate, key, children)) return candidate
+  return labelLike(content, key, (candidate) => readsAsCollapsed(candidate, key, children))
+}
+
+/** C2-W-075: the first spelling of the label `written` that folds to `key` and reads back, or `written`. */
+function labelLike(written: string, key: string, readsBack: (candidate: string) => boolean): string {
+  for (const candidate of [escapedLike(written, key), spacedLike(written, key), key]) {
+    if (candidate !== null && readsBack(candidate)) return candidate
   }
-  return content
+  return written
 }
 
 /** Trap: the candidate is read inside its brackets, where an edge space stays and `%%` opens no comment. */
@@ -518,6 +524,28 @@ function escapedLike(content: string, key: string): string | null {
   return k === key.length && foldLabel(out) === key ? out : null
 }
 
+/**
+ * C2-I-079: the key with each space replaced by the matching space run between the words of the content, so that a
+ * line break of the content stays where a braced form of a node around it changed the label; null where the counts differ.
+ */
+function spacedLike(content: string, key: string): string | null {
+  const runs: string[] = []
+  let at = 0
+  while (at < content.length && isLabelSpace(content[at]!)) at++
+  while (at < content.length) {
+    if (!isLabelSpace(content[at]!)) {
+      at++
+      continue
+    }
+    const end = spaceRunEnd(content, at)
+    if (end < content.length) runs.push(content.slice(at, end))
+    at = end
+  }
+  const words = key.split(' ')
+  if (words.length !== runs.length + 1 || runs.every((run) => run === ' ')) return null
+  return words.map((word, index) => (index === 0 ? word : runs[index - 1]! + word)).join('')
+}
+
 /** C2-I-079: the fold drops the space at the start and at the end of a label and makes one space of each run between. */
 function keyAfterSpace(key: string, k: number, inner: boolean): number {
   return k > 0 && inner && key[k] === ' ' ? k + 1 : k
@@ -553,13 +581,15 @@ function imageNode(w: Writer, node: ImageNode, flags: number): string {
   return `![${pipes ? escapePipes(alt) : alt}]${target(node, node.src, pipes)}`
 }
 
-/** C2-W-075: the alt text of a collapsed reference folds to its key (C2-I-079); where it does not, the key may serve. */
+/** C2-W-075: the alt text of a collapsed or shortcut reference folds to its key (C2-I-079), or a spelling of it does. */
 function collapsedAlt(node: ImageNode, alt: string): string {
   const key = node.key
-  if (node.refForm !== 'collapsed' || key === undefined || foldLabel(alt) === key) return alt
-  const read = inlineContent(`![${key}][]`)
-  const image = read.length === 1 ? read[0] : undefined
-  return image?.type === 'image' && image.key === key && image.alt === node.alt ? key : alt
+  if ((node.refForm !== 'collapsed' && node.refForm !== 'shortcut') || key === undefined || foldLabel(alt) === key) return alt
+  return labelLike(alt, key, (candidate) => {
+    const read = inlineContent(`![${candidate}][]`)
+    const image = read.length === 1 ? read[0] : undefined
+    return image?.type === 'image' && image.key === key && image.alt === node.alt
+  })
 }
 
 /**
