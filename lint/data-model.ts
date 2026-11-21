@@ -394,7 +394,11 @@ class BlockRecord {
 
   private readonly lines: ModelLine[]
 
-  constructor(item: Walked, line: ModelLine, start: number, context: LintContext, containers: Map<string, number>, lines: ModelLine[]) {
+  private readonly spanEnd: number | undefined
+
+  constructor(item: Walked, line: ModelLine, start: number, context: LintContext, containers: Map<string, number>, lines: ModelLine[],
+    end?: number) {
+    this.spanEnd = end
     this.containers = containers
     this.lines = lines
     this.node = item.node
@@ -410,9 +414,12 @@ class BlockRecord {
   get attributed(): boolean { return this.node.attrs !== undefined }
   get ancestors(): string[] { return ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>) }
   get ancestor_ids(): string[] { return ancestorPaths(this.path) }
-  get end(): number { return this.context.chars[this.node.pos?.endOffset ?? 0] ?? this.context.source.length }
+  get end(): number { return this.spanEnd ?? this.context.chars[this.node.pos?.endOffset ?? 0] ?? this.context.source.length }
   get text(): string { return this.context.source.slice(this.start, this.end) }
-  get last_line(): ModelLine { return this.lines[(this.node.pos?.endLine ?? 1) - 1] ?? this.line }
+  get last_line(): ModelLine {
+    const number = this.spanEnd === undefined ? this.node.pos?.endLine ?? 1 : this.context.offsetLines[Math.max(this.start, this.spanEnd - 1)] ?? 1
+    return this.lines[number - 1] ?? this.line
+  }
   get prev_type(): string | undefined {
     const split = this.path.lastIndexOf('/')
     return this.index === 0 || split < 0 ? undefined : this.context.nodeTypes.get(`${this.path.slice(0, split)}/${this.index - 1}`)
@@ -441,7 +448,11 @@ class BlockRecord {
     const end = source.indexOf('\n', from)
     return source.slice(from, end < 0 ? source.length : end).replace(/[ \t\r]+$/, '')
   }
-  get after_quote_mark(): boolean { return this.context.source.slice(this.line.start, this.start).endsWith('> ') }
+  get after_quote_mark(): boolean {
+    const at = this.opener_start
+    const source = this.context.source
+    return source.slice(source.lastIndexOf('\n', at - 1) + 1, at).endsWith('> ')
+  }
   get owner(): Container {
     if (this.ownerCache === undefined) {
       const found = ownerOf(this.parentPath, this.context.nodeTypes as Map<string, string>)
@@ -561,8 +572,8 @@ export class DataWalk {
 
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
     const holder = this.holder
-    // Inline content holds no block and no line of its own.
-    if (holder !== undefined && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
+    // Inline content holds no block and no line of its own; the caption of an image paragraph is a block (C2-W-140).
+    if (holder !== undefined && node.type !== 'caption' && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
       if (holder.inline && this.types.has(node.type) && node.pos !== undefined) {
         this.inline.push(new InlineRecord(node, path, holder.type, parent.type, this.context))
       }
@@ -588,13 +599,17 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   const runs: (readonly T[])[] = []
   const containers = new Map<string, number>()
   for (const item of walked) {
-    if (item.path === '' || item.node.pos === undefined) continue
+    if (item.path === '') continue
     const blockRuns = runsFor(blockType(item.node), context.nodeTypes.get(item.parent) ?? 'document')
     if (blockRuns.length === 0 && !needed.has(blockType(item.node))) continue
-    const start = context.chars[item.node.pos.startOffset] ?? 0
+    // C2-W-140: every block has a record; a row a continuation joined has no `pos` (C2-A-158), so its layout gives the span.
+    const layout = item.node.pos === undefined ? context.layouts.get(item.path) : undefined
+    if (item.node.pos === undefined && layout === undefined) continue
+    const start = context.chars[item.node.pos?.startOffset ?? layout!.startByte] ?? 0
     const line = model[(context.offsetLines[start] ?? 1) - 1]
     if (line === undefined) continue
-    blocks.push(new BlockRecord(item, line, start, context, containers, model))
+    const end = layout === undefined ? undefined : context.chars[layout.endByte] ?? source.length
+    blocks.push(new BlockRecord(item, line, start, context, containers, model, end))
     runs.push(blockRuns)
   }
   return { lines: model, blocks, runs }
