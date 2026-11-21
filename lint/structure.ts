@@ -73,12 +73,13 @@ function headingLineColumn(line: LintContext['lines'][number], quotes: number, c
 }
 
 /** The marker line of an attributed heading: the first line behind its attribute lines and the comments among them. */
-function markerLine(from: number, to: number, quotes: number, context: LintContext): number {
+function markerLine(start: number, from: number, to: number, quotes: number, context: LintContext): number {
   let number = from
   for (; number < to; number++) {
     const line = context.lines[number - 1]
     if (line === undefined) break
-    let at = quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
+    // The first line is read from the heading's start, behind a list marker or a byte order mark.
+    let at = number === from ? start : quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
     while (context.source[at] === ' ' || context.source[at] === '\t') at++
     if (context.source[at] !== '{' && !context.source.startsWith('%%', at)) break
   }
@@ -88,7 +89,9 @@ function markerLine(from: number, to: number, quotes: number, context: LintConte
 function headingContinuation(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
   const quotes = quotesAbove(path, context)
-  const opener = node.attrs === undefined ? node.pos.startLine : markerLine(node.pos.startLine, node.pos.endLine, quotes, context)
+  const range = bounds(node, context)
+  const opener = node.attrs === undefined || range === null ? node.pos.startLine
+    : markerLine(range[0], node.pos.startLine, node.pos.endLine, quotes, context)
   const first = context.lines[opener - 1]
   // C2-B-137: the line that continues the heading may stand below comment-only lines.
   let next = opener
