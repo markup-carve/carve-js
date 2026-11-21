@@ -33,6 +33,8 @@ describe('preserved-construct records of a hub import (carve-js#5133)', () => {
         ['listUnordered', 'list', 'preserved'], ['codeFenced', 'code_block', 'preserved']])
     expect(constructs('| a |\n|---|\n| 1 |\n\n> [!NOTE]\n> hi\n', 'gfm')?.map(entry => [entry.node, entry.status]))
       .toEqual([['table', 'preserved'], ['admonition', 'preserved']])
+    expect(constructs(':::note\nhello\n:::\n\n:::box\nx\n:::\n', 'markdown')?.map(entry => [entry.construct, entry.node, entry.status]))
+      .toEqual([['directiveContainer', 'admonition', 'preserved'], ['directiveContainer', 'div', 'preserved']])
     expect(constructs('x[^1]\n\n[^1]: n\n', 'djot')?.map(entry => [entry.node, entry.status]))
       .toEqual([['footnote_ref', 'preserved'], ['footnote', 'preserved']])
   })

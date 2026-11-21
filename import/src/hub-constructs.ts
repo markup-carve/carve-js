@@ -2,6 +2,7 @@
 // imported tree holds it. Ranges are UTF-8 bytes of the input, as the importer's own findings count them (C2-M-081).
 import type { Event } from 'micromark-util-types'
 import type { DocumentNode } from '../../src/index.ts'
+import { ADMONITION_KINDS } from './html.ts'
 import { byteOffsetTable, type ImportDiagnostic } from './kit.ts'
 
 /** One construct of the input; `status` is `preserved` when the tree is shown to hold it, `unverified` otherwise. */
@@ -21,6 +22,7 @@ const MARKDOWN_NODES: Readonly<Record<string, string>> = {
   atxHeading: 'heading', setextHeading: 'heading', blockQuote: 'block_quote', listOrdered: 'list', listUnordered: 'list',
   codeFenced: 'code_block', codeIndented: 'code_block', thematicBreak: 'thematic_break', htmlFlow: 'raw_block',
   table: 'table', mathFlow: 'math', gfmFootnoteDefinition: 'footnote', yaml: 'frontmatter', toml: 'frontmatter',
+  directiveContainer: 'div',
   strong: 'strong', emphasis: 'emphasis', strikethrough: 'delete', codeText: 'code', link: 'link', image: 'image',
   autolink: 'link', literalAutolink: 'link', hardBreakEscape: 'hard_break', hardBreakTrailing: 'hard_break',
   htmlText: 'raw_inline', mathText: 'math', gfmFootnoteCall: 'footnote_ref',
@@ -39,7 +41,8 @@ const DJOT_NODES: Readonly<Record<string, string>> = {
 
 /** The HTML elements a node type is read from; a finding on one of them leaves the node type unverified. */
 const NODE_ELEMENTS: Readonly<Record<string, readonly string[]>> = {
-  admonition: ['blockquote'], heading: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'], block_quote: ['blockquote'], list: ['ul', 'ol', 'li', 'input'],
+  admonition: ['blockquote', 'aside'], heading: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'], block_quote: ['blockquote'],
+  list: ['ul', 'ol', 'li', 'input'],
   definition_list: ['dl', 'dt', 'dd'], code_block: ['pre'], thematic_break: ['hr'],
   table: ['table', 'thead', 'tbody', 'tr', 'th', 'td'], div: ['div'], footnote: ['section'], strong: ['strong'],
   emphasis: ['em'], delete: ['del'], insert: ['ins'], highlight: ['mark'], superscript: ['sup'], subscript: ['sub'],
@@ -48,17 +51,27 @@ const NODE_ELEMENTS: Readonly<Record<string, readonly string[]>> = {
 
 const ALERT = /^>[ \t]?\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\r?\n|\r|$)/u
 
+/** The hub writes a container directive of an admonition kind as an admonition, any other as a div. */
+function nameDirective(directive: Found | undefined, name: string): undefined {
+  if (directive !== undefined && (ADMONITION_KINDS as readonly string[]).includes(name)) directive.node = 'admonition'
+  return undefined
+}
+
 /** The constructs micromark entered, from the events the hub compiles anyway. */
 export function markdownConstructs(events: readonly Event[], input: string, alerts: boolean): Found[] {
   const found: Found[] = []
+  let directive: Found | undefined
   for (const [kind, token] of events) {
     if (kind !== 'enter') continue
     const type = token.type
-    let node = MARKDOWN_NODES[type]
-    if (node === undefined) continue
+    const text = (): string => input.slice(token.start.offset, token.end.offset)
+    if (type === 'directiveContainerName') directive = nameDirective(directive, text())
+    const mapped = MARKDOWN_NODES[type]
+    if (mapped === undefined) continue
     // A GFM alert is an admonition; a wrong guess only leaves both types unverified.
-    if (alerts && type === 'blockQuote' && ALERT.test(input.slice(token.start.offset, token.end.offset))) node = 'admonition'
+    const node = alerts && type === 'blockQuote' && ALERT.test(text()) ? 'admonition' : mapped
     found.push({ construct: type, node, start: token.start.offset, end: token.end.offset })
+    if (type === 'directiveContainer') directive = found.at(-1)
   }
   return found
 }
