@@ -1,10 +1,8 @@
-import { forEachSlot, type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
-import { NODE_SLOTS } from '../src/ast-tables.ts'
+import { forEachSlot, type Node } from '../src/ast.ts'
 import { emptyMemo, readAttributeBlock } from '../src/attributes.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { quotesAbove } from './ancestry.ts'
-import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
 import { readPrefix } from '../src/layout-lines.ts'
 import { advanceColumn } from '../src/source.ts'
 import { escaped, isWord } from '../src/pair-marks.ts'
@@ -23,49 +21,6 @@ function reportNode(id: Rule['id'], node: Node, path: string, context: LintConte
 function raw(node: Node, context: LintContext): string {
   const range = bounds(node, context)
   return range === null ? '' : context.source.slice(range[0], range[1])
-}
-
-function attributeRange(node: Node, context: LintContext, key: string, whole = false): [number, number] | null {
-  const range = bounds(node, context)
-  if (range === null) return null
-  const source = context.source.slice(range[0], range[1])
-  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = new RegExp(`(?:^|[\\s{])(${escapedKey})(?:=("[^"]*"|'[^']*'|[^\\s}]+))?(?=[\\s}])`).exec(source)
-  if (match === null) return null
-  const start = range[0] + match.index + match[0].indexOf(key)
-  return [start, start + key.length + (whole && match[2] !== undefined ? match[2].length + 1 : 0)]
-}
-
-function reportAttribute(id: Rule['id'], node: Node, path: string, context: LintContext, key: string,
-  whole = false, values?: Record<string, string>): void {
-  const range = attributeRange(node, context, key, whole)
-  if (range !== null) context.report(id, range[0], range[1], path, values)
-  else reportNode(id, node, path, context, values)
-}
-
-function tableAttribute(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table' || context.layouts.get(path)?.sourceFormat !== 'pipe') return
-  if (attributeValue(node, context, 'header-rows') !== undefined) {
-    reportNode('deprecated-table-attribute', node, path, context)
-  }
-}
-
-const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols']
-
-/** C2-B-227: a table keeps a key it reads in `attrs` only when the value is invalid, or `header-rows` on a pipe table. */
-function keptTableKeys(node: Node): string[] {
-  if (node.type !== 'table') return []
-  return (node.attrs?.keyValues ?? []).map(([key]) => key).filter((key) => TABLE_KEYS.includes(key))
-}
-
-function invalidTableAttribute(node: Node, path: string, context: LintContext): void {
-  const pipe = context.layouts.get(path)?.sourceFormat === 'pipe'
-  for (const [key, value] of node.attrs?.keyValues ?? []) {
-    if (!keptTableKeys(node).includes(key)) continue
-    // C2-B-186: a valid count of `header-rows` on a pipe table is deprecated, not invalid.
-    if (pipe && key === 'header-rows' && /^\d*$/.test(value)) continue
-    reportAttribute('table-attribute-invalid', node, path, context, key, true, { key })
-  }
 }
 
 /** The offset of a line comment behind the closing pipe of a row line, or -1. */
@@ -110,65 +65,6 @@ function commentSplitsRow(node: Node, path: string, context: LintContext): void 
     const offset = line.text.length - line.text.replace(/^[\t >]*/u, '').length
     walkRowLine(walk, line.start + offset, line.text.slice(offset), path, context)
   }
-}
-
-function groupRows(node: Node, type: string): number {
-  if (node.type !== 'table') return 0
-  let rows = 0
-  for (const group of node.children) {
-    if (group.type !== 'comment' && group.type === type) rows += group.children.filter((row) => row.type === 'table_row').length
-  }
-  return rows
-}
-
-/** C2-B-187, C2-B-209: a valid count larger than the rows it can take is clamped, and the hint names the count to write. */
-function rowCountClamped(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table' || node.pos === undefined) return
-  const head = groupRows(node, 'table_head')
-  const below = groupRows(node, 'table_body') + groupRows(node, 'table_foot')
-  const limits: [string, number][] = [['footer-rows', below]]
-  if (context.layouts.get(path)?.sourceFormat !== 'pipe') limits.unshift(['header-rows', head + below])
-  const line = firstLine(node, context)
-  for (const [key, limit] of limits) {
-    const value = attributeValue(node, context, key)
-    if (line === undefined || value === undefined || !/^\d*$/.test(value)) continue
-    // C2-B-210: an empty value counts as 1.
-    const count = value === '' ? '1' : value
-    if (Number(count) <= limit) continue
-    const at = line.text.indexOf(key)
-    const equals = line.text[at + key.length] === '=' ? 1 : 0
-    // C2-W-138: the range is the key and its value as written, quotes included.
-    const written = line.text[at + key.length + equals] === '"' ? value.length + 2 : value.length
-    context.report('table-row-count-clamped', line.start + at, line.start + at + key.length + equals + written, path,
-      { key, count, effective: String(limit) })
-  }
-}
-
-/** The first line of a block from where the block starts, behind its container prefixes. */
-function firstLine(node: Node, context: LintContext): { start: number, text: string } | undefined {
-  const range = bounds(node, context)
-  const line = node.pos === undefined ? undefined : context.lines[node.pos.startLine - 1]
-  if (range === null || line === undefined) return undefined
-  return { start: range[0], text: context.source.slice(range[0], line.end) }
-}
-
-function attributeValue(node: Node, context: LintContext, key: string): string | undefined {
-  const line = firstLine(node, context)?.text.trim()
-  if (line === undefined || !line.startsWith('{') || !line.endsWith('}')) return undefined
-  const at = line.indexOf(key)
-  if (at < 0 || (at > 0 && line[at - 1] !== '{' && line[at - 1] !== ' ')) return undefined
-  const equals = at + key.length
-  if (line[equals] !== '=') return ''
-  return readAttributeValue(line, equals + 1)
-}
-
-function readAttributeValue(line: string, offset: number): string {
-  let end = offset
-  const quoted = line[end] === '"'
-  if (quoted) end++
-  const start = end
-  while (end < line.length && line[end] !== (quoted ? '"' : ' ') && line[end] !== '}') end++
-  return line.slice(start, end)
 }
 
 /** C2-A-084: a child of a group that carries a caption; C2-B-127: a nested figure group is a group of its own, no panel. */
@@ -256,53 +152,6 @@ function figurePanelNumber(node: Node, path: string, context: LintContext): void
 function referencesPlacement(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'directive' || path.split('/').length <= 3) return
   if (node.kind === 'references') reportNode('references-placement-in-container', node, path, context)
-}
-
-/** C2-H-075 keys with those a registered extension adds (carve-js#5060). */
-function semanticKeys(context: LintContext): readonly (readonly [string, string | null])[] {
-  let keys = CORE_SEMANTIC_KEYS
-  for (const entry of context.options.extensions ?? []) if (entry.semanticKeys !== undefined) keys = entry.semanticKeys
-  return keys
-}
-
-function semanticOutside(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'span' || node.attrs?.keyValues === undefined) return
-  for (const [name] of semanticKeys(context)) {
-    const value = node.attrs.keyValues.find(([key]) => key.toLowerCase() === name)?.[1]
-    if (value !== undefined) {
-      const range = attributeRange(node, context, name)
-      if (range === null) continue
-      context.report('semantic-attribute-outside-span', range[0], range[1], path, { name, type: node.type, value })
-    }
-  }
-}
-
-function semanticValue(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'span') return
-  for (const [name, value] of node.attrs?.keyValues ?? []) {
-    if (value !== '' && semanticKeys(context).some(([key, target]) => key === name && target === null)) {
-      reportAttribute('semantic-attribute-value-ignored', node, path, context, name, true, { name })
-    }
-  }
-}
-
-function tableColumnArity(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table') return
-  for (const key of ['aligns', 'valigns', 'widths']) {
-    const value = attributeValue(node, context, key)
-    // C2-B-211: an invalid list sets no column, and table-attribute-invalid reports it.
-    if (value === undefined || keptTableKeys(node).includes(key)) continue
-    const count = value.split(',').length
-    if (count < node.columns.length) reportAttribute('table-column-arity', node, path, context, key, false,
-      { key, count: String(count), widest: String(node.columns.length) })
-  }
-}
-
-function tableWidth(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table') return
-  let total = 0
-  for (const column of node.columns) total += column.width ?? 0
-  if (total > 1) reportAttribute('table-width-total', node, path, context, 'widths')
 }
 
 function rowAttributeCell(node: Node, path: string, context: LintContext): void {
@@ -570,27 +419,6 @@ function jsonText(value: string): string {
   return JSON.stringify(value).slice(1, -1)
 }
 
-/** C2-B-213: a head mark and an `aligns` or `valigns` entry that set the same axis of a column. */
-function tableColumnOverlap(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table') return
-  if (attributeValue(node, context, 'aligns') === undefined && attributeValue(node, context, 'valigns') === undefined) return
-  const head = node.children.find((child) => child.type === 'table_head')
-  const first = head?.type === 'table_head' ? head.children.find((child) => child.type === 'table_row') : undefined
-  if (first?.type !== 'table_row') return
-  node.columns.forEach((column, at) => {
-    // C2-A-095: the column fields carry the fact that `aligns` or `valigns` wrote them.
-    if (overlaps(column, first.children[at])) {
-      const key = column.align !== undefined && first.children[at]?.align !== undefined ? 'aligns' : 'valigns'
-      reportAttribute('table-column-overlap', node, path, context, key, false, { n: String(at + 1) })
-    }
-  })
-}
-
-function overlaps(column: TableColumnNode, cell: TableCellNode | undefined): boolean {
-  if (cell === undefined) return false
-  return (column.align !== undefined && cell.align !== undefined) || (column.valign !== undefined && cell.valign !== undefined)
-}
-
 function tightBlankLine(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'list' || node.spacing !== 'tight') return
   for (let at = 0; at < node.children.length; at++) {
@@ -641,7 +469,6 @@ function unclosedEmphasis(node: Node, path: string, context: LintContext): void 
   }
 }
 
-const NOT_SPAN = [...NODE_SLOTS.keys()].filter((type) => type !== 'span') as Node['type'][]
 // C2-I-079: a footnote label, a full reference's label or a definition label of only whitespace.
 
 function sigilAfterLetter(node: Node, path: string, context: LintContext): void {
@@ -731,37 +558,6 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
   const after = range === null ? '' : context.source.slice(range[0] + at + 2)
   if (at >= 0 && range !== null && after.includes(closer)) context.report('braced-span-opener-as-text', range[0] + at,
     range[0] + at + 2, path)
-}
-
-function nearTable(word: string): boolean {
-  const lower = word.toLowerCase()
-  if (lower === 'table') return word !== 'table'
-  if (Math.abs(lower.length - 5) > 1) return false
-  if (lower.length === 5) {
-    const wrong = [...lower].filter((char, index) => char !== 'table'[index]).length
-    if (wrong === 1) return true
-    for (let at = 0; at < 4; at++) {
-      const swapped = `${lower.slice(0, at)}${lower[at + 1]}${lower[at]}${lower.slice(at + 2)}`
-      if (swapped === 'table') return true
-    }
-    return false
-  }
-  const short = lower.length < 5 ? lower : 'table'
-  const long = lower.length < 5 ? 'table' : lower
-  for (let at = 0; at < long.length; at++) if (long.slice(0, at) + long.slice(at + 1) === short) return true
-  return false
-}
-
-function consumedNearMiss(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'code_block' || (node.syntax !== 'csv' && node.syntax !== 'tsv')) return
-  const range = bounds(node, context)
-  if (range === null) return
-  const opener = /^`{3,}/m.exec(context.source.slice(range[0], range[1]))
-  if (opener === null) return
-  for (const [word, value] of node.attrs?.keyValues ?? []) {
-    if (value === '' && nearTable(word)) context.report('consumed-key-near-miss', range[0] + opener.index,
-      range[1], path, { word, key: 'table' })
-  }
 }
 
 function orderedRightAligned(node: Node, path: string, context: LintContext): void {
@@ -934,20 +730,13 @@ function nodeRule(id: Rule['id'], nodes: readonly Node['type'][] , checkNode: No
 }
 
 export const NODE_RULES: readonly Rule[] = [
-                            nodeRule('deprecated-table-attribute', ['table'], tableAttribute),
                   nodeRule('deprecated-substitution-arrow', ['strike'], substitutionArrow),
       nodeRule('html-comment-renders-as-text', ['paragraph'], multilineHtmlComment),
   nodeRule('bidi-control-in-source', ['text', 'code', 'code_block', 'math'], bidiControl),
     nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
   nodeRule('figure-group-panel-number', ['figure_group'], figurePanelNumber),
     nodeRule('references-placement-in-container', ['directive'], referencesPlacement),
-  nodeRule('semantic-attribute-outside-span', NOT_SPAN, semanticOutside),
-  nodeRule('semantic-attribute-value-ignored', ['span'], semanticValue),
-  nodeRule('table-column-arity', ['table'], tableColumnArity),
-  nodeRule('table-attribute-invalid', ['table'], invalidTableAttribute),
-  nodeRule('table-row-count-clamped', ['table'], rowCountClamped),
   nodeRule('comment-splits-table-row', ['table'], commentSplitsRow),
-  nodeRule('table-width-total', ['table'], tableWidth),
   nodeRule('table-row-attribute-as-cell', ['table_row'], rowAttributeCell),
             nodeRule('unattached-inline-attribute', ['text'], unattachedInline),
   nodeRule('deprecated-cell-alignment', ['table_cell'], deprecatedCellAlignment),
@@ -961,7 +750,6 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('emphasis-marker-before-attributes', ['strong', 'emphasis'], spanMarkerBeforeAttrs),
   nodeRule('carve-version-unsupported', ['frontmatter'], carveVersion),
       nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
-  nodeRule('table-column-overlap', ['table'], tableColumnOverlap),
   nodeRule('tight-list-item-with-blank-line', ['list'], tightBlankLine),
     nodeRule('region-marker-renders-as-text', ['comment'], regionComment),
   nodeRule('unclosed-braced-comment', ['text'], unclosedBracedComment),
@@ -969,7 +757,6 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('sigil-after-letter', ['text'], sigilAfterLetter),
       nodeRule('list-marker-below-content-column', ['list'], listMarkerBelowColumn),
     nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
-  nodeRule('consumed-key-near-miss', ['code_block'], consumedNearMiss),
   nodeRule('ordered-marker-right-aligned', ['list'], orderedRightAligned),
   nodeRule('table-span-marker-blocked', ['table_cell'], spanMarkerBlocked),
   nodeRule('table-span-marker-attribute', ['table_cell'], spanMarkerAttribute),
