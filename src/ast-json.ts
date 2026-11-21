@@ -91,13 +91,19 @@ function comparedField(node: Record<string, unknown>, results: ReadonlyMap<strin
   return false
 }
 
+/** A text with no field beyond its value and geometry; only such runs join, so a field of a later one is compared. */
+function joinableText(node: unknown): node is { type: 'text', value?: string } {
+  if (!isRecord(node) || node['type'] !== 'text') return false
+  for (const name of Object.keys(node)) if (name !== 'type' && name !== 'value' && name !== 'pos' && name !== 'segments') return false
+  return true
+}
+
 /** C2-A-040: adjacent text nodes compare as one. */
 function coalesced(list: unknown[]): unknown[] {
   const out: unknown[] = []
   for (const item of list) {
-    const last = out[out.length - 1] as { type?: unknown, value?: string } | undefined
-    const text = item as { type?: unknown, value?: string } | null
-    if (text?.type === 'text' && last?.type === 'text') out[out.length - 1] = { ...last, value: (last.value ?? '') + (text.value ?? '') }
+    const last = out[out.length - 1]
+    if (joinableText(item) && joinableText(last)) out[out.length - 1] = { ...last, value: (last.value ?? '') + (item.value ?? '') }
     else out.push(item)
   }
   return out
