@@ -86,9 +86,10 @@ export interface Writer {
   /**
    * C2-W-133: the characters every parse of the writer read, probes included, which share this record, and its limit.
    * The repairs of all groups draw on one budget: `spent` is what they read, `source` the length of the document
-   * where the writer has it, `written` the characters of the groups written so far.
+   * where the writer has it, `written` the characters of the groups written so far, `rewritten` what the rounds of
+   * all repairs wrote.
    */
-  work: { chars: number, limit: number, spent: number, source: number, written: number }
+  work: { chars: number, limit: number, spent: number, source: number, written: number, rewritten: number }
 }
 
 /** What one probe of the repair found: its result and the escapes it asked of the comparison, in order. */
@@ -108,7 +109,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     parsed: null,
     prewrittenAttributes: null, bareAlts: false, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
-    work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0 },
+    work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
   }
 }
 
