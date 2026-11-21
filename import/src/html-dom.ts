@@ -14,6 +14,35 @@ export const CARRIERS: ReadonlySet<string> = new Set([
 /** C2-H-186: the level of a heading before `headingShift` (C2-H-208); only a heading reads it. */
 export const SOURCE_LEVEL = 'data-carve-source-level'
 
+/** C2-H-186: the element classes named by the carrier table's Read on column. */
+const CARRIER_READ_ON: Readonly<Record<string, readonly string[]>> = {
+  'data-marker': ['ul', 'ol'],
+  'data-carve-explicit-id': ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'section'],
+  'data-carve-generated-id': ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'section'],
+  'data-carve-ref': ['a', 'img'],
+  'data-carve-ref-collapsed': ['a', 'img'],
+  'data-carve-ref-shortcut': ['a', 'img'],
+  'data-carve-autolink': ['a'],
+  'data-carve-footnote-label': ['a', 'li'],
+  'data-carve-inline-footnote': ['li'],
+  'data-carve-raw': ['span'],
+  'data-carve-abbreviations': ['template'],
+  'data-carve-label': ['pre'],
+  'data-carve-tight': ['ul', 'ol'],
+  'data-carve-xref': ['a'],
+  'data-carve-caption-number': ['span'],
+  'data-carve-div': ['div'],
+  'data-carve-line-block': ['div'],
+  'data-carve-source-level': ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div'],
+}
+
+export function readsCarrier(node: Html.Element, name: string, heading = false): boolean {
+  if (node.tagName === 'div' && (name === SOURCE_LEVEL || name === 'data-carve-explicit-id' || name === 'data-carve-generated-id')) {
+    return heading
+  }
+  return name === 'data-carve-src' || (CARRIER_READ_ON[name]?.includes(node.tagName) ?? false)
+}
+
 /** A note of the footnote section, by the id of its item (C2-H-089). */
 export interface NoteEntry { item: Html.Element, label?: string, inline: boolean }
 
@@ -136,11 +165,18 @@ function isAuthored(item: { name: string, value: string }, omit: readonly string
  * the audit of the document reports. With `alignStyle`, an exact alignment declaration is the key `align`, and an
  * `align` attribute beside it is dropped and reported, since the declaration wins in a browser (C2-M-075).
  */
-export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyled = false): MappedAttrs {
+function reportUnreadCarrier(context: HtmlContext, node: Html.Element, name: string, heading: boolean): void {
+  if (!CARRIERS.has(name) || readsCarrier(node, name, heading)) return
+  ignoredCarrier(context, node, name, name === SOURCE_LEVEL ? 'the element is no heading' : 'the element does not read this carrier')
+}
+
+export function attrs(
+  context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyled = false, heading = false,
+): MappedAttrs {
   const styled = alignStyled && alignStyle(attr(node, 'style')) !== undefined
-  if (!omit.includes(SOURCE_LEVEL) && has(node, SOURCE_LEVEL)) ignoredCarrier(context, node, SOURCE_LEVEL, 'the element is no heading')
   const entries: [string, string][] = []
   for (const item of node.attrs) {
+    reportUnreadCarrier(context, node, item.name, heading)
     if (!isAuthored(item, omit)) continue
     if (styled && item.name === 'align') {
       report(context, node, 'import-attribute-dropped', 'An align attribute beside a text-align declaration dropped')

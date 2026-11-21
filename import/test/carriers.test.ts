@@ -54,6 +54,36 @@ function examplesWith(marker: string): { count: number, failing: string[] } {
 }
 
 describe('C2-H-186 carriers', () => {
+  it.each([
+    ['<div data-carve-ref="x">y</div>', 'data-carve-ref'],
+    ['<p data-carve-tight>x</p>', 'data-carve-tight'],
+    ['<p data-carve-ref="x">y</p>', 'data-carve-ref'],
+    ['<p><em data-carve-div>x</em></p>', 'data-carve-div'],
+    ['<blockquote data-carve-line-block><p>x</p></blockquote>', 'data-carve-line-block'],
+    ['<p data-carve-explicit-id>x</p>', 'data-carve-explicit-id'],
+  ])('C2-M-009 reports a carrier outside its element class: %s', (html, name) => {
+    const findings = importDocument(html, { from: 'html', rawHtml: true }).diagnostics
+    expect(findings.filter(entry => entry.code === 'import-carrier-ignored' && entry.message.includes(name))).toHaveLength(1)
+  })
+
+  it.each([
+    'data-marker', 'data-carve-explicit-id', 'data-carve-generated-id', 'data-carve-ref',
+    'data-carve-ref-collapsed', 'data-carve-ref-shortcut', 'data-carve-autolink',
+    'data-carve-footnote-label', 'data-carve-inline-footnote', 'data-carve-raw',
+    'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight',
+    'data-carve-xref', 'data-carve-caption-number', 'data-carve-div',
+    'data-carve-line-block', 'data-carve-source-level',
+  ])('C2-M-009 reports %s on a paragraph', name => {
+    expect(ignored(`<p ${name}="1">x</p>`, name)).toBe(true)
+  })
+  it('C2-H-120 still removes data-carve-src without a report', () => {
+    expect(read('<p data-carve-src="x">x</p>').messages).toEqual([])
+  })
+  it('C2-H-186 reads source-level on a div only when that div becomes a heading', () => {
+    expect(ignored('<div role="heading" aria-level="2" data-carve-source-level="1">x</div>', 'data-carve-source-level')).toBe(true)
+    expect(ignored('<div role="heading" aria-level="7" data-carve-source-level="6">x</div>', 'data-carve-source-level')).toBe(false)
+  })
+
   it('C2-H-195 row 16: the space at the edge of a delimited-table cell is a listed loss', () => {
     const outcome = roundTrip('{table}\n```csv\na,"b ""q"" c", d\n```\n')
     expect(outcome.html).toContain('<th scope="col"> d</th>')
