@@ -40,6 +40,7 @@ const ENGINE_FLAGS: readonly Flag[] = [
   { name: 'ignore', commands: ['lint'], kind: 'code', repeatable: true },
   { name: 'strict', commands: ['render', 'lint'], kind: 'switch' },
   { name: 'output', commands: ['render', 'fmt', 'import'], kind: 'path' },
+  { name: 'directory', commands: ['import'], kind: 'path' },
 ]
 
 function specified(row: (typeof cli.flags)[number]): Flag {
@@ -174,9 +175,22 @@ function checkEngineCombinations(parsed: ParsedArgs): void {
   }
 }
 
+/** The directory import of 0.1 `migrate --from markdown --directory` (C2-T-003): a source and an output directory, no files. */
+function checkDirectoryCombinations(parsed: ParsedArgs): void {
+  const values = parsed.values
+  if (parsed.command !== 'import' || values['directory'] === undefined) return
+  if (typeof values['output'] !== 'string') throw new UsageError('--directory needs --output DIR')
+  if (values['from'] !== 'gfm' && values['from'] !== 'markdown') throw new UsageError('--directory imports --from gfm or markdown')
+  if (parsed.files.length > 0) throw new UsageError('--directory takes no file')
+  for (const name of ['adapter', 'raw-html', 'report-losses', 'allow-loss', 'max-render-losses']) {
+    if (values[name] !== undefined) throw new UsageError(`--directory cannot be combined with --${name}`)
+  }
+}
+
 function checkCombinations(parsed: ParsedArgs, files: readonly string[]): void {
   checkFormatCombinations(parsed)
   checkEngineCombinations(parsed)
+  checkDirectoryCombinations(parsed)
   const values = parsed.values
   if (values['from-ast'] === true && values['normalize'] === true) throw new UsageError('--normalize needs source input')
   const losses = values['report-losses']

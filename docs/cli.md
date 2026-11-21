@@ -8,6 +8,7 @@ carve fix notes.md.crv > notes.crv
 carve fix --write docs/*.crv
 carve lint --fix --write --json docs/*.crv
 carve upgrade --migrate --write legacy.crv
+carve import --from gfm --directory docs --output docs-carve
 carve render -o page.html page.crv
 carve lint --strict --ignore vendor/third-party.crv book.crv
 ```
@@ -55,6 +56,16 @@ Without `--write`, the fixed source goes to standard output, and `FILE: fixed RU
 ## `carve upgrade --migrate`
 
 `--migrate` is the `fmt --migrate` of 0.1. Before the upgrade reads a 0.1 file, a cross-reference `</#id>` or a reference label that misses its target only by case is respelled to that target, when exactly one target matches it. Each respelled line gets a `case-reference` record of class `rewrite`. A reference with several candidates is left for `lint`.
+
+## `carve import --directory`
+
+`carve import --from gfm --directory SOURCE --output TARGET` converts a tree of Markdown files, as `migrate --from markdown --directory` did in 0.1. `--from markdown` reads strict CommonMark instead. Each file is imported as `importDocument` imports it:
+
+- A `.md` or `.markdown` file (the extension in any ASCII case) becomes a `.crv` file at the same path. Another regular file is copied with its permission bits. A symlink or special file is skipped and listed in the report.
+- A local link or image to a converted file is rewritten to its `.crv` name once its target and fragment are found in the output. A fragment that matches one heading id only without regard to case is respelled to that id, with a `link-fragment-case-rewritten` hint. A missing file or fragment, a site-root path, a path outside `SOURCE` and a fragment into a copied file are left as written and reported. A URL in raw HTML is checked but never rewritten.
+- `TARGET/migration-report.json` holds `schemaVersion`, `sourceFormat`, and `files`: each with its `source`, `output`, its import `diagnostics` and its `links`, each link `rewritten`, `valid` or `unresolved` with a `reason`. It also holds `assets`, `skipped`, and `review`, the files with an unresolved link or a loss.
+
+`TARGET` must not exist and must lie outside `SOURCE`. Two inputs that map to one output, such as `a.md` and `a.markdown`, are refused. The tree is built beside `TARGET` and moved into place at the end, so a refused run leaves no output; these refusals have the category `usage`, and a file that cannot be read has `input-unreadable`. The summary line goes to standard output. The status is 0, or 1 under `--strict-losses` when a file needs review or an entry was skipped. `--directory` takes no file and refuses `--raw-html`, `--adapter` and the loss report flags.
 
 ## Flags on the specified commands
 
