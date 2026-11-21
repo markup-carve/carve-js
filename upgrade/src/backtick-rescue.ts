@@ -61,6 +61,7 @@ function opaqueMask(output: string): Uint8Array {
  * to the end of the content. Each candidate closes the first such run at one line end of its paragraph.
  */
 export function closedRunCandidates(output: string, id = 'U-258'): Candidate[] {
+  if (!output.includes('`')) return []
   const found: Candidate[] = []
   const opaque = opaqueMask(output)
   for (let at = 0; at < output.length; at++) {
@@ -90,6 +91,7 @@ export function closedRunCandidates(output: string, id = 'U-258'): Candidate[] {
 
 /** C2-B-173, C2-B-174, U-259: a span mark alone in a cell that cannot join is removed, which leaves an empty cell. */
 export function spanMarkCandidates(output: string): Candidate[] {
+  if (!output.includes('|')) return []
   const found: Candidate[] = []
   for (const { node } of makeContext(output).visits) {
     if (node.type !== 'table_cell' || node.pos === undefined || node.span === undefined) continue
