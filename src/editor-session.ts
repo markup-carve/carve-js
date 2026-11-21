@@ -3,6 +3,9 @@ import type { DocumentNode } from './ast.ts'
 import type { ParseOptions } from './options.ts'
 import { parse } from './api.ts'
 import { utf8Length } from './positions.ts'
+import { NODE_TABLE } from './ast-validate.ts'
+
+const INLINE_TYPES: ReadonlySet<string> = new Set(NODE_TABLE.INLINES)
 
 type AstJsonDocument = DocumentNode
 type AstJsonBlock = DocumentNode['children'][number]
@@ -105,41 +108,62 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
       ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'))
     }
   }
+  const cellsByRow = new Map<string, EditorRange[]>()
+  for (const node of result) {
+    if (node.type !== 'table_cell') continue
+    const row = node.path.slice(0, node.path.lastIndexOf('/children/'))
+    const cells = cellsByRow.get(row)
+    if (cells) cells.push(node)
+    else cellsByRow.set(row, [node])
+  }
   for (const node of result) {
     const tokens: EditorToken[] = []
-    const authored = source.slice(node.start, node.end)
     const token = (role: EditorToken['role'], start: number, end: number): void => { if (end > start) tokens.push({ role, start, end }) }
+    // The attribute lines above a block lie inside its range; the block's own markers start behind them.
+    let contentStart = node.start
+    if (hasAttrs.has(node.path) && !INLINE_TYPES.has(node.type ?? '')) {
+      // An attribute line is followed by the rest of its block, so the last line of the range never is one.
+      for (let line = attributeLine(source, contentStart); line !== null && line.next < node.end;) {
+        token('attribute', contentStart, line.end)
+        contentStart = line.next
+        line = attributeLine(source, contentStart)
+      }
+    }
+    const authored = source.slice(contentStart, node.end)
     if (node.type === 'heading') {
-      const marker = /^(#{1,6})[ \t]+/.exec(authored)
-      if (marker) token('block-marker', node.start, node.start + marker[0].length)
+      const marker = /^([ \t]*)(?:={1,6}|#{1,6})[ \t]+/.exec(authored)
+      if (marker) token('block-marker', contentStart + marker[1]!.length, contentStart + marker[0].length)
     } else if (node.type === 'list_item') {
       const content = byPath.get(`${node.path}/children/0`)
-      if (content && content.start > node.start) token('block-marker', node.start, content.start)
+      if (content && content.start > contentStart) token('block-marker', contentStart, content.start)
     } else if (node.type === 'link') {
       const text = textByAncestor.get(node.path)
       if (text) {
         const { start, end } = text
         token('open-marker', node.start, start)
-        const destination = /^\]\((.*)\)$/.exec(source.slice(end, node.end))
-        if (destination) {
+        const tail = source.slice(end, node.end)
+        if (tail.startsWith('](') && tail.endsWith(')')) {
           token('close-marker', end, end + 2)
-          token('destination', end + 2, node.end - 1)
+          token('destination', end + 2, end + 2 + destinationLength(tail.slice(2, -1)))
           token('close-marker', node.end - 1, node.end)
         } else token('close-marker', end, node.end)
       }
     } else if (node.type === 'code_block') {
       const first = authored.indexOf('\n')
       const last = authored.lastIndexOf('\n')
-      if (first >= 0 && last > first) {
-        token('fence-open', node.start, node.start + first + 1)
-        token('fence-close', node.start + last, node.end)
-      }
+      if (first >= 0) token('fence-open', contentStart, contentStart + first + 1)
+      const closer = first >= 0 ? /`{3,}[ \t]*$/.exec(authored.slice(last + 1)) : null
+      if (closer) token('fence-close', contentStart + last + 1 + closer.index, node.end)
     } else if (node.type === 'table_row') {
-      for (let index = 0; index < authored.length; index++) {
-        if (authored[index] === '|') token('table-marker', node.start + index, node.start + index + 1)
+      const cells = (cellsByRow.get(node.path) ?? []).sort((a, b) => a.start - b.start)
+      let cell = 0
+      for (let index = contentStart; index < node.end; index++) {
+        while (cell < cells.length && cells[cell]!.end <= index) cell++
+        const inCell = cell < cells.length && cells[cell]!.start <= index
+        if (source[index] === '|' && !inCell) token('table-marker', index, index + 1)
       }
     }
-    if (hasAttrs.has(node.path)) {
+    if (hasAttrs.has(node.path) && contentStart === node.start) {
       let end = node.start
       if (source[end - 1] === '\n') { end--; if (source[end - 1] === '\r') end-- }
       else if (source[end - 1] === '\r') end--
@@ -150,6 +174,32 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
     node.tokens = Object.freeze(tokens.sort((a, b) => a.start - b.start || a.end - b.end))
   }
   return result.sort((a, b) => a.path.localeCompare(b.path))
+}
+
+/** The attribute line `{...}` that starts at `start`: where its text ends and where the next line starts. */
+function attributeLine(source: string, start: number): { end: number; next: number } | null {
+  if (source[start] !== '{' || source[start + 1] === '{') return null
+  let end = start
+  while (end < source.length && source[end] !== '\n' && source[end] !== '\r') end++
+  if (end === start || source[end - 1] !== '}' || end >= source.length) return null
+  return { end, next: end + (source.startsWith('\r\n', end) ? 2 : 1) }
+}
+
+/** The length of the destination at the start of the inside of `(...)`: up to a space or tab outside parentheses. */
+function destinationLength(inside: string): number {
+  if (inside.startsWith('<')) {
+    const close = inside.indexOf('>')
+    return close < 0 ? inside.length : close + 1
+  }
+  let depth = 0
+  for (let at = 0; at < inside.length; at++) {
+    const char = inside[at]
+    if (char === '\\') at++
+    else if (char === '(') depth++
+    else if (char === ')') depth--
+    else if (depth === 0 && (char === ' ' || char === '\t' || char === '\n' || char === '\r')) return at
+  }
+  return inside.length
 }
 
 function scalarBoundary(source: string, offset: number): boolean {
