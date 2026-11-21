@@ -17,21 +17,25 @@ function trimmedEnd(value: string): number {
 interface Trimming {
   readonly pending: Node[]
   readonly values: [TextNode, string][]
-  readonly removed: [Node[], number, Node][]
+  /** Each list that lost a text, with its nodes as they were. */
+  readonly removed: [Node[], Node[]][]
 }
 
-/** Right to left, so a text before a dropped text sees what follows it then. */
+/** Right to left, so a text before a dropped text sees what follows it then. The list is compacted once. */
 function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimming): void {
+  let next: Node | undefined
+  let dropped: Set<Node> | undefined
   for (let i = nodes.length - 1; i >= 0; i--) {
     const child = nodes[i]!
+    const after = next
+    next = child
     if (child.type !== 'text') {
       run.pending.push(child)
       continue
     }
     // The attribute block of a text follows it, so its spaces end no line.
     if ('attrs' in child || 'data' in child) continue
-    const next = nodes[i + 1]
-    if (single || (next === undefined ? !atLineEnd : next.type !== 'soft_break')) continue
+    if (single || (after === undefined ? !atLineEnd : after.type !== 'soft_break')) continue
     const end = trimmedEnd(child.value)
     if (end === child.value.length) continue
     if (end > 0) {
@@ -39,9 +43,18 @@ function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimm
       child.value = child.value.slice(0, end)
       continue
     }
-    run.removed.push([nodes, i, child])
-    nodes.splice(i, 1)
+    next = after
+    dropped ??= new Set()
+    dropped.add(child)
   }
+  if (dropped !== undefined) dropTexts(nodes, dropped, run)
+}
+
+function dropTexts(nodes: Node[], dropped: ReadonlySet<Node>, run: Trimming): void {
+  run.removed.push([nodes, [...nodes]])
+  let kept = 0
+  for (const child of nodes) if (!dropped.has(child)) nodes[kept++] = child
+  nodes.length = kept
 }
 
 function drain(run: Trimming, delimited: (table: TableNode) => boolean): void {
@@ -71,9 +84,10 @@ function trimCells(table: TableNode, groups: Node[], run: Trimming, delimited: (
 }
 
 function restore({ values, removed }: Trimming): void {
-  for (let at = removed.length - 1; at >= 0; at--) {
-    const [nodes, i, child] = removed[at]!
-    nodes.splice(i, 0, child)
+  for (let list = removed.length - 1; list >= 0; list--) {
+    const [nodes, original] = removed[list]!
+    nodes.length = original.length
+    for (let at = 0; at < original.length; at++) nodes[at] = original[at]!
   }
   for (const [text, value] of values) text.value = value
 }
