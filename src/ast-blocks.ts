@@ -27,6 +27,7 @@ import { lineFeedAt } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
 import { finishPositions, utf8Length } from './positions.ts'
+import { DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR } from './derived-text.ts'
 import { type Findings } from './diagnostics.ts'
 import { acquireState, releaseState } from './state.ts'
 import { type BlockNode, buildTree } from './tree.ts'
@@ -674,7 +675,8 @@ export function inlineContent(text: string): Inline[] {
   inline.definitions = new Set()
   try {
     const ctx: TreeContext = {
-      src: text, positions: false, inline, abbreviations: new Map(), markup: new Map(), resolvable: false,
+      src: text, positions: false, inline, abbreviations: new Map(), abbreviationBytesLeft: 0,
+      abbreviationCosts: new Map(), markup: new Map(), resolvable: false,
       resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null, includes: [],
     }
     return contentNodes(ctx, [0, text.length], 0, 2, true, FLOW_PLAIN)
@@ -736,7 +738,9 @@ export function buildSource(
     const terms = abbreviations ?? collectAbbreviations(text, root)
     if (outer !== null) for (const [term, expansion] of outer.abbreviations) if (!terms.has(term)) terms.set(term, expansion)
     const ctx: TreeContext = {
-      src: text, positions, inline, abbreviations: terms, markup: new Map(),
+      src: text, positions, inline, abbreviations: terms,
+      abbreviationBytesLeft: Math.max(DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR * utf8Length(src)),
+      abbreviationCosts: new Map(), markup: new Map(),
       resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
       sourceNames: collectSourceNames ? new Map() : null, includes: [],
     }

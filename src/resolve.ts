@@ -36,6 +36,8 @@ export interface Note {
 
 export interface Resolution {
   definitions: Map<string, LinkReferenceDefinitionNode>
+  /** The definition's expansion for rendering, including uses whose parse-budget copy was omitted. */
+  expansionOf: Map<Node, string>
   /** C2-N-054: the definition a reference in an included file resolved to, where it is not the document's own. */
   definitionOf: Map<Node, LinkReferenceDefinitionNode>
   notes: Note[]
@@ -150,7 +152,10 @@ const ABBREVIATIONS = (scope: Scope): Map<string, AbbreviationDefNode> => scope.
 function visitAbbreviation(node: AbbreviationNode, walk: Walk): void {
   const expansion = lookUp(walk.scope, node.key, ABBREVIATIONS)?.expansion
   if (expansion === undefined) delete node.expansion
-  else node.expansion = expansion
+  else {
+    if (node.expansion === undefined) walk.resolution.expansionOf.set(node, expansion)
+    else node.expansion = expansion
+  }
 }
 
 function visitFootnoteRef(node: FootnoteRefNode, walk: Walk): void {
@@ -772,7 +777,8 @@ function newWalk(
 ): Walk {
   const findings: Findings = { entries: [], nodes: [] }
   const resolution: Resolution = {
-    definitions: new Map(), definitionOf: new Map(), notes: [], noteOf: new Map(), refIds: new Map(), xrefText: new Map(),
+    definitions: new Map(), expansionOf: new Map(), definitionOf: new Map(), notes: [], noteOf: new Map(),
+    refIds: new Map(), xrefText: new Map(),
     labelIds: new Map(), findings, diagnostics: findings.entries, markupLines: new Map(),
   }
   const footnotes = new Map<string, FootnoteNode>()
