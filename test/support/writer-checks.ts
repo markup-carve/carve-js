@@ -197,7 +197,7 @@ function unheldConstructs(parsed: Node, text: string, toBare: readonly number[],
   const offsets = stringOffsets(text)
   const found: Construct[] = []
   for (const { node } of placedNodes(parsed)) {
-    if (node.type === 'text' || node.type === 'document' || node.pos === undefined) continue
+    if (node.type === 'text' || node.type === 'document' || node.type === 'paragraph' || node.pos === undefined) continue
     let start = offsets.get(node.pos.startOffset) ?? -1
     const end = offsets.get(node.pos.endOffset) ?? -1
     let type = constructName(node)
@@ -209,7 +209,8 @@ function unheldConstructs(parsed: Node, text: string, toBare: readonly number[],
     }
     found.push({ start, end, type })
   }
-  return found.sort((a, b) => a.start - b.start || b.end - a.end)
+  found.sort((a, b) => a.start - b.start || b.end - a.end)
+  return found.filter((item, at) => at === 0 || item.start !== found[at - 1]!.start)
 }
 
 export type ReferenceForm = { form: string } | { gap: string }

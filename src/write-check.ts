@@ -1561,9 +1561,11 @@ function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: 
     if (pos !== undefined) {
       const line = pos.startLine - offset
       lines.add(line)
-      const starts = columns.get(line) ?? new Set<number>()
-      starts.add(pos.startColumn - 1)
-      columns.set(line, starts)
+      if (block.type !== 'paragraph') {
+        const starts = columns.get(line) ?? new Set<number>()
+        starts.add(pos.startColumn - 1)
+        columns.set(line, starts)
+      }
       if (block.type === 'paragraph') paragraphs.add((pos.startLine - offset) * PLACE_COLUMNS + pos.startColumn - 1)
     }
     if (!isInlineParent(block)) readStarts(block, offset, paragraphs, lines, columns)

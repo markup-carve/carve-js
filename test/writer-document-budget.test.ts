@@ -7,12 +7,9 @@ import { type DocumentNode, formatWithDiagnostics, parse, treesEqual } from '../
 const source = readFileSync(join(import.meta.dirname, 'fixtures', 'writer-document-budget.crv'), 'utf8')
 
 describe('the writer repair budget of a document', () => {
-  it('C2-W-133: three quotes that each fit the floor share it, so the second and third are refused (CC-1493)', () => {
+  it('C2-W-088, C2-W-133: three quotes complete within the shared budget after round repairs (CC-1493)', () => {
     const result = formatWithDiagnostics(source)
-    expect(result.diagnostics.map((entry) => [entry.code, entry.path])).toEqual([
-      ['writer-refused', '/children/1'],
-      ['writer-refused', '/children/2'],
-    ])
+    expect(result.diagnostics).toEqual([])
   }, 120_000)
 
   it('C2-W-133: the first quote alone is written without refusal', () => {
