@@ -20,6 +20,22 @@ describe('replay fallback families', () => {
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
+  it('separates two indented sibling headings', () => {
+    const input = '-{#k} text\n # h\n # h\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('-{#k} text\n\n# h\n\n # h\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps an empty attribute-only item after a description', () => {
+    const input = '  > y\n:: term\n:  definition\n-     {.k}\n- tail\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('  > y\n\n:: term\n:  definition\n\n-     {% %}\n- tail\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('preserves adjacent reversed and ordinary strong-emphasis spans', () => {
     const input = 'b */{/*/*{t="*/"}\nb *///*{t="*/"}\n'
     const result = upgrade(input)
