@@ -27,20 +27,19 @@ describe('an attribute line at an ordered-list style boundary', () => {
     const attrs = ['{x}', '{#i}', '{.c}', '{k=v}', '{#i .c}', '{start=7}']
     const prefixes = ['', '> ', '- q\n\n  ']
     const contents = ['y', '[y](u)']
-    let checked = 0
-    for (const left of first) for (const marker of second) for (const attr of attrs) for (const prefix of prefixes) {
-      for (const content of contents) {
-        const right = marker.replace(' y', ` ${content}`)
-        const input = prefix === '> '
-          ? `> ${left}\n>\n> ${attr}\n> ${right}\n`
-          : prefix === '' ? `${left}\n\n${attr}\n${right}\n`
-            : `- q\n\n  ${left}\n\n  ${attr}\n  ${right}\n`
-        const written = format(input)
-        expect(treesEqual(parse(written), parse(input)), input).toBe(true)
-        expect(format(written), input).toBe(written)
-        checked++
-      }
+    for (let at = 0; at < 1080; at++) {
+      const left = first[Math.floor(at / 180)]!
+      const marker = second[Math.floor(at / 36) % second.length]!
+      const attr = attrs[Math.floor(at / 6) % attrs.length]!
+      const prefix = prefixes[Math.floor(at / 2) % prefixes.length]!
+      const right = marker.replace(' y', ` ${contents[at % contents.length]}`)
+      const input = prefix === '> '
+        ? `> ${left}\n>\n> ${attr}\n> ${right}\n`
+        : prefix === '' ? `${left}\n\n${attr}\n${right}\n`
+          : `- q\n\n  ${left}\n\n  ${attr}\n  ${right}\n`
+      const written = format(input)
+      expect(treesEqual(parse(written), parse(input)), input).toBe(true)
+      expect(format(written), input).toBe(written)
     }
-    expect(checked).toBe(1080)
   })
 })
