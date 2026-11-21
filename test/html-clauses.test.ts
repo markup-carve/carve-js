@@ -387,6 +387,14 @@ describe('roundtrip carriers', () => {
     expect(lossCodes('[t]{data-carve-ref=x}')).toEqual(['carrier-attribute-dropped'])
   })
 
+  it('C2-H-116: reported when the element writes a carrier of the same name (carve#6339)', () => {
+    const RT: RenderOptions = { roundtrip: true }
+    expect(lossCodes('<https://x.y>{data-carve-autolink=1}', RT)).toEqual(['carrier-attribute-dropped'])
+    expect(lossCodes('x[^1]{data-carve-footnote-label=1}\n\n[^1]: n', RT)).toEqual(['carrier-attribute-dropped'])
+    expect(lossCodes('{data-carve-source-level=3}\n= A', { ...RT, headingShift: 1 })).toEqual(['carrier-attribute-dropped'])
+    expect(render('<https://x.y>{data-carve-autolink=1}', RT)).toBe('<p><a href="https://x.y" data-carve-autolink>https://x.y</a></p>')
+  })
+
   it('C2-H-115: the 18 reserved names include the new data-carve-ref-shortcut and the reserved data-carve-src', () => {
     for (const name of ['data-carve-ref-shortcut', 'data-carve-ref-collapsed', 'data-carve-src']) {
       expect(lossCodes(`[t]{${name}=x}`, { roundtrip: true }), name).toEqual(['carrier-attribute-dropped'])

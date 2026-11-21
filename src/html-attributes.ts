@@ -4,7 +4,7 @@ import {
 } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
-import { stringOffsetOfByte, utf8Length } from './positions.ts'
+import { ByteCursor, utf8Length } from './positions.ts'
 import { type Settings, type UrlPolicy } from './options.ts'
 import { DROPPED_NAMES, DROPPED_PREFIXES, PROBE_REMOVED, STYLE_PATTERNS, URL_LIST_ATTRIBUTES } from './render-tables.ts'
 import { type Resolution } from './resolve.ts'
@@ -43,6 +43,8 @@ export interface Render {
   /** C2-H-201: the tree, its budget for derived text (-1 until a node draws), what remains, and whether one did not fit. */
   document: DocumentNode
   source: string | number | undefined
+  /** Maps the byte offsets of the loss ranges in `source`. */
+  byteCursor?: ByteCursor
   derivedBudget: number
   derivedLeft: number
   derivedReported: boolean
@@ -243,6 +245,16 @@ export function escapeAttribute(text: string): string {
   return from === 0 ? text : out + text.slice(from)
 }
 
+/** Sets the range of `entry` to the first `needle` at or after byte `from`, `length` string units long. */
+function sourceRange(r: Render, entry: Findings['entries'][number], from: number, needle: string, length: number): void {
+  if (typeof r.source !== 'string') return
+  if (r.byteCursor?.src !== r.source) r.byteCursor = new ByteCursor(r.source)
+  const start = r.source.indexOf(needle, r.byteCursor.stringOffset(from))
+  if (start < 0) return
+  const startOffset = r.byteCursor.byteOffset(start)
+  entry.range = { startOffset, endOffset: startOffset + utf8Length(r.source.slice(start, start + length)) }
+}
+
 /** C2-H-132: a render loss on `node`, or on the document when it is null. */
 export function loss(r: Render, node: Node | null, code: string, message: string, severity: 'error' | 'warning' = 'warning'): void {
   addFinding(r.losses, node, { code, severity, channel: 'render-loss', message })
@@ -321,11 +333,7 @@ export function isDenied(r: Render, url: string, node: Node): boolean {
     r.losses.steps ??= new Map()
     r.losses.steps.set(entry, `/${field}`)
   }
-  if (typeof r.source === 'string' && node.pos !== undefined) {
-    const start = r.source.indexOf(url, stringOffsetOfByte(r.source, node.pos.startOffset))
-    if (start >= 0) entry.range = { startOffset: utf8Length(r.source.slice(0, start)),
-      endOffset: utf8Length(r.source.slice(0, start + url.length)) }
-  }
+  if (node.pos !== undefined) sourceRange(r, entry, node.pos.startOffset, url, url.length)
   return true
 }
 
@@ -500,21 +508,21 @@ function styleValue(value: string, declarations: string, first: boolean): string
   return declarations === '' ? written : withDeclaration(written, declarations)
 }
 
+function carrierDropped(r: Render, key: string, value: string, origin: Node | null): void {
+  loss(r, origin, 'carrier-attribute-dropped',
+    `Dropped the authored attribute ${key}: the name is reserved for roundtrip import`)
+  if (origin?.pos === undefined) return
+  sourceRange(r, r.losses.entries.at(-1)!, origin.pos.startOffset, key, key.length + (value === '' ? 0 : value.length + 1))
+}
+
 function addKeyValue(
   r: Render, list: AttributeList, [key, value]: [string, string], parts: TagParts, style: StyleFacts, origin: Node | null,
 ): void {
   const name = key.toLowerCase()
-  if (isBlockedName(name) || list.has(name)) return
-  if (CARRIERS.has(name)) {
-    loss(r, origin, 'carrier-attribute-dropped',
-      `Dropped the authored attribute ${key}: the name is reserved for roundtrip import`)
-    if (typeof r.source === 'string' && origin?.pos !== undefined) {
-      const start = r.source.indexOf(key, stringOffsetOfByte(r.source, origin.pos.startOffset))
-      if (start >= 0) r.losses.entries.at(-1)!.range = { startOffset: utf8Length(r.source.slice(0, start)),
-        endOffset: utf8Length(r.source.slice(0, start + key.length + (value === '' ? 0 : value.length + 1))) }
-    }
-    return
-  }
+  if (isBlockedName(name)) return
+  // C2-H-116: reported even when the element already wrote a carrier of that name.
+  if (CARRIERS.has(name)) return carrierDropped(r, key, value, origin)
+  if (list.has(name)) return
   if (name === 'style') return list.add(key, styleValue(value, style.declarations, parts.styleFirst === true))
   if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(foldedAlign(value))) {
     return list.add(key, urlListValue(r, name, keyValue(name, value), origin))
