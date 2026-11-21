@@ -7,7 +7,7 @@ import {
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
-import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
+import { blankLinesBetween, commentLinesEnd, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { addSpanMarks } from './write-spans.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
@@ -315,25 +315,28 @@ function joinsGroup(w: Writer, before: Node, node: Node): boolean {
  * The end of the group of blocks that starts at `from`: the blocks behind it that no blank line
  * separates from it, and what the block before reads differently.
  */
-function isBridged(w: Writer, nodes: readonly Node[], from: number, at: number): boolean {
-  let priorAt = at - 1
-  while (priorAt >= from && nodes[priorAt]?.type === 'comment') priorAt--
-  const prior = nodes[priorAt]
+// `prior` is the block before `at` behind its comments, and `following` the block after the comment lines behind `at`.
+function isBridged(w: Writer, nodes: readonly Node[], prior: Node | undefined, at: number, following: Node | undefined): boolean {
   if (prior?.type !== 'list' && prior?.type !== 'definition_list' && prior?.type !== 'footnote') return false
   const node = nodes[at]
-  const following = node?.type === 'comment' ? afterComments(nodes, at) : node
-  return followingAttributes(w, following) !== ''
+  return followingAttributes(w, node?.type === 'comment' ? following : node) !== ''
 }
 
 function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
   let end = from + 1
+  // The last block of the group that is no comment, and the first block behind the comment lines after `end`: kept
+  // as the group grows, so a run of comments is walked once rather than once per comment.
+  let priorAt = nodes[from]?.type === 'comment' ? from - 1 : from
+  let after = -1
   while (end < nodes.length) {
     const before = nodes[end - 1]!
     const node = nodes[end]!
-    const bridged = isBridged(w, nodes, from, end)
+    if (after <= end) after = commentLinesEnd(nodes, end)
+    const bridged = isBridged(w, nodes, nodes[priorAt], end, nodes[after])
     const hoisted = node.type === 'comment' && bridged
     const belongs = before.type === 'comment' && bridged
     if (!hoisted && !belongs && !joinsGroup(w, before, node)) break
+    if (node.type !== 'comment') priorAt = end
     end++
   }
   return end
