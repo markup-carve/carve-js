@@ -399,9 +399,10 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
 function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
   // C2-W-125 tries to form a missing node separately from the constructs C2-W-088 found in the
-  // read-back parse. An ineffective trial takes no escape; all actual constructs still act together.
+  // read-back parse. A lone ineffective trial takes no escape. Multiple trials can work together.
   let dropped = false
   for (const [node, at] of check.trials.length <= 4 ? check.trials : []) {
+    if (check.trials.length > 1) continue
     if (isAsked(w, group, first, node, at)) continue
     const place = check.escapes.findIndex((escape) => escape[0] === node && escape[1] === at)
     if (place >= 0) check.escapes.splice(place, 1)

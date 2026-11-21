@@ -45,6 +45,20 @@ it('C2-W-125 keeps bracket pairs on opposite sides of a nested link separate', (
   expect(formatWithDiagnostics(input)).toEqual({ source: expected, diagnostics: [] })
 })
 
+it('C2-W-088 preserves a multiline emphasis while repairing a later opener', () => {
+  const input = '{/:\n/}!/\n/-\\/'
+  const result = formatWithDiagnostics(input)
+  expect(result.diagnostics).toEqual([])
+  expect(treesEqual(parse(result.source), parse(input))).toBe(true)
+})
+
+it('C2-W-125 keeps jointly effective trials after grouped construct escapes', () => {
+  const input = '\\}{/\\`\\/{/\\`/![/}`a`%'
+  const result = formatWithDiagnostics(input)
+  expect(result.diagnostics).toEqual([])
+  expect(treesEqual(parse(result.source), parse(input))).toBe(true)
+})
+
 it('C2-W-117 repairs a text construct behind a text whose leading space is lost', () => {
   const result = writeWithDiagnostics(paragraph([{ type: 'text', value: ' w' }, { type: 'text', value: 'a *b*' }]))
   expect(result.source).toBe(' wa \\*b*\n')
