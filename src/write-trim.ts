@@ -33,8 +33,8 @@ function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimm
       run.pending.push(child)
       continue
     }
-    // The attribute block of a text follows it, so its spaces end no line.
-    if ('attrs' in child || 'data' in child) continue
+    // The attribute block of a text follows it, so its spaces end no line; a field dropped with the node is a loss.
+    if ('attrs' in child || 'data' in child || 'lang' in child || 'dir' in child || 'metadata' in child) continue
     if (single || (after === undefined ? !atLineEnd : after.type !== 'soft_break')) continue
     const end = trimmedEnd(child.value)
     if (end === child.value.length) continue
