@@ -68,7 +68,7 @@ function closingBraceEnd(src: string, from: number, end: number, scans: Map<numb
       found = known
       break
     }
-    passed.push(p)
+    if (scans !== undefined) passed.push(p)
     const code = src.charCodeAt(p)
     if (code === BRACE_CLOSE) {
       found = p + 1
