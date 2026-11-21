@@ -65,8 +65,11 @@ function rowAttribute(ctx: Context, paragraph: Node01): void {
   for (let line = paragraph.pos!.startLine; line <= paragraph.pos!.endLine; line++) {
     const text = lineText(ctx.lines, line)
     const end = trimmedEnd(ctx, line)
-    const brace = ctx.src.lastIndexOf('{', end)
-    if (!text.trimStart().startsWith('|') || ctx.src[end - 1] !== '}' || brace < lineStart(ctx.lines, line)) continue
+    if (!text.trimStart().startsWith('|') || ctx.src[end - 1] !== '}') continue
+    const start = lineStart(ctx.lines, line)
+    const localBrace = ctx.src.slice(start, end).lastIndexOf('{')
+    if (localBrace < 0) continue
+    const brace = start + localBrace
     if (ctx.src.startsWith('| ', brace - 2) && ctx.src[brace - 3] !== '\\') {
       change(
         ctx,
