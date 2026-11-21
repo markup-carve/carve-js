@@ -396,15 +396,31 @@ function ownerOf(parent: string, types: Map<string, string>): { path: string, ty
 const COLON_CONTAINERS: ReadonlySet<string> = new Set(['admonition', 'directive', 'div', 'figure_group'])
 
 /** carve#6206: the list item that is the owner, or holds it through colon containers only; else the document. */
-function itemOwnerOf(owner: { path: string, type: string }, types: Map<string, string>): { path: string, type: string } {
+export function itemOwnerOf(owner: { path: string, type: string }, types: Map<string, string>): { path: string, type: string } {
+  let cache = itemOwners.get(types)
+  if (cache === undefined) itemOwners.set(types, cache = new Map())
+  const known = cache.get(owner.path)
+  if (known !== undefined) return known
   let { path, type } = owner
+  const visited: string[] = []
   while (COLON_CONTAINERS.has(type) && path !== '') {
+    visited.push(path)
     const split = path.lastIndexOf('/children/')
     path = split < 0 ? '' : path.slice(0, split)
     type = types.get(path) ?? 'document'
+    const found = cache.get(path)
+    if (found !== undefined) {
+      for (const at of visited) cache.set(at, found)
+      return found
+    }
   }
-  return type === 'list_item' ? { path, type } : { path: '', type: 'document' }
+  const result = type === 'list_item' ? { path, type } : { path: '', type: 'document' }
+  cache.set(path, result)
+  for (const at of visited) cache.set(at, result)
+  return result
 }
+
+const itemOwners = new WeakMap<Map<string, string>, Map<string, { path: string, type: string }>>()
 
 /** A container as a block record sees it; its content column is computed on first read and shared per path. */
 class ContainerRecord implements Container {
