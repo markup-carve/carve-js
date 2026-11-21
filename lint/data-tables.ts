@@ -326,8 +326,8 @@ const K51 = new RegExp("^(?<label>\\[.+?\\]:).", "")
 const K52 = new RegExp("^(?<label>\\[.+?\\]:).", "d")
 const K53 = new RegExp("^[ \\t]", "")
 const K54 = new Set<unknown>(["admonition","block_quote","definition_description","definition_list","directive","div","figure_group","list","list_item"])
-const K55 = new RegExp("^::?[ \\t]+(?<body>(?:>[ \\t]|[-*][ \\t]|[0-9]{1,9}[.)][ \\t])[\\s\\S]*)$", "")
-const K56 = new RegExp("^::?[ \\t]+(?<body>(?:>[ \\t]|[-*][ \\t]|[0-9]{1,9}[.)][ \\t])[\\s\\S]*)$", "d")
+const K55 = new RegExp("^::?[ \\t]+(?<marker>>|[-*]|[0-9]{1,9}[.)])[ \\t]", "")
+const K56 = new RegExp("^::?[ \\t]+(?<marker>>|[-*]|[0-9]{1,9}[.)])[ \\t]", "d")
 const K57 = new RegExp("^\\\\(?:\\\\\\\\)*$", "")
 const K58 = new RegExp("^[\\p{Zs}\\t\\n\\r\\f\\v]|[\\p{Zs}\\t\\n\\r\\f\\v]$", "u")
 const K59 = new RegExp("^=|=$", "")
@@ -384,7 +384,7 @@ const K109 = new RegExp("^---[ \\t]*\\n", "")
 const K110 = new RegExp("^---[ \\t]*\\n[ \\t]*(?:\\n|$)", "")
 const K111 = new RegExp("^---[ \\t]*\\n[^:]*$", "")
 const K112 = new Set<unknown>(["heading","paragraph","table_cell","table_row"])
-const K113 = new RegExp("^\\s*>>", "")
+const K113 = new RegExp("^[ \\t]*>(?:[^ \\t\\[]|\\[[^!])", "")
 const K114 = new RegExp("^[ \\t]*(?:>[ \\t]*)+(?:(?:[-*]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]*>[ \\t]*)?(?:\\[[^\\]]+\\]:[ \\t]*>[ \\t]*)?(?<mark>\\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\])", "")
 const K115 = new RegExp("^[ \\t]*(?:>[ \\t]*)+(?:(?:[-*]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]*>[ \\t]*)?(?:\\[[^\\]]+\\]:[ \\t]*>[ \\t]*)?(?<mark>\\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\])", "d")
 const K116 = new RegExp("^\\*\\.[\\s\\S]*\\*$", "")
@@ -715,7 +715,7 @@ function rule18(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
   if (!(same(self.leaf, "definition_term") && Boolean(self.leaf_first))) return
   if ((hit(K55, K56, self.body) && mark(num(self.body_start)))) {
-    context.report("definition-term-block-folded", num(group("body", 0)), num(group("body", 1)), path, {  }, 0)
+    context.report("definition-term-block-folded", num(group("marker", 0)), num(group("marker", 1)), path, {  }, 0)
     return
   }
 }
