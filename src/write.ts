@@ -1374,6 +1374,8 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
     new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
+  const lead = document.children[0]
+  w.leadingFrontmatter = lead?.type === 'frontmatter' && lead.attrs === undefined ? lead : null
   const source = writeWithSpanMarks(w, run, document, original)
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)

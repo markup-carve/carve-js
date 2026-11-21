@@ -513,6 +513,13 @@ export function isFrontmatterOpener(src: string, pos: number, end: number): bool
   return skipSpaces(src, p, end) === end
 }
 
+/** A frontmatter opener that names its format: the only one that opens a metadata block after line 1. */
+export function isTypedFrontmatterOpener(src: string, pos: number, end: number): boolean {
+  if (!isFrontmatterOpener(src, pos, end)) return false
+  const name = src.charCodeAt(pos + FRONTMATTER_RUN) === SPACE ? pos + FRONTMATTER_RUN + 1 : pos + FRONTMATTER_RUN
+  return name < end && isFormatNameCharacter(src.charCodeAt(name))
+}
+
 function isFormatNameCharacter(code: number): boolean {
   return isLower(code) || isUpper(code) || isAsciiDigit(code)
 }

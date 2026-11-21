@@ -175,7 +175,10 @@ function comment(w: Writer, node: CommentNode, prefix: string): void {
 
 /** C2-W-052: the bare opener for YAML, and the format name glued to it for every other format. */
 function frontmatter(w: Writer, node: FrontmatterNode, prefix: string): void {
-  emit(w, prefix, node.format === 'yaml' ? '---' : `---${node.format}`)
+  // Prototype: after line 1 only a typed opener opens a metadata block, so a later block always names its format.
+  const later = w.leadingFrontmatter !== node
+  if (later) attributeLine(w, node as never, prefix)
+  emit(w, prefix, node.format === 'yaml' && !later ? '---' : `---${node.format}`)
   for (const line of valueLines(w, node)) emit(w, prefix, line)
   emit(w, prefix, '---')
 }
