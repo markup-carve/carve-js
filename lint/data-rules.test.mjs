@@ -269,3 +269,28 @@ it('C2-W-149: row_index counts rows, not the comments among them', () => {
     expect(findings('|= a |\n%% x\n| ^ |\n', mode)).toEqual(['table-span-marker-blocked@13-16'])
   }
 })
+
+it('C2-A-158: a continued row is reported from the plus sign of its continuation row', () => {
+  for (const mode of ['code', 'data']) {
+    expect(findings('| a | b |\n| c | d |\n+ | | | e |\n', mode)).toEqual(['table-row-cell-count@20-31'])
+    expect(findings('| a | b c |\n+ | | x |\n| d | e |\n', mode)).toEqual(['table-row-cell-count@22-31'])
+  }
+})
+
+it('C2-B-030: every right-aligned ordered marker is reported once, and not as an uneven indent', () => {
+  for (const mode of ['code', 'data']) {
+    expect(findings(' 9. a\n10. b\n', mode)).toEqual(['ordered-marker-right-aligned@6-11'])
+    expect(findings(' 8. a\n 9. b\n10. c\n', mode)).toEqual(['ordered-marker-right-aligned@12-17'])
+  }
+})
+
+it('C2-W-150: the id rows read id records', () => {
+  const source = '{#intro}\n# Intro\n\nSee </#Intro> and [a](#INTRO) and [t][x].\n\n[X]: /u\n'
+  expect(findings(source, 'data')).toEqual(findings(source, 'code'))
+  expect(findings(source, 'data')).toEqual(['broken-crossref@22-31', 'broken-fragment-link@36-47',
+    'unresolved-reference-link@52-58', 'unused-link-reference-definition@61-68'])
+})
+
+it('C2-B-074: a Markdown definition behind a tab is reported too', () => {
+  for (const mode of ['code', 'data']) expect(findings('para\n:\ttext\n', mode)).toEqual(['markdown-definition-paragraph@5-11'])
+})

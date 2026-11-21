@@ -29,3 +29,12 @@ describe('lint data model on tables', () => {
     }, count => 'x'.repeat(count), { label: 'pipe tables', smallRepeats: 5_000 })
   })
 })
+
+// The content of a line behind its quote marks is read without a backtracking scan of a space run inside it.
+describe('lint data model on long lines', () => {
+  perfIt('scales linearly on a line with a run of spaces inside it, below a definition list', () => {
+    expectBuiltInputScansLinearly(source => { lint(source, {}) }, count => `:: t\n: d\n\na${' '.repeat(count)}b\n`,
+      { label: 'inner space run', smallRepeats: 2_000 })
+  })
+})
+

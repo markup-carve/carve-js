@@ -132,7 +132,8 @@ function runBlocks(model: LineModel<BlockRun>, context: LintContext): void {
 
 function runInline(walk: DataWalk, rules: Active, context: LintContext): void {
   for (const record of walk.inline) {
-    for (const run of rules.inline.get(record.type) ?? []) run(record, record.path, context)
+    const runs = rules.inline.get(record.type)
+    if (runs !== undefined) for (const run of runs) run(record, record.path, context)
   }
 }
 
@@ -152,7 +153,7 @@ export function runDataRules(walk: DataWalk, context: LintContext, active: (id: 
   if (rules.attributes.length > 0) runAttributes(walk, rules, context)
   if (rules.lines.length === 0 && rules.blocks.length === 0 && rules.inline.size === 0) return
   const model = buildModel(walk.walked, context, (type, parent) => blockRuns(rules, type, parent), rules.needBlocks)
-  useRecords(model.blocks, walk.inline)
+  useRecords(model.blocks, walk.inline, walk.ids, () => model.lines.all())
   let commentPaths: Map<number, string> | undefined
   const report: LintContext['report'] = (id, start, end, path, values, message) => {
     if (id === 'list-item-body-below-content-column') path = path.slice(0, path.lastIndexOf('/children/'))

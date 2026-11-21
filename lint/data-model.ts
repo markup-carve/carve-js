@@ -22,6 +22,7 @@ export interface ModelLine {
   attached_here: boolean
   closes_container: boolean
   readonly ancestors: string[]
+  readonly ancestor_ids: string[]
   readonly shape: string
   readonly quote_prefix: boolean
   readonly quote_depth: number
@@ -70,6 +71,8 @@ export interface ModelBlock {
   readonly row_index: number | undefined
   readonly ancestors: string[]
   readonly ancestor_ids: string[]
+  readonly identity: string
+  readonly layout: NodeLayout | undefined
 }
 
 /** An inline record: one node of an inline content, with the leaf block that holds it. */
@@ -82,6 +85,7 @@ export interface ModelInline {
   leaf: string
   parent: string
   readonly node: Node | undefined
+  readonly raw_ref?: string
 }
 
 export interface Container { readonly type: string, readonly content_column: number, readonly marker_column: number | undefined }
@@ -123,15 +127,22 @@ function trimEndAt(text: string, from: number): number {
   return end
 }
 
-const depths = new WeakMap<Map<string, string>, Map<string, number>>()
+// Per tree, the depth of each path asked for, or undefined for a tree that holds no quote.
+const depths = new WeakMap<Map<string, string>, Map<string, number> | undefined>()
+
+function depthsOf(types: Map<string, string>): Map<string, number> | undefined {
+  if (depths.has(types)) return depths.get(types)
+  let quoted = false
+  for (const type of types.values()) if (type === 'block_quote') { quoted = true; break }
+  const cache = quoted ? new Map<string, number>() : undefined
+  depths.set(types, cache)
+  return cache
+}
 
 /** The number of quotes that hold the node at `path`, the node itself left out. */
 export function quoteDepth(path: string, types: Map<string, string>): number {
-  let cache = depths.get(types)
-  if (cache === undefined) {
-    cache = new Map<string, number>()
-    depths.set(types, cache)
-  }
+  const cache = depthsOf(types)
+  if (cache === undefined) return 0
   const known = cache.get(path)
   if (known !== undefined) return known
   const split = path.lastIndexOf('/children/')
@@ -151,10 +162,10 @@ function colonKind(type: string, opener: string): string {
 }
 
 /** `format`: for a table, a row or a cell, the source format of the table (C2-W-149). */
-export interface Walked { node: Node, path: string, parent: string, index: number, format?: string | undefined }
+export interface Walked { node: Node, path: string, parent: string, index: number, format?: string | undefined, quotes?: number }
 
 
-interface Leaves { type: string[], id: string[], first: boolean[], head: number[], last: number[], start: number[] }
+interface Leaves { type: string[], id: string[], first: boolean[], head: number[], last: number[], start: number[], quotes: number[] }
 
 const blockType = (node: Node): string => (node.type === 'comment' && node.form === 'block' ? 'comment_block' : node.type)
 
@@ -162,8 +173,8 @@ const blockType = (node: Node): string => (node.type === 'comment' && node.form 
 function leaves(walked: readonly Walked[], count: number, chars: Uint32Array): Leaves {
   const out: Leaves = { type: new Array<string>(count).fill('none'), id: new Array<string>(count).fill(''),
     first: new Array<boolean>(count).fill(false), head: new Array<number>(count).fill(0), last: new Array<number>(count).fill(0),
-    start: new Array<number>(count).fill(-1) }
-  for (const { node, path } of walked) {
+    start: new Array<number>(count).fill(-1), quotes: new Array<number>(count).fill(0) }
+  for (const { node, path, quotes } of walked) {
     const type = blockType(node)
     if (!LEAF_TYPES.has(type) || node.pos === undefined) continue
     for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
@@ -173,6 +184,7 @@ function leaves(walked: readonly Walked[], count: number, chars: Uint32Array): L
       out.head[number - 1] = node.pos.startLine
       out.start[number - 1] = chars[node.pos.startOffset] ?? 0
       out.last[number - 1] = node.pos.endLine
+      out.quotes[number - 1] = quotes ?? 0
     }
   }
   return out
@@ -203,7 +215,7 @@ function ancestorPaths(path: string): string[] {
 interface LineFields {
   number: number, start: number, end: number, text: string, body: string, body_start: number, body_end: number
   blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, closes_container: boolean
-  leaf_head: number, leaf_last: number, leaf_start: number
+  leaf_head: number, leaf_last: number, leaf_start: number, quote_depth: number
 }
 
 class LineRecord {
@@ -221,7 +233,10 @@ class LineRecord {
   readonly attached_here: boolean
   readonly closes_container: boolean
   readonly leaf_start: number
+  /** The number of quotes that hold the line's leaf. */
+  readonly quote_depth: number
   private ancestorsCache: string[] | undefined = undefined
+  private idsCache: string[] | undefined = undefined
   private colonCache: ColonContainer[] | undefined = undefined
   private shapeCache: string | undefined = undefined
   private lazyCache: boolean | undefined = undefined
@@ -249,6 +264,7 @@ class LineRecord {
     this.attached_here = fields.attached_here
     this.closes_container = fields.closes_container
     this.leaf_start = fields.leaf_start
+    this.quote_depth = fields.quote_depth
     this.leafHead = fields.leaf_head
     this.leafLast = fields.leaf_last
     this.path = path
@@ -259,8 +275,9 @@ class LineRecord {
   }
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
+  /** The identities of the blocks of `ancestors`, item by item. */
+  get ancestor_ids(): string[] { return (this.idsCache ??= this.path === '' ? [] : ancestorPaths(this.path)) }
   get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
-  get quote_depth(): number { return this.leaf_id === '' ? 0 : quoteDepth(this.leaf_id, this.context.nodeTypes as Map<string, string>) }
   get quote_marks(): number {
     let marks = 0
     let at = 0
@@ -322,7 +339,7 @@ function lineRecord(line: Line, index: number, model: LineList, found: Leaves, c
   tables: TableLines): ModelLine {
   const leaf = found.type[index]!
   // A verbatim body line keeps quote marks past the quotes that hold its leaf: they are content.
-  const marks = VERBATIM_LEAVES.has(leaf) ? quoteDepth(found.id[index]!, context.nodeTypes as Map<string, string>) : Infinity
+  const marks = VERBATIM_LEAVES.has(leaf) ? found.quotes[index]! : Infinity
   const bodyStart = line.content !== undefined && line.content >= line.start && line.content <= line.end
     ? line.content : quotedStart(line, marks)
   const from = bodyStart - line.start
@@ -334,7 +351,7 @@ function lineRecord(line: Line, index: number, model: LineList, found: Leaves, c
     blank: leaf === 'none' && body === '', leaf, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
     attached_here: context.state.attachedLines.has(line.number),
     closes_container: context.state.containerClosers.has(line.number),
-    leaf_head: found.head[index]!, leaf_last: found.last[index]!, leaf_start: found.start[index]!,
+    leaf_head: found.head[index]!, leaf_last: found.last[index]!, leaf_start: found.start[index]!, quote_depth: found.quotes[index]!,
   }, line.path, index, model, context, tables)
 }
 
@@ -354,9 +371,8 @@ function quoteMarks(line: ModelLine): number {
 /** C2-B-024: a later line of a text leaf that lacks a quote mark or the indent of a container that holds the leaf. */
 function isLazy(line: ModelLine, context: LintContext): boolean {
   if (!TEXT_LEAVES.has(line.leaf) || line.leaf_first) return false
-  const types = context.nodeTypes as Map<string, string>
   const marks = quoteMarks(line)
-  if (marks < quoteDepth(line.leaf_id, types)) return true
+  if (marks < line.quote_depth) return true
   for (let path = line.leaf_id, split = path.lastIndexOf('/children/'); split >= 0; split = path.lastIndexOf('/children/')) {
     path = path.slice(0, split)
     const content = context.layouts.get(path)?.contentColumn
@@ -421,6 +437,8 @@ class ContainerRecord implements Container {
 }
 
 class BlockRecord {
+  private ancestorsCache: string[] | undefined = undefined
+  private ancestorIdsCache: string[] | undefined = undefined
   private quotes: number | undefined = undefined
   private columnCache: number | undefined = undefined
   private ownerCache: Container | undefined = undefined
@@ -459,8 +477,12 @@ class BlockRecord {
   }
 
   get attributed(): boolean { return this.node.attrs !== undefined }
-  get ancestors(): string[] { return ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>) }
-  get ancestor_ids(): string[] { return ancestorPaths(this.path) }
+  get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
+  get ancestor_ids(): string[] { return (this.ancestorIdsCache ??= ancestorPaths(this.path)) }
+  /** The identity of the block, as ancestor_ids gives the identities of the blocks that hold it. */
+  get identity(): string { return this.path }
+  /** C2-L-009: the layout entry of the block, absent where the layout has none. */
+  get layout(): NodeLayout | undefined { return this.context.layouts.get(this.path) }
   get end(): number { return this.spanEnd ?? this.context.chars[this.node.pos?.endOffset ?? 0] ?? this.context.source.length }
   get text(): string { return this.context.source.slice(this.start, this.end) }
   get last_line(): ModelLine {
@@ -542,9 +564,11 @@ class InlineRecord implements ModelInline {
   readonly parent: string
   readonly node: Node
   private readonly source: string
+  private readonly layouts: LintContext['layouts']
 
   constructor(node: Node, path: string, leaf: string, parent: string, context: LintContext) {
     this.node = node
+    this.layouts = context.layouts
     this.type = node.type
     this.path = path
     this.start = context.chars[node.pos?.startOffset ?? 0] ?? 0
@@ -555,6 +579,19 @@ class InlineRecord implements ModelInline {
   }
 
   get text(): string { return this.source.slice(this.start, this.end) }
+
+  /** C2-L-022: the reference of a link or an image, read without the container prefixes of the lines it crosses. */
+  get raw_ref(): string { return this.layouts.get(this.path)?.rawRef ?? this.text }
+}
+
+/** An id record: one distinct id that the tree carries, in order of first occurrence. */
+export interface ModelId {
+  readonly type: 'id'
+  readonly id: string
+  /** C2-A-039: the type of the first node that carries the id, the one it anchors. */
+  readonly owner: string
+  readonly index: number
+  readonly start: number
 }
 
 /** A text run record: the text and soft breaks that stand next to each other among the children of one inline parent. */
@@ -591,7 +628,12 @@ export class DataWalk {
   readonly inline: ModelInline[] = []
   /** The nodes that carry `attrs`, when an attribute rule is on (C2-W-148), with their paths and whether they are inline. */
   readonly attributed: Attributed = { nodes: [], paths: [], inline: [] }
+  readonly ids: ModelId[] = []
+  private readonly idIndex = new Map<string, ModelId>()
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
+  // The blocks the walk is inside, with the quotes that hold each: it visits a parent before its children.
+  private readonly openBlocks: Node[] = []
+  private readonly openQuotes: number[] = []
   private tableFormat: string | undefined = undefined
   private readonly types: ReadonlySet<string>
   private readonly context: LintContext
@@ -610,6 +652,22 @@ export class DataWalk {
     this.attributes = attributes
     this.model = model
     this.walked.push({ node: document, path: '', parent: '', index: 0 })
+    this.id(document)
+  }
+
+  /** The ids a node carries: an authored id, then a generated heading id. */
+  private id(node: Node): void {
+    const authored = node.attrs?.id
+    if (authored !== undefined) this.addId(authored, node)
+    if (node.type === 'heading' && node.generatedId !== undefined) this.addId(node.generatedId, node)
+  }
+
+  private addId(id: string, node: Node): void {
+    if (this.idIndex.has(id)) return
+    const start = node.pos === undefined ? 0 : this.context.chars[node.pos.startOffset] ?? 0
+    const record: ModelId = { type: 'id', id, owner: node.type, index: this.ids.length, start }
+    this.idIndex.set(id, record)
+    this.ids.push(record)
   }
 
   /** C2-W-140: a text or soft break child of an inline parent joins the run of its previous sibling, or starts one. */
@@ -651,20 +709,36 @@ export class DataWalk {
     return node.type === 'table_row' || node.type === 'table_cell' ? this.tableFormat : undefined
   }
 
+  private inlineChild(node: Node, path: string, parent: Node, parentPath: string, index: number, leaf: string): void {
+    if ((this.types.has(node.type) || this.types.has('*')) && node.pos !== undefined) {
+      this.inline.push(new InlineRecord(node, path, leaf, parent.type, this.context))
+    }
+    if (this.textRuns) this.run(node, parent, parentPath, index, leaf)
+  }
+
+  private quotesOf(node: Node, parent: Node): number {
+    while (this.openBlocks.length > 0 && this.openBlocks[this.openBlocks.length - 1] !== parent) {
+      this.openBlocks.pop()
+      this.openQuotes.pop()
+    }
+    const quotes = (this.openQuotes[this.openQuotes.length - 1] ?? 0) + (parent.type === 'block_quote' ? 1 : 0)
+    this.openBlocks.push(node)
+    this.openQuotes.push(quotes)
+    return quotes
+  }
+
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
     if (this.attributes) this.attribute(node, path, parent)
     if (!this.model) return
+    if (node.attrs?.id !== undefined || node.type === 'heading') this.id(node)
     const holder = this.holder
     // Inline content holds no block and no line of its own; the caption of an image paragraph is a block (C2-W-140).
     if (holder !== undefined && node.type !== 'caption' && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
-      if (holder.inline && this.types.has(node.type) && node.pos !== undefined) {
-        this.inline.push(new InlineRecord(node, path, holder.type, parent.type, this.context))
-      }
-      if (holder.inline && this.textRuns) this.run(node, parent, parentPath, index, holder.type)
+      if (holder.inline) this.inlineChild(node, path, parent, parentPath, index, holder.type)
       return
     }
     if (this.textRuns) this.run(node, parent, parentPath, index, blockType(parent))
-    this.walked.push({ node, path, parent: parentPath, index, format: this.formatOf(node, path) })
+    this.walked.push({ node, path, parent: parentPath, index, format: this.formatOf(node, path), quotes: this.quotesOf(node, parent) })
     this.holder = INLINE_HOLDERS.has(node.type) ? { path, type: node.type, inline: INLINE_LEAVES.has(node.type) } : undefined
   }
 }
@@ -676,6 +750,9 @@ function blockSpan(item: Walked, context: LintContext): { start: number, end: nu
   if (layout === undefined) return undefined
   return { start: context.chars[layout.startByte] ?? 0, end: context.chars[layout.endByte] ?? context.source.length }
 }
+
+// A lookup that names no block types reads every block.
+const isNeeded = (needed: ReadonlySet<string>, type: string): boolean => needed.has(type) || needed.has('*')
 
 /** The model; a block record is made only where `runsFor` gives runs for its type and its parent's type, or a lookup needs it. */
 export function buildModel<T>(walked: readonly Walked[], context: LintContext,
@@ -691,7 +768,7 @@ export function buildModel<T>(walked: readonly Walked[], context: LintContext,
   for (const item of walked) {
     if (item.path === '') continue
     const blockRuns = runsFor(blockType(item.node), context.nodeTypes.get(item.parent) ?? 'document')
-    if (blockRuns.length === 0 && !needed.has(blockType(item.node))) continue
+    if (blockRuns.length === 0 && !isNeeded(needed, blockType(item.node))) continue
     const span = blockSpan(item, context)
     const line = span === undefined ? undefined : model.at((context.offsetLines[span.start] ?? 1) - 1)
     if (line === undefined) continue

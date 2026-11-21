@@ -465,13 +465,19 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
     range[0] + at + 2, path)
 }
 
-function orderedRightAligned(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list' || node.marker.kind !== 'ordered' || node.children.length < 2) return
+/** C2-B-030: an ordered marker left of the list's first marker that ends where the list's markers end. */
+function rightAligned(node: Node, path: string, at: number, context: LintContext): boolean {
+  if (node.type !== 'list' || node.marker.kind !== 'ordered' || at < 1) return false
   const first = context.layouts.get(`${path}/children/0`)
-  const second = context.layouts.get(`${path}/children/1`)
-  if (first?.markerColumn === undefined || second?.markerColumn === undefined) return
-  if (first.markerColumn > second.markerColumn && first.contentColumn === second.contentColumn) {
-    reportNode('ordered-marker-right-aligned', node.children[1]!, `${path}/children/1`, context)
+  const item = context.layouts.get(`${path}/children/${at}`)
+  if (first?.markerColumn === undefined || item?.markerColumn === undefined) return false
+  return first.markerColumn > item.markerColumn && first.contentColumn === item.contentColumn
+}
+
+function orderedRightAligned(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'list') return
+  for (let at = 1; at < node.children.length; at++) {
+    if (rightAligned(node, path, at, context)) reportNode('ordered-marker-right-aligned', node.children[at]!, `${path}/children/${at}`, context)
   }
 }
 
@@ -486,7 +492,7 @@ function unevenListIndent(node: Node, path: string, context: LintContext): void 
       }
     }
     const previous = context.layouts.get(`${path}/children/${at - 1}`)?.markerColumn ?? 0
-    if (Math.max(0, column - footnoteColumn) >= Math.max(0, previous - footnoteColumn)) return
+    if (Math.max(0, column - footnoteColumn) >= Math.max(0, previous - footnoteColumn) || rightAligned(node, path, at, context)) return
     if (item !== undefined && (outer === undefined || column <= outer)) reportNode('uneven-list-indent', item, `${path}/children/${at}`, context)
   })
 }

@@ -90,7 +90,7 @@ function markdownDefinition(line: Line, context: LintContext): void {
   const { text, start } = lineText(line)
   const previous = prior(line, context)
   // C2-B-074: a later line of its paragraph, below a line that is no `::` term.
-  if (!line.paragraphLeaf || previous === undefined || previous.path !== line.path || !text.startsWith(': ')) return
+  if (!line.paragraphLeaf || previous === undefined || previous.path !== line.path || !/^:[ \t]./.test(text)) return
   if (lineText(previous).text.startsWith(':: ') || belowListColumn(line, context) !== undefined) return
   context.report('markdown-definition-paragraph', start, start + text.length, line.path)
 }

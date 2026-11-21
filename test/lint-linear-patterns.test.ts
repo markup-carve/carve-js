@@ -35,6 +35,16 @@ function run(pattern: RegExp | Pattern, text: string): number {
   return performance.now() - started
 }
 
+/** The times on 1 KB and 4 KB of a shape when they grow past linear, else undefined. */
+function growth(pattern: RegExp | Pattern, make: (size: number) => string): string | undefined {
+  const small = Math.min(run(pattern, make(1024)), run(pattern, make(1024)))
+  if (small < 0.05) return undefined
+  let big = Math.min(run(pattern, make(4096)), run(pattern, make(4096)))
+  // A collection or a tier-up during one sample reads as growth; a real one stays when measured again.
+  for (let again = 0; again < 3 && big > 10 * Math.max(small, 0.1) && big > 3; again++) big = Math.min(big, run(pattern, make(4096)))
+  return big > 10 * Math.max(small, 0.1) && big > 3 ? `${small.toFixed(2)} ms to ${big.toFixed(1)} ms` : undefined
+}
+
 /** A pseudo-random line of pieces; every fifteenth is a bracketed label with no inner `]`, the shape of a definition. */
 function randomLine(pieces: readonly string[], round: number, next: (limit: number) => number): string {
   let text = round % 3 === 0 ? '[' : ''
@@ -49,7 +59,7 @@ describe('linear matchers for lint-model patterns (carve#6297)', () => {
   const linear = compiled().filter((entry) => hasLinearMatcher(entry.source))
 
   it('stand for the patterns the lint model states', () => {
-    expect(new Set(linear.map((entry) => entry.source)).size).toBe(5)
+    expect(new Set(linear.map((entry) => entry.source)).size).toBe(6)
   })
 
   // Random short lines over the characters and pieces the patterns name.
@@ -89,11 +99,11 @@ describe('linear matchers for lint-model patterns (carve#6297)', () => {
       const units = alphabet.flatMap((first) => [first, ...alphabet.map((second) => first + second)])
       for (const unit of units) {
         for (const suffix of suffixes) {
-          const make = (size: number): string => unit.repeat(Math.ceil(size / unit.length)) + suffix
-          const small = Math.min(run(pattern, make(1024)), run(pattern, make(1024)))
-          if (small < 0.05) continue
-          const big = Math.min(run(pattern, make(4096)), run(pattern, make(4096)))
-          if (big > 10 * Math.max(small, 0.1) && big > 3) slow.push(`/${source}/${flags} ${JSON.stringify(unit)}${JSON.stringify(suffix)} ${small.toFixed(2)} ms to ${big.toFixed(1)} ms`)
+          // A lead that is no space puts the run inside the line, where a lazy part before a trailing class rescans it.
+          for (const lead of ['', 'a']) {
+            const grew = growth(pattern, (size) => lead + unit.repeat(Math.ceil(size / unit.length)) + suffix)
+            if (grew !== undefined) slow.push(`/${source}/${flags} ${JSON.stringify(lead + unit)}${JSON.stringify(suffix)} ${grew}`)
+          }
         }
       }
     }
