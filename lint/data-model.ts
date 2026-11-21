@@ -398,7 +398,7 @@ const COLON_CONTAINERS: ReadonlySet<string> = new Set(['admonition', 'directive'
 /** carve#6206: the list item that is the owner, or holds it through colon containers only; else the document. */
 export function itemOwnerOf(owner: { path: string, type: string }, types: Map<string, string>): { path: string, type: string } {
   let cache = itemOwners.get(types)
-  if (cache === undefined) itemOwners.set(types, cache = new Map())
+  if (cache === undefined) itemOwners.set(types, cache = new Map<string, { path: string, type: string }>())
   const known = cache.get(owner.path)
   if (known !== undefined) return known
   let { path, type } = owner
