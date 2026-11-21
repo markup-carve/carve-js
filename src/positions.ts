@@ -63,6 +63,40 @@ export function stringOffsetOfByte(src: string, byte: number): number {
   return src.length
 }
 
+/** `stringOffsetOfByte` for many offsets into one source, each walking only from the one before. */
+export class ByteCursor {
+  private at = 0
+  private bytes = 0
+  readonly src: string
+
+  constructor(src: string) {
+    this.src = src
+  }
+
+  stringOffset(byte: number): number {
+    const src = this.src
+    while (this.bytes > byte) {
+      this.at -= this.at >= 2 && isPairAt(src, this.at - 2) ? 2 : 1
+      this.bytes -= isPairAt(src, this.at) ? 4 : unitBytes(src, this.at)
+    }
+    while (this.at < src.length) {
+      const units = isPairAt(src, this.at) ? 2 : 1
+      const next = this.bytes + (units === 2 ? 4 : unitBytes(src, this.at))
+      if (next > byte) break
+      this.bytes = next
+      this.at += units
+    }
+    return this.at
+  }
+
+  /** The byte offset of the string offset `at`, which lies at or after `stringOffset(byte)` of the last call. */
+  byteOffset(at: number): number {
+    let bytes = this.bytes
+    for (let unit = this.at; unit < at; unit++) bytes += unitBytes(this.src, unit)
+    return bytes
+  }
+}
+
 /** The start of every line as a string offset and as a byte offset, and whether the line is ASCII. */
 interface LineTable {
   starts: number[]
