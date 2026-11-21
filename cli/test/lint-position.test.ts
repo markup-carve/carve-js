@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { location, locationIndex } from '../run.ts'
 
 function at(bytes: Uint8Array, offset: number): { line: number, column: number } {
-  return location(locationIndex(bytes), { code: 'x', severity: 'warning', channel: 'lint', message: '',
+  return location(locationIndex(bytes, new Set([offset])), { code: 'x', severity: 'warning', channel: 'lint', message: '',
     range: { startOffset: offset, endOffset: offset } })!
 }
 
@@ -17,7 +17,7 @@ it('C2-T-019: indexed positions equal decoded byte prefixes, including malformed
     samples.push(bytes)
   }
   for (const bytes of samples) {
-    const index = locationIndex(bytes)
+    const index = locationIndex(bytes, new Set(Array.from({ length: bytes.length + 1 }, (_, offset) => offset)))
     for (let offset = 0; offset <= bytes.length; offset++) {
       const lineStart = offset === 0 ? 0 : bytes.lastIndexOf(0x0a, offset - 1) + 1
       const line = bytes.subarray(0, lineStart).filter((byte) => byte === 0x0a).length + 1
@@ -31,8 +31,9 @@ it('C2-T-019: indexed positions equal decoded byte prefixes, including malformed
 
 it('C2-T-019: many findings on one long line use the index once', () => {
   const bytes = Buffer.from('_a_ '.repeat(32768))
+  const offsets = new Set(Array.from({ length: 32768 }, (_, finding) => finding * 4))
   const started = performance.now()
-  const index = locationIndex(bytes)
+  const index = locationIndex(bytes, offsets)
   for (let offset = 0; offset < bytes.length; offset += 4) {
     const entry = { code: 'x', severity: 'warning' as const, channel: 'lint' as const, message: '',
       range: { startOffset: offset, endOffset: offset } }
@@ -40,6 +41,10 @@ it('C2-T-019: many findings on one long line use the index once', () => {
   }
   expect(performance.now() - started).toBeLessThan(3000)
 }, 30_000)
+
+it('C2-T-019: a source with no positions keeps no column index', () => {
+  expect(locationIndex(Buffer.alloc(128 * 1024), new Set()).columns.size).toBe(0)
+})
 
 it('C2-T-019: line starts and supplementary code points keep their columns', () => {
   const bytes = Buffer.from('x😀\nα_b_\n')

@@ -117,7 +117,8 @@ function includesOf(path: string, args: ParsedArgs): { includes?: IncludeConfig 
 interface LocationIndex {
   bytes: Uint8Array
   starts: number[]
-  columns: Uint32Array
+  columns: Map<number, number>
+  ascii: boolean
 }
 
 function validSecond(first: number, second: number): boolean {
@@ -139,31 +140,47 @@ function decodedWidth(bytes: Uint8Array, at: number): number {
   return width
 }
 
-/** C2-T-019: index line starts and decoded code-point columns once in the original bytes. */
-export function locationIndex(input: string | Uint8Array): LocationIndex {
-  const bytes = typeof input === 'string' ? Buffer.from(input, 'utf8') : input
+function lineBom(bytes: Uint8Array, at: number, lineStart: number, width: number): boolean {
+  return at === lineStart && width === 3 && bytes[at] === 0xef &&
+    bytes[at + 1] === 0xbb && bytes[at + 2] === 0xbf
+}
+
+function lineStartsAndAscii(bytes: Uint8Array): { starts: number[], ascii: boolean } {
   const starts = [0]
-  const columns = new Uint32Array(bytes.length + 1)
-  columns[0] = 1
+  let ascii = true
+  for (let at = 0; at < bytes.length; at++) {
+    if (bytes[at] === 0x0a) starts.push(at + 1)
+    if (bytes[at]! >= 0x80) ascii = false
+  }
+  return { starts, ascii }
+}
+
+/** C2-T-019: index line starts and only the columns the reports request. */
+export function locationIndex(input: string | Uint8Array, requested: ReadonlySet<number>): LocationIndex {
+  const bytes = typeof input === 'string' ? Buffer.from(input, 'utf8') : input
+  const { starts, ascii } = lineStartsAndAscii(bytes)
+  const columns = new Map<number, number>()
+  if (ascii || requested.size === 0) return { bytes, starts, columns, ascii }
   let column = 1
+  let lineStart = 0
   for (let at = 0; at < bytes.length;) {
+    if (requested.has(at)) columns.set(at, column)
     const first = bytes[at]!
     if (first === 0x0a) {
-      columns[at + 1] = column = 1
-      starts.push(at + 1)
+      column = 1
+      lineStart = at + 1
       at++
       continue
     }
     // A decoder replaces one malformed UTF-8 prefix with one code point. An offset inside
     // that prefix includes the replacement, just as decoding a sliced prefix does.
     const width = decodedWidth(bytes, at)
-    for (let step = 1; step <= width; step++) columns[at + step] = column + 1
-    if (at === starts[starts.length - 1] && width === 3 && first === 0xef &&
-      bytes[at + 1] === 0xbb && bytes[at + 2] === 0xbf) columns[at + width] = column
-    else column++
+    for (let step = 1; step < width; step++) if (requested.has(at + step)) columns.set(at + step, column + 1)
+    if (!lineBom(bytes, at, lineStart, width)) column++
     at += width
   }
-  return { bytes, starts, columns }
+  if (requested.has(bytes.length)) columns.set(bytes.length, column)
+  return { bytes, starts, columns, ascii }
 }
 
 export function location(index: LocationIndex, entry: Diagnostic): { line: number, column: number } | null {
@@ -176,14 +193,18 @@ export function location(index: LocationIndex, entry: Diagnostic): { line: numbe
     if (index.starts[middle]! <= offset) low = middle
     else high = middle
   }
-  return { line: low + 1, column: index.columns[offset]! }
+  if (index.ascii) return { line: low + 1, column: offset - index.starts[low]! + 1 }
+  const column = index.columns.get(offset)
+  if (column === undefined) throw new Error(`diagnostic position ${offset} was not indexed`)
+  return { line: low + 1, column }
 }
 
-function indexFor(entry: Diagnostic, own: LocationIndex, included: Map<string, LocationIndex>): LocationIndex {
+function indexFor(entry: Diagnostic, own: LocationIndex, included: Map<string, LocationIndex>,
+  requested: Map<string | undefined, Set<number>>): LocationIndex {
   if (entry.file === undefined) return own
   let index = included.get(entry.file)
   if (index === undefined) {
-    index = locationIndex(includedTexts.get(entry.file) ?? '')
+    index = locationIndex(includedTexts.get(entry.file) ?? '', requested.get(entry.file) ?? new Set())
     included.set(entry.file, index)
   }
   return index
@@ -191,32 +212,51 @@ function indexFor(entry: Diagnostic, own: LocationIndex, included: Map<string, L
 
 /** C2-T-019: `FILE:LINE:COLUMN: SEVERITY CODE MESSAGE`, or `FILE: SEVERITY CODE MESSAGE` with no range. */
 function diagnosticLine(display: string, entry: Diagnostic, own: LocationIndex,
-  included: Map<string, LocationIndex>): string {
-  const index = indexFor(entry, own, included)
+  included: Map<string, LocationIndex>, requested: Map<string | undefined, Set<number>>): string {
+  const index = indexFor(entry, own, included, requested)
   const place = location(index, entry)
   const head = `${entry.file ?? display}${place === null ? '' : `:${place.line}:${place.column}`}`
   const chain = entry.includedBy?.map((part) => {
-    const siteIndex = part.file === undefined ? own : indexFor({ ...entry, file: part.file }, own, included)
+    const siteIndex = part.file === undefined ? own : indexFor({ ...entry, file: part.file }, own, included, requested)
     const site = location(siteIndex, { ...entry, range: part.range })
     return `${part.file ?? display}${site === null ? '' : `:${site.line}:${site.column}`}`
   }).join(' > ')
   return `${head}: ${entry.severity} ${entry.code} ${entry.message}${chain ? ` (included from ${chain})` : ''}\n`
 }
 
+function requestedOffsets(entries: readonly Diagnostic[]): Map<string | undefined, Set<number>> {
+  const requested = new Map<string | undefined, Set<number>>()
+  const add = (file: string | undefined, range: Diagnostic['range']): void => {
+    if (range === undefined) return
+    let offsets = requested.get(file)
+    if (offsets === undefined) { offsets = new Set(); requested.set(file, offsets) }
+    offsets.add(range.startOffset)
+  }
+  for (const entry of entries) {
+    add(entry.file, entry.range)
+    for (const part of entry.includedBy ?? []) add(part.file, part.range)
+  }
+  return requested
+}
+
 function lines(display: string, input: string, entries: readonly Diagnostic[], bytes?: Uint8Array): string {
-  const own = locationIndex(bytes ?? input)
+  if (entries.length === 0) return ''
+  const requested = requestedOffsets(entries)
+  const own = locationIndex(bytes ?? input, requested.get(undefined) ?? new Set())
   const included = new Map<string, LocationIndex>()
-  return entries.map((entry) => diagnosticLine(display, entry, own, included)).join('')
+  return entries.map((entry) => diagnosticLine(display, entry, own, included, requested)).join('')
 }
 
 /** C2-T-020: an entry with `line` and `column` added where it has a range. */
 function located(input: string, entries: readonly Diagnostic[], bytes?: Uint8Array): object[] {
-  const own = locationIndex(bytes ?? input)
+  if (entries.length === 0) return []
+  const requested = requestedOffsets(entries)
+  const own = locationIndex(bytes ?? input, requested.get(undefined) ?? new Set())
   const included = new Map<string, LocationIndex>()
   return entries.map((entry) => {
-    const place = location(indexFor(entry, own, included), entry)
+    const place = location(indexFor(entry, own, included, requested), entry)
     const includedBy = entry.includedBy?.map((part) => {
-      const index = part.file === undefined ? own : indexFor({ ...entry, file: part.file }, own, included)
+      const index = part.file === undefined ? own : indexFor({ ...entry, file: part.file }, own, included, requested)
       const site = location(index, { ...entry, range: part.range })
       return { ...part, ...(site ?? {}) }
     })
