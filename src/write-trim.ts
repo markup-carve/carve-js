@@ -14,45 +14,56 @@ function trimmedEnd(value: string): number {
   return end
 }
 
+interface Trimming {
+  readonly pending: Node[]
+  readonly values: [TextNode, string][]
+  readonly removed: [Node[], number, Node][]
+}
+
+/** Right to left, so a text before a dropped text sees what follows it then. */
+function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimming): void {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const child = nodes[i]!
+    if (child.type !== 'text') {
+      run.pending.push(child)
+      continue
+    }
+    // The attribute block of a text follows it, so its spaces end no line.
+    if ('attrs' in child || 'data' in child) continue
+    const next = nodes[i + 1]
+    if (single || (next === undefined ? !atLineEnd : next.type !== 'soft_break')) continue
+    const end = trimmedEnd(child.value)
+    if (end === child.value.length) continue
+    if (end > 0) {
+      run.values.push([child, child.value])
+      child.value = child.value.slice(0, end)
+      continue
+    }
+    run.removed.push([nodes, i, child])
+    nodes.splice(i, 1)
+  }
+}
+
 /**
  * Drops the spaces and tabs at the end of each text node that stands before a soft break or at the end of the
  * content of a line holder, and the text nodes that hold nothing else. `delimited` says whether a table is written
- * in a delimited form, where a cell keeps them as data (C2-W-066). Returns the function that restores the tree, or
- * null where nothing changed.
+ * in a delimited form, where a cell keeps them as data (C2-W-066) while its caption is still trimmed. Returns the
+ * function that restores the tree, or null where nothing changed.
  */
 export function trimLineEnds(document: Node, delimited: (table: TableNode) => boolean): (() => void) | null {
-  const values: [TextNode, string][] = []
-  const removed: [Node[], number, Node][] = []
-  const pending: Node[] = [document]
+  const run: Trimming = { pending: [document], values: [], removed: [] }
   for (;;) {
-    const node = pending.pop()
+    const node = run.pending.pop()
     if (node === undefined) break
     if (node.type === 'text') continue
-    if (node.type === 'table' && delimited(node)) continue
+    const cellsAreData = node.type === 'table' && delimited(node)
     const holder = LINE_HOLDERS.has(node.type)
     forEachSlot(node, (list, step, single) => {
-      const nodes = list as Node[]
-      const atLineEnd = holder && step === 'children'
-      for (let i = nodes.length - 1; i >= 0; i--) {
-        const child = nodes[i]!
-        if (child.type !== 'text') {
-          pending.push(child)
-          continue
-        }
-        const next = nodes[i + 1]
-        if (single || (next === undefined ? !atLineEnd : next.type !== 'soft_break')) continue
-        const end = trimmedEnd(child.value)
-        if (end === child.value.length) continue
-        if (end > 0) {
-          values.push([child, child.value])
-          child.value = child.value.slice(0, end)
-          continue
-        }
-        removed.push([nodes, i, child])
-        nodes.splice(i, 1)
-      }
+      if (cellsAreData && step === 'children') return
+      trimList(list as Node[], holder && step === 'children', single, run)
     })
   }
+  const { values, removed } = run
   if (values.length === 0 && removed.length === 0) return null
   return () => {
     for (let at = removed.length - 1; at >= 0; at--) {

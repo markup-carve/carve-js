@@ -39,6 +39,16 @@ describe('C2-W-151: line-end spaces and tabs of text', () => {
     const output = writeWithDiagnostics(documentOf(table))
     expect(output.source).toBe('{table header-rows=0}\n```csv\nx \n```\n')
     expect(output.diagnostics).toEqual([])
+    const captioned = { ...table, caption: { type: 'caption', children: [paragraph(text('cap '))] } } as Block
+    const withCaption = writeWithDiagnostics(documentOf(captioned))
+    expect(withCaption.source, 'the caption of a delimited table is trimmed').toBe('{table header-rows=0}\n```csv\nx \n```\n^ cap\n')
+    expect(withCaption.diagnostics).toEqual([])
+  })
+
+  it('still reports an attributed text whose attribute block follows its spaces', () => {
+    const attributed = (value: string): Inline => ({ type: 'text', value, attrs: { classes: ['c'] } }) as Inline
+    expect(reports(documentOf(paragraph(text('a'), attributed('x '))))).toEqual(['structure-unspellable /children/0'])
+    expect(reports(documentOf(paragraph(text('a'), attributed('  '))))).toEqual(['structure-unspellable /children/0'])
   })
 
   it('still reports a code span whose value loses a space before its line break', () => {
