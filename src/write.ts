@@ -1478,6 +1478,8 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
   w.work.source = original?.length ?? 0
+  const lead = document.children[0]
+  w.leadingFrontmatter = lead?.type === 'frontmatter' && lead.attrs === undefined ? lead : null
   const source = writeTrimmed(w, run, document, original)
   const diagnostics = writerDiagnostics(document, w)
   stats.parses = w.parses

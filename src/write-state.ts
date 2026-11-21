@@ -94,6 +94,8 @@ export interface Writer {
    * all repairs wrote.
    */
   work: { chars: number, limit: number, spent: number, source: number, written: number, rewritten: number }
+  /** Prototype: the frontmatter that stands first in the document and may use the bare opener (C2-B-161). */
+  leadingFrontmatter: Node | null
 }
 
 /** What one probe of the repair found: its result and the escapes it asked of the comparison, in order. */
@@ -115,6 +117,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     extensionSources: new Map(), verifiedSourceBytes: undefined,
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
+    leadingFrontmatter: null,
   }
 }
 
