@@ -801,14 +801,17 @@ function blankFrom(context: LintContext, end: number): number {
   return starts[end]!
 }
 
-const colonCandidates = new WeakMap<LintContext['layouts'], ColonLayout[][]>()
+/** The candidates of a line: the first `length` entries of `list`, which later lines only append to. */
+interface Candidates { list: ColonLayout[], length: number }
+
+const colonCandidates = new WeakMap<LintContext['layouts'], Candidates[]>()
 
 /**
  * The colon containers that may be open on each line, by line number: those that start before the line ends and end
  * at or after the blank run before the line. A container that ends before that run never is again, so one sweep
  * over the lines finds them all (carve-js#5280).
  */
-function colonCandidatesOf(context: LintContext): ColonLayout[][] {
+function colonCandidatesOf(context: LintContext): Candidates[] {
   let table = colonCandidates.get(context.layouts)
   if (table !== undefined) return table
   const colons = [...colonLayoutsOf(context)].sort((a, b) => a.from - b.from)
@@ -816,12 +819,11 @@ function colonCandidatesOf(context: LintContext): ColonLayout[][] {
   let active: ColonLayout[] = []
   let next = 0
   for (const line of context.lines) {
-    // Each line keeps its own list, so a list another line holds is copied before it grows.
-    if (next < colons.length && colons[next]!.from <= line.end) active = [...active]
     while (next < colons.length && colons[next]!.from <= line.end) active.push(colons[next++]!)
     const bound = Math.min(line.start - 1, blankFrom(context, line.start))
+    // A line keeps the list it saw, so a list that loses an entry is copied rather than changed.
     if (active.some((colon) => colon.to < bound)) active = active.filter((colon) => colon.to >= bound)
-    table[line.number] = active
+    table[line.number] = { list: active, length: active.length }
   }
   colonCandidates.set(context.layouts, table)
   return table
@@ -886,8 +888,11 @@ function ownerBoundary(at: number, context: LintContext): string | undefined {
 function openColon(line: ModelLine, context: LintContext): ColonContainer[] {
   const open: ColonContainer[] = []
   const boundary = ownerBoundary(line.body_start, context)
-  const candidates = colonCandidatesOf(context)[line.number] ?? colonLayoutsOf(context)
-  for (const colon of candidates) {
+  const candidates = colonCandidatesOf(context)[line.number]
+  const list = candidates?.list ?? colonLayoutsOf(context)
+  const length = candidates?.length ?? list.length
+  for (let index = 0; index < length; index++) {
+    const colon = list[index]!
     if ((colon.owner ??= ownerBoundary(colon.from, context) ?? '') !== (boundary ?? '')) continue
     const found = colonOpener(colon, line.body_start, line.start, context)
     if (found !== undefined) open.push(found)
