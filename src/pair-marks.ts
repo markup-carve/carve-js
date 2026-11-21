@@ -18,7 +18,7 @@ function isBlankAt(text: string, at: number): boolean {
   return BLANK.test(text[at]!)
 }
 
-function isEdgeSpaceAt(text: string, at: number): boolean {
+export function isEdgeSpaceAt(text: string, at: number): boolean {
   const code = text.charCodeAt(at)
   if (code < 128) return code === 32 || (code >= 9 && code <= 13)
   return EDGE.test(text[at]!)

@@ -73,14 +73,61 @@ function quotesOfLine(text: string): number {
   return count
 }
 
+/** The `>` marks at the start of `text`. */
+function quoteMarks(text: string): number {
+  let count = 0
+  for (let rest = text.trimStart(); rest.startsWith('>'); rest = rest.slice(1).trimStart()) count++
+  return count
+}
+
+/** The offset in `text` after its first `count` quote marks. */
+function afterMarks(text: string, count: number): number {
+  let at = 0
+  for (let seen = 0; seen < count; seen++) at = text.indexOf('>', at) + 1
+  return at
+}
+
 /** U-016: in a quote the `+` line becomes a marked blank line and the block takes the marks. */
+/** The block starts right after the marks, or 0.2 reads it as a later block of an item there. */
+function closeUpMarks(ctx: Context, line: number, depth: number, message: string): void {
+  const text = lineText(ctx.lines, line)
+  const after = afterMarks(text, depth)
+  const spaces = indentOf(text.slice(after))
+  const start = lineStart(ctx.lines, line)
+  if (spaces > 1) change(ctx, 'U-016', start + after + 1, start + after + spaces, '', message)
+}
+
 function plusInQuote(ctx: Context, quote: Visit, child: Node01, line: number): void {
   const message = '+ line replaced by a quoted blank line, the block given the quote mark'
+  if (ctx.repairs === true) { plusInQuoteKeepingMarks(ctx, quote, child, line, message); return }
   const marks = '>'.repeat(quotesOf(quote).length + 1)
   change(ctx, 'U-016', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), marks, message)
   for (let at = child.pos!.startLine; at <= child.pos!.endLine; at++) {
     const start = lineStart(ctx.lines, at)
     change(ctx, 'U-016', start, start, isBlank(lineText(ctx.lines, at)) ? marks : marks + ' ', message)
+  }
+}
+
+/** The repairs of U-016: a line keeps the marks it has and the indent of a quote inside a body. */
+function plusInQuoteKeepingMarks(ctx: Context, quote: Visit, child: Node01, line: number, message: string): void {
+  const depth = quotesOf(quote).length + 1
+  const marks = '>'.repeat(depth)
+  // A quote inside a body keeps the body's indent on the lines it is given.
+  const column = depth === 1 ? quote.node.pos!.startColumn - 1 : 0
+  const indentAt = (at: number): number => Math.min(column, indentOf(lineText(ctx.lines, at)))
+  change(ctx, 'U-016', lineStart(ctx.lines, line) + indentAt(line), lineEnd(ctx.lines, line), marks, message)
+  for (let at = child.pos!.startLine; at <= child.pos!.endLine; at++) {
+    const text = lineText(ctx.lines, at)
+    // The marks of a quote that is the attached block are its own, not the host's.
+    const have = Math.max(0, quoteMarks(text) - (child.type === 'block_quote' ? 1 : 0))
+    const start = lineStart(ctx.lines, at)
+    if (have >= depth) {
+      if (at === child.pos!.startLine && have === depth) closeUpMarks(ctx, at, depth, message)
+      continue
+    }
+    const added = '>'.repeat(depth - have)
+    const from = start + (have === 0 ? indentAt(at) : 0)
+    change(ctx, 'U-016', from, from, isBlank(text) ? added : added + ' ', message)
   }
 }
 
@@ -116,7 +163,12 @@ function plusLines(ctx: Context, visit: Visit, used: Set<number>): void {
 function leavesHost(ctx: Context, host: Visit, line: number): boolean {
   if (line >= ctx.lines.count || isBlank(lineText(ctx.lines, line + 1))) return false
   const next = ctx.blocks.leaf[line + 1]
-  if (next === null || next === undefined) return true
+  if (next === null || next === undefined) {
+    if (ctx.repairs !== true) return true
+    // An item of the host whose first block starts below its marker line holds no leaf there.
+    return !ctx.visits.some((visit) => visit.node.type === 'list_item' && visit.node.pos?.startLine === line + 1
+      && isInside(visit, host))
+  }
   // A marker at an open list's column ends the paragraph by itself (C2-B-015).
   const item = ancestor(next, 'list_item')
   return !isInside(next, host) && (item === null || item.node.pos!.startLine !== line + 1)
@@ -406,7 +458,9 @@ function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
 /** A `+` line that attaches no block: 0.1 rendered nothing for it, 0.2 reads it as text (C2-B-059), so it goes. */
 function danglingPlus(ctx: Context, used: Set<number>): void {
   for (let line = 1; line <= ctx.lines.count; line++) {
+    if (ctx.repairs === true && quotedLastPlus(ctx, line, used)) continue
     if (used.has(line) || !isGap(ctx, line) || lineText(ctx.lines, line).trim() !== '+') continue
+    if (ctx.repairs === true && endsItem(ctx, line)) continue
     change(
       ctx,
       'U-014',
@@ -416,6 +470,33 @@ function danglingPlus(ctx: Context, used: Set<number>): void {
       '+ line that attaches no block removed, 0.1 rendered nothing for it'
     )
   }
+}
+
+/** A quoted `+` line that ends its quote attaches nothing either (C2-B-059), so it goes. */
+function quotedLastPlus(ctx: Context, line: number, used: Set<number>): boolean {
+  const text = lineText(ctx.lines, line)
+  if (used.has(line) || !isGap(ctx, line) || text.trim() === '+' || insideQuotes(text).trim() !== '+') return false
+  if (line < ctx.lines.count && !isBlank(lineText(ctx.lines, line + 1))) return false
+  change(ctx, 'U-014', lineStart(ctx.lines, line), lineStart(ctx.lines, line + 1), '',
+    '+ line that attaches no block removed, 0.1 rendered nothing for it')
+  return true
+}
+
+/**
+ * A `+` line between an item and a block 0.1 put after the list becomes a blank line, which keeps the
+ * block out of the item; U-109 moves an indented block to column 0.
+ */
+function endsItem(ctx: Context, line: number): boolean {
+  const above = ctx.blocks.leaf[line - 1]
+  const below = ctx.blocks.leaf[line + 1]
+  if (above == null || below == null || below.node.pos?.startLine !== line + 1) return false
+  const item = ancestor(above, 'list_item')
+  if (item === null || isInside(below, item) || ancestor(below, 'list_item') !== null) return false
+  const message = '+ line that attaches no block written as a blank line, the block after it kept after the list'
+  const text = lineText(ctx.lines, line)
+  const start = lineStart(ctx.lines, line)
+  change(ctx, 'U-014', start + indentOf(text), lineEnd(ctx.lines, line), '', message)
+  return true
 }
 
 export function lists(ctx: Context): void {

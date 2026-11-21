@@ -10,10 +10,10 @@ const seed = 1794696020
 const bounds = {
   full: { lines: 4, inline: 5, treeLines: 3, treeTokens: 4, mutants: 100000,
     fuzz: 20000, writerLines: 3, writerTokens: 4, writerContents: 50000, writerDocuments: 5000,
-    stressSizes: '1000,10000,100000', inlineStressSizes: '1000,10000,100000', proptest: 100000000, importProptest: 100000000, minutes: 1, benchRounds: 20 },
+    stressSizes: '1000,10000,100000', inlineStressSizes: '1000,10000,100000', proptest: 100000000, importProptest: 100000000, scalingProptest: 100000000, minutes: 1, benchRounds: 20 },
   smoke: { lines: 2, inline: 2, treeLines: 2, treeTokens: 2, mutants: 1000,
     fuzz: 300, writerLines: 2, writerTokens: 2, writerContents: 200, writerDocuments: 50,
-    stressSizes: '100,1000,10000', inlineStressSizes: '1000,10000,50000', proptest: 30, importProptest: 3, minutes: 0, benchRounds: 1 },
+    stressSizes: '100,1000,10000', inlineStressSizes: '1000,10000,50000', proptest: 30, importProptest: 3, scalingProptest: 4, minutes: 0, benchRounds: 1 },
 }[mode]
 
 function run(command, args, cwd = '.') {
@@ -73,9 +73,10 @@ switch (gate) {
     npm('bench', '--files', smoke ? 'test/fixtures/bench-commonmark-core.crv' : 'test/fixtures/bench-commonmark-core.crv,docs/api.md,docs/engine.md', '--rounds', String(bounds.benchRounds)); break
   case 'proptest':
     if (!smoke) npm('test:proptest')
-    for (const target of ['parse', 'render', 'format', 'diagnostics', 'extensions', 'decode', 'cli', 'lint', 'migrate', 'import']) {
+    for (const target of ['parse', 'render', 'format', 'diagnostics', 'extensions', 'decode', 'cli', 'lint', 'migrate', 'import', 'scaling']) {
       if (smoke && target === 'cli') continue
-      node('proptest/run.ts', '--target', target, '--seed', seed, '--count', target === 'import' ? bounds.importProptest : bounds.proptest, '--minutes', bounds.minutes, '--max-bytes', 4096)
+      const count = target === 'import' ? bounds.importProptest : target === 'scaling' ? bounds.scalingProptest : bounds.proptest
+      node('proptest/run.ts', '--target', target, '--seed', seed, '--count', count, '--minutes', bounds.minutes, '--max-bytes', 4096)
     }
     break
   default: throw new Error(`unknown gate: ${gate}`)

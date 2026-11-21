@@ -14,6 +14,7 @@ import { type SourceLayout } from '../src/layout.ts'
 import { type Random } from './generate.ts'
 import { importDocument } from '../import/src/index.ts'
 import { type Target } from './targets.ts'
+import { checkScaling } from './scaling.ts'
 
 export interface Finding {
   kind: string
@@ -653,6 +654,7 @@ export function check(target: Target, source: string, rng: Random): Finding | nu
     case 'lint': return checkLint(source, rng)
     case 'migrate': return checkMigrate(source)
     case 'import': return checkImport(source, rng)
+    case 'scaling': return checkScaling(source, rng)
     case 'cli': return null
   }
 }

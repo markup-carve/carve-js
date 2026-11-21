@@ -208,6 +208,8 @@ function substitution(ctx: Context, node: Node01): void {
   change(ctx, 'U-069', start, start + 2, '{-', message)
   change(ctx, 'U-069', arrow, arrow + 2, '-}{+', message)
   change(ctx, 'U-069', end - 2, end, '+}', message)
+  // 0.1 wrote a glued attribute block as text; on the insertion it would apply (C2-I-028).
+  if (ctx.repairs === true && ctx.src[end] === '{') change(ctx, 'U-069', end, end, '\\', message)
   substitutionTextComments(ctx, node.old)
   substitutionTextComments(ctx, node.new)
 }

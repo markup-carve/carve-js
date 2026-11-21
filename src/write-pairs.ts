@@ -1,7 +1,7 @@
 // C2-W-146: the text the escaping procedure wrote is tested with the pair rules of lint, and each
 // mark of a reported opening run takes a backslash, so canonical output does not fail them.
 import { forEachSlot, INLINE_PARENTS, type Node, type ParagraphNode, type TextNode } from './ast.ts'
-import { nextPair, pairEnd } from './pair-marks.ts'
+import { isEdgeSpaceAt, nextPair, pairEnd } from './pair-marks.ts'
 import { isAsciiPunctuation } from './unicode.ts'
 
 const PAIR_RULES = [
@@ -17,6 +17,11 @@ export const NO_PAIRS = 0
 export const EARLY_PAIRS = 1
 /** Any other group with a pair mark: its pair escapes are tested once its other escapes are settled. */
 export const LATE_PAIRS = 2
+/** EARLY_PAIRS whose early escapes leave no mark that can open a pair, so a test of the same spelling finds none. */
+export const EARLY_FINAL = 3
+
+/** Whether every early escape of the group being read passed `opensNothing`. */
+let earlyFinal = true
 
 const WORD = /[\p{L}\p{N}]/u
 
@@ -72,6 +77,7 @@ export type Asked = Map<TextNode, number[]>
  */
 export function pairReach(group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>, early: Asked): number {
   let read = ONLY_PLAIN
+  earlyFinal = true
   for (const node of group) {
     if ((read & ONLY_PLAIN) !== 0 && node.type === 'paragraph' && onlyText(node.children)) {
       read = readParagraph(node, read, escapes, early)
@@ -86,7 +92,7 @@ export function pairReach(group: readonly Node[], escapes: ReadonlyMap<TextNode,
     return LATE_PAIRS
   }
   dropEscaped(early, escapes)
-  return EARLY_PAIRS
+  return earlyFinal && early.size > 0 ? EARLY_FINAL : EARLY_PAIRS
 }
 
 /** `read` with the text of a paragraph of text nodes, and its pair escapes in `early` while the group stays plain. */
@@ -100,8 +106,11 @@ function readParagraph(node: ParagraphNode, read: number, escapes: ReadonlyMap<T
   // A node with metadata has slots beside its children (forEachSlot).
   if (node.metadata !== undefined && hasMarksBelow(node)) next |= HOLDS_MARKS
   if (next !== (HOLDS_MARKS | ONLY_PLAIN)) return next
-  if (node.metadata === undefined) testChildren(node.children, escapes, early)
-  else for (const [text, offsets] of pairEscapes([node], escapes)) early.set(text, offsets)
+  if (node.metadata === undefined) testChildren(node.children, escapes, early, true)
+  else for (const [text, offsets] of pairEscapes([node], escapes)) {
+    early.set(text, offsets)
+    earlyFinal = false
+  }
   return next
 }
 
@@ -214,7 +223,7 @@ function testRun(run: Run, found: Asked): void {
   }
 }
 
-function testPlainText(node: TextNode, found: Asked): void {
+function testPlainText(node: TextNode, found: Asked, early: boolean): void {
   const value = node.value
   let offsets: number[] | undefined
   for (const [mark, id] of PAIR_RULES) {
@@ -223,15 +232,47 @@ function testPlainText(node: TextNode, found: Asked): void {
       for (let at = start; at < start + mark.length; at++) offsets.push(at)
     }
   }
-  if (offsets !== undefined && offsets.length > 0) found.set(node, offsets)
+  if (offsets === undefined || offsets.length === 0) return
+  found.set(node, offsets)
+  if (early && earlyFinal && !opensNothing(value, offsets)) earlyFinal = false
 }
 
-function testChildren(children: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>, found: Asked): void {
+/**
+ * Whether `value`, which holds no backslash, spelled with a backslash before each offset of `asked`, holds no mark of
+ * a pair rule that can open a pair: `validPair` asks the opener to be unescaped and the character behind it to be
+ * neither an edge space nor the first character of the mark. An inserted backslash there counts as able to open.
+ */
+function opensNothing(value: string, asked: readonly number[]): boolean {
+  const escaped = new Set(asked)
+  for (const [mark] of PAIR_RULES) {
+    for (let at = value.indexOf(mark); at >= 0; at = value.indexOf(mark, at + 1)) {
+      // An escaped mark opens nothing, and one with a backslash inside is no mark in the spelling.
+      if (escaped.has(at) || (mark.length === 2 && escaped.has(at + 1))) continue
+      const next = at + mark.length
+      if (next >= value.length || (!escaped.has(next) && (value[next] === mark[0] || isEdgeSpaceAt(value, next)))) continue
+      return false
+    }
+  }
+  return true
+}
+
+function testChildren(children: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>, found: Asked,
+  early = false): void {
   const only = children.length === 1 ? children[0] : undefined
   if (only?.type === 'text' && !only.value.includes('\\') && !escapes.has(only)) {
-    testPlainText(only, found)
+    testPlainText(only, found, early)
     return
   }
+  if (early) {
+    const before = found.size
+    testRuns(children, escapes, found)
+    if (found.size > before) earlyFinal = false
+    return
+  }
+  testRuns(children, escapes, found)
+}
+
+function testRuns(children: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>, found: Asked): void {
   let run = newRun()
   for (const child of children) {
     if (child.type === 'text') spell(run, child, escapes)
