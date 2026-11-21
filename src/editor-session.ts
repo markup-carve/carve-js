@@ -123,9 +123,11 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
     let contentStart = node.start
     if (hasAttrs.has(node.path) && !INLINE_TYPES.has(node.type ?? '')) {
       // An attribute line is followed by the rest of its block, so the last line of the range never is one.
-      for (let line = attributeLine(source, contentStart); line !== null && line.next < node.end;) {
+      // A later line carries the container prefixes the first one stands behind.
+      const column = node.start - lineStarts[node.start]!
+      for (let line = attributeLine(source, contentStart); line !== null && line.next + column < node.end;) {
         token('attribute', contentStart, line.end)
-        contentStart = line.next
+        contentStart = line.next + column
         line = attributeLine(source, contentStart)
       }
     }

@@ -42,6 +42,8 @@ describe('editor session tokens', () => {
     expect(tokens('{.k}\n{#i}\n- item', 'list')).toEqual(['attribute 0-4', 'attribute 5-9'])
     expect(tokens('{.k}\n```\na\n```', 'code_block')).toEqual(['attribute 0-4', 'fence-open 5-9', 'fence-close 11-14'])
     expect(tokens('{table}\n{{ a.csv }}\n', 'include')).toEqual(['attribute 0-7'])
+    expect(tokens('> {.x}\n> ```\n> a\n> ```', 'code_block')).toEqual(['attribute 2-6', 'fence-open 9-13', 'fence-close 19-22'])
+    expect(tokens('- {.x}\n  = H', 'heading')).toEqual(['attribute 2-6', 'block-marker 9-11'])
   })
 
   it('a list item marker', () => {
