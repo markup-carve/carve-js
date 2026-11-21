@@ -6,7 +6,7 @@ import type {
 import { resolveTree } from '../../src/index.ts'
 import {
   asciiLower, attr, attrs, CARRIERS, classList, content, directionOf, droppedAttribute, elements, has, ignoredCarrier, isBlank,
-  isComment, isElement, isRawSpan, SOURCE_LEVEL,
+  isComment, isElement, isRawSpan, readsCarrier, SOURCE_LEVEL,
   isText, plain, report, withoutClasses, withoutKeys, type HtmlContext, type MappedAttrs,
 } from './html-dom.ts'
 import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
@@ -307,13 +307,10 @@ function headingLevel(node: Html.Element): number | undefined {
   return level !== undefined && level > 6 ? level : undefined
 }
 
-// `data-carve-src` is removed on any element without a report (C2-H-120).
-const SECTION_CARRIERS: ReadonlySet<string> = new Set(['data-carve-explicit-id', 'data-carve-generated-id', 'data-carve-src'])
-
 /** C2-M-027: a render writes no attribute but the id on the section it opens at a heading; C2-M-009 reports other carriers. */
 function sectionAttributes(node: Html.Element, context: HtmlContext): void {
   for (const entry of node.attrs) {
-    if (CARRIERS.has(entry.name) && !SECTION_CARRIERS.has(entry.name)) {
+    if (CARRIERS.has(entry.name) && !readsCarrier(node, entry.name)) {
       ignoredCarrier(context, node, entry.name, 'a section reads only the id carriers')
       continue
     }

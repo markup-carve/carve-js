@@ -54,6 +54,18 @@ function examplesWith(marker: string): { count: number, failing: string[] } {
 }
 
 describe('C2-H-186 carriers', () => {
+  it.each([
+    ['<div data-carve-ref="x">y</div>', 'data-carve-ref'],
+    ['<p data-carve-tight>x</p>', 'data-carve-tight'],
+    ['<p data-carve-ref="x">y</p>', 'data-carve-ref'],
+    ['<p><em data-carve-div>x</em></p>', 'data-carve-div'],
+    ['<blockquote data-carve-line-block><p>x</p></blockquote>', 'data-carve-line-block'],
+    ['<p data-carve-explicit-id>x</p>', 'data-carve-explicit-id'],
+  ])('C2-M-009 reports a carrier outside its element class: %s', (html, name) => {
+    const findings = importDocument(html, { from: 'html', rawHtml: true }).diagnostics
+    expect(findings.filter(entry => entry.code === 'import-carrier-ignored' && entry.message.includes(name))).toHaveLength(1)
+  })
+
   it('C2-H-195 row 16: the space at the edge of a delimited-table cell is a listed loss', () => {
     const outcome = roundTrip('{table}\n```csv\na,"b ""q"" c", d\n```\n')
     expect(outcome.html).toContain('<th scope="col"> d</th>')
