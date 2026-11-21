@@ -695,7 +695,7 @@ export function blankLinesBetween(w: Writer, before: Node, list: Node | null, no
     node.marker.kind === 'ordered' && list.marker.style !== node.marker.style &&
     list.marker.delimiter === node.marker.delimiter) {
     // The next list's attribute line would be a lazy line of the open paragraph above it (C2-B-024).
-    return listAttributes(node, listMarkers(w, node).start) === '' ? 0 : 1
+    return listAttributes(node, listMarkers(w, node).start) !== '' && takesLineBelow(w, list) ? 1 : 0
   }
   return nested ? 0 : 1
 }

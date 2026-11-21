@@ -21,6 +21,11 @@ describe('an attribute line at an ordered-list style boundary', () => {
     }
   })
 
+  it('keeps the zero-blank boundary when the prior list ends in an opaque block', () => {
+    const source = 'v. ```\n   x\n   ```\n\n{x}\nvi. y\n'
+    expect(format(source)).toBe('v. ```\n   x\n   ```\n{x}\nvi. y\n')
+  })
+
   it('keeps the boundary for ordered styles, attributes, and container prefixes', () => {
     const first = ['v. x', 'a. x', 'i. x', 'A. x', 'V. x', '1. x']
     const second = ['vi. y', '1. y', 'b. y', 'I. y', '2. y']
