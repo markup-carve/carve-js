@@ -61,19 +61,30 @@ function cliCheck(source: string, seed: number): Finding | null {
   return null
 }
 
+function startWorker(): { worker: Worker, ready: Promise<void> } {
+  const worker = new Worker(new URL('./case-worker.ts', import.meta.url))
+  return { worker, ready: new Promise((resolve) => worker.once('message', () => resolve())) }
+}
+
 class Checker {
   private worker: Worker | null = null
+  private ready: Promise<void> = Promise.resolve()
   private readonly target: Target
 
   constructor(target: Target) {
     this.target = target
-    if (target !== 'cli') this.worker = new Worker(new URL('./case-worker.ts', import.meta.url))
+    if (target !== 'cli') this.restart()
   }
 
-  check(source: string, seed: number): Promise<Finding | null> {
-    if (this.target === 'cli') return Promise.resolve(cliCheck(source, seed))
+  private restart(): void {
+    ({ worker: this.worker, ready: this.ready } = startWorker())
+  }
+
+  async check(source: string, seed: number): Promise<Finding | null> {
+    if (this.target === 'cli') return cliCheck(source, seed)
+    await this.ready
     const worker = this.worker
-    if (worker === null) return Promise.resolve({ kind: 'harness-exception', detail: 'missing worker' })
+    if (worker === null) return { kind: 'harness-exception', detail: 'missing worker' }
     return new Promise((resolve) => {
       // C2-W-089: the writer may need several repair passes for one group.
       const writerTarget = this.target === 'render' || this.target === 'format' || this.target === 'diagnostics' ||
@@ -84,7 +95,7 @@ class Checker {
         worker.removeAllListeners('message')
         worker.removeAllListeners('error')
         void worker.terminate().then(() => {
-          this.worker = new Worker(new URL('./case-worker.ts', import.meta.url))
+          this.restart()
           resolve({ kind: 'no-termination', detail: `over ${timeout} ms` })
         }, (error: unknown) => resolve({ kind: 'worker-exception', detail: String(error) }))
       }, timeout)
@@ -96,7 +107,7 @@ class Checker {
       worker.once('error', (error: Error) => {
         clearTimeout(timer)
         worker.removeAllListeners('message')
-        this.worker = new Worker(new URL('./case-worker.ts', import.meta.url))
+        this.restart()
         resolve({ kind: 'worker-exception', detail: String(error) })
       })
       worker.postMessage({ target: this.target, source, seed })

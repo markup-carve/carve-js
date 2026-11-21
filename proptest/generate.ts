@@ -3,7 +3,7 @@ import { join, extname } from 'node:path'
 import { CARVE_SOURCES } from '../scripts/corpus.ts'
 import { LINE_SHAPES } from '../test/support/enumerate.ts'
 import { WRITER_TOKENS } from '../test/support/inline-enumerate.ts'
-import { family } from './scaling.ts'
+import { family, fitted } from './scaling.ts'
 
 export interface Random {
   int(limit: number): number
@@ -175,7 +175,7 @@ export function generate(rng: Random, corpus: Corpus, maxBytes: number): string 
   if (corpus.focused.length > 0 && rng.int(16) === 0) value = corpus.focused[rng.int(corpus.focused.length)] ?? ''
   else switch (rng.int(5)) {
     case 0: value = raw(rng, maxBytes); break
-    case 4: value = family(rng).build(50 + rng.int(4951)); break
+    case 4: value = fitted(family(rng), 50 + rng.int(4951), maxBytes, rng); break
     case 1: value = mutate(base, other, rng); break
     case 2: value = grammar(rng, maxBytes); break
     default: {

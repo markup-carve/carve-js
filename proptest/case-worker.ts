@@ -5,6 +5,9 @@ import { random } from './generate.ts'
 
 interface Request { target: Target, source: string, seed: number }
 
+// The runner starts a case timer only after this, so a worker that boots on a loaded machine is not a hang.
+parentPort?.postMessage('ready')
+
 parentPort?.on('message', (request: Request) => {
   try { parentPort?.postMessage(check(request.target, request.source, random(request.seed))) }
   catch (error) {

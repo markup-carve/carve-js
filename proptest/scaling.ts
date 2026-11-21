@@ -47,12 +47,13 @@ function indented(rng: Random): Family {
 function fenced(rng: Random): Family {
   const fence = [':::', '```', '~~~', '::: c'][rng.int(4)] ?? ':::'
   const body = words(rng, rng.int(4)) || 'a'
+  const closed = rng.bool()
   return {
-    name: `fences ${JSON.stringify(fence)} ${JSON.stringify(body)}`,
+    name: `fences ${JSON.stringify(fence)} ${JSON.stringify(body)} closed=${closed}`,
     build: (n) => {
       const open = Array.from({ length: n }, (_, at) => fence[0]!.repeat(3 + n - at) + fence.slice(3))
       const close = Array.from({ length: n }, (_, at) => fence[0]!.repeat(4 + at))
-      return [...open, body, ...(rng.bool() ? close : [])].join('\n') + '\n'
+      return [...open, body, ...(closed ? close : [])].join('\n') + '\n'
     },
   }
 }
@@ -94,6 +95,18 @@ function prefixed(rng: Random): Family {
     name: `prefixed ${JSON.stringify(prefix)}x${depth} ${inner.name}`,
     build: (n) => inner.build(n).split('\n').map((line) => prefix.repeat(depth) + line).join('\n'),
   }
+}
+
+/**
+ * A source of `chosen` at a size up to `wanted` that stays near `maxBytes`: sizes double from 50 while they fit,
+ * and the result lies between the last fitting size and the next doubling, so it costs at most four times the
+ * budget even for a family that grows quadratically.
+ */
+export function fitted(chosen: Family, wanted: number, maxBytes: number, rng: Random): string {
+  let size = Math.min(50, wanted)
+  while (size * 2 <= wanted && chosen.build(size * 2).length <= maxBytes) size *= 2
+  const upper = Math.min(wanted, size * 2 - 1)
+  return chosen.build(size + rng.int(upper - size + 1))
 }
 
 export function family(rng: Random): Family {
