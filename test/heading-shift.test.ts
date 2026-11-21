@@ -97,6 +97,39 @@ describe('headingShift', () => {
     expect(() => toMarkdown(parse('= A\n'), { headingShift: 6 })).toThrow(CarveOptionError)
   })
 
+  it('records the above-six warning at the shift before later level edits', () => {
+    const lower = renderWithDocumentTransforms('====== A\n', [{ name: 'sample.lower', transform(view) {
+      const heading = view.children[0]!
+      if (heading.type === 'heading') heading.level = 2
+      return view
+    } }], { headingShift: 1, roundtrip: true, sections: false, headingIds: 'off' })
+    expect(lower.html).toBe('<h2 data-carve-source-level="1">A</h2>')
+    expect(lower.diagnostics.map(d => d.code)).toEqual(['heading-shift-above-6'])
+    expect(lower.diagnostics[0]?.message).toBe('The heading shift of 1 raises a heading above level 6.')
+    const raise = renderWithDocumentTransforms('= A\n', [{ name: 'sample.raise', transform(view) {
+      const heading = view.children[0]!
+      if (heading.type === 'heading') heading.level = 7
+      return view
+    } }], { headingShift: 1, roundtrip: true, sections: false, headingIds: 'off' })
+    expect(raise.html).toBe('<div data-carve-source-level="6" role="heading" aria-level="7">A</div>')
+    expect(raise.diagnostics.map(d => d.code)).toEqual([])
+  })
+
+  it('writes the ruled carrier for inserted and below-shift headings', () => {
+    const options = { headingShift: 1, roundtrip: true, sections: false, headingIds: 'off' as const }
+    const added = renderWithDocumentTransforms('= A\n', [{ name: 'sample.add', transform(view) {
+      view.children.push(parse('=== B\n', { headingIds: 'off' }).children[0]!)
+      return view
+    } }], options)
+    expect(added.html).toBe('<h2 data-carve-source-level="1">A</h2>\n<h3 data-carve-source-level="2">B</h3>')
+    const zero = renderWithDocumentTransforms('= A\n', [{ name: 'sample.zero', transform(view) {
+      const heading = view.children[0]!
+      if (heading.type === 'heading') heading.level = 1
+      return view
+    } }], options)
+    expect(zero.html).toBe('<h1 data-carve-source-level="0">A</h1>')
+  })
+
   it('scales linearly with the shift on', () => {
     const time = (n: number): number => {
       const source = generated(7, n)

@@ -37,6 +37,5 @@ export function firstAboveSix(document: DocumentNode): HeadingNode | undefined {
 }
 
 export function headingShiftMessage(shift: number): string {
-  return `The heading shift of ${shift} raises a heading above level 6: ` +
-    'the render writes it as a div with the role heading, the Markdown export at level 6.'
+  return `The heading shift of ${shift} raises a heading above level 6.`
 }
