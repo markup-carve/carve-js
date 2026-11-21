@@ -15,11 +15,18 @@ import { DELIMITED_MALFORMED } from './parse-findings.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
 import { attributeBlocksEnd, countValue, isInnerLineComment, rowClosingPipe, skipSpaces } from './lines.ts'
 import { trimSpaces } from './source.ts'
-import type { BlockNode } from './tree.ts'
+import { spansOf, type BlockNode } from './tree.ts'
 import { BODY_KEYS, type BodyPartition, bodyPartition } from './table-bodies.ts'
 import { holdsBidiControl } from './unicode.ts'
 
 const MAX_WIDTH = 100
+const LINT_EMPTY_COLUMN: TableColumnNode = { type: 'table_column' }
+const LINT_EMPTY_CELL: TableCellNode = { type: 'table_cell', header: false,
+  children: [{ type: 'cell_paragraph', children: [] }] }
+const LINT_EMPTY_HEADER_CELL: TableCellNode = { type: 'table_cell', header: true,
+  children: [{ type: 'cell_paragraph', children: [] }] }
+
+export const isCompactEmptyCell = (node: TableCellNode): boolean => node === LINT_EMPTY_CELL || node === LINT_EMPTY_HEADER_CELL
 
 type CommentBuilder = (ctx: TreeContext, node: BlockNode) => CommentNode
 
@@ -126,11 +133,17 @@ function fragmentInlines(ctx: TreeContext, spans: number[], flow: number): Inlin
   return children
 }
 
+function traceCell(ctx: TreeContext, cell: TableCellNode, node: BlockNode, joined: boolean, children: readonly Inline[]): void {
+  // An unjoined cell without inline children has no source-layout facts to derive.
+  if (ctx.trace !== null && (joined || children.length > 0)) ctx.trace.blocks.set(cell, node)
+}
+
 function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellNode {
   // C2-A-158: a cell that a continuation row joined or formed has no position, and neither has its content.
-  const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![1]! > node.end) || node.start >= rowEnd
+  const spans = spansOf(node)
+  const joined = spans.length > 2 || (spans.length === 2 && spans[1]! > node.end) || node.start >= rowEnd
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_CELL
-  const children = fragmentInlines(ctx, node.spans!, flow)
+  const children = fragmentInlines(ctx, spans, flow)
   // C2-I-098: a cell is inline flow like any other leaf. A term holds no space, so none matches across a join.
   if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
   const paragraph: CellParagraphNode = noteLeaf(ctx, { type: 'cell_paragraph', children })
@@ -140,20 +153,27 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellN
   if ((node.aux & 0xff) !== 0) cell.align = alignmentOf(node.aux & 0xff)
   if (node.aux >> 8 !== 0) cell.valign = valignOf(node.aux >> 8)
   setAttributes(cell, cellAttributes(ctx, node))
-  if (ctx.trace !== null) ctx.trace.blocks.set(cell, node)
+  traceCell(ctx, cell, node, joined, children)
   if (joined) return cell
-  const spans = node.spans!
   // C2-A-158: the paragraph of an empty cell has no source character.
   if (spans.length === 2 && spans[0]! < spans[1]!) place(ctx, paragraph, spans[0]!, spans[1]!)
   // C2-A-149: a cell spans the text between its pipes.
   return place(ctx, cell, node.start + 1, node.end)
 }
 
+function compactEmptyCell(ctx: TreeContext, node: BlockNode, index: number, last: number, rowEnd: number,
+  bodyHeader: boolean): TableCellNode | undefined {
+  if (ctx.trace?.compactTables !== true || index >= last || node.start >= rowEnd) return undefined
+  if (node.flags !== 0 || node.aux !== 0 || node.facts !== 1 || node.rowFacts !== 1) return undefined
+  if (node.emptySpan === undefined && (node.spans?.length !== 2 || node.spans[0] !== node.spans[1])) return undefined
+  return bodyHeader ? LINT_EMPTY_HEADER_CELL : LINT_EMPTY_CELL
+}
+
 /**
  * The cells of one row with the cells of its span marks back at their columns (C2-A-092).
  * `covered` holds, per column, how many further rows a cell above still spans.
  */
-function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number): TableCellNode[] {
+function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number, bodyHeader: boolean): TableCellNode[] {
   const cells: TableCellNode[] = []
   const marks: Marks = { row, next: 0 }
   const takeCovered = (): void => {
@@ -163,9 +183,10 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: n
     }
   }
   const formed: TableCellNode[] = []
-  for (const node of row.children!) {
+  const last = row.children!.length - 1
+  for (const [index, node] of row.children!.entries()) {
     takeCovered()
-    const cell = cellNode(ctx, node, rowEnd)
+    const cell = compactEmptyCell(ctx, node, index, last, rowEnd, bodyHeader) ?? cellNode(ctx, node, rowEnd)
     const column = cells.length
     cells.push(cell)
     if (node.start >= rowEnd) formed.push(cell)
@@ -204,10 +225,13 @@ function rowComment(ctx: TreeContext, start: number, marker: number, lineEnd: nu
   return place(ctx, { type: 'comment', form: 'line', value: commentValue(ctx.src.slice(marker + 2, lineEnd), false) }, start, lineEnd)
 }
 
-function rowNode(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number): TableRowNode {
+function rowNode(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number, bodyHeader: boolean): TableRowNode {
   const firstEnd = rowRangeEnd(ctx.src, row)
   const joined = firstEnd < row.end
-  const out: TableRowNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? firstEnd : row.end + 1) }
+  const out: TableRowNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? firstEnd : row.end + 1, bodyHeader) }
+  // The public cells now own the row content. Keep only cells referenced by the
+  // layout trace; retaining the private row's cell list doubles wide tables.
+  row.children = null
   if (ctx.trace !== null) ctx.trace.blocks.set(out, row)
   if (row.aux !== 0) {
     // C2-B-167: the row attribute stands behind the closing pipe.
@@ -254,7 +278,7 @@ function addRow(ctx: TreeContext, groups: Groups, cursor: RowCursor, child: Bloc
   else cursor.group = cursor.index < cursor.footStart ? body : groups.foot
   const lineEnd = rowRangeEnd(ctx.src, child)
   const [end, marker] = rowTail(ctx.src, child, lineEnd)
-  const row = rowNode(ctx, child, cursor.covered, marker < 0 ? child.end : end)
+  const row = rowNode(ctx, child, cursor.covered, marker < 0 ? child.end : end, header)
   if (header && cursor.index < cursor.footStart) markHeaderRow(row)
   groups.width = Math.max(groups.width, row.children.length)
   cursor.group.push(row)
@@ -343,13 +367,17 @@ interface ColumnLists {
 }
 
 /** C2-A-089: one column per position up to the widest row, with what the column lists spell. */
-function columnNodes(width: number, lists: ColumnLists): TableColumnNode[] {
+function columnNodes(width: number, lists: ColumnLists, compact: boolean): TableColumnNode[] {
   const columns: TableColumnNode[] = []
   for (let at = 0; at < width; at++) {
-    const column: TableColumnNode = { type: 'table_column' }
     const align = lists.aligns?.[at]
     const valign = lists.valigns?.[at]
     const fraction = lists.widths?.[at]
+    if (compact && align === undefined && valign === undefined && fraction === undefined) {
+      columns.push(LINT_EMPTY_COLUMN)
+      continue
+    }
+    const column: TableColumnNode = { type: 'table_column' }
     if (align !== undefined && isFieldValue('table_column.align', align)) column.align = align
     if (valign !== undefined && isFieldValue('table_column.valign', valign)) column.valign = valign
     if (fraction !== undefined) column.width = fraction
@@ -391,7 +419,7 @@ function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null
   const aligns = consumed(attributes, 'aligns', columnEntries(keyOf(attributes, 'aligns'), alignEntry))
   const valigns = consumed(attributes, 'valigns', columnEntries(keyOf(attributes, 'valigns'), valignEntry))
   const widths = consumed(attributes, 'widths', columnEntries(keyOf(attributes, 'widths'), columnWidth))
-  const columns = columnNodes(groups.width, { aligns, valigns, widths })
+  const columns = columnNodes(groups.width, { aligns, valigns, widths }, ctx.trace?.compactTables === true)
   const table: TableNode = { type: 'table', columns, children: [] }
   if (groups.head.length > 0) table.children.push(groupNode(ctx, groups, 'table_head', groups.head))
   if (groups.bodies === null) {

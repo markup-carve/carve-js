@@ -1,5 +1,6 @@
 import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
-import { parseWithLayout } from '../src/api.ts'
+import { parseWithLayoutForLint } from '../src/api.ts'
+import { isCompactEmptyCell } from '../src/ast-table.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { CATALOG, type RuleId } from './catalog.ts'
@@ -138,12 +139,30 @@ function visitChildren(node: Node, path: string, context: LintContext, controls:
       for (let index = 0; index < nodes.length; index++) {
         const child = nodes[index]
         if (child === undefined) continue
+        if (inertTableNode(node, child, index, nodes.length, context)) continue
         const childPath = `${path}/${step}/${index}`
         context.dataWalk?.child(child, childPath, node, path, index)
         visit(child, childPath, context, controls)
       }
     }
   }, SOURCE_ORDER)
+}
+
+/** Keep the last cell as the line model's leaf, but omit preceding cells with no lint facts. */
+function inertTableNode(parent: Node, child: Node, index: number, count: number, context: LintContext): boolean {
+  if (child.type === 'table_column') return Object.keys(child).length === 1
+  return parent.type === 'table_row' && index < count - 1 && child.type === 'table_cell'
+    && (isCompactEmptyCell(child) || plainEmptyCell(child, context))
+}
+
+function plainEmptyCell(node: Node, context: LintContext): boolean {
+  if (node.type !== 'table_cell' || node.header || node.pos === undefined || node.children.length !== 1) return false
+  if (Object.keys(node).some((key) => key !== 'type' && key !== 'header' && key !== 'children' && key !== 'pos')) return false
+  const paragraph = node.children[0]
+  if (paragraph?.type !== 'cell_paragraph' || paragraph.children.length !== 0) return false
+  const start = context.chars[node.pos.startOffset]
+  const end = context.chars[node.pos.endOffset]
+  return start !== undefined && end !== undefined && context.source.slice(start, end).trim() === ''
 }
 
 function markSpanStarts(children: readonly Node[], context: LintContext): void {
@@ -550,7 +569,7 @@ export function lintPayload(text: string, node: Node, path: string, options: Lin
 }
 
 function lintSource(source: string, options: LintOptions): Diagnostic[] {
-  const parsed = parseWithLayout(source, { ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
+  const parsed = parseWithLayoutForLint(source, { ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
     ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])

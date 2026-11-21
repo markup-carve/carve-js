@@ -730,7 +730,7 @@ export function buildSource(
   inline.bidi = false
   try {
     scanBlocks(blocks, text)
-    const root = buildTree(blocks.events, blocks.eventLength, text)
+    const root = buildTree(blocks.events, blocks.eventLength, text, compactTrace(trace))
     const own = linkKeys ?? collectLinkKeys(text, root)
     inline.definitions = outer === null ? own : withOuterKeys(own, outer.linkKeys)
     const terms = abbreviations ?? collectAbbreviations(text, root)
@@ -745,4 +745,8 @@ export function buildSource(
     releaseInlineState(inline)
     releaseState(blocks)
   }
+}
+
+function compactTrace(trace: LayoutTrace | null): boolean {
+  return trace?.compactTables === true
 }

@@ -401,8 +401,18 @@ export function parse(src: string | Uint8Array, options?: ParseOptions): Documen
  * The tree is the one `parse` gives (C2-L-003). Positions are always built, since the record states its ranges in them.
  */
 export function parseWithLayout(src: string | Uint8Array, options?: ParseOptions): LayoutResult {
+  return parseWithLayoutCore(src, options, false)
+}
+
+/** The lint caller owns this tree and never exposes or mutates its inert table children. */
+export function parseWithLayoutForLint(src: string | Uint8Array, options?: ParseOptions): LayoutResult {
+  return parseWithLayoutCore(src, options, true)
+}
+
+function parseWithLayoutCore(src: string | Uint8Array, options: ParseOptions | undefined, compactTables: boolean): LayoutResult {
   const settings = readOptions(options, 'parse')
   const trace = createLayoutTrace()
+  if (compactTables) trace.compactTables = true
   const source = sourceText(src)
   const parsed = parseInput(source, settings, true, trace)
   const resolved = resolveStage(parsed, settings)
