@@ -4,6 +4,22 @@ import { render } from '../../src/index.ts'
 import { upgrade } from '../src/index.ts'
 
 describe('replay fallback families', () => {
+  it('keeps a quote-shaped paragraph below an attribute line', () => {
+    const input = '{#_id ._c _k=1 _="on click"}\n>> \npara\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe(input)
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps an indented fence run in the body and attaches the following caption', () => {
+    const input = '\n```python\ndef greet():\n    return 1\n  ```\n```\n\n^ Listing: a greeting\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('\n````python\ndef greet():\n    return 1\n  ```\n````\n^ Listing: a greeting\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('preserves adjacent reversed and ordinary strong-emphasis spans', () => {
     const input = 'b */{/*/*{t="*/"}\nb *///*{t="*/"}\n'
     const result = upgrade(input)

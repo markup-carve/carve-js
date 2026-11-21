@@ -1,6 +1,45 @@
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
-import { lineEnd, lineStart, lineText } from '../source.ts'
+import { lineEnd, lineOf, lineStart, lineText } from '../source.ts'
+
+/** A quote-shaped line that 0.1 read as paragraph text stays visible below attributes. */
+export function literalQuoteAfterAttributes(ctx: Context): void {
+  const removed = ctx.findings.filter(({ record, edit }) => record.entry === 'U-031' && edit !== null
+    && edit.text === '' && edit.start < edit.end)
+  for (const finding of removed) {
+    const edit = finding.edit!
+    const line = lineOf(ctx.lines, edit.start)
+    if (line < 2 || line > ctx.lines.count || ctx.blocks.leaf[line]?.node.type !== 'paragraph') continue
+    const value = lineText(ctx.lines, line)
+    if (!/^>+[ \t]*$/u.test(value) || !/^\{[^}\n]+\}$/u.test(lineText(ctx.lines, line - 1))) continue
+    finding.edit = { ...edit, text: `${value}\n` }
+    finding.record.message = 'quote-shaped paragraph text kept below its attribute line'
+  }
+}
+
+/** Widen a fence when 0.1 kept an indented run in its body that 0.2 closes. */
+export function innerFenceRun(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'code_block' || node.pos === undefined || node.pos.endLine <= node.pos.startLine + 1) continue
+    const firstLine = node.pos.startLine
+    const lastLine = node.pos.endLine
+    const opener = lineText(ctx.lines, firstLine)
+    const closer = lineText(ctx.lines, lastLine)
+    const start = /^( *)(`{3,})(.*)$/u.exec(opener)
+    if (start === null || closer !== `${start[1]}${start[2]}`) continue
+    let inner = false
+    for (let line = firstLine + 1; line < lastLine; line++) {
+      const value = lineText(ctx.lines, line)
+      if (value.trim() === start[2] && value !== closer) { inner = true; break }
+    }
+    if (!inner) continue
+    const message = 'fence widened so an indented body run stays literal'
+    const first = lineStart(ctx.lines, firstLine) + (start[1] ?? '').length
+    const last = lineStart(ctx.lines, lastLine) + (start[1] ?? '').length
+    change(ctx, 'U-049', first, first, '`', message)
+    change(ctx, 'U-049', last, last, '`', message)
+  }
+}
 
 function textOnly(node: Node01): boolean {
   return (node.children ?? []).every((child) => child.type === 'text' || child.type === 'soft_break'
