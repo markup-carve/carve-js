@@ -1,5 +1,6 @@
 import { change, type Context } from '../context.ts'
 import { type Node01 } from '../engines.ts'
+import { lineEnd, lineStart, lineText } from '../source.ts'
 
 function textOnly(node: Node01): boolean {
   return (node.children ?? []).every((child) => child.type === 'text' || child.type === 'soft_break'
@@ -35,4 +36,65 @@ export function literalTableHeader(ctx: Context): void {
     change(ctx, 'U-168', start + marker, start + marker, '\\',
       'the deprecated glued header spelling is literal cell text in 0.1')
   }
+}
+
+interface EmptyDefinitionItem {
+  line: number
+  start: number
+  end: number
+  body: string
+  label: string
+}
+
+function emptyDefinitionItem(ctx: Context, node: Node01): EmptyDefinitionItem | null {
+  if (node.type !== 'list_item' || node.pos === undefined || (node.children?.length ?? 0) !== 0
+    || node.pos.startLine !== node.pos.endLine) return null
+  const line = node.pos.startLine
+  const text = ctx.src.slice(node.pos.startOffset, lineEnd(ctx.lines, line))
+  const marker = /^(?:[-+*]|[0-9]+[.)]) +/u.exec(text)
+  if (marker === null) return null
+  const start = node.pos.startOffset + marker[0].length
+  const body = ctx.src.slice(start, lineEnd(ctx.lines, line)).trimEnd()
+  const definition = /^\[([^\]^][^\]]*)\]:[ \t]+\S.*$/u.exec(body)
+  if (definition === null) return null
+  return { line, start, end: lineEnd(ctx.lines, line), body, label: definition[1]!.toLowerCase() }
+}
+
+function repeatedItems(items: EmptyDefinitionItem[]): EmptyDefinitionItem[] {
+  const counts = new Map<string, number>()
+  const keyOf = (item: EmptyDefinitionItem): string => `${item.label}\0${item.body}`
+  for (const item of items) counts.set(keyOf(item), (counts.get(keyOf(item)) ?? 0) + 1)
+  return items.filter((item) => (counts.get(keyOf(item)) ?? 0) > 1)
+}
+
+function rewriteDuplicateGroup(ctx: Context, list: Node01, items: EmptyDefinitionItem[]): void {
+  if (list.pos === undefined) return
+  const duplicates = repeatedItems(items)
+  if (duplicates.length < 2) return
+  const from = lineStart(ctx.lines, list.pos.startLine)
+  const to = lineEnd(ctx.lines, list.pos.endLine)
+  for (let index = ctx.findings.length - 1; index >= 0; index--) {
+    const edit = ctx.findings[index]!.edit
+    if (edit !== null && edit.start >= from && edit.start <= to) ctx.findings.splice(index, 1)
+  }
+  const message = 'duplicate definitions consumed by empty list items lifted above their list'
+  change(ctx, 'U-038', from, from, `${duplicates[0]!.body}\n\n`, message)
+  for (const item of duplicates) change(ctx, 'U-038', item.start, item.end, '{% %}', message)
+  if (list.pos.endLine < ctx.lines.count && lineText(ctx.lines, list.pos.endLine + 1).trim() !== '') {
+    change(ctx, 'U-038', to, to, '\n', message)
+  }
+}
+
+/** Duplicate definitions consumed by empty sibling items in 0.1 move outside their list. */
+export function duplicateItemDefinitions(ctx: Context): void {
+  const groups = new Map<Node01, EmptyDefinitionItem[]>()
+  for (const visit of ctx.visits) {
+    if (visit.parent?.node.type !== 'list') continue
+    const item = emptyDefinitionItem(ctx, visit.node)
+    if (item === null) continue
+    const list = groups.get(visit.parent.node) ?? []
+    list.push(item)
+    groups.set(visit.parent.node, list)
+  }
+  for (const [list, items] of groups) rewriteDuplicateGroup(ctx, list, items)
 }

@@ -19,4 +19,12 @@ describe('replay fallback families', () => {
     expect(result.output).toContain('|\\=~> Middle |')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
+
+  it('lifts a duplicate definition from empty quoted list items', () => {
+    const input = '> - [d]: u\n> - [d]: u\n[go][d]\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('[d]: u\n\n> - {% %}\n> - {% %}\n\n[go][d]\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
 })
