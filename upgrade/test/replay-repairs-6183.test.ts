@@ -49,6 +49,23 @@ const written: [string, string, string][] = [
   // U-109 also reads a footnote body whose last block is a quote.
   ['U-002 U-109', '[^n]: intro\n  > quote\n    ordinary line\n\n see[^n]\n',
     '[^n]: intro\n\n  > quote\n    ordinary line\n\nsee[^n]\n'],
+  // A glued attribute block that 0.1 wrote as text after a substitution stays text.
+  ['U-069', '{~a~>b~}{.k} c\n{~a~>b~}{.k} c\n\n{#note#}{.k} c\n',
+    '{-a-}{+b+}\\{.k} c\n{-a-}{+b+}\\{.k} c\n\n{#note#}{.k} c\n'],
+  // A term on the marker line of a later item needs no blank line (C2-B-015).
+  ['U-008', '- para\n- :: t\n  : para\n  - li\n',
+    '- para\n- :: t\n  : para\n\n  - li\n'],
+  [' ', ' - :: term\n-   : body\n- \n    text\n@user\n',
+    ' - :: term\n-   : body\n- \n    text\n@user\n'],
+  // U-435 also moves a block that stands after a blank line below a description.
+  ['U-009 U-435', '- intro\n   :: term\n   : body\n \n    text\n',
+    '- intro\n\n   :: term\n   : body\n \n   text\n'],
+  // A quoted `+` line that ends its quote attaches nothing.
+  ['U-002 U-014', '>- ```\n> - s\n> +\n',
+    '>- ```\n\n> - s\n'],
+  // U-430 reads the line of the difference where the rewrite's added lines moved it.
+  ['U-038 U-430', '- a\n  [^f]: note\n    more\n\ntail\nsee[^    -  xf]\n',
+    '- a\n\n[^f]: note\n  more\n\ntail\nsee\\[^    -  xf]\n'],
 ]
 
 describe('the replay repairs', () => {
@@ -56,7 +73,7 @@ describe('the replay repairs', () => {
     const result = upgrade(source)
     expect(result.output).toBe(output)
     expect(canWriteUpgrade(result)).toBe(true)
-    for (const id of rows.split(' ')) {
+    for (const id of rows.trim().split(' ').filter(Boolean)) {
       if (source !== output) expect(result.records.some((record) => record.entry === id)).toBe(true)
     }
   })
