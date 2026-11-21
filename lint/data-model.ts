@@ -20,6 +20,7 @@ export interface ModelLine {
   attached_here: boolean
   closes_container: boolean
   readonly ancestors: string[]
+  readonly ancestor_ids: string[]
   readonly shape: string
   readonly quote_prefix: boolean
   readonly quote_depth: number
@@ -249,6 +250,8 @@ class LineRecord {
   }
 
   get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
+  /** The identities of the blocks of `ancestors`, item by item. */
+  get ancestor_ids(): string[] { return this.path === '' ? [] : ancestorPaths(this.path) }
   get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
   get quote_depth(): number { return this.leaf_id === '' ? 0 : quoteDepth(this.leaf_id, this.context.nodeTypes as Map<string, string>) }
   get quote_marks(): number {

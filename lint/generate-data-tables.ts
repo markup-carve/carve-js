@@ -17,7 +17,7 @@ interface DataRule {
 }
 interface Model { text_leaves: string[], verbatim_leaves: string[], row_leaves: string[], rules: DataRule[] }
 
-const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right', 'count', 'index_of'])
+const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right', 'count', 'index_of', 'column'])
 const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from', 'json_escape', 'lower', 'join',
   'percent_decode'])
 
@@ -129,11 +129,11 @@ class Compiler {
   }
 
   lookup(arg: Expr): string {
-    const spec = arg as { over: 'block' | 'inline' | 'id', types?: string[], key?: Expr, value?: Expr, before?: boolean, after?: boolean,
+    const spec = arg as { over: 'block' | 'inline' | 'id' | 'line', types?: string[], key?: Expr, value?: Expr, before?: boolean, after?: boolean,
       all?: boolean, from?: Expr, field?: string }
     const kinds = spec.over === 'id' ? ['id'] : spec.types
     // C2-W-150: a block lookup that names no types reads every block.
-    if (spec.over !== 'id') for (const type of kinds ?? ['*']) this.needs[spec.over].add(type)
+    if (spec.over === 'block' || spec.over === 'inline') for (const type of kinds ?? ['*']) this.needs[spec.over].add(type)
     const types = kinds === undefined ? 'undefined' : this.hoist(`new Set<string>(${literal(kinds)})`)
     const key = spec.key === undefined ? 'undefined' : `(item: unknown): unknown => ${this.value(spec.key)}`
     const value = spec.key === undefined ? 'undefined' : this.value(spec.value)
@@ -195,7 +195,9 @@ const VALUES: Record<string, Make> = {
   text_from: (c, arg) => `textFrom(line, ${c.number(arg)})`,
   count: (c, arg) => c.count(arg),
   lookup: (c, arg) => c.lookup(arg),
-  index_of: (c, _arg, args) => `${c.text(args[0])}.indexOf(${c.text(args[1])})`,
+  index_of: (c, _arg, args) => `indexOf(${c.value(args[0])}, ${c.value(args[1])})`,
+  nth: (c, _arg, args) => `at(${c.value(args[0])}, ${c.number(args[1])})`,
+  column: (c, _arg, args) => `columnAt(context, ${c.number(args[0])}, ${c.number(args[1])})`,
   json_escape: (c, arg) => `JSON.stringify(${c.text(arg)}).slice(1, -1)`,
   lower: (c, arg) => `${c.text(arg)}.toLowerCase()`,
   join: (c, _arg, args) => `joinOf(${c.value(args[0])}, ${c.text(args[1])})`,
@@ -279,6 +281,7 @@ function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string
 
 const PRELUDE = `import { type RuleId } from './catalog.ts'
 import { isAttributeLine } from '../src/lines.ts'
+import { columnOf } from '../src/layout-lines.ts'
 import { type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
 import { type LintContext } from './types.ts'
 
@@ -423,18 +426,20 @@ function countFrom(list: unknown, from: number, where: (item: unknown) => boolea
 
 interface Located { readonly start: number }
 
-let lookupRecords: { block: readonly Located[], inline: readonly Located[], id: readonly Located[] } = { block: [], inline: [], id: [] }
+type Over = 'block' | 'inline' | 'id' | 'line'
+let lookupRecords: Record<Over, readonly Located[]> = { block: [], inline: [], id: [], line: [] }
 let lookupSites = new Map<number, Map<unknown, Located[]>>()
 
 /** The records of one document that the lookups read, in document order. */
-export function useRecords(block: readonly Located[], inline: readonly Located[], id: readonly Located[] = []): void {
-  lookupRecords = { block, inline, id }
+export function useRecords(block: readonly Located[], inline: readonly Located[], id: readonly Located[] = [],
+  line: readonly Located[] = []): void {
+  lookupRecords = { block, inline, id, line }
   lookupSites = new Map()
 }
 
 // C2-W-141: the first record of the types whose key equals the value, the last one that starts before the record
 // (side -1) or the first one that starts after it (side 1).
-function lookupIndex(site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string> | undefined,
+function lookupIndex(site: number, over: Over, types: ReadonlySet<string> | undefined,
   key: ((item: unknown) => unknown) | undefined): Map<unknown, Located[]> {
   let index = lookupSites.get(site)
   if (index === undefined) {
@@ -454,10 +459,10 @@ function lookupIndex(site: number, over: 'block' | 'inline' | 'id', types: Reado
 }
 
 // C2-W-150: with all, every record of the types whose key equals the value, in document order.
-const lookupAll = (site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string> | undefined,
+const lookupAll = (site: number, over: Over, types: ReadonlySet<string> | undefined,
   key: ((item: unknown) => unknown) | undefined, value: unknown): readonly Located[] => lookupIndex(site, over, types, key).get(value) ?? []
 
-function lookupAt(site: number, over: 'block' | 'inline' | 'id', types: ReadonlySet<string> | undefined, key: ((item: unknown) => unknown) | undefined,
+function lookupAt(site: number, over: Over, types: ReadonlySet<string> | undefined, key: ((item: unknown) => unknown) | undefined,
   value: unknown, start: number, side: -1 | 0 | 1): Located | undefined {
   const list = lookupIndex(site, over, types, key).get(value)
   if (list === undefined) return undefined
@@ -489,6 +494,15 @@ function percentDecode(text: string): string {
 function runValue(context: LintContext, name: string): unknown {
   return name === 'extensions' ? context.options.extensions ?? [] : undefined
 }
+
+// C2-W-141, C2-W-150: the offset of a text in a text, or the index of an item in a list; -1 where there is none.
+function indexOf(haystack: unknown, needle: unknown): number {
+  if (Array.isArray(haystack)) return haystack.indexOf(needle)
+  return typeof haystack === 'string' && typeof needle === 'string' ? haystack.indexOf(needle) : -1
+}
+
+// C2-B-004: the column of an offset, counted after the given number of quote marks of its line, with tab stops.
+const columnAt = (context: LintContext, offset: number, quotes: number): number => columnOf(context.source, offset, quotes)
 
 const lenOf = (value: unknown): number => (typeof value === 'string' || Array.isArray(value) ? value.length : 0)
 
