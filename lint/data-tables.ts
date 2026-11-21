@@ -20,7 +20,11 @@ function aside(compute: () => unknown): unknown {
 const str = (value: unknown): string => (typeof value === 'string' ? value : '')
 const num = (value: unknown): number => Number(value)
 const same = (a: unknown, b: unknown): boolean => a === b
-const trimEnd = (text: string): string => text.replace(/[ \t]+$/, '')
+const trimEnd = (text: string): string => {
+  let end = text.length
+  while (end > 0 && (text.charCodeAt(end - 1) === 32 || text.charCodeAt(end - 1) === 9)) end--
+  return text.slice(0, end)
+}
 const test = (regex: RegExp, value: unknown): boolean => typeof value === 'string' && regex.test(value)
 const starts = (value: unknown, prefix: string): boolean => typeof value === 'string' && value.startsWith(prefix)
 
