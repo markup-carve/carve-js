@@ -18,7 +18,9 @@ import { fixSource } from './fix.ts'
 import { flatten } from '../src/flatten.ts'
 import { migrateCaseOnlyReferences } from '../build/engine-0.1/index.js'
 import includeTable from '../data/includes.json' with { type: 'json' }
-import { EXPORT_LOSS_CODES, exportTo, type ExportOptions, type ExportTarget } from '../src/export/index.ts'
+import {
+  EXPORT_LOSS_CODES, exportTo, type ExportOptions, type ExportTarget, type MarkdownExportOptions,
+} from '../src/export/index.ts'
 import { diffTree, type PatchOperation } from '../src/tree-patch.ts'
 import { type IncludeAnswer, type IncludeConfig, type IncludeRequest } from '../src/include-settings.ts'
 
@@ -336,8 +338,10 @@ function exportFile(path: string, display: string, bytes: Uint8Array, args: Pars
   const fromAst = args.values['from-ast'] === true
   const document = fromAst ? tree(strictText(path, bytes)) : parse(bytes, includesOf(path, args))
   const source = fromAst ? '' : lenientText(bytes)
-  const settings: ExportOptions = {}
+  const settings: MarkdownExportOptions = {}
   if (args.values['smart-typography'] !== undefined) settings.smartTypography = args.values['smart-typography'] as boolean
+  // C2-H-209: the Markdown export reads it, and the plain-text and ANSI exports refuse it with the category usage.
+  if (args.values['heading-shift'] !== undefined) settings.headingShift = args.values['heading-shift'] as number
   if (args.values['url-policy'] !== undefined) settings.urlPolicy = args.values['url-policy'] as NonNullable<ExportOptions['urlPolicy']>
   const result = exportTo(target, document, settings)
   const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)

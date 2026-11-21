@@ -13,6 +13,7 @@ import { CATALOG } from '../lint/catalog.ts'
 import { corpusResolver, hexBytes } from './corpus.ts'
 import { withoutPositions } from './corpus-checks.ts'
 import { applyPatch, diffTree, sourceFingerprint, treeFingerprint } from '../src/tree-patch.ts'
+import { exportTo } from '../src/export/index.ts'
 
 const same = (a, b) => isDeepStrictEqual(a, b)
 // C2-X-059: the standard img renderer reports a failed SVG under C2-X-050.
@@ -262,6 +263,12 @@ function run(entry) {
     const children = expected.children === undefined ? [] : childrenFields(engine.parse(input, parseOptions(options)), expected)
     if (expected.refusal !== undefined) engine.render(entry.tree ?? input, options)
     return [...children, ...(expected.html !== undefined && result.html !== expected.html ? ['html'] : []),
+      ...diagnosticFields(result.diagnostics, expected, input, entry.files)]
+  }
+  if (kind === 'export') {
+    // C2-T-003, C2-H-209: the export runs on the tree of the input.
+    const result = exportTo(entry.to, engine.parse(input, parseOptions(options)), options)
+    return [...(expected.output !== undefined && result.output !== expected.output ? ['output'] : []),
       ...diagnosticFields(result.diagnostics, expected, input, entry.files)]
   }
   if (kind === 'lint') return diagnosticFields(engine.lint(decoded(input), options), expected, input, entry.files)

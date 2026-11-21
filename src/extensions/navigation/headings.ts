@@ -1,4 +1,4 @@
-import { type DocumentNode, type HeadingNode, type Inline, type Node } from '../../ast.ts'
+import { type DocumentNode, type Inline, type Node } from '../../ast.ts'
 import { type ExtensionDefinition } from '../types.ts'
 import { chrome, declare, derivedInlines, freezeCrossReferences, freezeReferences, headingId, headingReferences, headingTexts, pinId,
   rewriteTree, visitTree } from './common.ts'
@@ -122,27 +122,6 @@ export function headingNumbers(options: HeadingNumbersOptions = {}): ExtensionDe
         return [link]
       }, true)
       freezeCrossReferences(view, texts)
-      return view
-    },
-  }
-}
-
-/** Options of {@link headingLevelShift}. */
-export interface HeadingLevelShiftOptions {
-  /** Levels to move each heading down, clamped to 0-5. Default 1. */
-  shift?: number
-}
-
-/** Moves every heading down by `shift` levels, to at most 6, for a page whose `<h1>` is its own title. */
-export function headingLevelShift(options: HeadingLevelShiftOptions = {}): ExtensionDefinition {
-  const shift = Math.max(0, Math.min(Math.trunc(options.shift ?? 1), 5))
-  return {
-    name: 'carve.headingLevelShift', version: '1', props: {}, slots: {},
-    documentTransform(view: DocumentNode): DocumentNode {
-      if (shift === 0) return view
-      visitTree(view, (node) => {
-        if (node.type === 'heading') (node as HeadingNode).level = Math.min(6, node.level + shift)
-      }, true)
       return view
     },
   }

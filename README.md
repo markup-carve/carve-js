@@ -41,8 +41,9 @@ files as `carve fmt` does. A classic-script build is published as
 - inline: `colorSwatch`, `wikilinks`, `semanticSpan`, `smartQuotes` (with `smartQuoteLocales`,
   `isSmartQuoteLocaleSupported`, `SMART_QUOTE_LOCALES`)
 - document transforms: `defaultAttributes`, `tabNormalize`, `inlineFootnotesToParentheses`
-- navigation: `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingNumbers`, `headingLevelShift`,
-  `headingReference`, `externalLinks`, `linkPolicy`, `autolink` ([guide](docs/extensions-navigation.md))
+- navigation: `tableOfContents`, `tocPlacement`, `headingPermalinks`, `headingNumbers`, `headingReference`,
+  `externalLinks`, `linkPolicy`, `autolink` ([guide](docs/extensions-navigation.md)); the heading shift is the core
+  render option `headingShift`
 
 The command line:
 

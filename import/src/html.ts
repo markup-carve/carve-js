@@ -6,7 +6,7 @@ import type {
 import { resolveTree } from '../../src/index.ts'
 import {
   asciiLower, attr, attrs, CARRIERS, classList, content, directionOf, droppedAttribute, elements, has, ignoredCarrier, isBlank,
-  isComment, isElement, isRawSpan,
+  isComment, isElement, isRawSpan, SOURCE_LEVEL,
   isText, plain, report, withoutClasses, withoutKeys, type HtmlContext, type MappedAttrs,
 } from './html-dom.ts'
 import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
@@ -266,10 +266,20 @@ function paragraphElement(node: Html.Element, context: HtmlContext): Block {
 function heading(node: Html.Element, level: number, context: HtmlContext, id?: HeadingId): Block {
   const own = headingId(node, context)
   const chosen = id ?? own
-  const omit = ['id', ...(level > 6 ? ['role', 'aria-level'] : [])]
+  const omit = ['id', SOURCE_LEVEL, ...(level > 6 ? ['role', 'aria-level'] : [])]
   const mapped = attrs(context, node, omit, true)
   const withId = chosen.authored === undefined ? mapped : { ...mapped, attrs: { ...mapped.attrs, id: chosen.authored } }
-  return { type: 'heading', level, children: inlineChildren(node, context), ...withId }
+  return { type: 'heading', level: sourceLevel(node, level, context), children: inlineChildren(node, context), ...withId }
+}
+
+/** C2-H-186, C2-H-208: the level a heading had before `headingShift`, where its carrier gives a valid one. */
+function sourceLevel(node: Html.Element, level: number, context: HtmlContext): number {
+  const value = attr(node, SOURCE_LEVEL)
+  if (value === undefined) return level
+  const source = /^[1-9][0-9]*$/u.test(value) ? Number(value) : undefined
+  if (source === undefined) ignoredCarrier(context, node, SOURCE_LEVEL, 'the value is no decimal integer of at least 1')
+  else if (source >= level) ignoredCarrier(context, node, SOURCE_LEVEL, 'the value is not smaller than the level of the element')
+  return source !== undefined && source < level ? source : level
 }
 
 interface HeadingId { authored?: string }
