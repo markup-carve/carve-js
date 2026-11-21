@@ -7,7 +7,7 @@ import { documentOf } from './support/tree.ts'
 
 const EMPHASIS: Inline = { type: 'emphasis', children: [{ type: 'text', value: 'x' }] }
 
-/** `count` copies of an emphasis and ` **b** `; the last space is trimmed (C2-W-022), so the paragraph is reported. */
+/** `count` copies of an emphasis and ` **b** `; the last space ends the line and is dropped without a report (C2-W-151). */
 function copies(count: number): Inline[] {
   return Array.from({ length: count }, (): Inline[] => [EMPHASIS, { type: 'text', value: ' **b** ' }]).flat()
 }
@@ -19,10 +19,10 @@ function behindBrokenStrong(count: number): Inline[] {
 }
 
 describe('C2-W-146: pair escapes in a group the repair writes', () => {
-  it('writes the reproduction of the issue with its escapes and its one report', () => {
+  it('writes the reproduction of the issue with its escapes and no report', () => {
     const output = writeWithDiagnostics(documentOf({ type: 'paragraph', children: copies(3) }))
     expect(output.source).toBe('/x/ \\*\\*b** /x/ \\*\\*b** /x/ \\*\\*b**\n')
-    expect(output.diagnostics.map((entry) => [entry.code, entry.path])).toEqual([['structure-unspellable', '/children/0']])
+    expect(output.diagnostics).toEqual([])
   })
 
   const shapes: [string, (count: number) => Inline[]][] = [
