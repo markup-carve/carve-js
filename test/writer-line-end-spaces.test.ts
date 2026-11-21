@@ -45,6 +45,17 @@ describe('C2-W-151: line-end spaces and tabs of text', () => {
     expect(withCaption.diagnostics).toEqual([])
   })
 
+  it('keeps the cells of a table that trimming would turn delimited', () => {
+    const cell = (...children: Inline[]): never => ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children }] }) as never
+    const table: Block = {
+      type: 'table', columns: [{ type: 'table_column' }, { type: 'table_column' }],
+      children: [{ type: 'table_body', children: [{ type: 'table_row', children: [cell(text('a'), text(' ')), cell(text(' b'))] }] }],
+    } as Block
+    const output = writeWithDiagnostics(documentOf(table))
+    expect(output.source).toBe('| a  |  b |\n')
+    expect(output.diagnostics.map((entry) => entry.code)).toEqual(['structure-unspellable', 'field-unspellable'])
+  })
+
   it('still reports an attributed text whose attribute block follows its spaces', () => {
     const attributed = (value: string): Inline => ({ type: 'text', value, attrs: { classes: ['c'] } }) as Inline
     expect(reports(documentOf(paragraph(text('a'), attributed('x '))))).toEqual(['structure-unspellable /children/0'])

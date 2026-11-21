@@ -44,6 +44,40 @@ function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimm
   }
 }
 
+function drain(run: Trimming, delimited: (table: TableNode) => boolean): void {
+  for (;;) {
+    const node = run.pending.pop()
+    if (node === undefined) return
+    if (node.type === 'text') continue
+    const holder = LINE_HOLDERS.has(node.type)
+    forEachSlot(node, (list, step, single) => {
+      if (node.type === 'table' && step === 'children') trimCells(node, list as Node[], run, delimited)
+      else trimList(list as Node[], holder && step === 'children', single, run)
+    })
+  }
+}
+
+/** A table that trimming would turn delimited keeps its cells as they are, as one that is delimited already. */
+function trimCells(table: TableNode, groups: Node[], run: Trimming, delimited: (table: TableNode) => boolean): void {
+  if (delimited(table)) return
+  const cells: Trimming = { pending: [...groups].reverse(), values: [], removed: [] }
+  drain(cells, delimited)
+  if (delimited(table)) {
+    restore(cells)
+    return
+  }
+  run.values.push(...cells.values)
+  run.removed.push(...cells.removed)
+}
+
+function restore({ values, removed }: Trimming): void {
+  for (let at = removed.length - 1; at >= 0; at--) {
+    const [nodes, i, child] = removed[at]!
+    nodes.splice(i, 0, child)
+  }
+  for (const [text, value] of values) text.value = value
+}
+
 /**
  * Drops the spaces and tabs at the end of each text node that stands before a soft break or at the end of the
  * content of a line holder, and the text nodes that hold nothing else. `delimited` says whether a table is written
@@ -52,24 +86,7 @@ function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimm
  */
 export function trimLineEnds(document: Node, delimited: (table: TableNode) => boolean): (() => void) | null {
   const run: Trimming = { pending: [document], values: [], removed: [] }
-  for (;;) {
-    const node = run.pending.pop()
-    if (node === undefined) break
-    if (node.type === 'text') continue
-    const cellsAreData = node.type === 'table' && delimited(node)
-    const holder = LINE_HOLDERS.has(node.type)
-    forEachSlot(node, (list, step, single) => {
-      if (cellsAreData && step === 'children') return
-      trimList(list as Node[], holder && step === 'children', single, run)
-    })
-  }
-  const { values, removed } = run
-  if (values.length === 0 && removed.length === 0) return null
-  return () => {
-    for (let at = removed.length - 1; at >= 0; at--) {
-      const [nodes, i, child] = removed[at]!
-      nodes.splice(i, 0, child)
-    }
-    for (const [text, value] of values) text.value = value
-  }
+  drain(run, delimited)
+  if (run.values.length === 0 && run.removed.length === 0) return null
+  return () => restore(run)
 }
