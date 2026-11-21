@@ -59,7 +59,7 @@ function footnoteStarts(ctx: Context): Set<number> {
 }
 
 /** The entry for a list that opens under text: only where 0.2 has no interrupter for it. */
-function listEntry(below: Visit, above: Visit, line: number): string | null {
+function listEntry(below: Visit, above: Visit, line: number, repairs = false): string | null {
   if (opensAt(below, above, 'list', line) === null) return null
   const quote = ancestor(above, 'block_quote')
   // C2-B-020: a marker without the quote mark does not interrupt the list in the quote.
@@ -70,7 +70,7 @@ function listEntry(below: Visit, above: Visit, line: number): string | null {
   // The text of a footnote body takes a marker as a lazy line in the same way.
   return above.parent!.parent === null &&
     above.siblings !== below.siblings &&
-    ancestor(below, 'list')?.parent?.parent === null
+    (repairs ? outermostList(below, line) : ancestor(below, 'list'))?.parent?.parent === null
     ? 'U-008'
     : null
 }
@@ -99,7 +99,14 @@ function blockEntry(ctx: Context, above: Visit, below: Visit, line: number, note
   }
   if (term) return isInside(above, below.parent!) ? null : underItem(above, below, 'U-004', 'U-009')
   if (quoteOpens(ctx, above, below, line)) return underItem(above, below, 'U-002', 'U-006')
-  return listEntry(below, above, line)
+  return listEntry(below, above, line, ctx.repairs === true)
+}
+
+/** The repairs read a nested list that opens on the line by the list that holds it. */
+function outermostList(below: Visit, line: number): Visit | null {
+  let list = ancestor(below, 'list')
+  for (let up = list; up !== null && up.node.pos?.startLine === line; up = ancestor(up, 'list')) list = up
+  return list
 }
 
 /** The entry that puts a blank line between `above` and the block `below` that starts on `line`. */
