@@ -23,6 +23,8 @@ describe('editor session tokens', () => {
     expect(tokens('```\n```', 'code_block')).toEqual(['fence-open 0-4', 'fence-close 4-7'])
     expect(tokens('> ```\n> a\n> ```', 'code_block')).toEqual(['fence-open 2-6', 'fence-close 12-15'])
     expect(tokens('```\na', 'code_block')).toEqual(['fence-open 0-4'])
+    expect(tokens('````\na\n```', 'code_block')).toEqual(['fence-open 0-5'])
+    expect(tokens('````\na\n`````', 'code_block')).toEqual(['fence-open 0-5', 'fence-close 7-12'])
   })
 
   it('an equals heading has a block marker', () => {
