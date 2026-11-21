@@ -13,6 +13,19 @@ describe('editor session tokens', () => {
     expect(tokens('[x](a(b))', 'link')).toEqual(['open-marker 0-1', 'close-marker 2-4', 'destination 4-8', 'close-marker 8-9'])
   })
 
+  it('a link label ends at its closing bracket, and an attribute block behind the link is its own token (carve#6347)', () => {
+    expect(tokens('[](url)', 'link')).toEqual(['open-marker 0-1', 'close-marker 1-3', 'destination 3-6', 'close-marker 6-7'])
+    expect(tokens('[`x`](url)', 'link')).toEqual(['open-marker 0-1', 'close-marker 4-6', 'destination 6-9', 'close-marker 9-10'])
+    expect(tokens('[---](url)', 'link')).toEqual(['open-marker 0-1', 'close-marker 4-6', 'destination 6-9', 'close-marker 9-10'])
+    expect(tokens('[x](url){.foo}', 'link'))
+      .toEqual(['open-marker 0-1', 'close-marker 2-4', 'destination 4-7', 'close-marker 7-8', 'attribute 8-14'])
+    expect(tokens('[*a*](u)', 'link')).toEqual(['open-marker 0-1', 'close-marker 4-6', 'destination 6-7', 'close-marker 7-8'])
+    expect(tokens('[x](u "a)b"){.c}', 'link'))
+      .toEqual(['open-marker 0-1', 'close-marker 2-4', 'destination 4-5', 'close-marker 11-12', 'attribute 12-16'])
+    expect(tokens('[x][r]{.a}', 'link')).toEqual(['open-marker 0-1', 'close-marker 2-6', 'attribute 6-10'])
+    expect(tokens('[x][a\\]b]{.a}', 'link')).toEqual(['open-marker 0-1', 'close-marker 2-9', 'attribute 9-13'])
+  })
+
   it('an escaped pipe or a pipe inside a cell is no table marker', () => {
     expect(tokens('| a \\| b | c |', 'table_row')).toEqual(['table-marker 0-1', 'table-marker 9-10', 'table-marker 13-14'])
     expect(tokens('| `a|b` | c |', 'table_row')).toEqual(['table-marker 0-1', 'table-marker 8-9', 'table-marker 12-13'])
