@@ -72,17 +72,34 @@ function headingLineColumn(line: LintContext['lines'][number], quotes: number, c
   return column - prefix.origin
 }
 
+/** The marker line of an attributed heading: the first line behind its attribute lines and the comments among them. */
+function markerLine(start: number, from: number, to: number, quotes: number, context: LintContext): number {
+  let number = from
+  for (; number < to; number++) {
+    const line = context.lines[number - 1]
+    if (line === undefined) break
+    // The first line is read from the heading's start, behind a list marker or a byte order mark.
+    let at = number === from ? start : quotes === 0 ? line.start : readPrefix(context.source, line.start, line.end, quotes).pos
+    while (context.source[at] === ' ' || context.source[at] === '\t') at++
+    if (context.source[at] !== '{' && !context.source.startsWith('%%', at)) break
+  }
+  return number
+}
+
 function headingContinuation(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
-  const first = context.lines[node.pos.startLine - 1]
+  const quotes = quotesAbove(path, context)
+  const range = bounds(node, context)
+  const opener = node.attrs === undefined || range === null ? node.pos.startLine
+    : markerLine(range[0], node.pos.startLine, node.pos.endLine, quotes, context)
+  const first = context.lines[opener - 1]
   // C2-B-137: the line that continues the heading may stand below comment-only lines.
-  let next = node.pos.startLine
+  let next = opener
   while (next < node.pos.endLine && context.lines[next]?.text.trimStart().startsWith('%%') === true) next++
   const second = next < node.pos.endLine ? context.lines[next] : undefined
   if (first === undefined || second === undefined) return
   const marker = context.layouts.get(path)?.markerColumn
   if (marker === undefined) return
-  const quotes = quotesAbove(path, context)
   const indent = headingLineColumn(second, quotes, context)
   if (indent > marker) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
 }
