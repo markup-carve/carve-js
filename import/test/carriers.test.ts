@@ -79,6 +79,10 @@ describe('C2-H-186 carriers', () => {
   it('C2-H-120 still removes data-carve-src without a report', () => {
     expect(read('<p data-carve-src="x">x</p>').messages).toEqual([])
   })
+  it('C2-H-186 reads source-level on a div only when that div becomes a heading', () => {
+    expect(ignored('<div role="heading" aria-level="2" data-carve-source-level="1">x</div>', 'data-carve-source-level')).toBe(true)
+    expect(ignored('<div role="heading" aria-level="7" data-carve-source-level="6">x</div>', 'data-carve-source-level')).toBe(false)
+  })
 
   it('C2-H-195 row 16: the space at the edge of a delimited-table cell is a listed loss', () => {
     const outcome = roundTrip('{table}\n```csv\na,"b ""q"" c", d\n```\n')

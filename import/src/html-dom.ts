@@ -36,9 +36,9 @@ const CARRIER_READ_ON: Readonly<Record<string, readonly string[]>> = {
   'data-carve-source-level': ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div'],
 }
 
-export function readsCarrier(node: Html.Element, name: string): boolean {
+export function readsCarrier(node: Html.Element, name: string, heading = false): boolean {
   if (node.tagName === 'div' && (name === SOURCE_LEVEL || name === 'data-carve-explicit-id' || name === 'data-carve-generated-id')) {
-    return attr(node, 'role') === 'heading'
+    return heading
   }
   return name === 'data-carve-src' || (CARRIER_READ_ON[name]?.includes(node.tagName) ?? false)
 }
@@ -165,11 +165,11 @@ function isAuthored(item: { name: string, value: string }, omit: readonly string
  * the audit of the document reports. With `alignStyle`, an exact alignment declaration is the key `align`, and an
  * `align` attribute beside it is dropped and reported, since the declaration wins in a browser (C2-M-075).
  */
-export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyled = false): MappedAttrs {
+export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyled = false, heading = false): MappedAttrs {
   const styled = alignStyled && alignStyle(attr(node, 'style')) !== undefined
   const entries: [string, string][] = []
   for (const item of node.attrs) {
-    if (CARRIERS.has(item.name) && !readsCarrier(node, item.name)) {
+    if (CARRIERS.has(item.name) && !readsCarrier(node, item.name, heading)) {
       ignoredCarrier(context, node, item.name, item.name === SOURCE_LEVEL ? 'the element is no heading' : 'the element does not read this carrier')
     }
     if (!isAuthored(item, omit)) continue

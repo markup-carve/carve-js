@@ -267,7 +267,7 @@ function heading(node: Html.Element, level: number, context: HtmlContext, id?: H
   const own = headingId(node, context)
   const chosen = id ?? own
   const omit = ['id', SOURCE_LEVEL, ...(level > 6 ? ['role', 'aria-level'] : [])]
-  const mapped = attrs(context, node, omit, true)
+  const mapped = attrs(context, node, omit, true, true)
   const withId = chosen.authored === undefined ? mapped : { ...mapped, attrs: { ...mapped.attrs, id: chosen.authored } }
   return { type: 'heading', level: sourceLevel(node, level, context), children: inlineChildren(node, context), ...withId }
 }
