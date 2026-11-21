@@ -11,6 +11,15 @@ type InlineRun = (self: ModelInline, path: string, context: LintContext) => void
 /** The ids of the catalog rows that `data/lint-model.json` states as data. */
 export const DATA_RULE_IDS: ReadonlySet<string> = new Set(DATA_RULES.map((rule) => rule.id))
 
+/** The rows whose hand-written rule is gone: they run from data whether or not the switch is on. */
+export const DATA_ONLY: ReadonlySet<string> = new Set(['figure-group-nested', 'footnote-labels-differ-only-in-whitespace',
+  'ordered-list-kind-split', 'table-row-cell-count'])
+
+/** Whether a rule runs from data: every data rule with the switch on, the rows of DATA_ONLY without it. */
+export function fromData(id: string, data: boolean): boolean {
+  return data ? DATA_RULE_IDS.has(id) : DATA_ONLY.has(id)
+}
+
 /** The internal switch: run the data rules in place of the hand-written ones. */
 export function dataRulesOn(): boolean {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
@@ -88,6 +97,7 @@ function blockRuns(rules: Active, type: string, parent: string): BlockRun[] {
 }
 
 function runLines(model: LineModel<BlockRun>, rules: Active, context: LintContext): void {
+  if (rules.lines.length === 0) return
   for (const line of model.lines) {
     const runs = lineRuns(rules, line.leaf)
     if (runs.length === 0) continue

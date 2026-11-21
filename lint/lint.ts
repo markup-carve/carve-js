@@ -9,7 +9,7 @@ import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 import { append } from '../src/append.ts'
-import { DATA_RULE_IDS, dataRulesOn, runDataRules, startDataWalk } from './data-rules.ts'
+import { DATA_ONLY, dataRulesOn, fromData, runDataRules, startDataWalk } from './data-rules.ts'
 
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
@@ -116,7 +116,7 @@ function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
   const byType = new Map<Node['type'], Rule[]>()
   const data = dataRulesOn()
   for (const rule of NODE_RULES) {
-    if (!active(rule.id, options) || data && DATA_RULE_IDS.has(rule.id)) continue
+    if (!active(rule.id, options) || fromData(rule.id, data)) continue
     for (const type of rule.nodes ?? []) {
       const rules = byType.get(type)
       if (rules === undefined) byType.set(type, [rule])
@@ -331,7 +331,7 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     nodeRules: nodeRulesByType(options),
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, firstHeading: null, referenceUrls: new Set(), ids: new Set(),
-      idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
+      idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteKeys: new Map(), attachedLines: new Set(),
       descriptionStarts: new Set(),
       containerClosers: new Set(),
       spanStarts: new Set(),
@@ -370,20 +370,22 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
   const data = dataRulesOn()
   // The default rule set is the same on every call, so its compiled rule lists are kept.
   const defaults = options.rules === undefined && options.platforms === undefined
-  const walk = data ? startDataWalk(parsed.document, context, (id) => active(id, options), defaults) : undefined
+  const runsFromData = (id: RuleId): boolean => active(id, options) && fromData(id, data)
+  const walk = startDataWalk(parsed.document, context, runsFromData, defaults && data)
   if (walk !== undefined) context.dataWalk = walk
   visit(parsed.document, '', context, controls)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
-  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !(data && DATA_RULE_IDS.has(rule.id)))
+  const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !fromData(rule.id, data))
   for (const line of scanLines) {
     if (line.opaque) continue
     for (const rule of activeLineRules) rule.checkLine?.(line, context)
   }
-  if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, (id) => active(id, options), defaults)
+  if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, runsFromData, defaults && data)
   const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
   return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
 }
 
-export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES]
+// The rows of DATA_ONLY have no hand-written rule; data/lint-model.json implements them.
+export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES, ...[...DATA_ONLY].map((id) => ({ id: id as RuleId }))]
 export type { LintOptions } from './types.ts'

@@ -53,7 +53,6 @@ export interface LintContext {
     idOwners: Map<string, Node['type']>
     fragmentLinks: { node: Node, path: string }[]
     crossrefs: { node: Node, path: string }[]
-    footnoteLabels: Map<string, string>
     footnoteKeys: Map<string, string>
     attachedLines: Set<number>
     descriptionStarts: Set<number>
