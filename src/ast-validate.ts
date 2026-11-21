@@ -1217,10 +1217,6 @@ function checkOptionalChildren(node: Fields, type: string, path: string, walk: W
   if (content === undefined) fail(`${path}/children`, `${type} holds no children`)
   if (node['file'] === undefined) fail(`${path}/file`, 'an expanded include names its file')
   checkList(node['children'], `${path}/children`, content, { ...walk, depth: -1, blocks: 0, inlines: 0 })
-  const children = node['children'] as Fields[]
-  children.forEach((child, index) => {
-    if (child['type'] === 'frontmatter' && index > 0) fail(`${path}/children/${index}`, 'frontmatter is not the first child')
-  })
 }
 
 function checkQualifiedDepth(current: Walk, value: Fields, type: string, path: string): void {
@@ -1406,11 +1402,6 @@ export function validateTree(
   }
   checkFields(document, 'document', RULES.get('document')!, '', { depth: 0, fallbacks: 0, tree })
   // C2-A-052: definitions and frontmatter are children of the document and of nothing else.
-  const children = document['children'] as Fields[]
-  children.forEach((child, index) => {
-    // C2-A-049.
-    if (child['type'] === 'frontmatter' && index > 0) fail(`/children/${index}`, 'frontmatter is not the first child')
-  })
   checkNodeBounds(document, '', { depth: 0, fallbacks: 0, tree })
   checkReferences(document, tree)
   if (annotations !== undefined) checkAnnotations(annotations, tree)
@@ -1443,9 +1434,6 @@ export function fragmentValidator(declarations: NonNullable<DocumentNode['extens
       declarations: declared, registry, headerIds: new Set(), headerReferences: [], sourcePositions: undefined }
     const walk: Walk = { depth: 0, fallbacks: 0, tree }
     checkList(children, '/children', content, walk)
-    children.forEach((child, index) => {
-      if (child.type === 'frontmatter' && index > 0) fail(`/children/${index}`, 'frontmatter is not the first child')
-    })
     checkReferences({ type: 'document', children }, tree)
   }
 }
