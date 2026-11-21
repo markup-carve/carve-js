@@ -132,6 +132,34 @@ describe('replay fallback families', () => {
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
+  it('keeps a lazy caption-shaped line in its quote paragraph', () => {
+    const input = '- ![a][r]\n>   x\n> b\n ^ cap\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('- ![a][r]\n\n>   x\n> b\n \\^ cap\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('widens a nested admonition around an old empty div', () => {
+    for (const suffix of ['', ' ']) {
+      const input = `:: term\n:  definition\n   ::: note\n   body\n   ::::${suffix}\n_u_\ntail\n`
+      const result = upgrade(input)
+      expect(result.check).toBe('pass')
+      expect(result.output).toContain('   ::::: note\n')
+      expect(render(result.output)).toBe(carveToHtml(input))
+    }
+  })
+
+  it('keeps narrow-space links and their references literal', () => {
+    const input = '[okref]: https://e.com/path\n\n_u_\n[t](u v) and [ok](u-v)\n \n[r]: https://e.com /path\n[text][r] and [text][okref]\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toContain('\\[t](u v)')
+    expect(result.output).toContain('\\[r]: https://e.com /path')
+    expect(result.output).toContain('\\[text][r]')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('preserves adjacent reversed and ordinary strong-emphasis spans', () => {
     const input = 'b */{/*/*{t="*/"}\nb *///*{t="*/"}\n'
     const result = upgrade(input)

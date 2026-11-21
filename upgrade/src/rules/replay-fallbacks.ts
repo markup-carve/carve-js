@@ -93,10 +93,18 @@ function documentEmptyColonDiv(ctx: Context, visit: Visit, line: number, source:
 }
 
 function admonitionEmptyColonDiv(ctx: Context, visit: Visit, line: number, source: string): void {
-  if (visit.parent?.node.type !== 'admonition' || !/^:{4,}[ \t]*$/u.test(source)
+  if (visit.parent?.node.type !== 'admonition' || !/^ *:{4,}[ \t]*$/u.test(source)
     || visit.parent.node.pos?.startLine === undefined) return
   const first = lineStart(ctx.lines, visit.parent.node.pos.startLine)
-  if (!ctx.src.startsWith('::: ', first)) return
+  const opener = lineText(ctx.lines, visit.parent.node.pos.startLine)
+  const prefix = /^ *::: /u.exec(opener)?.[0]
+  if (prefix === undefined) return
+  if (source.trim() === '::::' && opener.startsWith(' ')) {
+    change(ctx, 'U-276', first + prefix.length - 1, first + prefix.length - 1, '::',
+      'outer admonition widened beyond its old empty div')
+    return
+  }
+  if (first !== 0) return
   change(ctx, 'U-276', first + 3, first + 3, ':', 'outer admonition widened to hold its old empty div')
   change(ctx, 'U-276', lineStart(ctx.lines, line), lineEnd(ctx.lines, line), ':::\n:::\n::::',
     'empty div written before the outer admonition closes')
@@ -267,6 +275,40 @@ export function emptyQuoteInFootnote(ctx: Context): void {
       || edit.end !== lineEnd(ctx.lines, line) || ctx.src[edit.end] !== '\n') continue
     finding.edit = { ...edit, end: edit.end + 1 }
     finding.record.message = 'empty quoted line removed without splitting the old footnote body'
+  }
+}
+
+/** A lazy caption-shaped line stays text in the old quote paragraph. */
+export function lazyCaretAfterQuote(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'block_quote' || node.pos === undefined) continue
+    for (let line = node.pos.startLine + 1; line <= node.pos.endLine; line++) {
+      const text = lineText(ctx.lines, line)
+      if (!/^ *\^ +\S/u.test(text) || !/^ *>/u.test(lineText(ctx.lines, line - 1))) continue
+      const at = lineStart(ctx.lines, line) + text.indexOf('^')
+      change(ctx, 'U-006', at, at, '\\', 'lazy caption-shaped line kept as quote paragraph text')
+    }
+  }
+}
+
+/** A narrow space made these 0.1 link forms literal, including references to such definitions. */
+export function literalNarrowSpaceLinks(ctx: Context): void {
+  if (ctx.findings.some(({ record }) => record.entry === 'U-258')) return
+  const literalRefs = new Set<string>()
+  for (const match of ctx.src.matchAll(/(?<!\\)\[([^\]\n]+)\]:[^\n]*\u202f[^\n]*/gu)) {
+    const start = match.index
+    if (start === undefined) continue
+    literalRefs.add(match[1]!)
+    change(ctx, 'U-132', start, start, '\\', 'old literal reference definition kept as text')
+  }
+  for (const match of ctx.src.matchAll(/(?<!\\)\[[^\]\n]+\]\([^\n)]*\u202f[^\n)]*\)/gu)) {
+    if (match.index !== undefined) change(ctx, 'U-132', match.index, match.index, '\\',
+      'old literal link with a narrow space kept as text')
+  }
+  if (literalRefs.size === 0) return
+  for (const match of ctx.src.matchAll(/(?<!\\)\[[^\]\n]+\]\[([^\]\n]+)\]/gu)) {
+    if (match.index !== undefined && literalRefs.has(match[1]!)) change(ctx, 'U-132', match.index, match.index, '\\',
+      'reference to an old literal definition kept as text')
   }
 }
 
