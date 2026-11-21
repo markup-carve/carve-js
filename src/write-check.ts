@@ -10,8 +10,8 @@ import { buildSource } from './ast-blocks.ts'
 import { applyExtensions } from './extensions/claims.ts'
 import { AST_RESULTS } from './ast-tables.ts'
 import { sourceCoreEquivalent } from './write-extension-source.ts'
-import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
-import { firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
+import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
+import { firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInlines } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
@@ -1128,6 +1128,54 @@ function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], 
   compareInline(c, e, a)
   at.i++
   at.j++
+  return VERBATIM.has(e.type) && differingField(c, e, a) !== null ? stepOverAbsorbed(c, e, es, as, a, at) : true
+}
+
+const VERBATIM: ReadonlySet<string> = new Set(['code', 'literal_inline', 'math', 'raw_inline'])
+
+/**
+ * C2-W-117, C2-W-124: the span `a` read on past the spelling of `e` to a later closing run. Every sibling whose
+ * spelling starts before that closer is part of `a` and is lost; the text the last one left behind it is stepped over.
+ */
+function stepOverAbsorbed(c: Check, e: Node, es: readonly Node[], as: readonly Node[], a: Node, at: Cursor): boolean {
+  const end = a.pos?.endOffset
+  if (end === undefined) return true
+  const own = writeInlines(c.w, [e], c.flags)
+  // Container prefixes on later lines would stand between the offsets.
+  if (own.includes('\n')) return true
+  let offset = a.pos!.startOffset + utf8Length(own)
+  while (offset < end && at.i < es.length && !isBreak(es[at.i])) {
+    const to = gluedEnd(es, at.i)
+    const spelled = writeInlines(c.w, es.slice(at.i, to), c.flags)
+    const start = offset
+    offset += utf8Length(spelled)
+    // The last one reads on behind the closer; where that tail is no text, the comparison goes on from it.
+    const tail = offset > end ? spelled.slice(stringOffsetOfByte(spelled, end - start)) : ''
+    const text = textAt(as, at.j)
+    if (tail !== '' && (text === null || !text.value.startsWith(tail))) return true
+    loseTaken(c, es, at, to)
+    if (text !== null && tail !== '') return stepIntoText(at, text, tail)
+  }
+  return offset >= end
+}
+
+/** C2-W-112: the end of the part that starts at `from`, where code spans glued to each other are written as one. */
+function gluedEnd(es: readonly Node[], from: number): number {
+  let to = from + 1
+  while (joinsNextCode(es, to - 1)) to++
+  return to
+}
+
+function loseTaken(c: Check, es: readonly Node[], at: Cursor, to: number): void {
+  for (; at.i < to; at.i++) c.losses.push([es[at.i]!, es[at.i]!.type === 'text' ? 'value' : null])
+}
+
+function stepIntoText(at: Cursor, text: TextNode, tail: string): boolean {
+  at.aj = tail.length
+  if (at.aj === text.value.length) {
+    at.j++
+    at.aj = 0
+  }
   return true
 }
 
