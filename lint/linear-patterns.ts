@@ -82,116 +82,7 @@ function linkGap(source: string): Matcher {
   })
 }
 
-function oddBackslashesAtEnd(source: string): Matcher {
-  return new Matcher(source, (text) => (from) => {
-    let run = 0
-    while (text.charCodeAt(text.length - 1 - run) === 92) run++
-    if (run % 2 === 0) return null
-    const start = Math.max(0, text.length - run - 1)
-    return start < from ? null : found(text, start, text.length, {})
-  })
-}
-
-function definitionWithLabel(source: string): Matcher {
-  return new Matcher(source, (text) => (from) => {
-    if (from > 0 || !text.startsWith('[') || !text.endsWith(']:') || text.length < 3) return null
-    const close = text.length - 2
-    let spoken = false
-    for (let at = 1; at < close; at++) {
-      if (text[at] === ']') return null
-      if (text[at] !== ' ' && text[at] !== '\t') spoken = true
-    }
-    return spoken ? found(text, 0, text.length, { def: [0, text.length], label: [1, close] }) : null
-  })
-}
-
-const SPACE = /\s/
 const LINE_END = /[\n\r\u2028\u2029]/
-const NAME = /[A-Za-z0-9_:-]/
-const LETTER = /[A-Za-z]/
-
-/** Where the tag starting with the `<` at `at` ends, or -1. */
-function tagEnd(text: string, at: number): number {
-  let next = at + 1
-  if (text[next] === '/') next++
-  if (text[next] === undefined || !LETTER.test(text[next]!)) return -1
-  while (text[next] !== undefined && NAME.test(text[next]!)) next++
-  if (text[next] !== undefined && SPACE.test(text[next]!)) {
-    let attributes = next + 1
-    while (attributes < text.length && text[attributes] !== '<' && text[attributes] !== '>') attributes++
-    return text[attributes] === '>' ? attributes + 1 : -1
-  }
-  if (text[next] === '/') next++
-  return text[next] === '>' ? next + 1 : -1
-}
-
-/** The length of the step the pattern takes over the `<` at `at` outside a comment, or 0 when it has none. */
-function bracketStep(text: string, at: number): number {
-  if (at + 1 === text.length) return 1
-  if (text[at + 1] !== '!') return 2
-  if (at + 2 === text.length) return 2
-  if (text[at + 2] !== '-') return 3
-  if (at + 3 === text.length) return 3
-  return text[at + 3] === '-' ? 0 : 4
-}
-
-// The pattern steps through the line lazily and tries the tag after a run of `<` at every step, so a run of n
-// brackets costs n². The result of a step only depends on where it stands: this reads the steps right to left once,
-// in the order of the pattern's alternatives, and keeps for each position the tag that the pattern finds from there.
-class TagSteps {
-  private readonly text: string
-  private readonly starts: Int32Array
-  private readonly ends: Int32Array
-  // The first `-->` at or after a position, before any line break, whose step finds a tag.
-  private readonly comments: Int32Array
-  // The last `<` of the run that the position starts, and the end of the tag there.
-  private last = -1
-  private end = -1
-
-  constructor(text: string) {
-    this.text = text
-    this.starts = new Int32Array(text.length + 2).fill(-1)
-    this.ends = new Int32Array(text.length + 2).fill(-1)
-    this.comments = new Int32Array(text.length + 2).fill(-1)
-  }
-
-  first(): RegExpExecArray | null {
-    for (let at = this.text.length; at >= 0; at--) {
-      const next = this.next(at)
-      if (next > at) {
-        this.starts[at] = this.starts[next]!
-        this.ends[at] = this.ends[next]!
-      }
-      this.comments[at] = this.comment(at)
-    }
-    const end = this.ends[0]!
-    return end < 0 ? null : found(this.text, 0, end, { tag: [this.starts[0]!, end] })
-  }
-
-  /** The position whose result the step at `at` takes, or `at` when it finds the tag itself or nothing. */
-  private next(at: number): number {
-    const text = this.text
-    if (text[at] !== '<') return at < text.length ? at + 1 : at
-    if (text[at + 1] !== '<') this.end = tagEnd(text, this.last = at)
-    if (this.end >= 0) {
-      this.starts[at] = this.last
-      this.ends[at] = this.end
-      return at
-    }
-    const comment = text.startsWith('<!--', at) ? this.comments[at + 4]! : -1
-    return comment >= 0 ? comment + 3 : at + bracketStep(text, at)
-  }
-
-  private comment(at: number): number {
-    if (at < this.text.length && LINE_END.test(this.text[at]!)) return -1
-    return this.text.startsWith('-->', at) && this.ends[at + 3]! >= 0 ? at : this.comments[at + 1]!
-  }
-}
-
-function firstBareTag(source: string): Matcher {
-  return new Matcher(source, (text) => (from) => (from > 0 ? null : new TagSteps(text).first()))
-}
-
 // `.*?` before `[ \t]*$` rescans a run of spaces from each of its positions. With no line break to stop `.`, the greedy
 // prefix and the trimmed rest always match, so no other split is ever taken.
 function contentSpan(text: string): [number, number] | null {
@@ -227,10 +118,7 @@ class QuotedContent extends Matcher {
 
 const MATCHERS: Record<string, (source: string) => Matcher> = {
   '^[ \\t]*(?:> [ \\t]*)*(?<c>.*?)[ \\t]*$': (source) => new QuotedContent(source),
-  '^(?:[^<]|<!--.*?-->|<[^!<A-Za-z/]|<[A-Za-z/]|<<|<!(?:[^-]|$)|<!-(?:[^-]|$)|<$)*?<*(?<tag></?[A-Za-z][A-Za-z0-9_:-]*(?:\\s[^<>]*)?/?>)': firstBareTag,
   '(?<link>\\[[^\\]\\n]+\\][ \\t]+\\((?<dest>[^)\\n]*)\\))|\\[[^\\]\\n]+\\][ \\t]+\\([^)\\n]*|\\[[^\\]\\n]*': linkGap,
-  '(?:^|[^\\\\])(?:\\\\\\\\)*\\\\$': oddBackslashesAtEnd,
-  '^(?<def>\\[(?<label>[^\\]]*[^\\] \\t][^\\]]*)\\]:)$': definitionWithLabel,
 }
 
 /** Whether `source` has a linear matcher here. */

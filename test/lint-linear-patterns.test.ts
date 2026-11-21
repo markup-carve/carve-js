@@ -35,8 +35,13 @@ function run(pattern: RegExp | Pattern, text: string): number {
   return performance.now() - started
 }
 
-/** The times on 1 KB and 4 KB of a shape when they grow past linear, else undefined. */
-function growth(pattern: RegExp | Pattern, make: (size: number) => string): string | undefined {
+/** The times of a repeated shape when it grows past linear, else undefined. */
+function growth(pattern: RegExp | Pattern, make: (size: number) => string, stable: boolean): string | undefined {
+  if (stable) {
+    const small = Math.min(...Array.from({ length: 5 }, () => run(pattern, make(2048))))
+    const big = Math.min(...Array.from({ length: 5 }, () => run(pattern, make(16384))))
+    return big > 20 * Math.max(small, 0.1) && big > 10 ? `${small.toFixed(2)} ms to ${big.toFixed(1)} ms` : undefined
+  }
   const small = Math.min(run(pattern, make(1024)), run(pattern, make(1024)))
   if (small < 0.05) return undefined
   let big = Math.min(run(pattern, make(4096)), run(pattern, make(4096)))
@@ -59,7 +64,7 @@ describe('linear matchers for lint-model patterns (carve#6297)', () => {
   const linear = compiled().filter((entry) => hasLinearMatcher(entry.source))
 
   it('stand for the patterns the lint model states', () => {
-    expect(new Set(linear.map((entry) => entry.source)).size).toBe(5)
+    expect(new Set(linear.map((entry) => entry.source)).size).toBe(2)
   })
 
   // Random short lines over the characters and pieces the patterns name.
@@ -101,7 +106,8 @@ describe('linear matchers for lint-model patterns (carve#6297)', () => {
         for (const suffix of suffixes) {
           // A lead that is no space puts the run inside the line, where a lazy part before a trailing class rescans it.
           for (const lead of ['', 'a']) {
-            const grew = growth(pattern, (size) => lead + unit.repeat(Math.ceil(size / unit.length)) + suffix)
+            const grew = growth(pattern, (size) => lead + unit.repeat(Math.ceil(size / unit.length)) + suffix,
+              source.includes('(?<link>'))
             if (grew !== undefined) slow.push(`/${source}/${flags} ${JSON.stringify(lead + unit)}${JSON.stringify(suffix)} ${grew}`)
           }
         }
