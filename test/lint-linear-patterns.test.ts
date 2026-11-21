@@ -39,7 +39,9 @@ function run(pattern: RegExp | Pattern, text: string): number {
 function growth(pattern: RegExp | Pattern, make: (size: number) => string): string | undefined {
   const small = Math.min(run(pattern, make(1024)), run(pattern, make(1024)))
   if (small < 0.05) return undefined
-  const big = Math.min(run(pattern, make(4096)), run(pattern, make(4096)))
+  let big = Math.min(run(pattern, make(4096)), run(pattern, make(4096)))
+  // A collection or a tier-up during one sample reads as growth; a real one stays when measured again.
+  for (let again = 0; again < 3 && big > 10 * Math.max(small, 0.1) && big > 3; again++) big = Math.min(big, run(pattern, make(4096)))
   return big > 10 * Math.max(small, 0.1) && big > 3 ? `${small.toFixed(2)} ms to ${big.toFixed(1)} ms` : undefined
 }
 
