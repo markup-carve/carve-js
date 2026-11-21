@@ -23,3 +23,16 @@ export function flippedStrong(ctx: Context): void {
     }
   }
 }
+
+/** A deprecated glued header spelling that 0.1 kept as cell text must stay cell text. */
+export function literalTableHeader(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'table_cell' || node.pos === undefined || node.header === true) continue
+    const { startOffset: start, endOffset: end } = node.pos
+    const value = ctx.src.slice(start, end)
+    const marker = value.indexOf('=~>')
+    if (marker < 0 || value.slice(0, marker).trim() !== '') continue
+    change(ctx, 'U-168', start + marker, start + marker, '\\',
+      'the deprecated glued header spelling is literal cell text in 0.1')
+  }
+}

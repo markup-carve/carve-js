@@ -11,4 +11,12 @@ describe('replay fallback families', () => {
     expect(result.output).toContain('{*{/\\{/}*}')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
+
+  it('combines a braced strong-emphasis span with a literal legacy table cell', () => {
+    const input = '/*a*/b c*/\n|=^ Top |=v Bottom |={<^} Paired |=v> Reverse |=~> Middle |\n| a | b | c | d | e |\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toContain('|\\=~> Middle |')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
 })

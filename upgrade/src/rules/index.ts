@@ -12,7 +12,7 @@ import { lists } from './lists.ts'
 import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
 import { includes, tables, tablesHeadStyles } from './tables.ts'
-import { flippedStrong } from './replay-fallbacks.ts'
+import { flippedStrong, literalTableHeader } from './replay-fallbacks.ts'
 
 /** Starts the repairs of the replay rows (carve#6183) for the rules after it. */
 function repairs(ctx: Context): void {
@@ -40,5 +40,6 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
   [...RULES, ...LATE_RULES, itemParagraphBreaks],
   [...RULES.map((rule) => rule === tables ? tablesHeadStyles : rule), ...LATE_RULES],
   [...RULES.map((rule) => rule === definitions ? definitionsKeptAfter : rule), ...LATE_RULES],
-  [repairs, ...RULES.map((rule) => rule === inline ? inlineBraced : rule), ...LATE_RULES, descriptionColumns, flippedStrong],
+  [repairs, ...RULES.map((rule) => rule === inline ? inlineBraced : rule === tables ? tablesHeadStyles : rule),
+    ...LATE_RULES, descriptionColumns, flippedStrong, literalTableHeader],
 ]
