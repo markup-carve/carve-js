@@ -253,3 +253,7 @@ it('C2-W-150: the id rows read id records', () => {
   expect(findings(source, 'data')).toEqual(['broken-crossref@22-31', 'broken-fragment-link@36-47',
     'unresolved-reference-link@52-58', 'unused-link-reference-definition@61-68'])
 })
+
+it('C2-B-074: a Markdown definition behind a tab is reported too', () => {
+  for (const mode of ['code', 'data']) expect(findings('para\n:\ttext\n', mode)).toEqual(['markdown-definition-paragraph@5-11'])
+})
