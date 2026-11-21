@@ -27,6 +27,7 @@ import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
 import { rescueEscape } from './escape-rescue.ts'
 import { rescueDashRun } from './dash-run-rescue.ts'
 import { LATE_VARIANTS, RULES } from './rules/index.ts'
+import { itemColumns, itemParagraphBreaks } from './rules/late.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
 import { applyTabs, planTabs, sameHost } from './tabs.ts'
@@ -530,6 +531,11 @@ function triedBefore(tried: Set<string>, done: Rewritten): boolean {
 }
 
 /** A late variant can change the first pass only when its distinct rule has a host in the 0.1 tree. */
+function hasLateEdits(parsed: Context, rule: Rule): boolean {
+  const probe: Context = { ...parsed, findings: [], late: true }
+  try { rule(probe); return probe.findings.length > 0 } catch { return true }
+}
+
 function lateHosts(input: string, parsed: Context): boolean[] {
   const types = new Set(parsed.visits.map(({ node }) => node.type))
   const definitions = input.includes(']:')
@@ -539,7 +545,8 @@ function lateHosts(input: string, parsed: Context): boolean[] {
     true,
     definitions, definitions, input.includes('%%'),
     input.includes('/*'), inline, definitions,
-    types.has('definition_list'), list, list, types.has('table'), definitions,
+    types.has('definition_list'), list && hasLateEdits(parsed, itemColumns),
+    list && hasLateEdits(parsed, itemParagraphBreaks), types.has('table'), definitions,
     true,
   ]
 }
