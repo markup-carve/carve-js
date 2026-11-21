@@ -179,7 +179,9 @@ export function locationIndex(input: string | Uint8Array, requested: ReadonlySet
     if (!lineBom(bytes, at, lineStart, width)) column++
     at += width
   }
-  if (requested.has(bytes.length)) columns.set(bytes.length, column)
+  // location() clamps a reported offset beyond EOF, so keep EOF available even when no
+  // diagnostic asked for that exact offset.
+  columns.set(bytes.length, column)
   return { bytes, starts, columns, ascii }
 }
 
