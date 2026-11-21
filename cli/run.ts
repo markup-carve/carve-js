@@ -117,17 +117,56 @@ function includesOf(path: string, args: ParsedArgs): { includes?: IncludeConfig 
 interface LocationIndex {
   bytes: Uint8Array
   starts: number[]
+  columns: Uint32Array
 }
 
-/** C2-T-019: index line starts once in the original bytes of a file. */
-function locationIndex(input: string | Uint8Array): LocationIndex {
+function validSecond(first: number, second: number): boolean {
+  if (second < 0x80 || second > 0xbf) return false
+  if (first === 0xe0) return second >= 0xa0
+  if (first === 0xed) return second <= 0x9f
+  if (first === 0xf0) return second >= 0x90
+  return first !== 0xf4 || second <= 0x8f
+}
+
+/** Number of bytes the decoder consumes before it emits one code point or replacement. */
+function decodedWidth(bytes: Uint8Array, at: number): number {
+  const first = bytes[at]!
+  const expected = first >= 0xc2 && first <= 0xdf ? 2 : first >= 0xe0 && first <= 0xef ? 3
+    : first >= 0xf0 && first <= 0xf4 ? 4 : 1
+  if (expected === 1 || !validSecond(first, bytes[at + 1] ?? 0)) return 1
+  let width = 2
+  while (width < expected && bytes[at + width]! >= 0x80 && bytes[at + width]! <= 0xbf) width++
+  return width
+}
+
+/** C2-T-019: index line starts and decoded code-point columns once in the original bytes. */
+export function locationIndex(input: string | Uint8Array): LocationIndex {
   const bytes = typeof input === 'string' ? Buffer.from(input, 'utf8') : input
   const starts = [0]
-  for (let at = 0; at < bytes.length; at++) if (bytes[at] === 0x0a) starts.push(at + 1)
-  return { bytes, starts }
+  const columns = new Uint32Array(bytes.length + 1)
+  columns[0] = 1
+  let column = 1
+  for (let at = 0; at < bytes.length;) {
+    const first = bytes[at]!
+    if (first === 0x0a) {
+      columns[at + 1] = column = 1
+      starts.push(at + 1)
+      at++
+      continue
+    }
+    // A decoder replaces one malformed UTF-8 prefix with one code point. An offset inside
+    // that prefix includes the replacement, just as decoding a sliced prefix does.
+    const width = decodedWidth(bytes, at)
+    for (let step = 1; step <= width; step++) columns[at + step] = column + 1
+    if (at === starts[starts.length - 1] && width === 3 && first === 0xef &&
+      bytes[at + 1] === 0xbb && bytes[at + 2] === 0xbf) columns[at + width] = column
+    else column++
+    at += width
+  }
+  return { bytes, starts, columns }
 }
 
-function location(index: LocationIndex, entry: Diagnostic): { line: number, column: number } | null {
+export function location(index: LocationIndex, entry: Diagnostic): { line: number, column: number } | null {
   if (entry.range === undefined) return null
   const offset = Math.min(entry.range.startOffset, index.bytes.length)
   let low = 0
@@ -137,8 +176,7 @@ function location(index: LocationIndex, entry: Diagnostic): { line: number, colu
     if (index.starts[middle]! <= offset) low = middle
     else high = middle
   }
-  const prefix = new TextDecoder().decode(index.bytes.subarray(index.starts[low], offset))
-  return { line: low + 1, column: Array.from(prefix).length + 1 }
+  return { line: low + 1, column: index.columns[offset]! }
 }
 
 function indexFor(entry: Diagnostic, own: LocationIndex, included: Map<string, LocationIndex>): LocationIndex {
