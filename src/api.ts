@@ -188,8 +188,8 @@ function resolveStage(parsed: ParsedTree, settings: Settings): ResolvedTree {
  * The render stage. The profile degrades nodes for this render only, and every list it changed is put
  * back, so the resolved tree is the same afterwards and the stage can run more than once.
  */
-function renderStage(resolved: ResolvedTree): { html: string, losses: Findings } {
-  const rendered = renderProfiled(resolved)
+function renderStage(resolved: ResolvedTree, reportShift = true): { html: string, losses: Findings } {
+  const rendered = renderProfiled(resolved, reportShift)
   const allowed = resolved.settings.allowLosses
   if (allowed.size === 0) return rendered
   // C2-H-204: an allowed code is left out of the record and counts for neither strictLosses nor maxLosses.
@@ -202,10 +202,10 @@ function renderStage(resolved: ResolvedTree): { html: string, losses: Findings }
   return { html: rendered.html, losses }
 }
 
-function renderProfiled(resolved: ResolvedTree): { html: string, losses: Findings } {
+function renderProfiled(resolved: ResolvedTree, reportShift: boolean): { html: string, losses: Findings } {
   const { document, settings } = resolved
   const losses: Findings = { entries: [...resolved.losses.entries], nodes: [...resolved.losses.nodes] }
-  if (settings.headingShift !== 0) reportShiftAboveSix(document, settings.headingShift, losses)
+  if (reportShift && settings.headingShift !== 0) reportShiftAboveSix(document, settings.headingShift, losses)
   const rule = profileRule(settings)
   if (rule === NO_PROFILE) return renderDocument(document, settings, resolved.resolution, losses, resolved.bidi, resolved.source)
   const run = applyProfile(document, settings.profile, rule, losses, resolved.resolution.xrefText, settings)
@@ -470,16 +470,16 @@ function sourceLayout(source: SourceText, document: DocumentNode, trace: LayoutT
 export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode, options?: RenderOptions): RenderOutput {
   const settings = readOptions(options, 'render')
   const registered = registeredTransforms(settings)
-  if (registered.length > 0) return transformedRender(input, withShift(registered, settings), settings)
+  if (registered.length > 0) return transformedRender(input, registered, settings)
   return plainRender(input, settings)
 }
 
 /** `shift`: the heading shift still to apply, 0 for a view that a transform has already shifted. */
 function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings, validated = false,
-  shift = settings.headingShift): RenderOutput {
+  shift = settings.headingShift, reportShift = true): RenderOutput {
   const parsed = inputStage(input, settings, true, validated)
   const resolved = shiftedResolve(parsed, settings, isSupplied(input), shift)
-  const rendered = renderStage(resolved)
+  const rendered = renderStage(resolved, reportShift)
   const diagnostics = [...parseDiagnostics(resolved, parsed), ...locateFindings(resolved.document, rendered.losses)]
   if (settings.strictLosses) for (const entry of diagnostics) {
     if (entry.channel === 'render-loss') entry.severity = 'error'
@@ -567,14 +567,6 @@ function applyDocumentTransforms(view: DocumentNode, transforms: readonly Docume
   return { view, failures, validated, changed }
 }
 
-/** C2-H-208: the core heading shift, which runs before every document transform. */
-function headingShiftTransform(shift: number): DocumentTransform {
-  return { name: 'carve.headingShift', transform(view) {
-    shiftHeadings(view, shift)
-    return view
-  } }
-}
-
 /** C2-X-053: the document transforms of the registered extensions, in registration order. */
 function registeredTransforms(settings: Settings): DocumentTransform[] {
   const transforms: DocumentTransform[] = []
@@ -582,12 +574,6 @@ function registeredTransforms(settings: Settings): DocumentTransform[] {
     if (entry.documentTransform !== undefined) transforms.push({ name: entry.name, transform: entry.documentTransform })
   }
   return transforms
-}
-
-/** C2-H-208: the heading shift runs before every document transform; with none, the render shifts in place. */
-function withShift(transforms: DocumentTransform[], settings: Settings): DocumentTransform[] {
-  return transforms.length === 0 || settings.headingShift === 0 ? transforms
-    : [headingShiftTransform(settings.headingShift), ...transforms]
 }
 
 /** C2-X-053 to C2-X-055: transforms run in registration order on a copy, leaving the authored tree intact. */
@@ -598,7 +584,7 @@ export function renderWithDocumentTransforms(
   const all = [...registeredTransforms(settings), ...transforms]
   // With no transform the shift runs in place, as in renderWithDiagnostics.
   if (all.length === 0 && settings.headingShift !== 0) return plainRender(input, settings)
-  return transformedRender(input, withShift(all, settings), settings)
+  return transformedRender(input, all, settings)
 }
 
 /** Reuse the resolved view when no transform changed it and its output has no positional loss. */
@@ -623,19 +609,26 @@ function transformedRender(
   const parsed = inputStage(authored, settings, positions)
   const resolved = resolveStage(parsed, settings)
   const sourceDiagnostics = parseDiagnostics(resolved, parsed)
+  // C2-H-208: capture the shift's own above-six result before any host can change the level.
+  const shiftLosses: Findings = { entries: [], nodes: [] }
+  if (settings.headingShift !== 0) {
+    shiftHeadings(resolved.document, settings.headingShift)
+    reportShiftAboveSix(resolved.document, settings.headingShift, shiftLosses)
+  }
+  const shiftDiagnostics = settings.allowLosses.has(HEADING_SHIFT_CODE) ? [] : locateFindings(resolved.document, shiftLosses)
   const { view, failures, validated, changed } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
   if (!changed) {
     const direct = unchangedViewRender(resolved, sourceDiagnostics, failures, settings)
     if (direct !== undefined) return direct
   }
-  const rendered = plainRender(view, settings, validated, 0)
+  const rendered = plainRender(view, settings, validated, 0, false)
   const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
   ])))
   const viewDiagnostics = rendered.diagnostics.filter((entry) => !sourceKeys.has(JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
   ])))
-  const diagnostics = [...sourceDiagnostics, ...failures, ...viewDiagnostics]
+  const diagnostics = [...sourceDiagnostics, ...failures, ...shiftDiagnostics, ...viewDiagnostics]
   if (settings.strictLosses) for (const entry of diagnostics) {
     if (entry.channel === 'render-loss') entry.severity = 'error'
   }
@@ -658,7 +651,7 @@ export function render(input: string | Uint8Array | DocumentNode, options?: Rend
   }
   const registered = registeredTransforms(settings)
   if (registered.length > 0) {
-    const output = transformedRender(input, withShift(registered, settings), settings, false)
+    const output = transformedRender(input, registered, settings, false)
     const lost = output.diagnostics.filter((entry) => entry.channel === 'render-loss')
     if (settings.strictLosses && lost.length > 0) throw new CarveRenderError(lost)
     return output.html

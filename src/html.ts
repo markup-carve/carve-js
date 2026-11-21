@@ -204,10 +204,10 @@ function idCarriers(r: Render, node: HeadingNode): Pair[] {
   return [[node.attrs?.id === undefined ? 'data-carve-generated-id' : 'data-carve-explicit-id', null]]
 }
 
-/** C2-H-208: under `roundtrip` a shifted heading carries its level before the shift. */
+/** C2-H-208: under `roundtrip` a heading carries its rendered element level minus N. */
 function sourceLevel(r: Render, node: HeadingNode): number | undefined {
   const level = node.level - r.settings.headingShift
-  return r.settings.roundtrip && r.settings.headingShift !== 0 && level >= 1 ? level : undefined
+  return r.settings.roundtrip && r.settings.headingShift !== 0 ? level : undefined
 }
 
 /** C2-H-021: `h1` to `h6`, and above them a `div` that keeps the true level. `inSection`: the section carries the id. */

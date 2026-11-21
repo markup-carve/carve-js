@@ -62,6 +62,10 @@ function documentTransforms(entry) {
     const at = Number(path.pop())
     let parent = view
     for (const part of path) parent = parent[part]
+    if (row.setLevel !== undefined) {
+      parent[at].level = row.setLevel
+      return view
+    }
     const inserted = structuredClone(row.insert)
     // C2-A-058: a host fixture's empty slot map constructs an absent slot field in the actual tree.
     if (inserted.slots && Object.keys(inserted.slots).length === 0) delete inserted.slots
