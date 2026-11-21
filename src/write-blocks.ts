@@ -641,10 +641,11 @@ function isCommentLine(node: Node | undefined): boolean {
   return node !== undefined && node.type === 'comment' && node.form !== 'block'
 }
 
-export function afterComments(nodes: readonly Node[], at: number): Node | undefined {
+/** The index of the first block behind `at` that is no comment line, or `nodes.length`. */
+export function commentLinesEnd(nodes: readonly Node[], at: number): number {
   let next = at + 1
   while (isCommentLine(nodes[next])) next++
-  return nodes[next]
+  return next
 }
 
 /** C2-W-059: the blank lines before the comment `node`, which follows `before`. */
@@ -712,10 +713,10 @@ function markFenceBeforeComment(w: Writer, node: Node, next: Node | undefined): 
   if (fence !== null) w.forms.set(fence, 1)
 }
 
+// `following` is the block behind the comment lines after `at`.
 function beforeSibling(w: Writer, nodes: readonly Node[], at: number, before: Node | null,
-  list: Node | null, prefix: string, layout: number): void {
+  list: Node | null, prefix: string, layout: number, following: Node | undefined): void {
   const node = nodes[at]!
-  const following = afterComments(nodes, at)
   const attributes = isCommentLine(node) && before !== null && isOpenContainer(w, before)
     && w.prewrittenAttributes !== following ? followingAttributes(w, following) : ''
   if (before !== null) {
@@ -735,11 +736,14 @@ function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags:
   let before: Node | null = null
   // The last block that is no comment: comments do not keep two lists apart (C2-B-053).
   let list: Node | null = null
+  // Kept across a run of comment lines, which is walked once rather than once per comment.
+  let after = -1
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     const start = w.lines.length
     const next = nodes[at + 1]
-    beforeSibling(w, nodes, at, before, list, prefix, layout)
+    if (after <= at) after = commentLinesEnd(nodes, at)
+    beforeSibling(w, nodes, at, before, list, prefix, layout, nodes[after])
     markFenceBeforeComment(w, node, next)
     const written = w.lines.length
     if (node.type === 'code_block' && node.caption !== undefined) at = captionedCode(w, nodes, at, prefix, flags)
