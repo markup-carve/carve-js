@@ -14,17 +14,22 @@ export interface Pattern {
 
 type Groups = Record<string, [number, number]>
 
-function found(text: string, start: number, end: number, groups: Groups, missing: readonly string[] = []): RegExpExecArray {
+function found(text: string, start: number, end: number, groups: Groups): RegExpExecArray {
   const match = [text.slice(start, end)] as unknown as RegExpExecArray
   match.index = start
   match.input = text
   const named: Record<string, string> = {}
   for (const name in groups) named[name] = text.slice(groups[name]![0], groups[name]![1])
-  for (const name of missing) (named as Record<string, string | undefined>)[name] = undefined
   match.groups = named
-  const indices = { ...groups } as Record<string, [number, number] | undefined>
-  for (const name of missing) indices[name] = undefined
-  ;(match as { indices?: unknown }).indices = Object.assign([[start, end]], { groups: indices })
+  ;(match as { indices?: unknown }).indices = Object.assign([[start, end]], { groups })
+  return match
+}
+
+/** The fallback alternatives match a bracket run but define neither report group. */
+function failedLinkGap(text: string, start: number, end: number): RegExpExecArray {
+  const match = found(text, start, end, {})
+  match.groups = { link: undefined, dest: undefined } as unknown as Record<string, string>
+  ;(match.indices as unknown as { groups: Record<string, undefined> }).groups = { link: undefined, dest: undefined }
   return match
 }
 
@@ -58,15 +63,15 @@ class Matcher implements Pattern {
 function linkGapAt(text: string, open: number): RegExpExecArray {
   let close = open + 1
   while (close < text.length && text[close] !== ']' && text[close] !== '\n') close++
-  if (close <= open + 1 || text[close] !== ']') return found(text, open, close, {}, ['link', 'dest'])
+  if (close <= open + 1 || text[close] !== ']') return failedLinkGap(text, open, close)
   let paren = close + 1
   while (text[paren] === ' ' || text[paren] === '\t') paren++
-  if (paren <= close + 1 || text[paren] !== '(') return found(text, open, close, {}, ['link', 'dest'])
+  if (paren <= close + 1 || text[paren] !== '(') return failedLinkGap(text, open, close)
   let end = paren + 1
   while (end < text.length && text[end] !== ')' && text[end] !== '\n') end++
   if (text[end] === ')') return found(text, open, end + 1,
     { link: [open, end + 1], dest: [paren + 1, end] })
-  return found(text, open, end, {}, ['link', 'dest'])
+  return failedLinkGap(text, open, end)
 }
 
 function linkGap(source: string): Matcher {
