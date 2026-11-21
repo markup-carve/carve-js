@@ -142,7 +142,7 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
       if (source[node.start] === '[' && source[label.end] === ']') {
         token('open-marker', node.start, label.start)
         const tail = source.slice(label.end, node.end)
-        const close = tail.startsWith('](') ? closingParen(tail) : tail.startsWith('][') ? tail.indexOf(']', 2) : 0
+        const close = tail.startsWith('](') ? closingParen(tail) : tail.startsWith('][') ? referenceClose(tail) : 0
         const end = close < 0 ? node.end : label.end + close + 1
         if (close > 0 && tail[1] === '(') {
           token('close-marker', label.end, label.end + 2)
@@ -192,6 +192,15 @@ function attributeLine(source: string, start: number): { end: number; next: numb
   while (end < source.length && source[end] !== '\n' && source[end] !== '\r') end++
   if (end === start || source[end - 1] !== '}' || end >= source.length) return null
   return { end, next: end + (source.startsWith('\r\n', end) ? 2 : 1) }
+}
+
+/** The index of the unescaped `]` that closes the reference of the link tail `][...`, or -1. */
+function referenceClose(tail: string): number {
+  for (let at = 2; at < tail.length; at++) {
+    if (tail[at] === '\\') at++
+    else if (tail[at] === ']') return at
+  }
+  return -1
 }
 
 /** The index of the `)` that closes the destination and title of the link tail `](...`, or -1. */

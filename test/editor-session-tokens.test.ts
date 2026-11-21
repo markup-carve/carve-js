@@ -23,6 +23,7 @@ describe('editor session tokens', () => {
     expect(tokens('[x](u "a)b"){.c}', 'link'))
       .toEqual(['open-marker 0-1', 'close-marker 2-4', 'destination 4-5', 'close-marker 11-12', 'attribute 12-16'])
     expect(tokens('[x][r]{.a}', 'link')).toEqual(['open-marker 0-1', 'close-marker 2-6', 'attribute 6-10'])
+    expect(tokens('[x][a\\]b]{.a}', 'link')).toEqual(['open-marker 0-1', 'close-marker 2-9', 'attribute 9-13'])
   })
 
   it('an escaped pipe or a pipe inside a cell is no table marker', () => {
