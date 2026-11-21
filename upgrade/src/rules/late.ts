@@ -210,7 +210,10 @@ function movedBlock(below: Visit, above: Visit, line: number): Visit {
 
 /** The block that starts on `line` and how far it moves left, when 0.1 ended a description above it. */
 function leftOfDescription(ctx: Context, line: number): { block: Visit; shift: number } | null {
-  const above = ctx.blocks.leaf[line - 1]
+  // The repairs also read a block after a blank line, which 0.2 keeps in the description too.
+  let up = line - 1
+  if (ctx.repairs === true) while (up > 1 && isBlank(lineText(ctx.lines, up))) up--
+  const above = ctx.blocks.leaf[up]
   const below = ctx.blocks.leaf[line]
   if (above == null || below == null || below === above || below.node.pos!.startLine !== line) return null
   const left = quotesOf(above).length > 0 ? null : leftList(above, below)
