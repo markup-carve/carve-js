@@ -169,6 +169,41 @@ describe('replay fallback families', () => {
     }
   })
 
+  it('explains task label spacing beside editorial content', () => {
+    for (const input of ['- text\n\n\n- [ ] x {#c#} y\n  [a]: /u {.c}\n^[fn]\n\n[a][]\n',
+      '- t\n  %% c\n   ````\n  x\n- [ ] x {#c#} y\n- [x] {# note #}done\n']) {
+      const result = upgrade(input)
+      expect(result.check).toBe('explained')
+      expect(result.records.some((record) => record.entry === 'U-133')).toBe(true)
+      expect(result.records.some((record) => record.entry === 'U-159')).toBe(true)
+      expect(result.records.some((record) => record.entry === 'upgrade-mismatch')).toBe(false)
+    }
+  })
+
+  it('keeps a document fence outside the preceding description', () => {
+    const input = ':: t\n: a\n ```\n  b\n   ```\n y\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe(':: t\n: a\n\n````\n b\n  ```\ny\n````\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps a converted tilde fence outside the preceding description', () => {
+    const input = '- a\n    ```\n\n  ~~~\n:: tail\n:  definition\n   code\n  ~~~\n  more\nafter\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('- a\n    ```\n\n  ~~~\n:: tail\n:  definition\n   code\n\n```\nmore\nafter\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps a literal include directive from turning sigils into mentions', () => {
+    const input = ':: t\n{{ data/p2.csv  @code:csv @lines:00-2 }}\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe(':: t\n\n{{ data/p2.csv  \\@code:csv \\@lines:00-2 }}\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('preserves adjacent reversed and ordinary strong-emphasis spans', () => {
     const input = 'b */{/*/*{t="*/"}\nb *///*{t="*/"}\n'
     const result = upgrade(input)

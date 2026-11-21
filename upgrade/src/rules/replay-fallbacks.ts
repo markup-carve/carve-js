@@ -312,6 +312,63 @@ export function literalNarrowSpaceLinks(ctx: Context): void {
   }
 }
 
+/** A document fence after a definition stays outside its description body. */
+export function fenceAfterDescription(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const place = descriptionFence(ctx, visit)
+    if (place !== null) moveFence(ctx, place)
+  }
+}
+
+function descriptionFence(ctx: Context, visit: Visit): { first: number; last: number; indent: number; entry: string;
+  closer: typeof ctx.findings[number] | undefined } | null {
+  const node = visit.node
+  const before = visit.siblings[visit.index - 1]
+  if (node.type !== 'code_block' || node.pos === undefined || before?.type !== 'definition_list'
+    || before.pos?.endLine !== node.pos.startLine - 1 || visit.parent?.node.type !== 'document') return null
+  const first = node.pos.startLine
+  const last = node.pos.endLine
+  const opener = /^( +)(?:`{3,}|~{3,})/u.exec(lineText(ctx.lines, first))
+  if (opener === null) return null
+  const indent = opener[1]!.length
+  const closer = ctx.findings.find(({ record, edit }) => record.entry === 'U-049'
+    && edit?.start === lineEnd(ctx.lines, last) && edit.text.startsWith(`\n${' '.repeat(indent)}`))
+  if (closer === undefined && !ctx.findings.some(({ record, edit }) => record.entry === 'U-116'
+    && edit !== null && lineOf(ctx.lines, edit.start) === first)) return null
+  return { first, last, indent, entry: closer === undefined ? 'U-116' : 'U-049', closer }
+}
+
+function moveFence(ctx: Context, { first, last, indent, entry, closer }: NonNullable<ReturnType<typeof descriptionFence>>): void {
+  change(ctx, entry, lineStart(ctx.lines, first), lineStart(ctx.lines, first) + indent, '\n',
+    'blank line and document column keep the fence outside the description')
+  for (let line = first + 1; line <= last; line++) {
+    const spaces = /^ */u.exec(lineText(ctx.lines, line))![0].length
+    const cut = Math.min(indent, spaces)
+    if (cut === 0) continue
+    change(ctx, entry, lineStart(ctx.lines, line), lineStart(ctx.lines, line) + cut, '',
+      'fence body shifted with its document opener')
+  }
+  if (closer?.edit !== null && closer?.edit !== undefined) {
+    closer.edit = { ...closer.edit, text: closer.edit.text.replace(new RegExp(`^\\n {${indent}}`, 'u'), '\n') }
+  }
+}
+
+/** Literal 0.1 include text keeps its sigil words from becoming 0.2 mentions. */
+export function literalIncludeMentions(ctx: Context): void {
+  if (!ctx.findings.some(({ record }) => record.entry === 'U-011')) return
+  for (let line = 1; line <= ctx.lines.count; line++) {
+    const source = lineText(ctx.lines, line)
+    if (!source.includes('{{') || !source.includes('}}')) continue
+    const start = source.indexOf('{{')
+    const end = source.indexOf('}}', start + 2)
+    if (end < 0) continue
+    for (const match of source.slice(start + 2, end).matchAll(/(?<!\\)@[A-Za-z][A-Za-z0-9-]*/gu)) {
+      const at = lineStart(ctx.lines, line) + start + 2 + match.index
+      change(ctx, 'U-011', at, at, '\\', 'old literal include sigil kept as text')
+    }
+  }
+}
+
 function textOnly(node: Node01): boolean {
   return (node.children ?? []).every((child) => child.type === 'text' || child.type === 'soft_break'
     || (child.type === 'emphasis' && textOnly(child)))

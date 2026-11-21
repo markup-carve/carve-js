@@ -17,8 +17,9 @@ import {
   abbreviationSpaces, continuedHeaderRow, crossLineStrong, descriptionAfterQuotedTerm, duplicateItemDefinitions,
   emptyAttributeItemAfterDescription, emptyAttributeQuote, emptyQuoteInFootnote,
   emptyColonDiv,
-  flippedStrong, footnoteQuoteAfterDescription, inlineEditComposition, innerFenceRun, lazyCaretAfterQuote, legacyPlusDash, listAfterFootnote,
-  literalLinkBeforeCode, literalNarrowSpaceLinks,
+  fenceAfterDescription, flippedStrong, footnoteQuoteAfterDescription, inlineEditComposition, innerFenceRun, lazyCaretAfterQuote,
+  legacyPlusDash, listAfterFootnote,
+  literalIncludeMentions, literalLinkBeforeCode, literalNarrowSpaceLinks,
   literalQuoteAfterAttributes, literalTableHeader,
   nestedFootnoteAfterItem,
   siblingHeadingBoundary, siblingListBoundary, tabbedFootnoteContinuation, wrappedCodeTableRow,
@@ -57,5 +58,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     siblingHeadingBoundary, emptyAttributeItemAfterDescription, emptyColonDiv, continuedHeaderRow,
     descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
     footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
-    literalNarrowSpaceLinks],
+    literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions],
 ]

@@ -53,18 +53,25 @@ export function followTaskLabels(old: string, next: string): Result {
   const source = htmlTokens(old)
   const target = htmlTokens(next)
   let changed = false
+  let spacing = false
   for (let at = 0; at < Math.min(source.length, target.length); at++) {
     const before = source[at]!
     const after = target[at]!
-    if (!before.startsWith('<input ') || !before.includes('type="checkbox"')) continue
+    if (before === after || !before.startsWith('<input ') || !before.includes('type="checkbox"')) continue
     const left = LABEL.exec(before)?.[1]
     const right = LABEL.exec(after)?.[1]
-    if (right === undefined || (left !== undefined && !right.startsWith(`${left} `))) continue
+    if (right === undefined) continue
+    let differentSpacing = false
+    if (left !== undefined && !right.startsWith(`${left} `)) {
+      if (left.replace(/\s+/gu, ' ').trim() !== right.replace(/\s+/gu, ' ').trim()) continue
+      differentSpacing = true
+    }
     if (before.replace(LABEL, '') !== after.replace(LABEL, '')) continue
     source[at] = after
     changed = true
+    spacing ||= differentSpacing
   }
-  return { html: source.join(''), applied: changed ? ['U-133'] : [] }
+  return { html: source.join(''), applied: changed ? spacing ? ['U-133', 'U-159'] : ['U-133'] : [] }
 }
 
 function isLiOpen(token: string): boolean { return token === '<li>' || token.startsWith('<li ') }

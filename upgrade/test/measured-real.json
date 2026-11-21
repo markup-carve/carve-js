@@ -1859,7 +1859,7 @@
     "path": "resources/examples/edge-cases/0766-an-editorial-comment-contributes-nothing-to-a-heading-id.md",
     "line": 25,
     "input": "- [ ] x {#c#} y\n- [x] {# note #}done\n",
-    "check": "mismatch",
+    "check": "explained",
     "entries": [
       "U-133",
       "U-159"
