@@ -160,6 +160,15 @@ describe('replay fallback families', () => {
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
+  it('explains a generated task label on a heading child', () => {
+    for (const input of ['- [ ] > q\n- [x] # h\n- [ ] --{.x}-\n', '- [] > q\n- [x] # h\n- [ ] ---\n']) {
+      const result = upgrade(input)
+      expect(result.check).toBe('explained')
+      expect(result.records.some((record) => record.entry === 'U-133')).toBe(true)
+      expect(result.records.some((record) => record.entry === 'upgrade-mismatch')).toBe(false)
+    }
+  })
+
   it('preserves adjacent reversed and ordinary strong-emphasis spans', () => {
     const input = 'b */{/*/*{t="*/"}\nb *///*{t="*/"}\n'
     const result = upgrade(input)

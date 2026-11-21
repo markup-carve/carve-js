@@ -48,7 +48,7 @@ export function addTaskPresentation(old: string, next: string): Result {
 
 const LABEL = / aria-label="([^"]*)"/u
 
-/** C2-H-032: the 0.2 box label also takes the text of the item's later paragraph and heading children. */
+/** C2-H-032: the 0.2 box label takes text from the item's direct paragraphs and headings. */
 export function followTaskLabels(old: string, next: string): Result {
   const source = htmlTokens(old)
   const target = htmlTokens(next)
@@ -59,7 +59,7 @@ export function followTaskLabels(old: string, next: string): Result {
     if (!before.startsWith('<input ') || !before.includes('type="checkbox"')) continue
     const left = LABEL.exec(before)?.[1]
     const right = LABEL.exec(after)?.[1]
-    if (left === undefined || right === undefined || !right.startsWith(`${left} `)) continue
+    if (right === undefined || (left !== undefined && !right.startsWith(`${left} `))) continue
     if (before.replace(LABEL, '') !== after.replace(LABEL, '')) continue
     source[at] = after
     changed = true
