@@ -232,17 +232,3 @@ export function siblingListBoundary(ctx: Context): void {
       'sibling list separated and its marker moved to the list column')
   }
 }
-
-/** U-438: a nested ordered start above one needs a blank after its host paragraph. */
-export function nestedOrderedStart(ctx: Context): void {
-  for (const visit of ctx.visits) {
-    const list = visit.node
-    if (list.type !== 'list' || list.ordered !== true || list.pos === undefined
-      || typeof list.start !== 'number' || list.start <= 1 || visit.parent?.node.type !== 'list_item') continue
-    const above = visit.siblings[visit.index - 1]
-    if (above?.type !== 'paragraph' || above.pos?.endLine !== list.pos.startLine - 1) continue
-    const at = lineStart(ctx.lines, list.pos.startLine)
-    change(ctx, 'U-438', at, at, '\n',
-      'blank line closes the host paragraph before a nested ordered list starting above one')
-  }
-}
