@@ -27,3 +27,15 @@ it('reports a line-block comment that reads back as text at the comment', () => 
     'structure-unspellable', '/children/0/children/0/children/1',
   ]])
 })
+
+it('keeps an independent section loss and the text source range', () => {
+  const pos = { startLine: 1, endLine: 2, startColumn: 1, endColumn: 2, startOffset: 0, endOffset: 3 }
+  const paragraph = { type: 'paragraph', children: [{ type: 'text', value: 'a\nb', pos }] } as Block
+  const section = { type: 'section', children: [paragraph] } as Block
+  const diagnostics = writeWithDiagnostics(documentOf(section)).diagnostics
+  expect(diagnostics).toEqual(expect.arrayContaining([
+    expect.objectContaining({ code: 'structure-unspellable', path: '/children/0' }),
+    expect.objectContaining({ code: 'field-unspellable', path: '/children/0/children/0/children/0/value',
+      range: { startOffset: 0, endOffset: 3 } }),
+  ]))
+})

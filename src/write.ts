@@ -1416,8 +1416,6 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   readAbbreviations(w, document)
   w.work.source = original?.length ?? 0
   const source = writeTrimmed(w, run, document, original)
-  // C2-W-103: a finding of the writer has the path of its node.
-  const diagnostics = locateFindings(document, w.losses)
   // A line feed supplied inside one text value is read as a line boundary.
   // The block comparison can see only the changed wrapper, so move that loss
   // to the leaf field that actually failed to read back (C2-W-117, C2-W-124).
@@ -1426,13 +1424,19 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   const pending: Array<{ node: Node; path: string; inLineBlock: boolean }> = [{ node: document, path: '', inLineBlock: false }]
   while (pending.length > 0) {
     const { node, path, inLineBlock } = pending.pop()!
-    if (node.type === 'text' && node.value.includes('\n')) textLineFeeds.push(path)
+    if (node.type === 'text' && node.value.includes('\n')) {
+      textLineFeeds.push(path)
+      if (!w.lost.has(node)) lose(w, node, 'value')
+    }
     if (inLineBlock && node.type === 'comment' && node.value.includes('\n')) commentLines.push(path)
     forEachSlot(node, (children, step, single) => {
       for (let at = children.length - 1; at >= 0; at--) pending.push({ node: children[at]!, path: `${path}/${step}${single ? '' : `/${at}`}`,
         inLineBlock: inLineBlock || node.type === 'line_block' })
     }, undefined, document.extensions ?? [])
   }
+  // C2-W-103: locate both the original findings and the text findings together,
+  // so source ranges and include ancestry are retained.
+  const diagnostics = locateFindings(document, w.losses)
   if (textLineFeeds.length > 0) {
     const ancestors = new Set<string>()
     for (const path of textLineFeeds) {
@@ -1441,13 +1445,9 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
     }
     for (let at = diagnostics.length - 1; at >= 0; at--) {
       const entry = diagnostics[at]!
-      if (entry.code === 'structure-unspellable' && ancestors.has(entry.path ?? '')) diagnostics.splice(at, 1)
-    }
-    const reported = new Set(diagnostics.map(entry => entry.path))
-    for (const path of textLineFeeds) {
-      if (reported.has(`${path}/value`)) continue
-      diagnostics.push({ code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
-        message: 'Carve source cannot spell the field value of a text node here', path: `${path}/value` })
+      if (entry.code !== 'structure-unspellable' || !ancestors.has(entry.path ?? '')) continue
+      const wrapper = nodeAt(document, entry.path ?? '')
+      if (wrapper !== null && ['document', 'paragraph', 'line', 'line_block'].includes(wrapper.type)) diagnostics.splice(at, 1)
     }
   }
   for (const path of commentLines) {
