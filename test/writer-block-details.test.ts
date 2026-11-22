@@ -104,7 +104,8 @@ describe('continuation rows', () => {
   it('C2-W-088: equal backtick runs in a continuation row settle in one pass', () => {
     const escaped = `\\${TICK}${TICK}x`
     const source = `| a |\n+${` ${escaped}`.repeat(10_000)} |`
-    const written = `| a |\n+${` ${escaped}`.repeat(9_999)} ${TICK}${TICK}x |\n`
+    // C2-W-088 (carve-js#5283, option B): the reported backtick kind escapes the last run of the row as well.
+    const written = `| a |\n+${` ${escaped}`.repeat(10_000)} |\n`
     expect(format(source)).toBe(written)
     expect(format(written)).toBe(written)
     expect(treesEqual(parse(written), parse(source))).toBe(true)
@@ -129,7 +130,8 @@ describe('continuation rows', () => {
   it('C2-B-184, C2-L-035: backticks that crossed rows are text, kept on their rows with the record and on one line without it', () => {
     const src = `| ${TICK}a |\n+ b${TICK} |`
     stays(src)
-    expect(write(parse(src))).toBe(`| \\${TICK}a b${TICK} |\n`)
+    // C2-W-088 (carve-js#5283, option B): the reported backtick kind escapes the second backtick as well.
+    expect(write(parse(src))).toBe(`| \\${TICK}a b\\${TICK} |\n`)
     const cell = childrenOf(childrenOf(childrenOf(childrenOf(parse(src))[0])[0])[0])[0]
     expect(inlinesOf(childrenOf(cell)[0]).map((node) => node.type)).toEqual(['text'])
   })

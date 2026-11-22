@@ -153,10 +153,11 @@ function isLineOpener(leaf: { text: TextNode, lineStart: boolean }, at: number):
 }
 
 /**
- * Whether the escapes `escapes` of a plan leave an opener of one of their kinds bare in its block (C2-W-010). Without
+ * Whether the escapes `escapes` of a plan leave an opener of one of their kinds outside `placed` (C2-W-010). Without
  * the parse a line-start escape may be of either kind, so both are tested.
  */
-export function leavesKindBare(group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>): boolean {
+export function leavesKindBare(group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>,
+  placed: ReadonlyMap<TextNode, readonly number[]>): boolean {
   for (const block of new Set(kindBlocks(group).values())) {
     const keys = new Set<string>()
     for (const leaf of block.leaves) {
@@ -170,8 +171,8 @@ export function leavesKindBare(group: readonly Node[], escapes: ReadonlyMap<Text
       for (let index = 0; index < block.leaves.length; index++) {
         const leaf = block.leaves[index]!
         if (leaf.text === null) continue
-        const placed = escapes.get(leaf.text) ?? []
-        for (const offset of kindOffsets(key, block, index)) if (!placed.includes(offset)) return true
+        const there = placed.get(leaf.text) ?? []
+        for (const offset of kindOffsets(key, block, index)) if (!there.includes(offset)) return true
       }
     }
   }

@@ -119,7 +119,8 @@ describe('the writer follow-ups of the reader fixes', () => {
   })
 
   it('C2-B-197: a text line of the shape of a block image line takes escapes, so the caret line below stays text', () => {
-    expect(roundTrip(lines('![a][b[c]', '^ d'))).toBe('!\\[a][b[c]\n^ d\n')
+    // C2-W-088 (carve-js#5283, option B): every bracket of the reported kind and the caret line take the escape.
+    expect(roundTrip(lines('![a][b[c]', '^ d'))).toBe('!\\[a]\\[b\\[c]\n\\^ d\n')
     expect(roundTrip(lines('![a][ ]', '^ c'))).toBe('![a][ ]\n^ c\n')
   })
 

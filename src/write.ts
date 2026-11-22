@@ -712,12 +712,14 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   const reported = w.losses.entries.length
   const plan = settledPlan(w, run, group, first, reported)
   if (plan === null) return false
+  const replaced = addPlanned(w, plan)
   // C2-W-088: a round escapes every opener of a kind its parse reports; a plan that leaves one bare goes to the rounds.
-  if (w.kindRounds && plan.escapes.size > 0 && leavesKindBare(group, plan.escapes)) {
+  if (w.kindRounds && !w.planKinds && plan.escapes.size > 0 && leavesKindBare(group, plan.escapes, w.escapes)) {
+    restoreEscapes(w, replaced)
     noteReason(run, 'kind', '')
+    w.planWhy = 'kind'
     return false
   }
-  const replaced = addPlanned(w, plan)
   if (replaced.length > 0) {
     resetLines(w)
     writeBlocks(w, group, '', 0, false)
@@ -947,10 +949,26 @@ function writeGroupOnce(w: Writer, run: WriterRun, document: DocumentNode, from:
   }
   run.stats.repaired++
   const work = w.work.chars
-  const end = w.planWhy === 'depth cap'
+  const saved = w.planWhy === 'kind' ? saveGroup(w, groupEnd(w, document.children, from)) : null
+  let end = w.planWhy === 'depth cap'
     ? repairBareAlts(w, document, from, first, reported) : repairGroup(w, document, from, first, reported)
+  if (saved !== null && w.losses.entries.length > reported) end = planInstead(w, run, document, from, first, pairs, saved, end)
   run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), w.work.chars - work])
   return end
+}
+
+/** C2-W-010: where the rounds lose a node of a group the plan writes whole, the plan's form is taken. */
+function planInstead(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean, pairs: GroupPairs,
+  saved: SavedGroup, end: number): number {
+  const repaired = saveGroup(w, end)
+  restoreGroup(w, saved)
+  w.planKinds = true
+  try {
+    if (planGroup(w, run, document.children.slice(from, saved.end), first, pairs)) return saved.end
+  } finally {
+    w.planKinds = false
+  }
+  return restoreGroup(w, repaired)
 }
 
 /**
