@@ -62,7 +62,8 @@ void test('C2-W-088: needless bracket and brace escapes are removed', () => {
 void test('C2-W-125: ordered repairs keep required bracket and brace escapes', () => {
   const cases: readonly (readonly [string, string])[] = [
     // C2-I-017: the backtick behind the escaped one has no closer, so the footnote closes at the bracket.
-    ['x^[\\`a`]', 'x^[\\`a`]\n'],
+    // C2-W-088 (carve-js#5283, option B): the reported backtick kind escapes the second backtick as well.
+    ['x^[\\`a`]', 'x^[\\`a\\`]\n'],
     ['x{#a\\--}', 'x\\{#a-\\-}\n'],
     ['x{#\\---}', 'x\\{#\\---}\n'],
     ['x<a:b>{#\\--}', 'x<a:b>\\{#-\\-}\n'],
@@ -72,8 +73,10 @@ void test('C2-W-125: ordered repairs keep required bracket and brace escapes', (
 })
 
 void test('C2-W-088: an escape before a dash run is removed when unasked', () => {
-  const cases = ['x[----\\--', 'x^[----\\--------', 'x[\\[----\\--', 'x[-----\\---*a', 'x[----\\--a<a:b>']
-  for (const source of cases) assert.equal(format(source), `${source.replace('\\[', '[')}\n`)
+  const cases = ['x[----\\--', 'x^[----\\--------', 'x[-----\\---*a', 'x[----\\--a<a:b>']
+  for (const source of cases) assert.equal(format(source), `${source}\n`)
+  // C2-W-088 (carve-js#5283, option B): the reported bracket kind escapes the first bracket of the run.
+  assert.equal(format('x[\\[----\\--'), 'x\\[[----\\--\n')
 })
 
 void test('C2-W-088: a former repair cycle reaches its canonical form', () => {
