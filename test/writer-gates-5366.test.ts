@@ -51,3 +51,24 @@ it('C2-W-003: a reference label over a line end formats like its folded spelling
   expect(once).toBe('{=\\`=}[^"]\n`\n:\n')
   expect(format(once)).toBe(once)
 })
+
+// C2-W-088, C2-W-125 case two: a quote that the round's parse holds in another direction is reported with the other
+// constructs of that parse, also inside a construct that reads on over it; its right neighbor takes the backslash.
+it.each([
+  ['x\\<="[', 'x\\<="\\[\n'],
+  ['x{-"\\-}', 'x\\{\\-"\\-}\n'],
+  ["x{-'\\-}", "x\\{\\-'\\-}\n"],
+  ['x<\\="{*', 'x\\<="\\{*\n'],
+  ["x<\\='{/", "x\\<='\\{/\n"],
+])('C2-W-088: a quote read in another direction in the same round %j', (input, expected) => {
+  expect(bothPaths(input)).toEqual([expected, expected])
+})
+
+// C2-W-125, case seven: where the text before the quote changes in the same round, a sigil opener behind it takes the
+// backslash at its bracket; with nothing behind the quote, its left neighbor takes none.
+it.each([
+  ['x<\\=":n[', 'x\\<=":n\\[\n'],
+  ['x<<\\="', 'x\\<\\<="\n'],
+])('C2-W-125: the neighbors of a quote behind a changing text %j', (input, expected) => {
+  expect(format(input)).toBe(expected)
+})

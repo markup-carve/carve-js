@@ -1138,7 +1138,10 @@ function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: 
   const pos = a.pos
   if (pos === undefined) return false
   const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, c.flags)
-  if (end < 0) return false
+  if (end < 0) {
+    escapeInnerQuotes(c, es, at.i, at.vi, a)
+    return false
+  }
   at.vi = end
   at.j++
   if (at.vi === e.value.length) {
@@ -1146,6 +1149,33 @@ function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: 
     at.vi = 0
   }
   return true
+}
+
+/**
+ * C2-W-088: the construct `a` that opens at `from` in `es[i]` reads on over the nodes behind it. A quote of the tree in
+ * that stretch that the parse holds in another direction is reported in the same round: its neighbor takes the
+ * backslash, as behind a construct (C2-W-125, case two).
+ */
+function escapeInnerQuotes(c: Check, es: readonly Node[], i: number, from: number, a: Node): void {
+  const pos = a.pos!
+  const quotes = new Map<number, string>()
+  const pending = [...childNodes(a)]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'smart_punctuation' && node.pos !== undefined) quotes.set(node.pos.startOffset, node.kind)
+    pending.push(...childNodes(node))
+  }
+  if (quotes.size === 0) return
+  const e = es[i] as TextNode
+  const escapes = c.w.escapes.get(e) ?? []
+  let offset = pos.startOffset + utf8Length(writeInline(c.w, e, c.flags)) - utf8Length(e.value.slice(0, from)) -
+    escapes.filter((at) => at < from).length
+  for (let k = i + 1; k < es.length && offset < pos.endOffset; k++) {
+    const node = es[k]!
+    const kind = quotes.get(offset)
+    const next = textAt(es, k + 1)
+    if (node.type === 'smart_punctuation' && kind !== undefined && kind !== node.kind && next !== null) escapeSmartNeighbor(c, next, false)
+    offset += utf8Length(writeInline(c.w, node, c.flags))
+  }
 }
 
 /** C2-W-125, case seven: escaping a comparison's first character would turn the preceding right quote left. */
@@ -1172,13 +1202,35 @@ function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Nod
   // C2-I-090: a name character behind a mention or a tag makes the name longer.
   if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
-  if (next !== null && escapeSmartNeighbor(c, next)) return true
-  const before = textAt(es, i - 1)
-  return before !== null && escapeAt(c, before, before.value.length - 1)
+  return escapeSmartSide(c, textAt(es, i - 1), next)
 }
 
-function escapeSmartNeighbor(c: Check, next: TextNode): boolean {
-  return moveSigilEscape(c, next) || escapeComparison(c, next) || escapeAt(c, next, 0)
+/** C2-I-105: the smart punctuation between `before` and `next` read as another kind; a neighbor takes the backslash. */
+function escapeSmartSide(c: Check, before: TextNode | null, next: TextNode | null): boolean {
+  const leftChanges = isPending(c, before ?? undefined)
+  if (next !== null && escapeSmartNeighbor(c, next, leftChanges)) return true
+  // Where the text before it changes in this round, the next round reads its direction again.
+  return before !== null && !leftChanges && escapeAt(c, before, before.value.length - 1)
+}
+
+/**
+ * The neighbor of a quote that read in another direction takes the backslash. `leftChanges` says the text before the
+ * quote takes an escape in this round, so the escape of a sigil opener behind it would not turn the quote: C2-W-125,
+ * case seven, puts the backslash before the bracket of that opener.
+ */
+function escapeSmartNeighbor(c: Check, next: TextNode, leftChanges: boolean): boolean {
+  if (moveSigilEscape(c, next)) return true
+  const bracket = leftChanges ? sigilBracket(c, next) : -1
+  return (bracket > 0 && escapeAt(c, next, bracket)) || escapeComparison(c, next) || escapeAt(c, next, 0)
+}
+
+/** The bracket of the sigil opener `:name[` at the start of `next` while it is bare, or -1. */
+function sigilBracket(c: Check, next: TextNode): number {
+  const value = next.value
+  if (value[0] !== ':') return -1
+  let bracket = 1
+  while (bracket < value.length && isExtensionNameChar(value.charCodeAt(bracket))) bracket++
+  return bracket === 1 || value[bracket] !== '[' || isEscaped(c, next, bracket) ? -1 : bracket
 }
 
 /** C2-W-125, case seven: the second character of a comparison sign can take the escape without flipping a quote. */
@@ -1193,11 +1245,9 @@ function escapeComparison(c: Check, next: TextNode): boolean {
  * direction of the quote before it, so the backslash goes before the bracket of that opener.
  */
 function moveSigilEscape(c: Check, next: TextNode): boolean {
-  const value = next.value
-  if (value[0] !== ':' || !isEscaped(c, next, 0)) return false
-  let bracket = 1
-  while (bracket < value.length && isExtensionNameChar(value.charCodeAt(bracket))) bracket++
-  if (bracket === 1 || value[bracket] !== '[' || isEscaped(c, next, bracket)) return false
+  if (!isEscaped(c, next, 0)) return false
+  const bracket = sigilBracket(c, next)
+  if (bracket < 0) return false
   c.retracted.push([next, 0])
   mark(c, next, 0, false)
   return escapeAt(c, next, bracket)
