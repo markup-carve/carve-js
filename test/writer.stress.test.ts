@@ -1,14 +1,10 @@
 // Writer cases that take seconds; outside the everyday run, `npm run test:stress` runs them, and CI does.
 import { expect, it } from 'vitest'
-import { CarveWriteError, format } from '../src/index.ts'
+import { format, parse, treesEqual } from '../src/index.ts'
 
-it('C2-W-133: a long repeated reference label chain reports its repair limit', () => {
+// C2-W-088 (carve-js#5283, option B): the rounds are bounded by the kinds, so the chain completes and reads back
+// instead of reaching the repair limit of C2-W-133 (carve-js#5366 tracks its time).
+it('C2-W-133: a long repeated reference label chain completes without a refusal', () => {
   const source = `x ${'[a][\\]'.repeat(4_000)}`
-  try {
-    format(source)
-    throw new Error('expected a reported refusal')
-  } catch (error) {
-    expect(error).toBeInstanceOf(CarveWriteError)
-    if (error instanceof CarveWriteError) expect(error.diagnostics.map((entry) => entry.code)).toContain('writer-refused')
-  }
+  expect(treesEqual(parse(format(source)), parse(source))).toBe(true)
 }, 20_000)

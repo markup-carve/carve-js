@@ -577,22 +577,31 @@ function kindExplained(written: string, form: string): boolean {
   const a = escapedOffsets(written)
   const b = escapedOffsets(form)
   if (a.bare !== b.bare) return false
-  for (const at of b.escaped) if (!a.escaped.has(at)) return false
+  if ([...b.escaped].some((at) => !a.escaped.has(at) && canOpenDelimiter(b.bare, at))) return false
   const blockOf = (at: number): [number, number] => {
     let start = a.bare.lastIndexOf('\n\n', at)
     start = start < 0 ? 0 : start + 2
     const end = a.bare.indexOf('\n\n', at)
     return [start, end < 0 ? a.bare.length : end]
   }
-  for (const at of a.escaped) {
-    if (b.escaped.has(at)) continue
-    const char = a.bare[at]!
+  return [...a.escaped].every((at) => {
+    if (b.escaped.has(at)) return true
     const [start, end] = blockOf(at)
-    let kin = false
-    for (const other of b.escaped) if (other >= start && other < end && a.bare[other] === char) kin = true
-    if (!kin) return false
-  }
-  return true
+    return [...b.escaped].some((other) => other >= start && other < end && a.bare[other] === a.bare[at])
+  })
+}
+
+/**
+ * C2-I-047, C2-I-049: a slash or a star that its neighbors let open. The slow reference escapes the closer of a
+ * reported pair as well; under C2-W-088 only the delimiters that can open are openers of its kind.
+ */
+function canOpenDelimiter(text: string, at: number): boolean {
+  const char = text[at]
+  if (char !== '/' && char !== '*') return true
+  if (text[at - 1] === char || text[at + 1] === char) return false
+  const before = text.codePointAt(at - 1) ?? 0
+  const after = text[at + 1]
+  return at === 0 || (!/[\p{L}\p{N}]/u.test(String.fromCodePoint(before)) && after !== undefined && !/\s/u.test(after))
 }
 
 function show(text: string): string {
