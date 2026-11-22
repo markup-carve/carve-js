@@ -27,7 +27,8 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   w.parses++
   w.work.chars += src.length
   const extensions = w.extensions
-  const parsed = applyExtensions(buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys), extensions).document
+  const source = buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys)
+  const parsed = applyExtensions(source, extensions, linkKeys).document
   if (cacheable) {
     if (w.parseCache.size >= 128) w.parseCache.clear()
     w.parseCache.set(src, parsed)
@@ -38,7 +39,7 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
 /** The tree of the whole written document, for the check of C2-W-144; it is no repair parse of a group. */
 export function parseWritten(w: Writer, src: string): DocumentNode {
   const extensions = w.extensions
-  return applyExtensions(buildSource(src, true, w.abbreviations, null, extensions.length > 0, w.linkKeys), extensions).document
+  return applyExtensions(buildSource(src, true, w.abbreviations, null, extensions.length > 0, w.linkKeys), extensions, w.linkKeys).document
 }
 
 /** C2-W-133: whether the repair of the group has parsed more than its limit. */

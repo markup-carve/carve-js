@@ -526,15 +526,8 @@ function extensionSpelling(node: BlockExtensionNode): string | null {
 
 function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, flags: number): void {
   const spelling = extensionSpelling(node)
-  if (spelling !== null && canonicalExtensionBody(node)) {
-    let same = false
-    try {
-      const attrs = braceBlock(node)
-      const probe = attrs === '' ? spelling : `${attrs}\n${spelling}`
-      const parsed = parseChunk(w, probe, null).children[0]
-      same = w.extensions.length === 0 ? sourceCoreEquivalent(node, parsed) : parsed !== undefined && treesEqual(node, parsed)
-    } catch { same = false }
-    if (same) {
+  if (spelling !== null && canonicalExtensionBody(node, w.linkKeys)) {
+    if (sourceFormReadsBack(w, node, spelling)) {
       attributeLine(w, node, prefix)
       for (const line of spelling.trimEnd().split('\n')) emit(w, prefix, line)
       return
@@ -542,6 +535,15 @@ function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, fla
   }
   lose(w, node, null)
   writeBlocks(w, node.fallback, prefix, flags, false)
+}
+
+function sourceFormReadsBack(w: Writer, node: BlockExtensionNode, spelling: string): boolean {
+  try {
+    const attrs = braceBlock(node)
+    const probe = attrs === '' ? spelling : `${attrs}\n${spelling}`
+    const parsed = parseChunk(w, probe, w.extensions.length === 0 ? null : w.linkKeys).children[0]
+    return w.extensions.length === 0 ? sourceCoreEquivalent(node, parsed) : parsed !== undefined && treesEqual(node, parsed)
+  } catch { return false }
 }
 
 function table(w: Writer, node: TableNode, prefix: string, flags: number): void {

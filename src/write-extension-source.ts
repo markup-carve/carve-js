@@ -3,6 +3,8 @@ import { treesEqual } from './ast-json.ts'
 import { isClaimableName } from './ast-validate.ts'
 import { parse } from './api.ts'
 import { format } from './format.ts'
+import { buildSource } from './ast-blocks.ts'
+import { writeWithLinkKeys } from './write.ts'
 
 /** C2-X-023: a core readback of the source form is allowed only for its canonical content. */
 export function sourceCoreEquivalent(expected: Node, actual: Node | undefined): boolean {
@@ -77,7 +79,11 @@ function divBodyEquals(body: string, actual: readonly Node[]): boolean {
   } catch { return false }
 }
 
-export function canonicalExtensionBody(node: BlockExtensionNode): boolean {
+export function canonicalExtensionBody(node: BlockExtensionNode, linkKeys: ReadonlySet<string>): boolean {
   if (node.source === undefined) return false
-  try { return format(node.source.body) === node.source.body } catch { return false }
+  try {
+    if (linkKeys.size === 0) return format(node.source.body) === node.source.body
+    const body = buildSource(node.source.body, false, null, null, false, linkKeys).document
+    return writeWithLinkKeys(body, linkKeys) === node.source.body
+  } catch { return false }
 }
