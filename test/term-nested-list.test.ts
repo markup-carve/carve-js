@@ -12,4 +12,13 @@ describe('C2-B-015: nested list after a definition term', () => {
     expect(shape('10. :: t\n    1. x')).toContain('1. x')
     expect(shape('10. :: t\n  2. x')).toContain('2. x')
   })
+
+  it('compares ownership correctly across a quote origin', () => {
+    expect(shape('    - >   :: t\n      >  1. x')).toContain('dt"t"] ol(1.)[li[p"x"]]')
+  })
+
+  it('closes the description list before checking the depth cap', () => {
+    const quotes = '> '.repeat(196)
+    expect(shape(`${quotes}- :: t\n${quotes} 1. x`)).toContain('dt"t"] ol(1.)[li[p"x"]]')
+  })
 })

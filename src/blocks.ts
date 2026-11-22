@@ -501,13 +501,16 @@ function markerInterrupts(state: BlockState, matched: number, end: number): bool
 function nestedMarkerInterrupts(state: BlockState): boolean {
   const containers = state.containers
   const depth = containers.depth
-  if (depth + 2 > MAX_DEPTH + 1) return false
-  if (isIndentContainer(containers.kind[depth - 1]!)) return true
+  if (isIndentContainer(containers.kind[depth - 1]!)) return depth + 2 <= MAX_DEPTH + 1
   if (containers.kind[depth - 1] !== DESCRIPTION_LIST) return false
+  // Closing the description list frees its slot before the new list and item open.
+  if (depth + 1 > MAX_DEPTH + 1) return false
   const column = state.cursor.column - state.cursor.origin
   if (column >= containers.column[depth - 1]!) return false
+  // matchContainers has already established that every enclosing item or
+  // description owns this line, including when a quote changes the origin.
   for (let at = depth - 2; at > 0; at--) {
-    if (isIndentContainer(containers.kind[at]!)) return column > containers.column[at]!
+    if (isIndentContainer(containers.kind[at]!)) return true
   }
   return false
 }
