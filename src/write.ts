@@ -1312,7 +1312,8 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
       if (host !== undefined) refuseRepair(w, host)
       break
     }
-    if (prunableOpener(w, source, at, scan)) {
+    // C2-W-125, case two: a backslash directly behind a quote mark is the escape of the neighbor that decides its direction.
+    if (source[at - 1] !== '"' && source[at - 1] !== "'" && prunableOpener(w, source, at, scan)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
       const parsed = parseChunk(w, candidate)
       if (parsed.children.length === group.length && parsed.children.every((node, index) => {

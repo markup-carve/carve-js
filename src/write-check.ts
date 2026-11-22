@@ -1172,13 +1172,35 @@ function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Nod
   // C2-I-090: a name character behind a mention or a tag makes the name longer.
   if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
-  if (next !== null && escapeSmartNeighbor(c, next)) return true
-  const before = textAt(es, i - 1)
-  return before !== null && escapeAt(c, before, before.value.length - 1)
+  return escapeSmartSide(c, textAt(es, i - 1), next)
 }
 
-function escapeSmartNeighbor(c: Check, next: TextNode): boolean {
-  return moveSigilEscape(c, next) || escapeComparison(c, next) || escapeAt(c, next, 0)
+/** C2-I-105: the smart punctuation between `before` and `next` read as another kind; a neighbor takes the backslash. */
+function escapeSmartSide(c: Check, before: TextNode | null, next: TextNode | null): boolean {
+  const leftChanges = isPending(c, before ?? undefined)
+  if (next !== null && escapeSmartNeighbor(c, next, leftChanges)) return true
+  // Where the text before it changes in this round, the next round reads its direction again.
+  return before !== null && !leftChanges && escapeAt(c, before, before.value.length - 1)
+}
+
+/**
+ * The neighbor of a quote that read in another direction takes the backslash. `leftChanges` says the text before the
+ * quote takes an escape in this round, so the escape of a sigil opener behind it would not turn the quote: C2-W-125,
+ * case seven, puts the backslash before the bracket of that opener.
+ */
+function escapeSmartNeighbor(c: Check, next: TextNode, leftChanges: boolean): boolean {
+  if (moveSigilEscape(c, next)) return true
+  const bracket = leftChanges ? sigilBracket(c, next) : -1
+  return (bracket > 0 && escapeAt(c, next, bracket)) || escapeComparison(c, next) || escapeAt(c, next, 0)
+}
+
+/** The bracket of the sigil opener `:name[` at the start of `next` while it is bare, or -1. */
+function sigilBracket(c: Check, next: TextNode): number {
+  const value = next.value
+  if (value[0] !== ':') return -1
+  let bracket = 1
+  while (bracket < value.length && isExtensionNameChar(value.charCodeAt(bracket))) bracket++
+  return bracket === 1 || value[bracket] !== '[' || isEscaped(c, next, bracket) ? -1 : bracket
 }
 
 /** C2-W-125, case seven: the second character of a comparison sign can take the escape without flipping a quote. */
@@ -1193,11 +1215,9 @@ function escapeComparison(c: Check, next: TextNode): boolean {
  * direction of the quote before it, so the backslash goes before the bracket of that opener.
  */
 function moveSigilEscape(c: Check, next: TextNode): boolean {
-  const value = next.value
-  if (value[0] !== ':' || !isEscaped(c, next, 0)) return false
-  let bracket = 1
-  while (bracket < value.length && isExtensionNameChar(value.charCodeAt(bracket))) bracket++
-  if (bracket === 1 || value[bracket] !== '[' || isEscaped(c, next, bracket)) return false
+  if (!isEscaped(c, next, 0)) return false
+  const bracket = sigilBracket(c, next)
+  if (bracket < 0) return false
   c.retracted.push([next, 0])
   mark(c, next, 0, false)
   return escapeAt(c, next, bracket)
