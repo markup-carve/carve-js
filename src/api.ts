@@ -20,6 +20,7 @@ import { base64, mapPositions, type SourceText, sourceText } from './byte-source
 import { append } from './append.ts'
 import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { denseListHtml } from './fast-dense-list.ts'
+import { fastCoreHtml } from './fast-core-html.ts'
 import { firstAboveSix, HEADING_SHIFT_CODE, headingShiftMessage, shiftHeadings } from './heading-shift.ts'
 
 export { type ParsedTree } from './ast-blocks.ts'
@@ -648,6 +649,8 @@ export function render(input: string | Uint8Array | DocumentNode, options?: Rend
   if (typeof input === 'string' && options === undefined) {
     const html = denseListHtml(input)
     if (html !== undefined) return html
+    const core = fastCoreHtml(input, settings)
+    if (core !== undefined) return core
   }
   const registered = registeredTransforms(settings)
   if (registered.length > 0) {
