@@ -172,6 +172,39 @@ export function nestedDivInsideAdmonition(ctx: Context): void {
   for (const { node } of ctx.visits) if (node.type === 'admonition') repairNestedAdmonition(ctx, node)
 }
 
+function moveDefinitionAboveFence(ctx: Context, admonition: Node01, div: Node01): boolean {
+  const moved = ctx.findings.find(({ record, edit }) => record.entry === 'U-038' && edit !== null
+    && edit.start === ctx.src.length && edit.end === edit.start && /^\n\[\^[^\]]+\]: /u.test(edit.text))
+  if (moved?.edit === null || moved?.edit === undefined) return false
+  const note = moved.edit.text.trimStart()
+  const hasSource = ctx.findings.some(({ record, edit }) => record.entry === 'U-038' && edit !== null
+    && edit.text === '' && edit.start > admonition.pos!.startOffset && edit.end <= div.pos!.startOffset
+    && ctx.src.slice(edit.start, edit.end).trim() === note.trim())
+  if (!hasSource) return false
+  moved.edit = { ...moved.edit, start: 0, end: 0, text: `${note}\n` }
+  moved.record.message = 'definition placed above the old unclosed code fence'
+  return true
+}
+
+/** Keep an old admonition around its longer div when that div holds an unclosed code fence. */
+export function outerAdmonitionAroundDiv(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'admonition' || node.pos === undefined) continue
+    const div = node.children?.find((child) => child.type === 'div' && child.pos?.endLine === node.pos!.endLine)
+    if (div?.pos === undefined) continue
+    const code = div.children?.find((child) => child.type === 'code_block'
+      && child.pos?.endLine === div.pos!.endLine && /^\s*`{3,}/u.test(lineText(ctx.lines, child.pos.startLine)))
+    if (code === undefined) continue
+    const outer = /^([ \t]*)(:{3,})(?=[ \t])/u.exec(lineText(ctx.lines, node.pos.startLine))
+    const inner = /^([ \t]*)(:{3,})[ \t]*$/u.exec(lineText(ctx.lines, div.pos.startLine))
+    if (outer === null || inner === null || outer[2]!.length > inner[2]!.length
+      || !moveDefinitionAboveFence(ctx, node, div)) continue
+    const at = lineStart(ctx.lines, node.pos.startLine) + outer[1]!.length + outer[2]!.length
+    change(ctx, 'U-049', at, at, ':'.repeat(inner[2]!.length + 1 - outer[2]!.length),
+      'outer admonition widened past its old nested div')
+  }
+}
+
 function alignDefinitionMarkers(ctx: Context, list: Node01, termColumn: number): void {
   for (const item of list.items ?? []) {
     const spans = item.definitionSpans as { startLine: number }[] | undefined
