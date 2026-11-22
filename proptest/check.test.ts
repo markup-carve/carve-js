@@ -80,7 +80,7 @@ void test('C2-W-088: an escape before a dash run is removed when unasked', () =>
   assert.equal(format('x[----\\--'), 'x[----\\-\\-\n')
   assert.equal(format('x[----\\--a<a:b>'), 'x[----\\-\\-a<a:b>\n')
   // C2-W-088 (carve-js#5283, option B): the reported bracket kind escapes the first bracket of the run.
-  assert.equal(format('x[\\[----\\--'), 'x\\[[----\\--\n')
+  assert.equal(format('x[\\[----\\--'), 'x\\[[----\\-\\-\n')
 })
 
 void test('C2-W-088: a former repair cycle reaches its canonical form', () => {
