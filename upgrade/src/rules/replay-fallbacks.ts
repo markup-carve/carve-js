@@ -46,6 +46,24 @@ export function repeatedIndentedNote(ctx: Context): void {
   }
 }
 
+/** Spell the extra old quote level on a list after a quoted plus line. */
+export function quotedPlusNestedList(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'block_quote' || node.pos === undefined) continue
+    const plusLine = node.pos.startLine
+    const inner = node.children?.find((child) => child.type === 'block_quote'
+      && child.pos?.startLine === plusLine + 1 && child.children?.[0]?.type === 'list')
+    if (inner === undefined) continue
+    const plus = /^([ \t]*(?:>[ \t]*)+)\+[ \t]*$/u.exec(lineText(ctx.lines, plusLine))
+    const list = /^([ \t]*(?:>[ \t]*)+)(?:[-*]|\d+[.)])(?=[ \t])/u.exec(lineText(ctx.lines, plusLine + 1))
+    if (plus === null || list === null) continue
+    change(ctx, 'U-017', lineStart(ctx.lines, plusLine), lineStart(ctx.lines, plusLine + 1), '',
+      'quoted plus line replaced by an explicit nested quote prefix')
+    change(ctx, 'U-017', lineStart(ctx.lines, plusLine + 1), lineStart(ctx.lines, plusLine + 1), '> ',
+      'old nested quote written explicitly before its list')
+  }
+}
+
 /** Keep a fused block opener inside an old comment instead of replaying it as a new block. */
 export function fusedCommentBlockOpener(ctx: Context): void {
   const moveOffsets = new Set<number>()
