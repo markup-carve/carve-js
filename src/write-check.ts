@@ -1485,14 +1485,25 @@ function nextBreak(nodes: readonly Node[], from: number): number {
   return nodes.length
 }
 
+/** The line ends in the spelling of `es` before `es[end]`. */
+function writtenBreaks(c: Check, es: readonly Node[], end: number): number {
+  let breaks = 0
+  for (let k = 0; k < end; k++) {
+    const spelled = writeInline(c.w, es[k]!, c.flags)
+    for (let at = spelled.indexOf('\n'); at >= 0; at = spelled.indexOf('\n', at + 1)) breaks++
+  }
+  return breaks
+}
+
 function resyncNextConstructLine(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
   if (es[at.i]?.type === 'text') return false
   const i = nextBreak(es, at.i + 1)
   const j = nextBreak(as, at.j)
   if (i === es.length || j === as.length || es[i]?.type !== as[j]?.type) return false
-  const expected = es[i]?.pos
+  const first = as[0]?.pos
   const actual = as[j]?.pos
-  if (expected === undefined || actual === undefined || expected.startLine !== actual.startLine) return false
+  // The line is read from the written spelling: the positions of the tree are those of its source, which may differ.
+  if (first === undefined || actual === undefined || actual.startLine - first.startLine !== writtenBreaks(c, es, i)) return false
   if (changes(c) === 0) for (let k = at.i; k < i; k++) c.losses.push([es[k]!, null])
   return resumeAt(at, i + 1, j + 1)
 }
