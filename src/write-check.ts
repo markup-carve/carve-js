@@ -316,11 +316,15 @@ function escapeContentOpener(c: Check, es: readonly Node[], i: number): boolean 
   if (e.type !== 'superscript') return false
   const mark = CLOSING_MARKS.get(e.type)
   if (mark === undefined || !('children' in e)) return false
+  let found = false
   for (const child of e.children) {
     // A run made entirely of openers follows the ordinary repair and budget rule.
-    if (child.type === 'text' && /[^{^]/.test(child.value) && escapeMark(c, [child], 0, 0, `{${mark}`)) return true
+    if (child.type !== 'text' || !/[^{^]/.test(child.value)) continue
+    for (let at = child.value.indexOf(`{${mark}`); at >= 0; at = child.value.indexOf(`{${mark}`, at + 1)) {
+      found = escapeAt(c, child, at) || found
+    }
   }
-  return false
+  return found
 }
 
 function escapeFootnoteBrace(c: Check, e: Node): boolean {
@@ -378,7 +382,7 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
       attempt.escapes.push(c.escapes[at]!)
       if (step !== escapeLoneBracket && step !== escapeContentOpener) c.trials.push(c.escapes[at]!)
     }
-    // Each newly escaped braced opener can reveal another one in the same text.
+    // A deferred escape can leave another opener for the next round.
     if (step === escapeContentOpener) attempt.step--
     return true
   }

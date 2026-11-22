@@ -16,3 +16,11 @@ it('C2-W-011: repeated braced openers in child text are repaired in order', () =
   expect(written.diagnostics).toEqual([])
   expect(treesEqual(parse(written.source), tree)).toBe(true)
 })
+
+it('C2-W-010: many repeated escaped openers are repaired within the linear work budget', () => {
+  const source = `{^${String.raw`\^\{\^\\{\^\{x`.repeat(2048)}^}`
+  const tree = parse(source)
+  const written = writeWithDiagnostics(tree)
+  expect(written.diagnostics).toEqual([])
+  expect(treesEqual(parse(written.source), tree)).toBe(true)
+}, 20_000)
