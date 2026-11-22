@@ -583,12 +583,20 @@ function checkedLateVariant(input: string, rules: readonly Rule[], parsed: Conte
 function latePass(input: string, first: string, parsed: Context): UpgradeResult | null {
   const tried = new Set([first])
   const hosts = lateHosts(input, parsed)
-  for (const [index, rules] of LATE_VARIANTS.entries()) {
+  const fusedComment = hasFusedCommentBlockOpener(input, parsed)
+  const order = [...LATE_VARIANTS.keys()]
+  if (fusedComment) order.unshift(order.pop()!)
+  for (const index of order) {
     if (hosts[index] === false) continue
-    const result = checkedLateVariant(input, rules, parsed, tried)
+    const result = checkedLateVariant(input, LATE_VARIANTS[index]!, parsed, tried)
     if (result !== null) return result
   }
   return null
+}
+
+function hasFusedCommentBlockOpener(input: string, parsed: Context): boolean {
+  return /^[ \t]*%{3,}:::[^\n]*$/mu.test(input)
+    && parsed.visits.some(({ node }) => node.type === 'comment' && node.block === true)
 }
 
 function upgradeSourceInSession(input: string): UpgradeResult {
@@ -621,7 +629,8 @@ function firstPass(input: string): { done: Rewritten; check: UpgradeResult['chec
   const check = selfCheck(input, done)
   const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
   if (check !== 'mismatch' || mismatch === undefined) return { done, check }
-  const rescued = rescueMismatch(input, done.output, mismatch, done.records)
+  const rescued = hasFusedCommentBlockOpener(input, done.context)
+    ? null : rescueMismatch(input, done.output, mismatch, done.records)
   const checked = done.records
   done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
   if (rescued !== null) {

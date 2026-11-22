@@ -3144,12 +3144,14 @@ export class ParseSession extends InlineParseSession {
     }
     // Only the next line reads the code and comment state, so a line is scanned when one follows.
     const pendingScans: string[] = []
+    let pendingHasRun = false
     const settleInlineScan = (): void => {
       if (pendingScans.length === 0) return
       // From a closed state, a line with no backtick and no `{%` leaves it closed: keep it for the host history.
-      if (openInlineCode === 0 && !openInlineComment && !pendingScans.some(line => line.includes('`') || line.includes('{%'))) return
+      if (openInlineCode === 0 && !openInlineComment && !pendingHasRun) return
       for (const line of pendingScans) scanInlineCode(line)
       pendingScans.length = 0
+      pendingHasRun = false
     }
     let imageCaptionSlot = false
     let captionAtContentColumn = false
@@ -3237,7 +3239,9 @@ export class ParseSession extends InlineParseSession {
       if (refusedOpener) literalBraces.push(lines.length)
       lines.push(received)
       // The literal brace opens no comment or attribute span.
-      pendingScans.push(refusedOpener ? received.replace('{', 'a') : received)
+      const pending = refusedOpener ? received.replace('{', 'a') : received
+      pendingScans.push(pending)
+      pendingHasRun ||= pending.includes('`') || pending.includes('{%')
     }
     // Every paragraph line has its leading whitespace stripped (djot /
     // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first
