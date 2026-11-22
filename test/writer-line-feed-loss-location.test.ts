@@ -28,14 +28,22 @@ it('reports a line-block comment that reads back as text at the comment', () => 
   ]])
 })
 
-it('keeps an independent section loss and the text source range', () => {
+it('keeps an independent section loss and locates a written text loss', () => {
   const pos = { startLine: 1, endLine: 2, startColumn: 1, endColumn: 2, startOffset: 0, endOffset: 3 }
   const paragraph = { type: 'paragraph', children: [{ type: 'text', value: 'a\nb', pos }] } as Block
   const section = { type: 'section', children: [paragraph] } as Block
-  const diagnostics = writeWithDiagnostics(documentOf(section)).diagnostics
-  expect(diagnostics).toEqual(expect.arrayContaining([
+  expect(writeWithDiagnostics(documentOf(section)).diagnostics).toEqual([
     expect.objectContaining({ code: 'structure-unspellable', path: '/children/0' }),
-    expect.objectContaining({ code: 'field-unspellable', path: '/children/0/children/0/children/0/value',
-      range: { startOffset: 0, endOffset: 3 } }),
-  ]))
+  ])
+  const diagnostics = writeWithDiagnostics(documentOf(paragraph)).diagnostics
+  expect(diagnostics).toEqual([expect.objectContaining({ code: 'field-unspellable', path: '/children/0/children/0/value',
+    range: { startOffset: 0, endOffset: 3 } })])
+})
+
+it('does not report line feeds inside an include expansion it does not write', () => {
+  const include = { type: 'include', path: 'a.crv', file: 'a.crv',
+    children: [{ type: 'paragraph', children: [{ type: 'text', value: 'a\nb' }] }] } as Block
+  const result = writeWithDiagnostics(documentOf(include))
+  expect(result.source).toBe('{{ a.crv }}\n')
+  expect(result.diagnostics).toEqual([])
 })

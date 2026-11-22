@@ -1421,17 +1421,31 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   // to the leaf field that actually failed to read back (C2-W-117, C2-W-124).
   const textLineFeeds: string[] = []
   const commentLines: string[] = []
-  const pending: Array<{ node: Node; path: string; inLineBlock: boolean }> = [{ node: document, path: '', inLineBlock: false }]
+  const lossNodes = new Set(w.losses.nodes)
+  type LossFrame = { node: Node; path: string; parent: LossFrame | null; inLineBlock: boolean }
+  const pending: LossFrame[] = [{ node: document, path: '', parent: null, inLineBlock: false }]
   while (pending.length > 0) {
-    const { node, path, inLineBlock } = pending.pop()!
+    const frame = pending.pop()!
+    const { node, path, inLineBlock } = frame
     if (node.type === 'text' && node.value.includes('\n')) {
-      textLineFeeds.push(path)
-      if (!w.lost.has(node)) lose(w, node, 'value')
+      let wrapperLost = false
+      for (let ancestor = frame.parent; ancestor !== null; ancestor = ancestor.parent) {
+        if (lossNodes.has(ancestor.node) && ['paragraph', 'line', 'line_block', 'document'].includes(ancestor.node.type)) {
+          wrapperLost = true
+          break
+        }
+      }
+      if (wrapperLost) {
+        textLineFeeds.push(path)
+        if (!w.lost.has(node)) lose(w, node, 'value')
+      }
     }
     if (inLineBlock && node.type === 'comment' && node.value.includes('\n')) commentLines.push(path)
+    // Expanded include children are not emitted by the writer.
+    if (node.type === 'include') continue
     forEachSlot(node, (children, step, single) => {
       for (let at = children.length - 1; at >= 0; at--) pending.push({ node: children[at]!, path: `${path}/${step}${single ? '' : `/${at}`}`,
-        inLineBlock: inLineBlock || node.type === 'line_block' })
+        parent: frame, inLineBlock: inLineBlock || node.type === 'line_block' })
     }, undefined, document.extensions ?? [])
   }
   // C2-W-103: locate both the original findings and the text findings together,
