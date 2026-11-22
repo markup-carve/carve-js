@@ -310,6 +310,13 @@ function escapeContentStart(c: Check, e: Node): boolean {
   return mark !== undefined && mark !== ']' && first?.type === 'text' && first.value.startsWith(mark) && escapeAt(c, first, 0)
 }
 
+/** A child text can hold the braced opener of its own wrapper and take its closer. */
+function escapeContentOpener(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]!
+  const mark = CLOSING_MARKS.get(e.type)
+  return mark !== undefined && 'children' in e && escapeMark(c, e.children, 0, 0, `{${mark}`)
+}
+
 function escapeFootnoteBrace(c: Check, e: Node): boolean {
   if (e.type !== 'inline_footnote') return false
   const first = e.children[0]
@@ -363,7 +370,7 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
     if (!step(c, es, i, attempt)) continue
     for (let at = before; at < c.escapes.length; at++) {
       attempt.escapes.push(c.escapes[at]!)
-      if (step !== escapeLoneBracket) c.trials.push(c.escapes[at]!)
+      if (step !== escapeLoneBracket && step !== escapeContentOpener) c.trials.push(c.escapes[at]!)
     }
     return true
   }
@@ -380,6 +387,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   (c, es, i) => escapeContentStart(c, es[i]!),
   (c, es, i) => escapeFootnoteBrace(c, es[i]!),
   (c, es, i) => escapeContentConstruct(c, es[i]!),
+  escapeContentOpener,
   escapeAcrossCloser,
   escapeInside,
   escapeCloserBeforeBrace,
