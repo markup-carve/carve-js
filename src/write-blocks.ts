@@ -526,8 +526,15 @@ function extensionSpelling(node: BlockExtensionNode): string | null {
 
 function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, flags: number): void {
   const spelling = extensionSpelling(node)
-  if (spelling !== null && canonicalExtensionBody(node, w.linkKeys)) {
-    if (sourceFormReadsBack(w, node, spelling)) {
+  if (spelling !== null) {
+    let source = w.extensionSources.get(node)
+    if (source === undefined) {
+      source = { canonical: canonicalExtensionBody(node, w.linkKeys) }
+      w.extensionSources.set(node, source)
+    }
+    if (source.canonical && (w.trustedExtensionSources ||
+      (source.readsBack ??= sourceFormReadsBack(w, node, spelling)))) {
+      w.plan?.opaqueBlocks.add(node)
       attributeLine(w, node, prefix)
       for (const line of spelling.trimEnd().split('\n')) emit(w, prefix, line)
       return

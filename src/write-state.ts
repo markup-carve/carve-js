@@ -76,6 +76,10 @@ export interface Writer {
   parses: number
   /** Parsed short blocks reused when no document-level definitions affect them. */
   parseCache: Map<string, DocumentNode>
+  /** Source validation is fixed for a node during this write, even when planning rewrites its group. */
+  extensionSources: Map<Node, { canonical: boolean; readsBack?: boolean }>
+  /** The formatter supplied the tree from a parse of its original source with these extensions. */
+  trustedExtensionSources: boolean
   /** C2-W-088: the result of each probe of the repair by the state it reads (write-check.ts), and an id of each node it read. */
   probes: Map<string, ProbeResult>
   nodeIds: Map<Node, number>
@@ -108,6 +112,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
     prewrittenAttributes: null, bareAlts: false, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
+    extensionSources: new Map(), trustedExtensionSources: false,
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
   }

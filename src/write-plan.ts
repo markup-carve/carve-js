@@ -29,6 +29,8 @@ export interface Plan {
   detail: string
   /** The text nodes that a planned leaf holds. */
   covered: Set<TextNode>
+  /** Blocks emitted from validated source forms cover their own fallback and slot text. */
+  opaqueBlocks: Set<Node>
   /** The escapes the plan places, by text node, in ascending order. */
   escapes: Map<TextNode, number[]>
   /** C2-W-069: the bare emphasis and strong that the next write gives their braced form. */
@@ -42,7 +44,8 @@ export interface Plan {
 
 export function createPlan(): Plan {
   return {
-    undecided: null, detail: '', covered: new Set(), escapes: new Map(), respell: [], places: new Map(), leaves: 0, lost: [],
+    undecided: null, detail: '', covered: new Set(), opaqueBlocks: new Set(), escapes: new Map(), respell: [],
+    places: new Map(), leaves: 0, lost: [],
   }
 }
 
