@@ -58,40 +58,50 @@ function kindKey(value: string, at: number, line: boolean): string {
 
 /** The shape of a line opener: its first character, or `0` and the delimiter for an ordered marker. */
 function lineShape(value: string): string {
-  let end = 0
-  while (end < value.length && isAsciiAlphanumeric(value.charCodeAt(end))) end++
+  const end = markerEnd(value)
   if (end > 0) return `0${value[end] ?? ''}`
   return value[0] ?? ''
+}
+
+function markerEnd(value: string): number {
+  let end = 0
+  while (end < value.length && isAsciiAlphanumeric(value.charCodeAt(end))) end++
+  return end
+}
+
+/** The offset that makes the line opener of kind `key` text, where `leaf` starts a line of that shape. */
+function lineOffsets(key: string, leaf: { text: TextNode, lineStart: boolean }): number[] {
+  const value = leaf.text.value
+  if (!leaf.lineStart || value === '' || `L${lineShape(value)}` !== key) return []
+  if (key.startsWith('L0')) return [markerEnd(value)]
+  return [value.startsWith('--') ? 1 : 0]
+}
+
+/** C2-W-099: the second hyphen of each run. */
+function hyphenOffsets(value: string): number[] {
+  const offsets: number[] = []
+  for (let at = 1; at < value.length; at++) if (value[at] === '-' && value[at - 1] === '-' && value[at - 2] !== '-') offsets.push(at)
+  return offsets
+}
+
+/** The first character of each run of the kind, and of `/` and `*` each one that can open. */
+function charOffsets(key: string, block: KindBlock, index: number, value: string): number[] {
+  const offsets: number[] = []
+  const ch = key.charCodeAt(0)
+  const delimiter = ch === SLASH || ch === STAR
+  for (let at = value.indexOf(key[0]!); at >= 0; at = value.indexOf(key[0]!, at + 1)) {
+    if (key.length === 2 && value[at + 1] !== key[1]) continue
+    if (delimiter ? canOpen(block, index, at) : value.charCodeAt(at - 1) !== ch) offsets.push(at)
+  }
+  return offsets
 }
 
 /** The offsets of the openers of kind `key` in `value`, the text of a leaf of `block`. */
 function kindOffsets(key: string, block: KindBlock, index: number): number[] {
   const leaf = block.leaves[index] as { text: TextNode, lineStart: boolean }
-  const value = leaf.text.value
-  if (key.startsWith('L')) {
-    if (!leaf.lineStart || value === '' || `L${lineShape(value)}` !== key) return []
-    if (key.startsWith('L0')) {
-      let end = 0
-      while (end < value.length && isAsciiAlphanumeric(value.charCodeAt(end))) end++
-      return [end]
-    }
-    return [value.startsWith('--') ? 1 : 0]
-  }
-  const offsets: number[] = []
-  if (key === '--') {
-    for (let at = 1; at < value.length; at++) if (value[at] === '-' && value[at - 1] === '-' && value[at - 2] !== '-') offsets.push(at)
-    return offsets
-  }
-  const ch = key.charCodeAt(0)
-  for (let at = 0; at < value.length; at++) {
-    if (value.charCodeAt(at) !== ch) continue
-    if (key.length === 2 && value[at + 1] !== key[1]) continue
-    if (ch === SLASH || ch === STAR) {
-      if (!canOpen(block, index, at)) continue
-    } else if (value.charCodeAt(at - 1) === ch) continue
-    offsets.push(at)
-  }
-  return offsets
+  if (key.startsWith('L')) return lineOffsets(key, leaf)
+  if (key === '--') return hyphenOffsets(leaf.text.value)
+  return charOffsets(key, block, index, leaf.text.value)
 }
 
 /** C2-I-047, C2-I-049: a delimiter whose neighbors let it open, by the characters written around it. */
@@ -152,29 +162,32 @@ function isLineOpener(leaf: { text: TextNode, lineStart: boolean }, at: number):
   return kindOffsets(`L${lineShape(value)}`, { leaves: [leaf] }, 0).includes(at)
 }
 
-/**
- * Whether the escapes `escapes` of a plan leave an opener of one of their kinds outside `placed` (C2-W-010). Without
- * the parse a line-start escape may be of either kind, so both are tested.
- */
+/** The kinds of the escapes `escapes` in `block`; without the parse a line-start escape may be of either kind. */
+function planKinds(block: KindBlock, escapes: ReadonlyMap<TextNode, readonly number[]>): Set<string> {
+  const keys = new Set<string>()
+  for (const leaf of block.leaves) {
+    if (leaf.text === null) continue
+    for (const at of escapes.get(leaf.text) ?? []) {
+      keys.add(kindKey(leaf.text.value, at, false))
+      if (isLineOpener(leaf, at)) keys.add(kindKey(leaf.text.value, at, true))
+    }
+  }
+  return keys
+}
+
+function bareOpener(block: KindBlock, key: string, placed: ReadonlyMap<TextNode, readonly number[]>): boolean {
+  return block.leaves.some((leaf, index) => {
+    if (leaf.text === null) return false
+    const there = placed.get(leaf.text) ?? []
+    return kindOffsets(key, block, index).some((offset) => !there.includes(offset))
+  })
+}
+
+/** Whether the escapes `escapes` of a plan leave an opener of one of their kinds outside `placed` (C2-W-010). */
 export function leavesKindBare(group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>,
   placed: ReadonlyMap<TextNode, readonly number[]>): boolean {
   for (const block of new Set(kindBlocks(group).values())) {
-    const keys = new Set<string>()
-    for (const leaf of block.leaves) {
-      if (leaf.text === null) continue
-      for (const at of escapes.get(leaf.text) ?? []) {
-        keys.add(kindKey(leaf.text.value, at, false))
-        if (isLineOpener(leaf, at)) keys.add(kindKey(leaf.text.value, at, true))
-      }
-    }
-    for (const key of keys) {
-      for (let index = 0; index < block.leaves.length; index++) {
-        const leaf = block.leaves[index]!
-        if (leaf.text === null) continue
-        const there = placed.get(leaf.text) ?? []
-        for (const offset of kindOffsets(key, block, index)) if (!there.includes(offset)) return true
-      }
-    }
+    for (const key of planKinds(block, escapes)) if (bareOpener(block, key, placed)) return true
   }
   return false
 }

@@ -13,7 +13,9 @@ import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { escapeKinds, leavesKindBare } from './write-kinds.ts'
-import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk, parseWritten } from './write-check.ts'
+import {
+  type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk, parseWritten,
+} from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { createWriter, type LossMark, lose, markLosses, rollBackLosses, type Writer, type WriterFacts } from './write-state.ts'
@@ -713,13 +715,7 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   const plan = settledPlan(w, run, group, first, reported)
   if (plan === null) return false
   const replaced = addPlanned(w, plan)
-  // C2-W-088: a round escapes every opener of a kind its parse reports; a plan that leaves one bare goes to the rounds.
-  if (w.kindRounds && !w.planKinds && plan.escapes.size > 0 && leavesKindBare(group, plan.escapes, w.escapes)) {
-    restoreEscapes(w, replaced)
-    noteReason(run, 'kind', '')
-    w.planWhy = 'kind'
-    return false
-  }
+  if (leavesKind(w, run, group, plan, replaced)) return false
   if (replaced.length > 0) {
     resetLines(w)
     writeBlocks(w, group, '', 0, false)
@@ -743,6 +739,16 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   }
   // The pair rules asked nothing of the planned spelling, so the test after the write would find nothing either.
   if (placed === NONE_ASKED) pairs.settled = true
+  return true
+}
+
+/** C2-W-088: a round escapes every opener of a kind its parse reports; a plan that leaves one bare goes to the rounds. */
+function leavesKind(w: Writer, run: WriterRun, group: readonly Node[], plan: Plan,
+  replaced: readonly [TextNode, number[] | undefined][]): boolean {
+  if (!w.kindRounds || w.planKinds || plan.escapes.size === 0 || !leavesKindBare(group, plan.escapes, w.escapes)) return false
+  restoreEscapes(w, replaced)
+  noteReason(run, 'kind', '')
+  w.planWhy = 'kind'
   return true
 }
 
