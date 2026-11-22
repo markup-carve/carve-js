@@ -191,7 +191,8 @@ describe('continuation rows with no layout record', () => {
 
   it('C2-B-184: a code span opened in a row and closed in its continuation row is text in each fragment', () => {
     expect(format(`| ${TICK}a | b |\n+ b${TICK} | c |`)).toBe(`| ${TICK}a | b |\n+ b${TICK} | c |\n`)
-    expect(write(parse(`| ${TICK}a | b |\n+ b${TICK} | c |`, { positions: false }))).toBe(`| \\${TICK}a b${TICK} | b c |\n`)
+    // C2-W-088 (carve-js#5283, option B): the reported backtick kind escapes the second backtick as well.
+    expect(write(parse(`| ${TICK}a | b |\n+ b${TICK} | c |`, { positions: false }))).toBe(`| \\${TICK}a b\\${TICK} | b c |\n`)
   })
 
   it('C2-W-067: a delimited table writes a cell that holds a line feed in double quotes', () => {
