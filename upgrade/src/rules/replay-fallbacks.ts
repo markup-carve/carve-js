@@ -17,6 +17,20 @@ export function literalQuoteAfterAttributes(ctx: Context): void {
   }
 }
 
+/** Keep a fused block opener inside an old comment instead of replaying it as a new block. */
+export function fusedCommentBlockOpener(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'comment' || node.block !== true || node.pos === undefined
+      || node.pos.endLine <= node.pos.startLine) continue
+    const line = node.pos.endLine
+    const source = lineText(ctx.lines, line)
+    if (!/^\s*%{3,}:::[^\n]*$/u.test(source)) continue
+    const end = lineEnd(ctx.lines, line - 1)
+    ctx.findings = ctx.findings.filter(({ record, edit }) => record.entry !== 'U-050' || edit === null
+      || edit.start !== end || edit.end !== end)
+  }
+}
+
 /** The longest backtick run of the body that 0.2 would close the fence at, 0 for none; the fence must exceed it. */
 function longestBodyRun(ctx: Context, firstLine: number, lastLine: number, width: number): number {
   const closer = lineText(ctx.lines, lastLine)
