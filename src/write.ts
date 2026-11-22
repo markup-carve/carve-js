@@ -12,7 +12,7 @@ import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
-import { escapeKinds } from './write-kinds.ts'
+import { escapeKinds, leavesKindBare } from './write-kinds.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -712,8 +712,8 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   const reported = w.losses.entries.length
   const plan = settledPlan(w, run, group, first, reported)
   if (plan === null) return false
-  // C2-W-088: which openers a round escapes follows from the kinds its parse reports, which the plan cannot know.
-  if (w.kindRounds && plan.escapes.size > 0) {
+  // C2-W-088: a round escapes every opener of a kind its parse reports; a plan that leaves one bare goes to the rounds.
+  if (w.kindRounds && plan.escapes.size > 0 && leavesKindBare(group, plan.escapes)) {
     noteReason(run, 'kind', '')
     return false
   }
