@@ -198,11 +198,33 @@ function openerOffsets(value: string): number[] {
   return offsets
 }
 
+/** The text nodes from `nodes[from]` up to the first other node: the opener of a line may span them (C2-W-092). */
+function leadingTexts(nodes: readonly Node[], from: number): TextNode[] {
+  const texts: TextNode[] = []
+  for (let at = from; nodes[at]?.type === 'text'; at++) texts.push(nodes[at] as TextNode)
+  return texts
+}
+
+function joinedValue(texts: readonly TextNode[]): string {
+  return texts.length === 1 ? texts[0]!.value : texts.map((text) => text.value).join('')
+}
+
+/** Escapes the opener of the text that `texts` hold joined, at the character it falls on in whichever node. */
+function escapeLeadingOpener(c: Check, texts: readonly TextNode[]): boolean {
+  if (texts.length === 0) return false
+  for (let offset of openerOffsets(joinedValue(texts))) {
+    let k = 0
+    while (k < texts.length - 1 && offset >= texts[k]!.value.length) offset -= texts[k++]!.value.length
+    if (escapeAt(c, texts[k]!, offset)) return true
+  }
+  return false
+}
+
 /** The line that starts at `nodes[from]` opened a block: escapes its opener (C2-W-090, C2-W-092). */
 function escapeLineStart(c: Check, nodes: readonly Node[], from: number, owner: Node): void {
   c.misaligned = true
   const first = nodes[from]
-  if (first?.type === 'text') for (const at of openerOffsets(first.value)) if (escapeAt(c, first, at)) return
+  if (escapeLeadingOpener(c, leadingTexts(nodes, from))) return
   for (let at = from + 1; at < nodes.length && !isBreak(nodes[at]); at++) {
     const node = nodes[at]
     if (node?.type === 'text' && escapeAt(c, node, 0)) return
@@ -678,8 +700,8 @@ function escapeContentLine(c: Check, e: Node): boolean {
     const node = nodes[at]!
     if ('children' in node && escapeContentLine(c, node)) return true
     const next = nodes[at + 1]
-    if (!isBreak(node) || next?.type !== 'text' || !hasOpenerShape(next) || !opensBlockAlone(c, nodes, at + 1)) continue
-    for (const offset of openerOffsets(next.value)) if (escapeAt(c, next, offset)) return true
+    if (!isBreak(node) || next?.type !== 'text' || !hasOpenerShape(nodes, at + 1) || !opensBlockAlone(c, nodes, at + 1)) continue
+    if (escapeLeadingOpener(c, leadingTexts(nodes, at + 1))) return true
   }
   return false
 }
@@ -1499,8 +1521,9 @@ function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: 
 }
 
 /** Whether the text at the start of a line has the shape of a block opener: punctuation, or a marker of digits or letters. */
-function hasOpenerShape(node: Node | undefined): boolean {
-  const value = node?.type === 'text' ? node.value : ''
+function hasOpenerShape(nodes: readonly Node[], from: number): boolean {
+  const node = nodes[from]
+  const value = joinedValue(leadingTexts(nodes, from))
   if (value === '') return node !== undefined && node.type !== 'text'
   return !isAsciiAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
 }
@@ -1516,7 +1539,7 @@ function isPending(c: Check, node: Node | undefined): boolean {
  */
 function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>): void {
   const top = e.children
-  if (!paragraphs.has(place) && hasOpenerShape(top[0]) && !isPending(c, top[0])) escapeLineStart(c, top, 0, e)
+  if (!paragraphs.has(place) && hasOpenerShape(top, 0) && !isPending(c, top[0])) escapeLineStart(c, top, 0, e)
   let line = Math.floor(place / PLACE_COLUMNS)
   const visit = (nodes: readonly Node[]): void => {
     for (let at = 0; at < nodes.length; at++) {
@@ -1524,7 +1547,7 @@ function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs
       if ('children' in node) visit(node.children)
       if (!isBreak(node)) continue
       line++
-      if (lines.has(line) && hasOpenerShape(nodes[at + 1]) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
+      if (lines.has(line) && hasOpenerShape(nodes, at + 1) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
     }
   }
   visit(top)
