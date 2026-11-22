@@ -32,6 +32,8 @@ const operatorOf = (expr: Expr): [string, Expr, Record<string, Expr>] | undefine
   return key === undefined ? undefined : [key, node[key], node]
 }
 const argsOf = (arg: Expr): Expr[] => (Array.isArray(arg) ? arg : [])
+// Whether compiled code reads anything but the item of a lookup: the record being checked, its line, a let or the run.
+const readsRecord = (code: string): boolean => /\b(?:self|line|context|v_\w+|path)\b/.test(code.replace(/"(?:[^"\\]|\\.)*"/g, '""'))
 const literal = (value: unknown): string => (value === undefined ? 'undefined' : JSON.stringify(value))
 const local = (name: string): string => `v_${name.replace(/\W/g, '_')}`
 // The groups and base a let saves while it computes, so the condition that reads it keeps its own.
@@ -153,7 +155,24 @@ class Compiler {
   lookupKey(expr: Expr | undefined): string {
     if (expr === undefined) return 'undefined'
     const key = `(item: unknown): unknown => ${this.value(expr)}`
-    return /\b(?:self|line|context|v_\w+|path)\b/.test(key.replace(/"(?:[^"\\]|\\.)*"/g, '""')) ? key : this.hoist(key)
+    if (readsRecord(key)) throw new Error(`lint-model: a lookup key reads more than its item: ${JSON.stringify(expr)}`)
+    return this.hoist(key)
+  }
+
+  /**
+   * A key `if [test, key, false]` whose test also reads the record being checked: the conjuncts that read only the item
+   * stay in the key of the shared index, the others filter the records the index finds for one value.
+   */
+  splitKey(expr: Expr | undefined): { key: Expr | undefined, filter: string } {
+    const operator = operatorOf(expr)
+    if (operator?.[0] !== 'if') return { key: expr, filter: 'undefined' }
+    const [test, key, otherwise] = argsOf(operator[1])
+    const tests = operatorOf(test)?.[0] === 'all' ? argsOf(operatorOf(test)![1]) : [test]
+    const outside = tests.filter((item) => readsRecord(this.test(item)))
+    if (outside.length === 0 || otherwise !== false) return { key: expr, filter: 'undefined' }
+    const inside = tests.filter((item) => !outside.includes(item))
+    const filter = `(item: unknown): boolean => ${this.test({ all: outside })}`
+    return { key: inside.length === 0 ? key : { if: [{ all: inside }, key, false] }, filter }
   }
 
   lookup(arg: Expr): string {
@@ -163,17 +182,21 @@ class Compiler {
     // C2-W-150: a block lookup that names no types reads every block.
     if (spec.over === 'block' || spec.over === 'inline') for (const type of kinds ?? ['*']) this.needs[spec.over].add(type)
     const types = kinds === undefined ? 'undefined' : this.hoist(`new Set<string>(${literal(kinds)})`)
-    const key = this.lookupKey(spec.key)
+    const split = this.splitKey(spec.key)
+    const key = this.lookupKey(split.key)
+    const filter = split.filter
     const value = spec.key === undefined ? 'undefined' : this.value(spec.value)
     // Lookups over the same records by the same key share one index.
     const signature = `${spec.over} ${types} ${key}`
     let site = this.lookupSites.get(signature)
     if (site === undefined) this.lookupSites.set(signature, site = this.lookupSites.size)
     const keys = (spec.field ?? '').split('.').filter((part) => part !== '').map((part) => literal(/^-?\d+$/.test(part) ? Number(part) : part))
-    if (spec.all === true) return `lookupAll(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}).map((record) => ${this.at('record', keys)})`
+    if (spec.all === true) {
+      return `lookupAll(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, ${filter}).map((record) => ${this.at('record', keys)})`
+    }
     const side = spec.before === true ? -1 : spec.after === true ? 1 : 0
     const from = spec.from === undefined ? 'self.start' : this.number(spec.from)
-    return this.at(`lookupAt(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, ${from}, ${side})`, keys)
+    return this.at(`lookupAt(${site}, ${literal(spec.over)}, ${types}, ${key}, ${value}, ${from}, ${side}, ${filter})`, keys)
   }
 
   // Each step of a path is its own property read, so each read site sees few node shapes; `obj` reads nothing from a
@@ -537,13 +560,17 @@ function lookupIndex(site: number, over: Over, types: ReadonlySet<string> | unde
 }
 
 // C2-W-150: with all, every record of the types whose key equals the value, in document order.
-const lookupAll = (site: number, over: Over, types: ReadonlySet<string> | undefined,
-  key: ((item: unknown) => unknown) | undefined, value: unknown): readonly Located[] => lookupIndex(site, over, types, key).get(value) ?? []
+function lookupAll(site: number, over: Over, types: ReadonlySet<string> | undefined,
+  key: ((item: unknown) => unknown) | undefined, value: unknown, filter?: (item: unknown) => boolean): readonly Located[] {
+  const list = lookupIndex(site, over, types, key).get(value) ?? []
+  return filter === undefined ? list : list.filter(filter)
+}
 
 function lookupAt(site: number, over: Over, types: ReadonlySet<string> | undefined, key: ((item: unknown) => unknown) | undefined,
-  value: unknown, start: number, side: -1 | 0 | 1): Located | undefined {
-  const list = lookupIndex(site, over, types, key).get(value)
-  if (list === undefined) return undefined
+  value: unknown, start: number, side: -1 | 0 | 1, filter?: (item: unknown) => boolean): Located | undefined {
+  const found = lookupIndex(site, over, types, key).get(value)
+  if (found === undefined) return undefined
+  const list = filter === undefined ? found : found.filter(filter)
   if (side === 0) return list[0]
   let low = 0
   let high = list.length
