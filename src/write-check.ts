@@ -1485,14 +1485,25 @@ function nextBreak(nodes: readonly Node[], from: number): number {
   return nodes.length
 }
 
+/** The line ends in the spelling of `es` before `es[end]`. */
+function writtenBreaks(c: Check, es: readonly Node[], end: number): number {
+  let breaks = 0
+  for (let k = 0; k < end; k++) {
+    const spelled = writeInline(c.w, es[k]!, c.flags)
+    for (let at = spelled.indexOf('\n'); at >= 0; at = spelled.indexOf('\n', at + 1)) breaks++
+  }
+  return breaks
+}
+
 function resyncNextConstructLine(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
   if (es[at.i]?.type === 'text') return false
   const i = nextBreak(es, at.i + 1)
   const j = nextBreak(as, at.j)
   if (i === es.length || j === as.length || es[i]?.type !== as[j]?.type) return false
-  const expected = es[i]?.pos
+  const first = as[0]?.pos
   const actual = as[j]?.pos
-  if (expected === undefined || actual === undefined || expected.startLine !== actual.startLine) return false
+  // The line is read from the written spelling: the positions of the tree are those of its source, which may differ.
+  if (first === undefined || actual === undefined || actual.startLine - first.startLine !== writtenBreaks(c, es, i)) return false
   if (changes(c) === 0) for (let k = at.i; k < i; k++) c.losses.push([es[k]!, null])
   return resumeAt(at, i + 1, j + 1)
 }
@@ -1611,24 +1622,33 @@ function compareBlock(c: Check, e: Node, a: Node): boolean {
   return true
 }
 
-/** The places at which the parse `node` has a paragraph, and the lines at which it has a block, from the blocks below it. */
-function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: Set<number>,
-  columns: Map<number, Set<number>>): void {
+/** The blocks of a parse, by the line they start on: paragraphs by place, other blocks by column. */
+interface Starts {
+  paragraphs: Set<number>
+  columns: Map<number, Set<number>>
+  /** For the line a paragraph starts on, the line its container starts on, or -1 for the document. */
+  containers: Map<number, number>
+}
+
+/** The starts of the blocks below the parse `node`. */
+function readStarts(node: Node, offset: number, starts: Starts): void {
+  const { paragraphs, columns } = starts
+  const container = node.pos === undefined ? -1 : node.pos.startLine - offset
   for (const block of childNodes(node)) {
     const pos = block.pos
     if (pos !== undefined) {
       const line = pos.startLine - offset
-      lines.add(line)
-      if (block.type !== 'paragraph') {
+      if (block.type === 'paragraph') starts.containers.set(line, container)
+      else {
         const starts = columns.get(line) ?? new Set<number>()
         starts.add(pos.startColumn - 1)
         columns.set(line, starts)
       }
       if (block.type === 'paragraph') paragraphs.add((pos.startLine - offset) * PLACE_COLUMNS + pos.startColumn - 1)
     }
-    if (!isInlineParent(block)) readStarts(block, offset, paragraphs, lines, columns)
+    if (!isInlineParent(block)) readStarts(block, offset, starts)
     const caption = captionOf(block)
-    if (caption !== undefined) readStarts(caption, offset, paragraphs, lines, columns)
+    if (caption !== undefined) readStarts(caption, offset, starts)
   }
 }
 
@@ -1649,11 +1669,12 @@ function isPending(c: Check, node: Node | undefined): boolean {
  * Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a
  * block. A line can start inside an inline node, such as emphasis or an inline footnote over two lines.
  */
-function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>,
-  columns: Map<number, Set<number>>): void {
+function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, starts: Starts): void {
+  const { paragraphs, columns } = starts
   const top = e.children
   if (!paragraphs.has(place) && hasOpenerShape(top, 0) && !isPending(c, top[0])) escapeLineStart(c, top, 0, e)
   let line = Math.floor(place / PLACE_COLUMNS)
+  const firstLine = line
   const nested = (node: Node | undefined): void => {
     if (node?.type !== 'text') return
     const written = c.w.lines[line] ?? ''
@@ -1675,11 +1696,23 @@ function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs
       if ('children' in node) visit(node.children)
       if (!isBreak(node)) continue
       line++
-      if (lines.has(line) && hasOpenerShape(nodes, at + 1) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
+      const opens = opensOn(starts, line, firstLine) && hasOpenerShape(nodes, at + 1)
+      if (opens && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
       nested(nodes[at + 1])
     }
   }
   visit(top)
+}
+
+/**
+ * Whether the parse starts a block on `line` of a paragraph whose first line is `first`. A paragraph there opens nothing
+ * where its container holds the first line too: the block above it ended. In a container that starts later it is a
+ * line of that container.
+ */
+function opensOn(starts: Starts, line: number, first: number): boolean {
+  if (starts.columns.has(line)) return true
+  const container = starts.containers.get(line)
+  return container !== undefined && container > first
 }
 
 /**
@@ -1690,12 +1723,10 @@ function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs
  */
 export function escapeOpeners(c: Check, parsed: DocumentNode, offset: number): void {
   if (!c.misaligned) return
-  const paragraphs = new Set<number>()
-  const lines = new Set<number>()
-  const columns = new Map<number, Set<number>>()
-  readStarts(parsed, offset, paragraphs, lines, columns)
+  const starts: Starts = { paragraphs: new Set(), columns: new Map(), containers: new Map() }
+  readStarts(parsed, offset, starts)
   for (const [node, place] of c.w.starts) {
-    if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, paragraphs, lines, columns)
+    if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, starts)
   }
 }
 
