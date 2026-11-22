@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { describe, expect, it } from 'vitest'
 import {
-  CarveOptionError, CarveTreeError, decodeTree, format, lint, parse, parseTree, parseWithLayout, render,
+  CarveOptionError, CarveTreeError, decodeTree, format, formatWithDiagnostics, lint, parse, parseTree, parseWithLayout, render,
   parseWithDiagnostics,
   renderWithDiagnostics, tabsExtensions, tabsRenderer, treesEqual, validateLayout, validateTree,
   writeWithDiagnostics, type BlockExtensionNode, type DocumentNode, type ExtensionDefinition,
@@ -38,6 +38,14 @@ function outer(document: DocumentNode): BlockExtensionNode {
 }
 
 describe('the extension interface', () => {
+  it.each(['see [r0].', '\\[r0] lit'])('C2-X-026: a tab body keeps its document link-key context: %s', (body) => {
+    const input = `[r0]: http://x/0\n\n:::: tabs\n::: tab "T0"\n${body}\n:::\n::::\n`
+    const result = formatWithDiagnostics(input, { extensions: tabsExtensions })
+    expect(result.source).toBe(input)
+    expect(result.diagnostics).toEqual([])
+    expect(format(result.source, { extensions: tabsExtensions })).toBe(input)
+  })
+
   it('C2-W-107: an ordinary attribute named for a registered inline matcher remains on a span', () => {
     const samp: ExtensionDefinition = { ...calloutExtension, name: 'test.samp', matcher: { form: 'inline', name: 'samp' } }
     const input = '[x]{samp=a}'

@@ -33,7 +33,7 @@ function definitionKeys(): ReadonlySet<string> | false {
  * The div is the first group of that write and nothing behind it changes it, so the definitions are written once.
  */
 function sourceBody(node: DivNode): string {
-  const keys = contextDefinitions.length === 0 ? null : definitionKeys()
+  const keys = contextKeys ?? (contextDefinitions.length === 0 ? null : definitionKeys())
   const text = keys === false ? write({ type: 'document', astVersion: '2.0', children: [node, ...contextDefinitions] })
     : keys === null ? write({ type: 'document', astVersion: '2.0', children: [node] })
       : writeWithLinkKeys({ type: 'document', astVersion: '2.0', children: [node] }, keys)
@@ -247,21 +247,24 @@ export function declareExtensions(document: DocumentNode, definitions: readonly 
 }
 
 /** C2-X-005: a separate pass claims core nodes after the core parse. */
-export function applyExtensions(parsed: ParsedTree, definitions: readonly ExtensionDefinition[]): ParsedTree {
+export function applyExtensions(parsed: ParsedTree, definitions: readonly ExtensionDefinition[],
+  outerKeys: ReadonlySet<string> | null = null): ParsedTree {
   if (definitions.length === 0) return parsed
   const document = parsed.document
   const sourceNames = parsed.facts?.sourceNames ?? null
   const findings: Findings = { entries: [], nodes: [] }
   const pass = createPass(definitions, sourceNames, findings)
+  const previousDefinitions = contextDefinitions
+  const previousKeys = contextKeys
   contextDefinitions = document.children.filter((node) => node.type === 'link_reference_definition')
-  contextKeys = null
+  contextKeys = outerKeys
   try {
     for (const [at, child] of document.children.entries()) {
       Reflect.set(document.children, at, replace(child, pass))
     }
   } finally {
-    contextDefinitions = []
-    contextKeys = null
+    contextDefinitions = previousDefinitions
+    contextKeys = previousKeys
   }
   declareExtensions(document, definitions)
   if (findings.entries.length === 0 || parsed.facts === null) return parsed
