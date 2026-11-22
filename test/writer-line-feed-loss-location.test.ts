@@ -97,3 +97,15 @@ it('keeps a structural loss when an adjacent text sibling merges', () => {
   const rows = writeWithDiagnostics(documentOf(block)).diagnostics
   expect(rows.map(row => [row.code, row.path])).toContainEqual(['structure-unspellable', '/children/0'])
 })
+
+it('keeps a value loss on a line comment that remains a comment', () => {
+  const block = { type: 'block_quote', children: [
+    { type: 'line_block', children: [{ type: 'line', children: [
+      { type: 'text', value: 'a' }, { type: 'comment', form: 'line', value: 'c\nd' },
+    ] }] },
+  ] } as Block
+  const rows = writeWithDiagnostics(documentOf(block)).diagnostics
+  expect(rows.map(row => [row.code, row.path])).toContainEqual([
+    'field-unspellable', '/children/0/children/0/children/0/children/1/value',
+  ])
+})

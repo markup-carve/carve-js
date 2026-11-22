@@ -1472,7 +1472,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
         if (!w.lost.has(node)) lose(w, node, 'value')
       }
     }
-    if (inLineBlock && node.type === 'comment' && node.value.includes('\n')) commentLines.push(path)
+    if (inLineBlock && node.type === 'comment' && node.form === 'braced' && node.value.includes('\n')) commentLines.push(path)
     // Expanded include children are not emitted by the writer.
     if (node.type === 'include') continue
     forEachSlot(node, (children, step, single) => {
