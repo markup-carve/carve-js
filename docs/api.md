@@ -189,7 +189,7 @@ command line does. `maxFileBytes` makes a larger file `unreadable` (it can lower
 when it lies inside the root (C2-N-012).
 
 `flatten(tree)` writes a tree parsed with a resolver as one Carve file, as `carve flatten` does: each expanded
-include is replaced by the blocks of its file, and included frontmatter is dropped. An include that did not expand
+include is replaced by the blocks of its file. Its line-1 frontmatter is dropped; later typed metadata blocks remain in source order. An include that did not expand
 keeps its directive, so an editor can write the copy and name what is missing from the parse diagnostics. `same` is
 false where the file renders differently from the tree, because a footnote, link reference or abbreviation key is
 defined in more than one file (C2-N-054, C2-N-055).
