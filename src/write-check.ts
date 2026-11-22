@@ -706,15 +706,22 @@ function openerShift(a: Node): number {
 }
 
 /** The text of `e` holds, at `at`, what the parse read as the construct `a`. */
-function escapeOpener(c: Check, e: TextNode, at: number, a: Node): void {
+function escapeOpener(c: Check, es: readonly Node[], i: number, at: number, a: Node): void {
+  const e = es[i] as TextNode
   const value = e.value
   let start = at
   // C2-I-023: a line comment takes the spaces before it.
   while (start < value.length && (value[start] === ' ' || value[start] === '\t')) start++
-  const shifted = start + openerShift(a)
-  if (escapeAt(c, e, shifted)) {
-    const opener = value[shifted]
-    if ((opener === '[' && isChainOpener(a)) || (opener === '`' && SPAN_TYPES.includes(a.type))) c.chains.push([e, shifted, a])
+  // C2-W-099: the shifted character is one of the source run, which may go on in the text nodes behind `e`.
+  let holder = e
+  let shifted = start + openerShift(a)
+  for (let k = i + 1; shifted >= holder.value.length && es[k]?.type === 'text'; k++) {
+    shifted -= holder.value.length
+    holder = es[k] as TextNode
+  }
+  if (escapeAt(c, holder, shifted)) {
+    const opener = holder.value[shifted]
+    if ((opener === '[' && isChainOpener(a)) || (opener === '`' && SPAN_TYPES.includes(a.type))) c.chains.push([holder, shifted, a])
   } else if (!escapeAt(c, e, start)) c.losses.push([e, 'value'])
 }
 
@@ -1046,7 +1053,7 @@ function stepOver(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor
 /** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
 function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor): boolean {
   if (comparisonBehindQuote(es[at.i - 2], es[at.i - 1], e, at.vi, a)) escapeAt(c, e, at.vi + 1)
-  else escapeOpener(c, e, at.vi, a)
+  else escapeOpener(c, es, at.i, at.vi, a)
   const pos = a.pos
   if (pos === undefined) return false
   const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, c.flags)
