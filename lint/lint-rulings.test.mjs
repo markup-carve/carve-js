@@ -34,7 +34,8 @@ describe('lint rulings', () => {
     expect(found('    i) > $$x$$\n   > ## H\n', 'block-opener-without-blank-line')).toEqual([[2, 4]])
     expect(found('10. %%#region\n     > :\n> [ ]: u\n', 'block-opener-without-blank-line')).toEqual([[3, 1]])
     expect(found('> a\n> ## H\n', 'block-opener-without-blank-line')).toEqual([[2, 3]])
-    expect(found('> a\n> > b\n', 'block-opener-without-blank-line')).toEqual([])
+    // carve#6279 (spec #6371): a nested quote mark after quoted paragraph text is a candidate, as CC-1623 pins.
+    expect(found('> a\n> > b\n', 'block-opener-without-blank-line')).toEqual([[2, 3]])
   })
 
   it('carve#6177: heading-marker-mixed stands on the first heading of the document', () => {
