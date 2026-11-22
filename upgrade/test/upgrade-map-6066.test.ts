@@ -101,11 +101,12 @@ describe('the pinned replay map rows', () => {
     },
   )
 
-  it('keeps an unmapped difference blocked with a machine readable status', () => {
+  it('writes a consumed marker-line attribute as an empty comment', () => {
     const result = upgrade('1.{#k} {#h}\n\n   # h\n')
-    expect(result.check).toBe('mismatch')
-    expect(result.records.find((record) => record.entry === 'upgrade-mismatch')?.status).toBe('no mapped row')
-    expect(canWriteUpgrade(result)).toBe(false)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('1.{#k} {% %}\n\n   # h\n')
+    expect(result.records.map((record) => record.entry)).toContain('U-137')
+    expect(canWriteUpgrade(result)).toBe(true)
   })
 
   it('reports the source span of a nested definition variant', () => {

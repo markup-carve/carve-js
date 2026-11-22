@@ -4,6 +4,34 @@ import { render } from '../../src/index.ts'
 import { upgrade } from '../src/index.ts'
 
 describe('replay fallback families', () => {
+  it('keeps a heading below a marker-line attribute without visible attribute text', () => {
+    const input = '1.{#k} {#h}\n\n   # h\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('1.{#k} {% %}\n\n   # h\n')
+    expect(result.records.map((record) => record.entry)).toContain('U-137')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
+  it('keeps an old sibling heading outside an empty attribute item', () => {
+    for (const gap of ['\n', '\n\n']) {
+      const input = `1.{#k} {#h}${gap} # h\n`
+      const result = upgrade(input)
+      expect(result.check).toBe('pass')
+      expect(result.output).toBe('1.{#k} {% %}\n\n# h\n')
+      expect(render(result.output)).toBe(carveToHtml(input))
+    }
+  })
+
+  it('keeps a quoted colon opener and brace as text beside an old inline tag', () => {
+    const input = '- > para\ntail\n  > ::: {#x}\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('- > para\ntail\n  > \\::: \\{#x}\n')
+    expect(result.records.map((record) => record.entry)).toEqual(['U-104', 'U-430'])
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('keeps a block opener fused to a comment closer inside the old comment', () => {
     const input = '- a\n  - %%%\n    hidden\n%%%::: note\ntail\n'
     const result = upgrade(input)

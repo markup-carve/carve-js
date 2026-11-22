@@ -33,6 +33,56 @@ export function fusedCommentBlockOpener(ctx: Context): void {
     || edit.start !== edit.end || !moveOffsets.has(edit.start))
 }
 
+/** An old marker-line attribute consumed by the following heading keeps its item empty. */
+function markerHeadingSibling(visit: Visit): Node01 | null {
+  const item = visit.node
+  if (item.type !== 'list_item' || item.pos === undefined) return null
+  const list = visit.parent
+  const next = list?.siblings[list.index + 1]
+  return list?.node.type === 'list' && next?.type === 'heading'
+    && next.pos?.startLine !== undefined && next.pos.startLine <= item.pos.endLine + 2 ? next : null
+}
+
+export function markerAttributeBeforeHeading(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    if (node.type !== 'list_item' || node.pos === undefined) continue
+    const nested = node.children?.some((child) => child.type === 'heading'
+      && (child.pos?.startLine ?? 0) > node.pos!.startLine) ?? false
+    const sibling = markerHeadingSibling(visit)
+    if (!nested && sibling === null) continue
+    const line = node.pos.startLine
+    const source = lineText(ctx.lines, line)
+    const match = /^([ \t]*(?:[-*]|\d+[.)])(?:\{[^}\n]+\})+[ \t]+)(\{[^}\n]+\})[ \t]*$/u.exec(source)
+    if (match === null) continue
+    const start = lineStart(ctx.lines, line) + match[1]!.length
+    change(ctx, 'U-137', start, start + match[2]!.length, '{% %}',
+      'marker-line attribute consumed by the old heading became an empty comment')
+    if (sibling?.pos?.startLine === node.pos.endLine + 1) {
+      const at = lineStart(ctx.lines, sibling.pos.startLine)
+      change(ctx, 'U-006', at, at, '\n', 'blank line keeps the old sibling heading outside its list')
+    }
+  }
+}
+
+/** A colon opener that 0.1 kept as quoted paragraph text stays literal beside its inline tag. */
+export function quotedColonOpenerText(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'paragraph' || node.pos === undefined) continue
+    for (let line = node.pos.startLine; line <= node.pos.endLine; line++) {
+      const source = lineText(ctx.lines, line)
+      const match = /^([ \t]*(?:>[ \t]*)+):::[ \t]+(\{)(#[\w-]+)\}[ \t]*$/u.exec(source)
+      if (match === null) continue
+      const colon = lineStart(ctx.lines, line) + match[1]!.length
+      const brace = lineStart(ctx.lines, line) + source.indexOf('{', match[1]!.length + 3)
+      if (!node.children?.some((child) => child.type === 'tag' && child.pos?.startLine === line
+        && child.pos.startOffset === brace + 1)) continue
+      change(ctx, 'U-104', colon, colon, '\\', 'old quoted colon opener kept as paragraph text')
+      change(ctx, 'U-430', brace, brace, '\\', 'old literal brace kept beside its inline tag')
+    }
+  }
+}
+
 /** The longest backtick run of the body that 0.2 would close the fence at, 0 for none; the fence must exceed it. */
 function longestBodyRun(ctx: Context, firstLine: number, lastLine: number, width: number): number {
   const closer = lineText(ctx.lines, lastLine)

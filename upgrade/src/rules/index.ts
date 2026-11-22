@@ -18,10 +18,10 @@ import {
   emptyAttributeItemAfterDescription, emptyAttributeQuote, emptyQuoteInFootnote,
   emptyColonDiv,
   fenceAfterDescription, flippedStrong, footnoteQuoteAfterDescription, fusedCommentBlockOpener, inlineEditComposition,
-  innerFenceRun, lazyCaretAfterQuote,
+  innerFenceRun, lazyCaretAfterQuote, markerAttributeBeforeHeading,
   legacyPlusDash, listAfterFootnote,
   literalIncludeMentions, literalLinkBeforeCode, literalNarrowSpaceLinks,
-  literalQuoteAfterAttributes, literalTableHeader,
+  literalQuoteAfterAttributes, literalTableHeader, quotedColonOpenerText,
   nestedFootnoteAfterItem,
   siblingHeadingBoundary, siblingListBoundary, tabbedFootnoteContinuation, wrappedCodeTableRow,
 } from './replay-fallbacks.ts'
@@ -59,5 +59,6 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     siblingHeadingBoundary, emptyAttributeItemAfterDescription, emptyColonDiv, continuedHeaderRow,
     descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
     footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
-    literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener],
+    literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
+    markerAttributeBeforeHeading, quotedColonOpenerText],
 ]
