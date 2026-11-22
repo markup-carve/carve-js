@@ -73,8 +73,12 @@ void test('C2-W-125: ordered repairs keep required bracket and brace escapes', (
 })
 
 void test('C2-W-088: an escape before a dash run is removed when unasked', () => {
-  const cases = ['x[----\\--', 'x^[----\\--------', 'x[-----\\---*a', 'x[----\\--a<a:b>']
+  const cases = ['x^[----\\--------', 'x[-----\\---*a']
   for (const source of cases) assert.equal(format(source), `${source}\n`)
+  // C2-W-088 (carve-js#5283, option B): the text run behind two dashes reports the hyphen-run kind, whose opener is
+  // the second hyphen of the run.
+  assert.equal(format('x[----\\--'), 'x[----\\-\\-\n')
+  assert.equal(format('x[----\\--a<a:b>'), 'x[----\\-\\-a<a:b>\n')
   // C2-W-088 (carve-js#5283, option B): the reported bracket kind escapes the first bracket of the run.
   assert.equal(format('x[\\[----\\--'), 'x\\[[----\\--\n')
 })

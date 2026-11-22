@@ -5,7 +5,7 @@ import { type Check, escapeAt } from './write-check.ts'
 import { isAsciiAlphanumeric, isBoundarySpace, isWordCharacter } from './unicode.ts'
 
 /** One leaf of the inline content of a block: a text node, a break, or the markup of another inline node. */
-type Leaf = { text: TextNode, lineStart: boolean } | { text: null, kind: 'break' | 'markup' }
+type Leaf = { text: TextNode, lineStart: boolean } | { text: null, kind: 'break' | 'markup', dash?: boolean }
 
 interface KindBlock {
   leaves: Leaf[]
@@ -34,9 +34,11 @@ function flatten(nodes: readonly Node[], out: Leaf[]): void {
       out.push({ text: node, lineStart: before === undefined || (before.text === null && before.kind === 'break') })
     } else if (isBreak(node)) out.push({ text: null, kind: 'break' })
     else {
-      out.push({ text: null, kind: 'markup' })
+      // The source of a smart dash is hyphens that the written text joins (C2-W-099).
+      const dash = node.type === 'smart_punctuation' && /^-+$/.test(node.source)
+      out.push({ text: null, kind: 'markup', dash })
       flatten(childNodes(node), out)
-      out.push({ text: null, kind: 'markup' })
+      out.push({ text: null, kind: 'markup', dash })
     }
   }
 }
@@ -53,8 +55,13 @@ function kindKey(block: KindBlock, index: number, at: number, line: boolean): st
   if (line) return `L${lineShape(value)}`
   const ch = value[at]!
   if (ch === '{' && at + 1 < value.length) return `{${value[at + 1]}`
-  if (ch === '-' && hyphenRun(block, index, at)[1] > 1) return '--'
+  if (ch === '-' && (hyphenRun(block, index, at)[0] > 0 || (at === 0 && afterDash(block, index)))) return '--'
   return ch
+}
+
+function afterDash(block: KindBlock, index: number): boolean {
+  const before = block.leaves[index - 1]
+  return before !== undefined && before.text === null && before.dash === true
 }
 
 function textOf(block: KindBlock, index: number): string {
@@ -95,13 +102,6 @@ function runOver(block: KindBlock, index: number, step: number): number {
   return total
 }
 
-/** Whether the hyphen at `at` stands next to the markup of another node, such as the source of a smart dash. */
-function touchesMarkup(block: KindBlock, index: number, at: number): boolean {
-  const isMarkup = (leaf: Leaf | undefined): boolean => leaf !== undefined && leaf.text === null && leaf.kind === 'markup'
-  return (at === 0 && isMarkup(block.leaves[index - 1])) ||
-    (at === textOf(block, index).length - 1 && isMarkup(block.leaves[index + 1]))
-}
-
 /** The shape of a line opener: its first character, or `0` and the delimiter for an ordered marker. */
 function lineShape(value: string): string {
   const end = markerEnd(value)
@@ -123,20 +123,11 @@ function lineOffsets(key: string, leaf: { text: TextNode, lineStart: boolean }):
   return [value.startsWith('--') ? 1 : 0]
 }
 
-/** Whether `at` is a hyphen of a run of two or more that C2-W-099 leaves bare: the first, the third and so on. */
-function isBareHyphen(block: KindBlock, index: number, at: number): boolean {
-  if (textOf(block, index)[at] !== '-') return false
-  const [place, length] = hyphenRun(block, index, at)
-  return length > 1 && place % 2 === 0
-}
-
-/** C2-W-099: every second hyphen of each run of two or more, starting with the second. */
+/** C2-W-099: the second hyphen of each run, where a run goes on over adjacent text nodes. */
 function hyphenOffsets(block: KindBlock, index: number): number[] {
   const value = textOf(block, index)
   const offsets: number[] = []
-  for (let at = value.indexOf('-'); at >= 0; at = value.indexOf('-', at + 1)) {
-    if (hyphenRun(block, index, at)[0] % 2 === 1) offsets.push(at)
-  }
+  for (let at = value.indexOf('-'); at >= 0; at = value.indexOf('-', at + 1)) if (hyphenRun(block, index, at)[0] === 1) offsets.push(at)
   return offsets
 }
 
@@ -206,20 +197,6 @@ export function escapeKinds(check: Check, group: readonly Node[]): void {
       if (leaf.text === null) return
       for (const offset of kindOffsets(key, block, index)) escapeAt(check, leaf.text, offset)
     })
-    if (key === '--') dropBareHyphens(check, block)
-  }
-}
-
-/** C2-W-099: a hyphen run takes the backslash on every second hyphen only, whichever hyphen of it a parse reports. */
-function dropBareHyphens(check: Check, block: KindBlock): void {
-  const texts = new Map(block.leaves.map((leaf, index) => [leaf.text, index]))
-  const trials = new Set(check.trials)
-  for (let place = check.escapes.length - 1; place >= 0; place--) {
-    const escape = check.escapes[place]!
-    const [node, at] = escape
-    const index = texts.get(node)
-    if (index === undefined || trials.has(escape) || check.lineEscapes.get(node)?.has(at) === true) continue
-    if (isBareHyphen(block, index, at) && !touchesMarkup(block, index, at)) check.escapes.splice(place, 1)
   }
 }
 
