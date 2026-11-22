@@ -17,6 +17,35 @@ export function literalQuoteAfterAttributes(ctx: Context): void {
   }
 }
 
+/** Keep identical adjacent note definitions together when only the first has an old tree position. */
+export function repeatedIndentedNote(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos as Record<string, { startLine: number }> | undefined
+  if (positions === undefined) return
+  for (const position of Object.values(positions)) {
+    const first = position.startLine
+    if (first >= ctx.lines.count) continue
+    const one = lineText(ctx.lines, first)
+    const two = lineText(ctx.lines, first + 1)
+    const match = /^([ \t]+)(\[\^([^\]]+)\]: .+)$/u.exec(one)
+    if (match === null || two.trimStart() !== match[2] || two === match[2]) continue
+    const start = lineStart(ctx.lines, first)
+    const end = lineStart(ctx.lines, first + 1)
+    const removed = ctx.findings.find(({ record, edit }) => record.entry === 'U-039' && edit !== null
+      && edit.start === start && edit.end === end && edit.text === '')
+    const inserted = ctx.findings.find(({ record, edit }) => record.entry === 'U-039' && edit !== null
+      && edit.start === edit.end && edit.text.trim() === match[2])
+    if (removed === undefined || inserted === undefined) continue
+    ctx.findings = ctx.findings.filter((finding) => finding !== removed && finding !== inserted
+      && !(finding.record.entry === 'U-042' && finding.edit?.start === end
+        && finding.edit.end === lineStart(ctx.lines, first + 2)))
+    change(ctx, 'U-039', start, start + match[1]!.length, '',
+      'repeated old note definitions kept together at document column')
+    const indent = two.length - two.trimStart().length
+    change(ctx, 'U-039', end, end + indent, '',
+      'repeated old note definitions kept together at document column')
+  }
+}
+
 /** Keep a fused block opener inside an old comment instead of replaying it as a new block. */
 export function fusedCommentBlockOpener(ctx: Context): void {
   const moveOffsets = new Set<number>()
