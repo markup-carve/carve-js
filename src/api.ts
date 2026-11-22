@@ -438,15 +438,22 @@ export function parse(src: string | Uint8Array, options?: ParseOptions): Documen
  * The tree is the one `parse` gives (C2-L-003). Positions are always built, since the record states its ranges in them.
  */
 export function parseWithLayout(src: string | Uint8Array, options?: ParseOptions): LayoutResult {
-  return parseWithLayoutCore(src, options, false)
+  const { document, diagnostics, suppressedDiagnostics, layout } = parseWithLayoutCore(src, options, false)
+  return { document, diagnostics, suppressedDiagnostics, layout }
 }
 
 /** The lint caller owns this tree and never exposes or mutates its inert table children. */
-export function parseWithLayoutForLint(src: string | Uint8Array, options?: ParseOptions): LayoutResult {
+export function parseWithLayoutForLint(src: string | Uint8Array, options?: ParseOptions): LayoutResult & { resolved: ResolvedTree } {
   return parseWithLayoutCore(src, options, true)
 }
 
-function parseWithLayoutCore(src: string | Uint8Array, options: ParseOptions | undefined, compactTables: boolean): LayoutResult {
+/** The HTML of a tree that `parseWithLayoutForLint` resolved, for the lint facts that read the rendered ids (C2-W-150). */
+export function renderForLint(resolved: ResolvedTree): string {
+  return renderStage(resolved, false).html
+}
+
+function parseWithLayoutCore(src: string | Uint8Array, options: ParseOptions | undefined, compactTables: boolean):
+  LayoutResult & { resolved: ResolvedTree } {
   const settings = readOptions(options, 'parse')
   const trace = createLayoutTrace()
   if (compactTables) trace.compactTables = true
@@ -456,7 +463,7 @@ function parseWithLayoutCore(src: string | Uint8Array, options: ParseOptions | u
   const diagnostics = parseDiagnostics(resolved, parsed)
   return { document: resolved.document,
     ...capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100),
-    layout: sourceLayout(source, resolved.document, trace) }
+    layout: sourceLayout(source, resolved.document, trace), resolved }
 }
 
 /** C2-L-056: the layout of bytes that are not well-formed UTF-8 keeps them in base64, and its ranges count them. */

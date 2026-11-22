@@ -508,14 +508,18 @@ type Over = 'block' | 'inline' | 'id' | 'line'
 let lookupRecords: Record<Over, readonly Located[]> = { block: [], inline: [], id: [], line: [] }
 let lookupSites = new Map<number, Map<unknown, Located[]>>()
 let lineRecords: () => readonly Located[] = () => []
+let idRecords: () => readonly Located[] = () => []
+let idsRead = false
 // Per kind of record, the positions of the records of each type, in document order.
 let typePositions = new Map<Over, Map<string, number[]>>()
 
 /** The records of one document that the lookups read, in document order; the line records are made when a lookup reads them. */
-export function useRecords(block: readonly Located[], inline: readonly Located[], id: readonly Located[] = [],
+export function useRecords(block: readonly Located[], inline: readonly Located[], id: () => readonly Located[] = () => [],
   line: () => readonly Located[] = () => []): void {
-  lookupRecords = { block, inline, id, line: [] }
+  lookupRecords = { block, inline, id: [], line: [] }
   lineRecords = line
+  idRecords = id
+  idsRead = false
   lookupSites = new Map()
   typePositions = new Map()
 }
@@ -546,6 +550,10 @@ function lookupIndex(site: number, over: Over, types: ReadonlySet<string> | unde
   if (index === undefined) {
     index = new Map()
     if (over === 'line' && lookupRecords.line.length === 0) lookupRecords.line = lineRecords()
+    if (over === 'id' && !idsRead) {
+      lookupRecords.id = idRecords()
+      idsRead = true
+    }
     for (const record of types === undefined ? lookupRecords[over] : recordsOf(over, types)) {
       // C2-W-150: a lookup with no types reads every block or every inline node; a text run is no node.
       if (types === undefined && (record as { type?: string }).type === 'text_run') continue

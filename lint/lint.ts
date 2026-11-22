@@ -552,6 +552,7 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
   const parsed = parseWithLayoutForLint(source, { ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
     ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
+  context.resolved = parsed.resolved
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
   // The default rule set is the same on every call, so its compiled rule lists are kept.
   const defaults = options.rules === undefined && options.platforms === undefined

@@ -1,4 +1,7 @@
-import { INLINE_PARENTS, type Node } from '../src/ast.ts'
+import { INLINE_PARENTS, type Inline, type Node } from '../src/ast.ts'
+import { plainText } from '../src/ast-text.ts'
+import { inlineContent } from '../src/ast-blocks.ts'
+import { generatedIdNodes, htmlIds, isRendered, renderedIds } from './rendered-ids.ts'
 import { columnOf } from '../src/layout-lines.ts'
 import { type Attributed } from './data-attributes.ts'
 import { type NodeLayout } from '../src/layout.ts'
@@ -86,6 +89,7 @@ export interface ModelInline {
   parent: string
   readonly node: Node | undefined
   readonly raw_ref?: string
+  readonly key_text?: string | undefined
 }
 
 export interface Container { readonly type: string, readonly content_column: number, readonly marker_column: number | undefined }
@@ -598,16 +602,40 @@ class InlineRecord implements ModelInline {
 
   /** C2-L-022: the reference of a link or an image, read without the container prefixes of the lines it crosses. */
   get raw_ref(): string { return this.layouts.get(this.path)?.rawRef ?? this.text }
+
+  /** C2-I-084: the plain text of the stored key of a link or an image, read as inline content of its own. */
+  get key_text(): string | undefined {
+    if (this.type !== 'link' && this.type !== 'image') return undefined
+    const key = (this.node as { key?: string }).key
+    return key === undefined ? undefined : plainText(inlineContent(key))
+  }
 }
 
-/** An id record: one distinct id that the tree carries, in order of first occurrence. */
+/** An id record: one distinct id that the tree or the rendered HTML carries, in document order (C2-W-150). */
 export interface ModelId {
   readonly type: 'id'
   readonly id: string
   /** C2-A-039: the type of the first node that carries the id, the one it anchors. */
   readonly owner: string
-  readonly index: number
+  index: number
   readonly start: number
+  heading_text?: string
+  rendered: boolean
+  xref: boolean
+}
+
+/** The ids of the tree with the ids only the HTML carries, each before the first tree id that starts after it. */
+function mergeByStart(tree: readonly ModelId[], extra: ModelId[]): ModelId[] {
+  extra.sort((a, b) => a.start - b.start)
+  const all: ModelId[] = []
+  let next = 0
+  for (const record of tree) {
+    while (next < extra.length && extra[next]!.start < record.start) all.push(extra[next++]!)
+    all.push(record)
+  }
+  while (next < extra.length) all.push(extra[next++]!)
+  all.forEach((record, index) => { record.index = index })
+  return all
 }
 
 /** A text run record: the text and soft breaks that stand next to each other among the children of one inline parent. */
@@ -644,8 +672,10 @@ export class DataWalk {
   readonly inline: ModelInline[] = []
   /** The nodes that carry `attrs`, when an attribute rule is on (C2-W-148), with their paths and whether they are inline. */
   readonly attributed: Attributed = { nodes: [], paths: [], inline: [] }
-  readonly ids: ModelId[] = []
+  private readonly treeIds: ModelId[] = []
   private readonly idIndex = new Map<string, ModelId>()
+  private readonly raws: Node[] = []
+  private idCache: ModelId[] | undefined = undefined
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
   // The blocks the walk is inside, with the quotes that hold each: it visits a parent before its children.
   private readonly openBlocks: Node[] = []
@@ -679,11 +709,62 @@ export class DataWalk {
   }
 
   private addId(id: string, node: Node): void {
-    if (this.idIndex.has(id)) return
-    const start = node.pos === undefined ? 0 : this.context.chars[node.pos.startOffset] ?? 0
-    const record: ModelId = { type: 'id', id, owner: node.type, index: this.ids.length, start }
+    const known = this.idIndex.get(id)
+    if (known !== undefined) {
+      if (known.heading_text === undefined && node.type === 'heading') known.heading_text = plainText(node.children as Inline[])
+      return
+    }
+    const record: ModelId = { type: 'id', id, owner: node.type, index: this.treeIds.length, start: this.startOf(node),
+      rendered: true, xref: false }
+    if (node.type === 'heading') record.heading_text = plainText(node.children as Inline[])
     this.idIndex.set(id, record)
-    this.ids.push(record)
+    this.treeIds.push(record)
+  }
+
+  private idsOf(node: Node): void {
+    if (node.attrs?.id !== undefined || node.type === 'heading') this.id(node)
+    if ((node.type === 'raw_inline' || node.type === 'raw_block') && node.format === 'html') this.raws.push(node)
+  }
+
+  private startOf(node: Node): number {
+    return node.pos === undefined ? 0 : this.context.chars[node.pos.startOffset] ?? 0
+  }
+
+  /**
+   * C2-W-150: the id records, made when a lookup first reads them: the ids of the tree, then in document order the ids
+   * only the rendered HTML carries, as note marks, notes and raw HTML anchors (C2-H-088, C2-H-089).
+   */
+  ids(): readonly ModelId[] {
+    if (this.idCache !== undefined) return this.idCache
+    const resolved = this.context.resolved
+    if (resolved === undefined) return (this.idCache = this.treeIds)
+    const rendered = renderedIds(resolved)
+    const decoded = new Set(rendered.decoded)
+    for (const record of this.treeIds) {
+      record.rendered = isRendered(rendered, decoded, record.id)
+      record.xref = resolved.resolution.xrefIds.has(record.id)
+    }
+    const generated = generatedIdNodes(resolved)
+    let raw: Map<string, Node> | undefined
+    const extra: ModelId[] = []
+    for (const id of rendered.decoded) {
+      if (this.idIndex.has(id)) continue
+      if (raw === undefined) raw = this.rawIdNodes()
+      const node = generated.get(id) ?? raw.get(id)
+      const record: ModelId = { type: 'id', id, owner: node?.type ?? 'html', index: 0,
+        start: node === undefined ? this.context.source.length : this.startOf(node), rendered: true, xref: false }
+      this.idIndex.set(id, record)
+      extra.push(record)
+    }
+    return (this.idCache = extra.length === 0 ? this.treeIds : mergeByStart(this.treeIds, extra))
+  }
+
+  private rawIdNodes(): Map<string, Node> {
+    const out = new Map<string, Node>()
+    for (const node of this.raws) {
+      for (const id of htmlIds((node as { value: string }).value).decoded) if (!out.has(id)) out.set(id, node)
+    }
+    return out
   }
 
   /** C2-W-140: a text or soft break child of an inline parent joins the run of its previous sibling, or starts one. */
@@ -746,7 +827,7 @@ export class DataWalk {
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
     if (this.attributes) this.attribute(node, path, parent)
     if (!this.model) return
-    if (node.attrs?.id !== undefined || node.type === 'heading') this.id(node)
+    this.idsOf(node)
     const holder = this.holder
     // Inline content holds no block and no line of its own; the caption of an image paragraph is a block (C2-W-140).
     if (holder !== undefined && node.type !== 'caption' && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
