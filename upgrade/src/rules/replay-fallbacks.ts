@@ -241,6 +241,38 @@ export function paddedTsvRows(ctx: Context): void {
   }
 }
 
+function blankBetween(ctx: Context, first: number, last: number): boolean {
+  for (let line = first; line < last; line++) if (lineText(ctx.lines, line).trim() !== '') return false
+  return true
+}
+
+function moveAttributeAcrossDefinition(ctx: Context, node: Node01,
+  definition: { startLine: number; endLine: number }): void {
+  const line = definition.startLine - 1
+  if (line < 1 || node.pos === undefined || definition.endLine >= node.pos.startLine
+    || !blankBetween(ctx, definition.endLine + 1, node.pos.startLine)) return
+  const attribute = lineText(ctx.lines, line).trim()
+  if (!/^\{[^{}\n]+\}$/u.test(attribute)) return
+  ctx.findings = ctx.findings.filter(({ record, edit }) => record.entry !== 'U-033' || edit === null
+    || ![line, definition.startLine].includes(lineOf(ctx.lines, edit.start)))
+  change(ctx, 'U-031', lineStart(ctx.lines, line), lineStart(ctx.lines, line + 1), '\n',
+    'old floating attribute moved beyond its intervening footnote definition')
+  change(ctx, 'U-031', lineStart(ctx.lines, node.pos.startLine), lineStart(ctx.lines, node.pos.startLine),
+    `${attribute}\n`, 'old floating attribute kept on its paragraph')
+}
+
+/** Carry a floating old attribute past a positioned footnote definition to its old paragraph. */
+export function attributeAcrossFootnoteDefinition(ctx: Context): void {
+  const positions = ctx.doc.footnoteDefPos
+  if (typeof positions !== 'object' || positions === null) return
+  const definitions = Object.values(positions as Record<string, { startLine: number; endLine: number }>)
+  for (const { node, parent } of ctx.visits) {
+    if (node.type !== 'paragraph' || node.pos === undefined || node.attrs === undefined
+      || parent?.node.type !== 'document') continue
+    for (const definition of definitions) moveAttributeAcrossDefinition(ctx, node, definition)
+  }
+}
+
 /** The longest backtick run of the body that 0.2 would close the fence at, 0 for none; the fence must exceed it. */
 function longestBodyRun(ctx: Context, firstLine: number, lastLine: number, width: number): number {
   const closer = lineText(ctx.lines, lastLine)

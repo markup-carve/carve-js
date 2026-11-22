@@ -14,7 +14,8 @@ import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
 import { includes, tables, tablesHeadStyles } from './tables.ts'
 import {
-  abbreviationSpaces, continuedHeaderRow, crossLineStrong, descriptionAfterQuotedTerm, duplicateItemDefinitions,
+  abbreviationSpaces, attributeAcrossFootnoteDefinition, continuedHeaderRow, crossLineStrong,
+  descriptionAfterQuotedTerm, duplicateItemDefinitions,
   emptyAttributeItemAfterDescription, emptyAttributeQuote, emptyQuoteInFootnote,
   emptyColonDiv, descriptionMarkerColumns,
   fenceAfterDescription, flippedStrong, footnoteQuoteAfterDescription, fusedCommentBlockOpener, inlineEditComposition,
@@ -60,5 +61,6 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
     footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
     literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
-    markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows],
+    markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows,
+    attributeAcrossFootnoteDefinition],
 ]
