@@ -60,6 +60,11 @@ export function isWordCharacter(code: number): boolean {
   return inRanges(LETTER_OR_NUMBER_RANGES, code)
 }
 
+/** A Unicode mark (general category M). */
+export function isMark(code: number): boolean {
+  return code >= ASCII && inRanges(MARK_RANGES, code)
+}
+
 /** A Unicode number (general category N). */
 export function isNumber(code: number): boolean {
   if (code < ASCII) return isAsciiDigit(code)
