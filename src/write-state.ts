@@ -68,6 +68,8 @@ export interface Writer {
   prewrittenAttributes: Node | null
   /** C2-I-118: images write the brackets of their alt text bare, for a group past the depth cap where they are text. */
   bareAlts: boolean
+  /** C2-W-088: false while a group is written again by rounds of the reported openers only. */
+  kindRounds: boolean
   /** Why the plan left the last group to the repair, or null. */
   planWhy: string | null
   /** The plan of the group being written, while the writer plans it (write-plan.ts). */
@@ -113,7 +115,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
-    prewrittenAttributes: null, bareAlts: false, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
+    prewrittenAttributes: null, bareAlts: false, kindRounds: true, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
     extensionSources: new Map(), verifiedSourceBytes: undefined,
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },

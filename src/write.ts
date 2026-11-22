@@ -12,6 +12,7 @@ import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
+import { bareKindOpeners, escapeKinds } from './write-kinds.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -424,6 +425,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     dropped = true
   }
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
+  if (w.kindRounds) escapeKinds(check, group)
   extendChains(check)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
@@ -539,6 +541,19 @@ function addPlanned(w: Writer, plan: Plan): [TextNode, number[] | undefined][] {
     w.escapes.set(node, [...new Set([...(previous ?? []), ...offsets])].sort((a, b) => a - b))
   }
   return replaced
+}
+
+/** The escapes of the text nodes of `group` before the plan placed `replaced`, to restore them with. */
+function groupEscapes(w: Writer, group: readonly Node[], replaced: readonly [TextNode, number[] | undefined][]):
+  [TextNode, number[] | undefined][] {
+  const before = new Map(replaced)
+  const saved: [TextNode, number[] | undefined][] = []
+  const pending = [...group]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'text') saved.push([node, before.has(node) ? before.get(node) : w.escapes.get(node)?.slice()])
+    forEachSlot(node, (children) => { for (const child of children) pending.push(child) })
+  }
+  return saved
 }
 
 function restoreEscapes(w: Writer, replaced: readonly [TextNode, number[] | undefined][]): void {
@@ -702,8 +717,13 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   for (const node of plan.lost) lose(w, node, 'value')
   const checked = run.check && plan.lost.length === 0 && w.lines.length > 0
   // The pair test reads its own spelling back, also where the run checks nothing, as the repair it replaces does.
-  const placed = pairs.late && plan.lost.length === 0 && w.lines.length > 0 && run.path === 'plan'
-    ? testLatePairs(w, group, first, pairs) : REFUSED
+  const late = pairs.late && plan.lost.length === 0 && w.lines.length > 0 && run.path === 'plan'
+  const beforePairs = late && w.kindRounds ? groupEscapes(w, group, replaced) : null
+  const placed = late ? testLatePairs(w, group, first, pairs) : REFUSED
+  if (w.kindRounds && !closeKinds(w, group, first, checked, plan.escapes, beforePairs ?? replaced)) {
+    noteReason(run, 'kind', '')
+    return false
+  }
   if (placed === PLACED) {
     // C2-W-089: the plan alone did not decide a group that needed a pair round and its parse.
     run.stats.repaired++
@@ -718,6 +738,26 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   // The pair rules asked nothing of the planned spelling, so the test after the write would find nothing either.
   if (placed === NONE_ASKED) pairs.settled = true
   return true
+}
+
+/**
+ * C2-W-088: the rounds escape every opener of a kind they report in its block, so the plan adds the openers its
+ * escapes leave bare. False, with the escapes of `before` restored, where that does not settle the group.
+ */
+function closeKinds(w: Writer, group: readonly Node[], first: boolean, checked: boolean,
+  planned: ReadonlyMap<TextNode, readonly number[]>, before: readonly [TextNode, number[] | undefined][]): boolean {
+  const missing = bareKindOpeners(group, planned, w.escapes)
+  if (missing !== null && missing.size === 0) return true
+  if (missing !== null) {
+    for (const [node, offsets] of missing) {
+      w.escapes.set(node, [...new Set([...(w.escapes.get(node) ?? []), ...offsets])].sort((a, b) => a - b))
+    }
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    if (bareKindOpeners(group, planned, w.escapes)?.size === 0 && (!checked || readsBack(w, group, first))) return true
+  }
+  restoreEscapes(w, before)
+  return false
 }
 
 const REFUSED = 0
@@ -953,6 +993,20 @@ function repairBareAlts(w: Writer, document: DocumentNode, from: number, first: 
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
 function repairGroup(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+  const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
+  const end = repairOnce(w, document, from, first, reported)
+  if (saved === null || w.losses.entries.length === reported) return end
+  // C2-W-088: where the rounds by kind lose a node, the rounds of the reported openers only give the form.
+  restoreGroup(w, saved)
+  w.kindRounds = false
+  try {
+    return repairOnce(w, document, from, first, reported)
+  } finally {
+    w.kindRounds = true
+  }
+}
+
+function repairOnce(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
   const start = w.work.chars
   const end = repairRounds(w, document, from, first, reported)
   w.work.spent += w.work.chars - start
