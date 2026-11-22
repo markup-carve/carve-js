@@ -958,15 +958,14 @@ function writeGroupOnce(w: Writer, run: WriterRun, document: DocumentNode, from:
   const saved = w.planWhy === 'kind' ? saveGroup(w, groupEnd(w, document.children, from)) : null
   let end = w.planWhy === 'depth cap'
     ? repairBareAlts(w, document, from, first, reported) : repairGroup(w, document, from, first, reported)
-  if (saved !== null && w.losses.entries.length > reported) end = planInstead(w, run, document, from, first, pairs, saved, end)
+  if (saved !== null && w.losses.entries.length > reported) end = planInstead(w, run, document, from, first, pairs, saved, reported)
   run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), w.work.chars - work])
   return end
 }
 
 /** C2-W-010: where the rounds lose a node of a group the plan writes whole, the plan's form is taken. */
 function planInstead(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean, pairs: GroupPairs,
-  saved: SavedGroup, end: number): number {
-  const repaired = saveGroup(w, end)
+  saved: SavedGroup, reported: number): number {
   restoreGroup(w, saved)
   w.planKinds = true
   try {
@@ -974,7 +973,10 @@ function planInstead(w: Writer, run: WriterRun, document: DocumentNode, from: nu
   } finally {
     w.planKinds = false
   }
-  return restoreGroup(w, repaired)
+  // The losses of the rounds were taken back with the group, so the rounds run again rather than restore them.
+  restoreGroup(w, saved)
+  w.planWhy = null
+  return repairGroup(w, document, from, first, reported)
 }
 
 /**

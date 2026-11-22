@@ -96,7 +96,8 @@ describe('BBCode', () => {
 
   it('keeps Carve delimiters, unclosed tags and stray closers as text', () => {
     const result = importDocument('*stars* /it/ [b]open [/i] [noparse][b]x[/b][/noparse]', { from: 'bbcode' })
-    expect(result.source).toBe('\\*stars* \\/it/ [b]open [/i] [b]x[/b]\n')
+    // C2-W-088 (carve-js#5283, option B): the reported slash kind escapes each slash that can open.
+    expect(result.source).toBe('\\*stars* \\/it/ [b]open [\\/i] [b]x[\\/b]\n')
   })
 
   it('keeps text a list or table holds outside its items and cells', () => {
