@@ -187,6 +187,60 @@ export function descriptionMarkerColumns(ctx: Context): void {
   }
 }
 
+function padTsvRows(ctx: Context, table: Node01): void {
+  const rows = Array.isArray(table.rows) ? table.rows as Node01[] : []
+  for (const row of rows) {
+    if (row.pos === undefined || !Array.isArray(row.cells) || row.pos.startLine !== row.pos.endLine) continue
+    const line = row.pos.startLine
+    const source = lineText(ctx.lines, line)
+    const written = source.split('\t').length
+    const missing = row.cells.length - written
+    if (missing <= 0) continue
+    change(ctx, 'U-150', lineEnd(ctx.lines, line), lineEnd(ctx.lines, line), '\t'.repeat(missing),
+      'old TSV row padding written as explicit empty cells')
+  }
+}
+
+function protectTsvBodyRun(ctx: Context, table: Node01): void {
+  if (table.pos === undefined) return
+  const first = table.pos.startLine
+  const opener = lineText(ctx.lines, first)
+  const run = /^([ \t]*)(`{3,})tsv[ \t]*$/u.exec(opener)
+  if (run === null) return
+  let longest = 0
+  const rows = Array.isArray(table.rows) ? table.rows as Node01[] : []
+  for (const row of rows) {
+    if (row.pos === undefined) continue
+    const body = /^[ \t]*(`{3,})[ \t]*$/u.exec(lineText(ctx.lines, row.pos.startLine))
+    if (body !== null) longest = Math.max(longest, body[1]!.length)
+  }
+  if (longest < run[2]!.length) return
+  const extra = '`'.repeat(longest + 1 - run[2]!.length)
+  const at = lineStart(ctx.lines, first) + run[1]!.length + run[2]!.length
+  change(ctx, 'U-049', at, at, extra, 'fence widened to keep the old TSV row literal')
+  const last = table.pos.endLine
+  const closer = lineText(ctx.lines, last)
+  const oldCloser = /^([ \t]*)(`{3,})[ \t]*$/u.exec(closer)
+  const finalRow = rows.at(-1)?.pos?.endLine ?? first
+  if (oldCloser !== null && finalRow < last) {
+    const closeAt = lineStart(ctx.lines, last) + oldCloser[1]!.length + oldCloser[2]!.length
+    change(ctx, 'U-049', closeAt, closeAt, extra, 'old TSV closer widened with its opener')
+    return
+  }
+  const after = lineStart(ctx.lines, last + 1)
+  change(ctx, 'U-049', after, after, `${'`'.repeat(longest + 1)}\n`,
+    'matching closer written after the old TSV row')
+}
+
+/** Write the cells the old TSV table padded and keep a bare run in its body. */
+export function paddedTsvRows(ctx: Context): void {
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'table' || node.sourceFormat !== 'tsv') continue
+    padTsvRows(ctx, node)
+    protectTsvBodyRun(ctx, node)
+  }
+}
+
 /** The longest backtick run of the body that 0.2 would close the fence at, 0 for none; the fence must exceed it. */
 function longestBodyRun(ctx: Context, firstLine: number, lastLine: number, width: number): number {
   const closer = lineText(ctx.lines, lastLine)
