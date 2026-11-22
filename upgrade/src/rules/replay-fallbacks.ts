@@ -219,6 +219,14 @@ function protectTsvBodyRun(ctx: Context, table: Node01): void {
   const at = lineStart(ctx.lines, first) + run[1]!.length + run[2]!.length
   change(ctx, 'U-049', at, at, extra, 'fence widened to keep the old TSV row literal')
   const last = table.pos.endLine
+  const closer = lineText(ctx.lines, last)
+  const oldCloser = /^([ \t]*)(`{3,})[ \t]*$/u.exec(closer)
+  const finalRow = rows.at(-1)?.pos?.endLine ?? first
+  if (oldCloser !== null && finalRow < last) {
+    const closeAt = lineStart(ctx.lines, last) + oldCloser[1]!.length + oldCloser[2]!.length
+    change(ctx, 'U-049', closeAt, closeAt, extra, 'old TSV closer widened with its opener')
+    return
+  }
   const after = lineStart(ctx.lines, last + 1)
   change(ctx, 'U-049', after, after, `${'`'.repeat(longest + 1)}\n`,
     'matching closer written after the old TSV row')
