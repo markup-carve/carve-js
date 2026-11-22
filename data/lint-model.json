@@ -2173,7 +2173,6 @@
       },
       "when": {
         "all": [
-          { "not": { "eq": [{ "v": "exact_owner" }, "frontmatter"] } },
           {
             "not": {
               "eq": [
