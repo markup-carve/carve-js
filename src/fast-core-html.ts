@@ -161,7 +161,7 @@ export function fastCoreHtml(source: string, settings: Settings): string | undef
     const heading = /^(#{1,6}) ([^#].*)$/.exec(current)
     if (heading !== null) {
       const title = heading[2]!
-      if (title.endsWith(' ') || !plain(title) || /[*\[\]/`]/.test(title)) return undefined
+      if (title.startsWith(' ') || title.endsWith(' ') || !plain(title) || /[*\[\]/`]/.test(title)) return undefined
       const level = heading[1]!.length
       while (sections.at(-1) !== undefined && sections.at(-1)! >= level) {
         parts.push(`${indent(sections.length - 1)}</section>`)
@@ -197,7 +197,7 @@ export function fastCoreHtml(source: string, settings: Settings): string | undef
       const quote: string[] = []
       while (lines[at]?.startsWith('> ')) {
         const body = lines[at]!.slice(2)
-        if (BLOCK.test(body)) return undefined
+        if (body === '' || body.endsWith(' ') || BLOCK.test(body)) return undefined
         const html = inline(body, definitions, settings)
         if (html === undefined) return undefined
         quote.push(html)
