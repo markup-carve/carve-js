@@ -9,7 +9,7 @@ import { blankLinesAfter, blankLinesBefore, byteOffsets, markedBlankEnd } from '
 import { cellRange, cellWraps, continuationRows, type TableRows, tableRows } from './layout-table.ts'
 import { contentSource, type LayoutTrace } from './ast-inline.ts'
 import { type BlockNode } from './tree.ts'
-import { stringOffsetOfByte } from './positions.ts'
+import { ByteCursor } from './positions.ts'
 
 export const LAYOUT_VERSION = 2
 
@@ -78,6 +78,7 @@ interface Frame {
 interface Walk {
   src: string
   trace: LayoutTrace
+  offsets: ByteCursor
   bytes: (offset: number) => number
   nodes: NodeLayout[]
   declarations: readonly ExtensionDeclaration[]
@@ -176,8 +177,8 @@ function visitInline(walk: Walk, node: Node, path: string, frame: Frame): void {
 function visitExtension(walk: Walk, node: Node, path: string, frame: Frame): Frame {
   const pos = node.pos
   if (pos === undefined) return frame
-  const start = stringOffsetOfByte(walk.src, pos.startOffset)
-  const end = stringOffsetOfByte(walk.src, pos.endOffset)
+  const start = walk.offsets.stringOffset(pos.startOffset)
+  const end = walk.offsets.stringOffset(pos.endOffset)
   const facts: Facts = {}
   setBlankLines(walk, start, end, frame, facts)
   addEntry(walk, node, path, start, end, facts)
@@ -213,7 +214,8 @@ function visitList(walk: Walk, nodes: readonly Node[], base: string, frame: Fram
 
 /** The record of `src` for `document`, the tree that was built with `trace`. */
 export function buildLayout(src: string, document: DocumentNode, trace: LayoutTrace): SourceLayout {
-  const walk: Walk = { src, trace, bytes: byteOffsets(src), nodes: [], declarations: document.extensions ?? [] }
+  const walk: Walk = { src, trace, offsets: new ByteCursor(src), bytes: byteOffsets(src), nodes: [],
+    declarations: document.extensions ?? [] }
   visit(walk, document, '', { start: 0, end: src.length, quotes: 0, open: false, spans: null, table: null, row: -1 })
   return {
     version: LAYOUT_VERSION, encoding: 'utf-8', source: src, lineEndings: lineEndings(src), bom: src.charCodeAt(0) === BYTE_ORDER_MARK,
