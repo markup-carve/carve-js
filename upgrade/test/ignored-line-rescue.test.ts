@@ -20,6 +20,14 @@ describe('lines consumed without output by the old parser', () => {
     expect(result.records.some((record) => record.entry === 'U-209' && record.message.includes('omitted'))).toBe(false)
   })
 
+  it('reports the omitted line when an earlier line has identical text', () => {
+    const source = '> q\n\n[^a]: +\n[^n]: a\n +\npara\n> q\n\n\nsee[^n]\n'
+    const result = upgrade(source)
+    expect(result.output).toContain('> q\n\n[^a]: +')
+    expect(result.records.find((record) => record.entry === 'U-209')?.line).toBe(7)
+    expect(canWriteUpgrade(result)).toBe(true)
+  })
+
   it('omits an unrendered definition that changes the ownership of following terms', () => {
     const source = '[^f]: alpha\n :: term\n :: term\n- \nSe```xe[^f]\n'
     const result = upgrade(source)

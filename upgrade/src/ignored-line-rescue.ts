@@ -1,18 +1,24 @@
 import { compareHtmlExact } from './compare.ts'
+import { offsetBefore, type Edit } from './edits.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
-import { lineEnd, lineStart, lineText, readLines } from './source.ts'
+import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 
-function originalLine(input: string, value: string, fallback: number): number {
+function originalLine(input: string, outputStart: number, value: string, edits: Edit[]): number {
   const lines = readLines(input)
+  const mapped = lineOf(lines, offsetBefore(edits, outputStart))
+  let closest = mapped
+  let distance = Infinity
   for (let line = 1; line <= lines.count; line++) {
-    if (lineText(lines, line).trimStart() === value.trimStart()) return line
+    if (lineText(lines, line).trimStart() !== value.trimStart()) continue
+    const nextDistance = Math.abs(line - mapped)
+    if (nextDistance < distance) { closest = line; distance = nextDistance }
   }
-  return fallback
+  return closest
 }
 
 /** A line swallowed by the old parser can be omitted when both complete renders prove that it had no effect. */
-export function rescueIgnoredLine(input: string, output: string, mismatch: ReportRecord):
+export function rescueIgnoredLine(input: string, output: string, mismatch: ReportRecord, edits: Edit[]):
   { output: string; record: ReportRecord } | null {
   if (!input.includes('[^') || mismatch.line < 1) return null
   const lines = readLines(output)
@@ -32,7 +38,7 @@ export function rescueIgnoredLine(input: string, output: string, mismatch: Repor
     const candidate = output.slice(0, start) + output.slice(end)
     try {
       if (!compareHtmlExact(old, html01(candidate)).equal || !compareHtmlExact(old, html02(candidate, false)).equal) continue
-      return { output: candidate, record: { ...recordOf('U-209', originalLine(input, lineText(lines, line), mismatch.line),
+      return { output: candidate, record: { ...recordOf('U-209', originalLine(input, start, lineText(lines, line), edits),
         'a line the old parser did not render was omitted after complete HTML verification'), class: 'rewrite' } }
     } catch { /* A candidate can be invalid under either grammar. */ }
   }

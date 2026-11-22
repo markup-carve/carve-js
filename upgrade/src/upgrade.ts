@@ -489,18 +489,20 @@ function recordsAfterRescue(input: string, rescued: { output: string; record: Re
 
 /** The first rescue whose spelling keeps the 0.1 HTML, in the order of the rescues. */
 function rescueMismatch(input: string, output: string, mismatch: ReportRecord, records: readonly ReportRecord[],
-  outputLine = 0): { output: string; record: ReportRecord } | null {
+  edits: Edit[], outputLine = 0): { output: string; record: ReportRecord } | null {
   // U-430 and U-431 leave a line that only report rows cite to a person (carve#6163).
   const onLine = records.filter((record) => record.line === mismatch.line || record.line === 0)
   const reported = onLine.some((record) => record.class === 'report' || record.class === 'unverified explanation')
     && !onLine.some((record) => record.class === 'rewrite' || record.class === 'escape')
   const rescues = [rescueFence, rescuePlus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
     rescueCombinedInline, rescueHeadingBraceTag, rescueTargeted, rescueMinor, rescueBacktick, rescueDirectiveSocial, rescueBraceOpenerTags,
-    rescueBracedBoldItalic, ...(reported ? [] : [rescueEscape, rescueDashRun]), rescueIgnoredLine]
+    rescueBracedBoldItalic, ...(reported ? [] : [rescueEscape, rescueDashRun])]
   for (const rescue of rescues) {
     const rescued = rescue(input, output, mismatch)
     if (rescued !== null) return rescued
   }
+  const ignored = rescueIgnoredLine(input, output, mismatch, edits)
+  if (ignored !== null) return ignored
   // The repairs also read the line of the output that holds the mismatch line of the input.
   return outputLine > 0 && outputLine !== mismatch.line && !reported ? rescueEscape(input, output, mismatch, outputLine) : null
 }
@@ -568,7 +570,8 @@ function checkedLateVariant(input: string, rules: readonly Rule[], parsed: Conte
   let check = selfCheck(input, done)
   const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
   if (check === 'mismatch' && mismatch !== undefined) {
-    const rescued = rescueMismatch(input, done.output, mismatch, done.records, repairsLine(input, done, mismatch))
+    const rescued = rescueMismatch(input, done.output, mismatch, done.records, done.edits,
+      repairsLine(input, done, mismatch))
     if (rescued !== null && !tried.has(rescued.output)) {
       tried.add(rescued.output)
       done.records = [...recordsAfterRescue(input, rescued, rewritten), rescued.record]
@@ -631,7 +634,7 @@ function firstPass(input: string): { done: Rewritten; check: UpgradeResult['chec
   const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
   if (check !== 'mismatch' || mismatch === undefined) return { done, check }
   const rescued = hasFusedCommentBlockOpener(input, done.context)
-    ? null : rescueMismatch(input, done.output, mismatch, done.records)
+    ? null : rescueMismatch(input, done.output, mismatch, done.records, done.edits)
   const checked = done.records
   done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
   if (rescued !== null) {
