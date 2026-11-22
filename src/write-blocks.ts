@@ -532,8 +532,7 @@ function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, fla
       source = { canonical: canonicalExtensionBody(node, w.linkKeys) }
       w.extensionSources.set(node, source)
     }
-    if (source.canonical && (w.trustedExtensionSources ||
-      (source.readsBack ??= sourceFormReadsBack(w, node, spelling)))) {
+    if (source.canonical && (source.readsBack ??= sourceFormReadsBack(w, node, spelling))) {
       w.plan?.opaqueBlocks.add(node)
       attributeLine(w, node, prefix)
       for (const line of spelling.trimEnd().split('\n')) emit(w, prefix, line)
@@ -545,12 +544,25 @@ function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, fla
 }
 
 function sourceFormReadsBack(w: Writer, node: BlockExtensionNode, spelling: string): boolean {
+  if (matchesVerifiedSource(w, node, spelling)) return true
   try {
     const attrs = braceBlock(node)
     const probe = attrs === '' ? spelling : `${attrs}\n${spelling}`
     const parsed = parseChunk(w, probe, w.extensions.length === 0 ? null : w.linkKeys).children[0]
     return w.extensions.length === 0 ? sourceCoreEquivalent(node, parsed) : parsed !== undefined && treesEqual(node, parsed)
   } catch { return false }
+}
+
+/** An unchanged source form already read back as this node in the formatter's parse. */
+function matchesVerifiedSource(w: Writer, node: BlockExtensionNode, spelling: string): boolean {
+  const original = w.verifiedSourceBytes
+  const pos = node.pos
+  if (original === undefined || pos === undefined || node.attrs !== undefined) return false
+  const written = new TextEncoder().encode(spelling)
+  const length = written.length - 1 // The source position ends before the trailing line feed.
+  if (pos.endOffset - pos.startOffset !== length) return false
+  for (let at = 0; at < length; at++) if (original[pos.startOffset + at] !== written[at]) return false
+  return true
 }
 
 function table(w: Writer, node: TableNode, prefix: string, flags: number): void {

@@ -1506,14 +1506,14 @@ function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout),
-  trustedExtensionSources?: boolean):
+  verifiedSourceBytes?: Uint8Array):
   { output: WriteOutput, stats: WriterStats } {
   const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), samples: new Map(), parses: 0, work: [] }
   const run: WriterRun = { path, check, stats }
   const layout = options?.layout
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
-  w.trustedExtensionSources = trustedExtensionSources === true
+  w.verifiedSourceBytes = verifiedSourceBytes
   w.linkKeys = linkKeys ??
     new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
@@ -1528,9 +1528,9 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
 
 /** Writes a tree that is known to be valid. */
 export function writeTree(document: DocumentNode, options: WriteOptions | undefined, check?: boolean,
-  original?: string, trustedExtensionSources = false): WriteOutput {
+  original?: string, verifiedSourceBytes?: Uint8Array): WriteOutput {
   return writeTreeWithStats(document, options, 'plan', check ?? options?.check !== false, undefined, original,
-    trustedExtensionSources).output
+    verifiedSourceBytes).output
 }
 
 /** The canonical Carve source of a tree, with what could not be written (C2-W-011). The tree is validated first. */
