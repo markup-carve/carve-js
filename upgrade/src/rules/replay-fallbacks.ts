@@ -143,6 +143,50 @@ export function nestedDivInsideAdmonition(ctx: Context): void {
   for (const { node } of ctx.visits) if (node.type === 'admonition') repairNestedAdmonition(ctx, node)
 }
 
+function alignDefinitionMarkers(ctx: Context, list: Node01, termColumn: number): void {
+  for (const item of list.items ?? []) {
+    const spans = item.definitionSpans as { startLine: number }[] | undefined
+    for (const span of spans ?? []) {
+      const line = span.startLine
+      const marker = /^([ ]+):(?=[ \t]|$)/u.exec(lineText(ctx.lines, line))
+      if (marker === null || marker[1]!.length <= termColumn) continue
+      change(ctx, 'U-435', lineStart(ctx.lines, line) + termColumn,
+        lineStart(ctx.lines, line) + marker[1]!.length, '',
+        'old definition marker aligned with its term column')
+    }
+  }
+}
+
+function alignFollowingSibling(ctx: Context, visit: Visit, termColumn: number): void {
+  const next = visit.siblings[visit.index + 1]
+  if (next?.pos === undefined || visit.node.pos === undefined
+    || next.pos.startLine <= visit.node.pos.endLine + 1) return
+  const firstIndent = /^ */u.exec(lineText(ctx.lines, next.pos.startLine))![0].length
+  const shift = firstIndent - termColumn
+  if (shift <= 0) return
+  for (let line = next.pos.startLine; line <= next.pos.endLine; line++) {
+    const value = lineText(ctx.lines, line)
+    const indent = /^ */u.exec(value)![0].length
+    if (indent < shift || value.trim() === '') continue
+    if (ctx.findings.some(({ edit }) => edit !== null && edit.start >= lineStart(ctx.lines, line)
+      && edit.start < lineStart(ctx.lines, line) + indent && edit.end > edit.start)) continue
+    change(ctx, 'U-435', lineStart(ctx.lines, line),
+      lineStart(ctx.lines, line) + shift, '',
+      'old sibling block kept outside the preceding definition')
+  }
+}
+
+/** Align old definition markers and following siblings with the term's list column. */
+export function descriptionMarkerColumns(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const list = visit.node
+    if (list.type !== 'definition_list' || list.pos === undefined || visit.parent?.node.type !== 'list_item') continue
+    const termColumn = list.pos.startColumn - 1
+    alignDefinitionMarkers(ctx, list, termColumn)
+    alignFollowingSibling(ctx, visit, termColumn)
+  }
+}
+
 /** The longest backtick run of the body that 0.2 would close the fence at, 0 for none; the fence must exceed it. */
 function longestBodyRun(ctx: Context, firstLine: number, lastLine: number, width: number): number {
   const closer = lineText(ctx.lines, lastLine)

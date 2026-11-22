@@ -16,7 +16,7 @@ import { includes, tables, tablesHeadStyles } from './tables.ts'
 import {
   abbreviationSpaces, continuedHeaderRow, crossLineStrong, descriptionAfterQuotedTerm, duplicateItemDefinitions,
   emptyAttributeItemAfterDescription, emptyAttributeQuote, emptyQuoteInFootnote,
-  emptyColonDiv,
+  emptyColonDiv, descriptionMarkerColumns,
   fenceAfterDescription, flippedStrong, footnoteQuoteAfterDescription, fusedCommentBlockOpener, inlineEditComposition,
   innerFenceRun, lazyCaretAfterQuote, markerAttributeBeforeHeading, nestedDivInsideAdmonition,
   legacyPlusDash, listAfterFootnote,
@@ -60,5 +60,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
     footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
     literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
-    markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition],
+    markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns],
 ]
