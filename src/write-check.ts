@@ -310,11 +310,17 @@ function escapeContentStart(c: Check, e: Node): boolean {
   return mark !== undefined && mark !== ']' && first?.type === 'text' && first.value.startsWith(mark) && escapeAt(c, first, 0)
 }
 
-/** A child text can hold the braced opener of its own wrapper and take its closer. */
+/** An opener in superscript text mixed with other content can take the wrapper's closer. */
 function escapeContentOpener(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]!
+  if (e.type !== 'superscript') return false
   const mark = CLOSING_MARKS.get(e.type)
-  return mark !== undefined && 'children' in e && escapeMark(c, e.children, 0, 0, `{${mark}`)
+  if (mark === undefined || !('children' in e)) return false
+  for (const child of e.children) {
+    // A run made entirely of openers follows the ordinary repair and budget rule.
+    if (child.type === 'text' && /[^{^]/.test(child.value) && escapeMark(c, [child], 0, 0, `{${mark}`)) return true
+  }
+  return false
 }
 
 function escapeFootnoteBrace(c: Check, e: Node): boolean {
