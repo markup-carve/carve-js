@@ -583,7 +583,7 @@ function checkImport(source: string, rng: Random): Finding | null {
   return null
 }
 
-interface OptionCase { name: string, kind: string, type: string, values?: string[] }
+interface OptionCase { name: string, kind: string, type: string, values?: string[], maximum?: number }
 const OPTIONS = (JSON.parse(readFileSync('data/options.json', 'utf8')) as { options: OptionCase[] }).options
 const WIDE_TABLE = '| a | b |\n|---|---|\n| 🇺🇸 | 👩‍💻 |\n| 각 | á |\n'
 const VALID_URL_POLICY: UrlPolicy = { deny: ['javascript'] }
@@ -593,7 +593,7 @@ function validOption(entry: OptionCase, rng: Random): unknown {
   if (entry.name === 'urlPolicy') return VALID_URL_POLICY
   if (entry.type === 'boolean') return rng.bool()
   if (entry.type === 'enum') return entry.values?.[rng.int(entry.values.length)] ?? 'off'
-  if (entry.type === 'count') return rng.int(200)
+  if (entry.type === 'count') return rng.int((entry.maximum ?? 199) + 1)
   if (entry.type === 'list') return []
   return {}
 }

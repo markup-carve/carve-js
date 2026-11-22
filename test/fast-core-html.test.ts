@@ -29,6 +29,14 @@ describe('direct core HTML path', () => {
     }
   })
 
+  // C2-B-109: a closing fence may stand at any indent, so an indented run ends the block.
+  it('declines a fence with an indented backtick run', () => {
+    for (const source of ['```\n  ```\n```', '```\n   ```\n> q\n```', '```py\na\n ```\n*x*\n```\n']) {
+      expect(fastCoreHtml(source, settings)).toBeUndefined()
+      expect(render(source)).toBe(renderWithDiagnostics(source).html)
+    }
+  })
+
   it('declines syntax whose ownership needs the full parser', () => {
     for (const source of ['---\nname: value\n---\n', ':: term\n: definition\n', '- first\n+\n> attached\n',
       '```js\ncode\n````\n', ': definition\n', '- `a``b`\n', '#  A\n', '> A \n', '> \n', '> A\n> \n',
