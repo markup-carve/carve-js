@@ -27,6 +27,17 @@ it('C2-W-088 repairs every reported construct from one parse of a capped fence g
   expect(treesEqual(parse(result.output.source), parse(input))).toBe(true)
 })
 
+it('C2-W-092 plans text fence and continuation lines at the block depth cap', () => {
+  const n = 230
+  const openers = Array.from({ length: n }, (_, at) => ':'.repeat(n + 3 - at))
+  const input = [...openers, '+', '', ...openers.slice().reverse()].join('\n') + '\n'
+  const result = writeTreeWithStats(parse(input), undefined, 'plan', false, undefined, input)
+  expect(result.stats.planned).toBe(1)
+  expect(result.stats.parses).toBe(0)
+  expect(result.output.diagnostics).toEqual([])
+  expect(treesEqual(parse(result.output.source), parse(input))).toBe(true)
+})
+
 it('C2-W-088 escapes nested block openers reported by the same read-back parse', () => {
   expect(formatWithDiagnostics('[^a]: x\n- > a')).toEqual({ source: '[^a]: x\n  \\- \\> a\n', diagnostics: [] })
   expect(formatWithDiagnostics('[^a]: x\n- ```')).toEqual({ source: '[^a]: x\n  \\- \\```\n', diagnostics: [] })

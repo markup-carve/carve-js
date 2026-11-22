@@ -534,12 +534,27 @@ function opensContainer(leaf: Leaf, at: number): boolean {
  * The escape the line that starts at `at` needs, NO_ESCAPE, or UNDECIDED. `first` says that the line is the first
  * line of a paragraph. The unit that takes the backslash must be text.
  */
+function cappedLineEscape(leaf: Leaf, at: number, place: LeafPlace): number | null {
+  if (!place.capped) return null
+  const value = code(leaf, at)
+  if (value === 43 && restIsBlank(leaf, at + 1)) {
+    return !place.inQuote && leaf.kinds[at] === TEXT ? at : UNDECIDED
+  }
+  // A later escaped fence can expose a task or parenthesized list marker below the cap.
+  if (value === 42 && code(leaf, at + 1) === 91 || value >= 48 && value <= 57 && code(leaf, at + 1) === 41) {
+    return UNDECIDED
+  }
+  if (opensContainer(leaf, at)) return NO_ESCAPE
+  // C2-B-125: past the cap a colon line still meets the fences of the outer divs, whose length the writer picks.
+  if (value === 58) return leaf.kinds[at] === TEXT ? at : UNDECIDED
+  return null
+}
+
 export function lineEscape(leaf: Leaf, at: number, first: boolean, place: LeafPlace): number {
   const start = lineStartRule(leaf, at, first)
   if (start !== null) return start
-  if (place.capped && opensContainer(leaf, at)) return NO_ESCAPE
-  // C2-B-125: past the cap a colon line still meets the fences of the outer divs, whose length the writer picks.
-  if (place.capped && code(leaf, at) === 58) return UNDECIDED
+  const capped = cappedLineEscape(leaf, at, place)
+  if (capped !== null) return capped
   const escape = first ? firstLine(leaf, at, place) : laterLine(leaf, at, place)
   if (escape < 0) return escape
   return leaf.kinds[escape] === TEXT && leaf.kinds[escape - 1] !== ESCAPE ? escape : UNDECIDED
