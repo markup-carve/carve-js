@@ -877,3 +877,27 @@ export function siblingListBoundary(ctx: Context): void {
       'sibling list separated and its marker moved to the list column')
   }
 }
+
+/** Keep a quote's two old paragraphs outside the preceding list after U-017 moves its first line. */
+export function siblingQuoteParagraphs(ctx: Context): void {
+  for (const visit of ctx.visits) {
+    const quote = visit.node
+    const above = visit.siblings[visit.index - 1]
+    if (quote.type !== 'block_quote' || quote.pos === undefined || above?.type !== 'list'
+      || above.pos?.endLine !== quote.pos.startLine - 1 || quote.children?.length !== 2
+      || quote.children.some((child) => child.type !== 'paragraph' || child.pos === undefined)) continue
+    const first = quote.children[0]!
+    const second = quote.children[1]!
+    const opener = quote.pos.startLine
+    if (first.pos!.startLine !== opener + 1 || second.pos!.startLine !== first.pos!.endLine + 1
+      || !/^>[ \t]*\+[ \t]*$/u.test(lineText(ctx.lines, opener))) continue
+    const later = lineText(ctx.lines, second.pos!.startLine)
+    const match = /^([ \t]*)>[ \t]+\S/u.exec(later)
+    if (match === null) continue
+    const start = lineStart(ctx.lines, opener)
+    const after = lineStart(ctx.lines, second.pos!.startLine)
+    change(ctx, 'U-126', start, start, '\n', 'sibling quote separated from the preceding list')
+    change(ctx, 'U-125', after, after + match[1]!.length, '>\n',
+      'empty quote line keeps the later old paragraph inside its sibling quote')
+  }
+}
