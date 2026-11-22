@@ -77,10 +77,23 @@ function lineOffsets(key: string, leaf: { text: TextNode, lineStart: boolean }):
   return [value.startsWith('--') ? 1 : 0]
 }
 
-/** C2-W-099: the second hyphen of each run. */
+/** The start of the run of hyphens that holds `at`. */
+function runStart(value: string, at: number): number {
+  let start = at
+  while (start > 0 && value[start - 1] === '-') start--
+  return start
+}
+
+/** Whether `at` is a hyphen of a run of two or more that C2-W-099 leaves bare: the first, the third and so on. */
+function isBareHyphen(value: string, at: number): boolean {
+  if (value[at] !== '-' || (value[at - 1] !== '-' && value[at + 1] !== '-')) return false
+  return (at - runStart(value, at)) % 2 === 0
+}
+
+/** C2-W-099: every second hyphen of each run of two or more, starting with the second. */
 function hyphenOffsets(value: string): number[] {
   const offsets: number[] = []
-  for (let at = 1; at < value.length; at++) if (value[at] === '-' && value[at - 1] === '-' && value[at - 2] !== '-') offsets.push(at)
+  for (let at = 1; at < value.length; at++) if (value[at] === '-' && value[at - 1] === '-' && !isBareHyphen(value, at)) offsets.push(at)
   return offsets
 }
 
@@ -149,6 +162,19 @@ export function escapeKinds(check: Check, group: readonly Node[]): void {
       if (leaf.text === null) return
       for (const offset of kindOffsets(key, block, index)) escapeAt(check, leaf.text, offset)
     })
+    if (key === '--') dropBareHyphens(check, block)
+  }
+}
+
+/** C2-W-099: a hyphen run takes the backslash on every second hyphen only, whichever hyphen of it a parse reports. */
+function dropBareHyphens(check: Check, block: KindBlock): void {
+  const texts = new Set(block.leaves.map((leaf) => leaf.text))
+  const trials = new Set(check.trials)
+  for (let place = check.escapes.length - 1; place >= 0; place--) {
+    const escape = check.escapes[place]!
+    const [node, at] = escape
+    if (!texts.has(node) || trials.has(escape) || check.lineEscapes.get(node)?.has(at) === true) continue
+    if (isBareHyphen(node.value, at)) check.escapes.splice(place, 1)
   }
 }
 
@@ -187,8 +213,7 @@ function bareOpener(block: KindBlock, key: string, placed: ReadonlyMap<TextNode,
 export function leavesKindBare(group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>,
   placed: ReadonlyMap<TextNode, readonly number[]>): boolean {
   for (const block of new Set(kindBlocks(group).values())) {
-    // A hyphen run takes its escapes round by round as the escapes split it (C2-W-099), which the plan does not follow.
-    for (const key of planKinds(block, escapes)) if (key === '--' || bareOpener(block, key, placed)) return true
+    for (const key of planKinds(block, escapes)) if (bareOpener(block, key, placed)) return true
   }
   return false
 }
