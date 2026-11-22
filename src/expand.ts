@@ -13,6 +13,7 @@ import { applyShifts, selectSection } from './include-select.ts'
 import { INCLUDE_CAUSES, INCLUDE_CONFLICTS, INCLUDE_MESSAGES, INCLUDE_OPTION_MESSAGES } from './include-tables.ts'
 import { type HeadingIds } from './options.ts'
 import { utf8Length } from './positions.ts'
+import { leadingIncludedFrontmatter } from './frontmatter-origin.ts'
 
 /** Parses the text of one file with the parse options of the top-level document (C2-N-015). */
 /** Parses the text of a file; `positions` asks for positions where the expansion would not keep them. */
@@ -204,6 +205,10 @@ function parseLines(exp: Expansion, text: string, lines: FileLines, range: LineR
   const slice = text.slice(start, lines.nexts[range.to - 1])
   // C2-N-020: frontmatter belongs to the file, so only a selection from its line 1 opens it.
   const parsed = exp.parse(slice, scope, false, range.from === 0)
+  const first = parsed.document.children[0]
+  const startOfFile = slice.charCodeAt(0) === 0xfeff ? slice.slice(1) : slice
+  if (range.from === 0 && first?.type === 'frontmatter' &&
+    (startOfFile.startsWith('---') || startOfFile.startsWith('{'))) leadingIncludedFrontmatter.add(first)
   // A slice from line 1 holds the U+FEFF too, and stands where the file starts.
   const from = range.from === 0 ? 0 : start
   if (exp.positions && from > 0) movePositions(parsed.document.children, range.from, utf8Length(text.slice(0, from)))
