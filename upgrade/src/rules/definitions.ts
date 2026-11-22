@@ -219,7 +219,16 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
 /** Writes the definition of `span` after the line `end` of its container. */
 function place(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
   const quote = top === false && ctx.repairs === true ? emptyNestedQuote(ctx, span) : ''
-  if (quote !== '') moveAfter(ctx, id, span, cut, end, message, quote)
+  if (quote !== '') {
+    moveAfter(ctx, id, span, cut, end, message, quote)
+    const next = span.last + 1
+    const outerEndsHere = (ctx.doc.children ?? []).some((node) => node.type === 'block_quote'
+      && node.pos?.endLine === span.last && node.pos.startLine <= span.first)
+    if (outerEndsHere && next <= ctx.lines.count && /^>[ \t]*$/u.test(lineText(ctx.lines, next))) {
+      change(ctx, id, lineStart(ctx.lines, next), lineStart(ctx.lines, next + 1), '',
+        'unclaimed empty quote line removed after the definition was moved')
+    }
+  }
   else if (end === span.last) hoistLast(ctx, id, span, cut, message)
   else moveAfter(ctx, id, span, cut, end, message)
 }
