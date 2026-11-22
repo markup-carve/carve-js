@@ -57,14 +57,17 @@ export function selectEdits(edits: Edit[]): Edit[] {
   return ordered.filter((edit) => !dropped.has(edit))
 }
 
-/** Applies `edits`, which `selectEdits` ordered, from the end of the text backward. */
+/** Applies ordered, nonoverlapping edits while copying each source span once. */
 export function applyEdits(src: string, edits: Edit[]): string {
-  let out = src
-  for (let index = edits.length - 1; index >= 0; index--) {
-    const edit = edits[index]!
-    out = out.slice(0, edit.start) + edit.text + out.slice(edit.end)
+  if (edits.length === 0) return src
+  const parts: string[] = []
+  let cursor = 0
+  for (const edit of edits) {
+    parts.push(src.slice(cursor, edit.start), edit.text)
+    cursor = edit.end
   }
-  return out
+  parts.push(src.slice(cursor))
+  return parts.join('')
 }
 
 /** The offset in the text after `edits` of `offset` in the text before them. */

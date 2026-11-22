@@ -12,6 +12,15 @@ describe('replay fallback families', () => {
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
+  it('keeps repeated fused closers without allocating a rescue for every comment', () => {
+    const unit = '- a\n  - %%%\n    hidden\n%%%::: note\ntail\n'
+    const input = unit.repeat(100)
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toContain('%%%\ntail\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('keeps a quote-shaped paragraph below an attribute line', () => {
     const input = '{#_id ._c _k=1 _="on click"}\n>> \npara\n'
     const result = upgrade(input)

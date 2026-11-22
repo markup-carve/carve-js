@@ -22,10 +22,15 @@ function percentCloser(lines: string[], open: number): number {
   return -1
 }
 
-function percentBoundaryCandidates(output: string): string[] {
+function candidateWindow(count: number, near: number): [number, number] {
+  return count <= 128 ? [0, count] : [Math.max(0, near - 12), Math.min(count, near + 12)]
+}
+
+function percentBoundaryCandidates(output: string, near: number): string[] {
   const lines = output.split('\n')
   const found: string[] = []
-  for (let open = 1; open < lines.length - 2; open++) {
+  const [first, last] = candidateWindow(lines.length, near)
+  for (let open = Math.max(1, first); open < Math.min(last, lines.length - 2); open++) {
     if (!(lines[open] ?? '').trimStart().startsWith('%%%')) continue
     const close = percentCloser(lines, open)
     if (close < 0 || (lines[close + 1] ?? '').trim() === '') continue
@@ -79,10 +84,11 @@ function percentLineCandidates(
   return { indented, lengthened }
 }
 
-function opaqueSpanCandidates(input: string): string[] {
+function opaqueSpanCandidates(input: string, near: number): string[] {
   const lines = input.split('\n')
   const found: string[] = []
-  for (let open = 0; open < lines.length - 2; open++) {
+  const [first, last] = candidateWindow(lines.length, near)
+  for (let open = first; open < Math.min(last, lines.length - 2); open++) {
     if (!(lines[open] ?? '').includes('%%%')) continue
     for (let close = open + 1; close < Math.min(lines.length - 1, open + 12); close++) {
       if (!(lines[close] ?? '').includes('%%%')) continue
@@ -100,10 +106,11 @@ function bareQuotedPercent(value: string): boolean {
   return run.length >= 3 && [...run].every((character) => character === '%')
 }
 
-function duplicatedPercentCandidates(output: string): string[] {
+function duplicatedPercentCandidates(output: string, near: number): string[] {
   const lines = output.split('\n')
   const found: string[] = []
-  for (let at = 0; at < lines.length - 1; at++) {
+  const [first, last] = candidateWindow(lines.length, near)
+  for (let at = first; at < Math.min(last, lines.length - 1); at++) {
     if (!bareQuotedPercent(lines[at] ?? '') || !bareQuotedPercent(lines[at + 1] ?? '')) continue
     if (bareQuotedPercent(lines[at - 1] ?? '') || bareQuotedPercent(lines[at + 2] ?? '')) continue
     const changed = [...lines]
@@ -117,7 +124,7 @@ function duplicatedPercentCandidates(output: string): string[] {
 export function rescuePercent(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('%%%')) return null
   const expected = html01(input)
-  const boundary = firstPreserving(expected, percentBoundaryCandidates(output))
+  const boundary = firstPreserving(expected, percentBoundaryCandidates(output, mismatch.line))
   if (boundary !== null)
     return {
       output: boundary,
@@ -148,10 +155,10 @@ export function rescuePercent(input: string, output: string, mismatch: ReportRec
         record: recordOf('U-129', mismatch.line, 'the comment fence was lengthened to retain the 0.1 opaque body')
       }
   }
-  const duplicated = firstPreserving(expected, duplicatedPercentCandidates(output))
+  const duplicated = firstPreserving(expected, duplicatedPercentCandidates(output, mismatch.line))
   if (duplicated !== null) return { output: duplicated, record: recordOf('U-129', mismatch.line,
     'a second comment fence boundary was written to retain the 0.1 hidden quote content') }
-  const opaque = firstPreserving(expected, opaqueSpanCandidates(input))
+  const opaque = firstPreserving(expected, opaqueSpanCandidates(input, mismatch.line))
   if (opaque !== null) return { output: opaque, record: recordOf('U-215', mismatch.line,
     'the invisible percent fence span was removed so the surrounding blocks keep their 0.1 ownership') }
   return null
