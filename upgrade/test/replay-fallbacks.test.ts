@@ -4,6 +4,14 @@ import { render } from '../../src/index.ts'
 import { upgrade } from '../src/index.ts'
 
 describe('replay fallback families', () => {
+  it('keeps a nested quote list after a quoted plus line', () => {
+    const input = '- - +\n> +\n> - s\n  b\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('- - {%%}\n\n> > - s\n  b\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('keeps an old admonition around a longer div with an unclosed fence', () => {
     const input = '::: note\n- para\n  [^f]: n\n::::\n```\ncode\n::::\n:::\nafter *b*\n'
     const result = upgrade(input)
