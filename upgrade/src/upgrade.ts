@@ -13,7 +13,7 @@ import { rescueBraceOpenerTags, rescueHeadingBraceTag } from './heading-brace-re
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
 import { addShortTableColumns, addTaskPresentation, followTaskLabels, applyHtmlTransformations, dropEmptyClasses, explainEmptyRuns,
-  hasTaskPresentationDifference,
+  hasTaskPresentationDifference, trimCellTabPadding,
   moveTrailingSigilHyphen,
   wrapLaterItemParagraphs } from './html-transform.ts'
 import { explainDescriptionPlusFenceEof } from './html-plus-eof.ts'
@@ -341,6 +341,11 @@ function applyCitedStep(old: string, next: string, records: ReportRecord[]): Ret
     entries.filter((entry) => entry !== 'U-154' && entry !== 'U-133' && entry !== 'U-159'))
   transformed.html = catalog.html
   transformed.applied.push(...catalog.applied)
+  if (hasEntry(records, 'U-065') && hasEntry(records, 'U-140')) {
+    const tabs = trimCellTabPadding(transformed.html)
+    transformed.html = tabs.html
+    transformed.applied.push(...tabs.applied)
+  }
   if (records.some((record) => record.entry === 'U-150' && record.range !== undefined)) {
     const columns = addShortTableColumns(transformed.html, next)
     transformed.html = columns.html

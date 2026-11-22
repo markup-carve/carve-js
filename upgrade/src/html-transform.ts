@@ -306,3 +306,24 @@ export function applyHtmlTransformations(old: string, next: string, entries: rea
   }
   return { html: tokens.join(''), applied }
 }
+
+function trimCellEdge(token: string | undefined, edge: 'start' | 'end'): string | null {
+  if (token === undefined || token.startsWith('<')) return null
+  const padding = edge === 'start' ? /^[ \t]+/u.exec(token)?.[0] : /[ \t]+$/u.exec(token)?.[0]
+  if (!padding?.includes('\t')) return null
+  return edge === 'start' ? token.slice(padding.length) : token.slice(0, -padding.length)
+}
+
+/** C2-B-171: table cell boundary whitespace that includes a tab is padding in 0.2. */
+export function trimCellTabPadding(old: string): Result {
+  const tokens = htmlTokens(old)
+  let changed = false
+  for (let at = 0; at < tokens.length; at++) {
+    const token = tokens[at]!
+    const next = /^<(?:td|th)(?:\s|>)/u.test(token) ? trimCellEdge(tokens[at + 1], 'start') : null
+    const previous = token === '</td>' || token === '</th>' ? trimCellEdge(tokens[at - 1], 'end') : null
+    if (next !== null) { tokens[at + 1] = next; changed = true }
+    if (previous !== null) { tokens[at - 1] = previous; changed = true }
+  }
+  return { html: changed ? tokens.join('') : old, applied: changed ? ['U-140'] : [] }
+}
