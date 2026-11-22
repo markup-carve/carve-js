@@ -1344,10 +1344,11 @@
     "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
     "line": 68,
     "input": "-{#k} {#h}\n # h\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-109",
-      "U-169"
+      "U-137",
+      "U-006"
     ]
   },
   {

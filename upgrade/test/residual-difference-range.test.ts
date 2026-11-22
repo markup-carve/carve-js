@@ -23,10 +23,11 @@ describe('residual HTML differences name their source', () => {
     expect(mismatch?.range).toEqual({ startOffset: 0, endOffset: source.length - 1 })
   })
 
-  it('marks a difference with no tool row as a map finding', () => {
+  it('no longer leaves a map gap for a consumed marker-line attribute', () => {
     const source = '1.{#k} {#h}\n\n   # h\n'
-    const mismatch = upgrade(source).records.find((record) => record.entry === 'upgrade-mismatch')
-    expect(mismatch?.message).toContain('no mapped row')
-    expect(mismatch?.range).toEqual({ startOffset: 0, endOffset: source.indexOf('\n') })
+    const result = upgrade(source)
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-137')
+    expect(result.records.some((record) => record.entry === 'upgrade-mismatch')).toBe(false)
   })
 })
