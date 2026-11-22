@@ -43,6 +43,11 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
     const output = flatten(document)
     expect(output.source).toBe('x\n\n---yaml\nk: v\n---\n')
     expect(output.same).toBe(true)
+    const withoutPositions = parse(source, { positions: false, includes: { resolver: corpusResolver(files) } })
+    expect(flatten(withoutPositions).source).toBe(output.source)
+    const laterOnly = { 'a.crv': { text: '\n---yaml\nk: v\n---\n' } }
+    const laterDocument = parse(source, { positions: false, includes: { resolver: corpusResolver(laterOnly) } })
+    expect(flatten(laterDocument).source).toBe('---\nk: v\n---\n')
   })
 
   it('repairs a supplied literal typed opener with the canonical escape', () => {
