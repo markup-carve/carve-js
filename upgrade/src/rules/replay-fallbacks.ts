@@ -110,9 +110,13 @@ function moveNestedDefinition(ctx: Context, quote: Node01): boolean {
     && child.pos !== undefined && quote.pos!.startLine < child.pos.startLine
     && child.pos.startLine <= quote.pos!.endLine)
   if (definition?.pos === undefined) return false
-  const moved = ctx.findings.find(({ record, edit }) => record.entry === 'U-038' && edit !== null
-    && edit.start === edit.end && edit.text.includes(`[${String(definition.label)}]:`))
-  if (moved?.edit === null || moved?.edit === undefined) return false
+  const from = lineStart(ctx.lines, definition.pos.startLine)
+  const removed = ctx.findings.findIndex(({ record, edit }) => record.entry === 'U-038' && edit !== null
+    && edit.text === '' && edit.start === from && edit.end > definition.pos!.startOffset)
+  if (removed < 0) return false
+  const moved = ctx.findings[removed + 1]
+  if (moved?.record.entry !== 'U-038' || moved.edit === null || moved.edit === undefined
+    || moved.edit.start !== moved.edit.end || !moved.edit.text.includes(`[${String(definition.label)}]:`)) return false
   moved.edit = { ...moved.edit, start: 0, end: 0, text: `${moved.edit.text.trimStart()}\n` }
   moved.record.message = 'definition hoisted above the old nested div'
   return true

@@ -17,4 +17,11 @@ describe('the old admonition owning a nested div', () => {
     expect(result.records.map(({ entry }) => entry)).toContain('U-049')
     expect(result.records.map(({ entry }) => entry)).toContain('U-258')
   })
+
+  it('moves the positioned definition when a label already appeared above it', () => {
+    const source = `[r]: /first\n\n${sources[0]}`
+    const result = upgrade(source)
+    expect(result.check).toBe('pass')
+    expect(result.output.startsWith('[r]: /u\n\n[r]: /first\n')).toBe(true)
+  })
 })
