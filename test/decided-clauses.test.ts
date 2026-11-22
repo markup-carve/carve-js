@@ -176,8 +176,9 @@ describe('escapes, from left to right', () => {
     expect(format('x(/u){/ /}')).toBe('x(/u){/ /}\n')
   })
 
-  it('C2-W-091: a round places the first escape only, so one behind it that it makes needless is not placed', () => {
-    expect(format('x(/u)\\/}/}')).toBe('x({/u)\\/}/}}\n')
+  it('C2-W-088: a round places every reported escape before the next parse', () => {
+    // C2-W-088 (carve-js#5283, option B): the reported brace kind escapes the brace of `/}` as well.
+    expect(format('x(/u)\\/}/}')).toBe('x({/u)\\/\\}/}\\}\n')
   })
 
   it('C2-W-088: the gate finds an escape the test does not ask for, also before one it asks for', () => {

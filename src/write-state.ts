@@ -68,6 +68,12 @@ export interface Writer {
   prewrittenAttributes: Node | null
   /** C2-I-118: images write the brackets of their alt text bare, for a group past the depth cap where they are text. */
   bareAlts: boolean
+  /** C2-W-088: false while a group is written again by rounds of the reported openers only. */
+  kindRounds: boolean
+  /** The blocks of the document root: only there does a typed opener open a metadata block (C2-B-232). */
+  topBlocks: ReadonlySet<Node>
+  /** C2-W-010: the plan is taken without the test of C2-W-088 kinds, after the rounds lost a node it keeps. */
+  planKinds: boolean
   /** Why the plan left the last group to the repair, or null. */
   planWhy: string | null
   /** The plan of the group being written, while the writer plans it (write-plan.ts). */
@@ -94,6 +100,8 @@ export interface Writer {
    * all repairs wrote.
    */
   work: { chars: number, limit: number, spent: number, source: number, written: number, rewritten: number }
+  /** Prototype: the frontmatter that stands first in the document and may use the bare opener (C2-B-161). */
+  leadingFrontmatter: Node | null
 }
 
 /** What one probe of the repair found: its result and the escapes it asked of the comparison, in order. */
@@ -111,10 +119,12 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
-    prewrittenAttributes: null, bareAlts: false, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
+    prewrittenAttributes: null, bareAlts: false, kindRounds: true, topBlocks: new Set(), planKinds: false, planWhy: null, plan: null,
+    parses: 0, parseCache: new Map(),
     extensionSources: new Map(), verifiedSourceBytes: undefined,
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
+    leadingFrontmatter: null,
   }
 }
 
@@ -186,7 +196,8 @@ export function lose(w: Writer, node: Node, field: string | null): void {
   w.lossLog.push([node, null])
   const message = field === null
     ? `Carve source cannot spell a ${node.type} node here`
-    : `Carve source cannot spell the field ${field} of a ${node.type} node here`
+    : field === '' ? `Carve source cannot spell the fields of a ${node.type} node here`
+      : `Carve source cannot spell the field ${field} of a ${node.type} node here`
   const code = field === null ? 'structure-unspellable' : 'field-unspellable'
   const entry: Diagnostic = { code, severity: 'warning', channel: 'render-loss', message }
   addFinding(w.losses, node, entry)

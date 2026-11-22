@@ -1,18 +1,27 @@
 // `flatten` and `carve flatten`: one Carve file with every include expanded in place. An engine feature, outside the
 // specification (C2-T-003); C2-N-005 keeps `fmt` from expanding, so this is the call that does.
 import { render } from './api.ts'
-import { type DocumentNode, type Node } from './ast.ts'
+import { type DocumentNode, type IncludeNode, type Node } from './ast.ts'
 import { write } from './write.ts'
+import { leadingIncludedFrontmatter } from './frontmatter-origin.ts'
 
 /**
- * The children of each expanded include in its place, recursively; included frontmatter renders nothing and goes.
+ * The children of each expanded include in its place, recursively; only its line-1 frontmatter goes.
  * An include that did not expand has no `children` and stays, so it is written as its directive.
  */
+function includedBody(node: IncludeNode): readonly Node[] {
+  const children = node.children ?? []
+  const first = children[0]
+  if (first?.type !== 'frontmatter') return children
+  // The parser records line-1 provenance even when the public tree omits positions.
+  const leading = first.pos?.startLine === 1 || leadingIncludedFrontmatter.has(first)
+  return leading ? children.slice(1) : children
+}
+
 function spliced(nodes: readonly Node[]): Node[] {
   const result: Node[] = []
   for (const node of nodes) {
-    const children = node.type === 'include' ? node.children : undefined
-    if (children !== undefined) result.push(...spliced(children.filter((child) => child.type !== 'frontmatter')))
+    if (node.type === 'include' && node.children !== undefined) result.push(...spliced(includedBody(node)))
     else result.push(withSplicedSlots(node))
   }
   return result

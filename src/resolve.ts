@@ -45,6 +45,8 @@ export interface Resolution {
   refIds: Map<Node, string>
   /** The generated text of each resolved cross-reference (C2-H-096). */
   xrefText: Map<Node, string>
+  /** C2-I-096, C2-B-207: the ids a cross-reference can reach: of headings and of numbered caption hosts and panels. */
+  xrefIds: Set<string>
   /** C2-H-156: the generated id of the title of each admonition and of the directive that places the notes. */
   labelIds: Map<Node, string>
   /** The findings of resolution, each with its node. `diagnostics` is the list of its entries. */
@@ -686,15 +688,21 @@ function panelAnchors(group: FigureGroupNode, text: string, anchors: Map<string,
   }
 }
 
+/** The id of each heading with its text; the text is read only where a cross-reference may point at it. */
+function headingAnchors(walk: Walk): Map<string, string> {
+  const anchors = new Map<string, string>()
+  for (const heading of walk.headings) {
+    const id = headingId(heading)
+    if (id !== undefined && !anchors.has(id)) anchors.set(id, walk.xrefs.length === 0 ? '' : plainText(heading.children))
+  }
+  return anchors
+}
+
 /** C2-H-095, C2-H-096: a cross-reference resolves against the ids of headings and of numbered captions. */
 function resolveXrefs(walk: Walk): void {
-  const anchors = new Map<string, string>()
-  // The text of a heading is read only where a cross-reference may point at it.
-  for (const heading of walk.xrefs.length === 0 ? [] : walk.headings) {
-    const id = headingId(heading)
-    if (id !== undefined && !anchors.has(id)) anchors.set(id, plainText(heading.children))
-  }
+  const anchors = headingAnchors(walk)
   numberCaptions(walk, anchors)
+  for (const id of anchors.keys()) walk.resolution.xrefIds.add(id)
   // C2-I-097: the ids match under NFC; the href names the target's own id, and the key stays as typed.
   const normalized = new Map<string, string>()
   for (const id of anchors.keys()) {
@@ -778,7 +786,7 @@ function newWalk(
   const findings: Findings = { entries: [], nodes: [] }
   const resolution: Resolution = {
     definitions: new Map(), expansionOf: new Map(), definitionOf: new Map(), notes: [], noteOf: new Map(),
-    refIds: new Map(), xrefText: new Map(),
+    refIds: new Map(), xrefText: new Map(), xrefIds: new Set(),
     labelIds: new Map(), findings, diagnostics: findings.entries, markupLines: new Map(),
   }
   const footnotes = new Map<string, FootnoteNode>()

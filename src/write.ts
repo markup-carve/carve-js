@@ -12,7 +12,10 @@ import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
-import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
+import { escapeKinds, leavesKindBare } from './write-kinds.ts'
+import {
+  type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk, parseWritten,
+} from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { createWriter, type LossMark, lose, markLosses, rollBackLosses, type Writer, type WriterFacts } from './write-state.ts'
@@ -359,7 +362,10 @@ function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
   return end
 }
 
-/** The text nodes below `nodes` in the order in which they are written: a title before the children. */
+// The nesting of inline nodes stays under the depth cap of the parser.
+const MAX_LEAF_DEPTH = 200
+
+/** Text nodes in source order, so a trial sees the escapes already placed to its left. */
 function textOrder(nodes: readonly Node[], order: Map<Node, number>): Map<Node, number> {
   for (const node of nodes) {
     if (node.type === 'text') order.set(node, order.size)
@@ -368,41 +374,7 @@ function textOrder(nodes: readonly Node[], order: Map<Node, number>): Map<Node, 
   return order
 }
 
-/**
- * C2-W-091: a round that asks for this many escapes or fewer places the first one only, since the
- * ones behind it were asked for with it not yet in place. A round that asks for more places them
- * all, so that the number of rounds stays linear in the size of the group.
- */
-const MAX_ORDERED_ESCAPES = 4
-// The nesting of inline nodes stays under the depth cap of the parser.
-const MAX_LEAF_DEPTH = 200
-
-/** C2-W-091: the first of `escapes` in written order. */
-function leftmost(group: readonly Node[], escapes: readonly [TextNode, number][]): [TextNode, number] {
-  const order = textOrder(group, new Map())
-  let best = escapes[0]!
-  for (const escape of escapes) {
-    const rank = order.get(escape[0]) ?? -1
-    const bestRank = order.get(best[0]) ?? -1
-    if (rank < bestRank || (rank === bestRank && escape[1] < best[1])) best = escape
-  }
-  return best
-}
-
-/**
- * The escapes a round asked for behind the leftmost one wait for the next round (C2-W-091). A node
- * whose way to form asked for one of them takes that way again then, rather than its next one.
- */
-function deferEscapes(w: Writer, deferred: readonly [TextNode, number][]): void {
-  for (const attempt of w.attempts.values()) {
-    const kept = attempt.escapes.filter((escape) => !deferred.includes(escape))
-    if (kept.length === attempt.escapes.length) continue
-    attempt.escapes = kept
-    attempt.step--
-  }
-}
-
-/** The tree of the group written with the escapes `escapes`. */
+/** Parse a C2-W-125 trial with one candidate escape in the current group spelling. */
 function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: Map<TextNode, number[]>): DocumentNode {
   w.escapes = escapes
   w.lines = []
@@ -412,10 +384,7 @@ function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: M
   return parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
 }
 
-/**
- * C2-W-088, C2-W-091: whether the test asks for the escape `at` of `node`: with the escapes to its
- * left in place and none to its right, the group parses to another tree without it.
- */
+/** Whether a trial escape changes the tree with earlier escapes in place. */
 function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNode, at: number): boolean {
   const placed = w.escapes
   const lines = w.lines
@@ -429,7 +398,6 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
     if (own < rank) left.set(text, offsets)
     else if (text === node) left.set(text, offsets.filter((offset) => offset < at))
   }
-  // Built before the first write, which may add the doubled backslash of C2-W-097 to the lists it reads.
   const escaped = new Map(left)
   escaped.set(node, [...(left.get(node) ?? []), at])
   const without = groupTree(w, group, first, left)
@@ -444,27 +412,23 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
 
 /**
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
- * false when the group reads back as its blocks. C2-W-091: an escape stays once placed, and an
- * escape that a node which did not form asks for is placed only where the test asks for it.
+ * false when the group reads back as its blocks. C2-W-088 places all escapes reported by the same read-back parse.
  */
 function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
+  // C2-W-125 tries to form a missing node separately from the constructs C2-W-088 found in the
+  // read-back parse. A lone ineffective trial takes no escape. Multiple trials can work together.
   let dropped = false
-  // Each test writes the group twice; a round with more trials places them all, as it does escapes.
-  const trials = check.trials.length <= MAX_ORDERED_ESCAPES ? check.trials : []
-  for (const [node, at] of trials) {
+  for (const [node, at] of check.trials.length <= 4 ? check.trials : []) {
+    if (check.trials.length > 1) continue
     if (isAsked(w, group, first, node, at)) continue
     const place = check.escapes.findIndex((escape) => escape[0] === node && escape[1] === at)
     if (place >= 0) check.escapes.splice(place, 1)
     dropped = true
   }
-  // The node that asked for a dropped escape takes its next way to form in the next round.
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
-  if (check.escapes.length > 1 && check.escapes.length <= MAX_ORDERED_ESCAPES) {
-    const first = leftmost(group, check.escapes)
-    deferEscapes(w, check.escapes.filter((escape) => escape !== first))
-    check.escapes = [first]
-  }
+  dropLineDuplicates(check)
+  if (w.kindRounds) escapeKinds(check, group)
   extendChains(check)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
@@ -474,6 +438,22 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     if (w.blankFirst) return true
   }
   return applyChanges(w, check)
+}
+
+/**
+ * C2-W-092, C2-W-152: a line whose opener this round escapes takes no second backslash on that opener, from a
+ * C2-W-125 trial or from the column of the block the parse opened there.
+ */
+function dropLineDuplicates(check: Check): void {
+  if (check.lineEscapes.size === 0) return
+  const trials = new Set(check.trials)
+  for (let place = check.escapes.length - 1; place >= 0; place--) {
+    const escape = check.escapes[place]!
+    const [node, at] = escape
+    const line = check.lineEscapes.get(node)
+    if (line === undefined || line.has(at) || !openerOffsets(node.value).includes(at)) continue
+    if (trials.has(escape) || check.ownEscapes.get(node)?.has(at) === true) check.escapes.splice(place, 1)
+  }
 }
 
 function nodeId(ids: Map<Node, number>, node: Node): number {
@@ -735,6 +715,7 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   const plan = settledPlan(w, run, group, first, reported)
   if (plan === null) return false
   const replaced = addPlanned(w, plan)
+  if (leavesKind(w, run, group, plan, replaced)) return false
   if (replaced.length > 0) {
     resetLines(w)
     writeBlocks(w, group, '', 0, false)
@@ -758,6 +739,16 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   }
   // The pair rules asked nothing of the planned spelling, so the test after the write would find nothing either.
   if (placed === NONE_ASKED) pairs.settled = true
+  return true
+}
+
+/** C2-W-088: a round escapes every opener of a kind its parse reports; a plan that leaves one bare goes to the rounds. */
+function leavesKind(w: Writer, run: WriterRun, group: readonly Node[], plan: Plan,
+  replaced: readonly [TextNode, number[] | undefined][]): boolean {
+  if (!w.kindRounds || w.planKinds || plan.escapes.size === 0 || !leavesKindBare(group, plan.escapes, w.escapes)) return false
+  restoreEscapes(w, replaced)
+  noteReason(run, 'kind', '')
+  w.planWhy = 'kind'
   return true
 }
 
@@ -964,10 +955,28 @@ function writeGroupOnce(w: Writer, run: WriterRun, document: DocumentNode, from:
   }
   run.stats.repaired++
   const work = w.work.chars
-  const end = w.planWhy === 'depth cap'
+  const saved = w.planWhy === 'kind' ? saveGroup(w, groupEnd(w, document.children, from)) : null
+  let end = w.planWhy === 'depth cap'
     ? repairBareAlts(w, document, from, first, reported) : repairGroup(w, document, from, first, reported)
+  if (saved !== null && w.losses.entries.length > reported) end = planInstead(w, run, document, from, first, pairs, saved, reported)
   run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), w.work.chars - work])
   return end
+}
+
+/** C2-W-010: where the rounds lose a node of a group the plan writes whole, the plan's form is taken. */
+function planInstead(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean, pairs: GroupPairs,
+  saved: SavedGroup, reported: number): number {
+  restoreGroup(w, saved)
+  w.planKinds = true
+  try {
+    if (planGroup(w, run, document.children.slice(from, saved.end), first, pairs)) return saved.end
+  } finally {
+    w.planKinds = false
+  }
+  // The losses of the rounds were taken back with the group, so the rounds run again rather than restore them.
+  restoreGroup(w, saved)
+  w.planWhy = null
+  return repairGroup(w, document, from, first, reported)
 }
 
 /**
@@ -994,6 +1003,20 @@ function repairBareAlts(w: Writer, document: DocumentNode, from: number, first: 
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
 function repairGroup(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+  const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
+  const end = repairOnce(w, document, from, first, reported)
+  if (saved === null || w.losses.entries.length === reported) return end
+  // C2-W-088: where the rounds by kind lose a node, the rounds of the reported openers only give the form.
+  restoreGroup(w, saved)
+  w.kindRounds = false
+  try {
+    return repairOnce(w, document, from, first, reported)
+  } finally {
+    w.kindRounds = true
+  }
+}
+
+function repairOnce(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
   const start = w.work.chars
   const end = repairRounds(w, document, from, first, reported)
   w.work.spent += w.work.chars - start
@@ -1504,6 +1527,16 @@ function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
 }
 
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
+function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteOptions['layout']): void {
+  w.linkKeys = new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
+  if (layout !== undefined && w.facts !== null) readLayout(w, w.facts, document, layout.nodes)
+  readAbbreviations(w, document)
+  const lead = document.children[0]
+  w.leadingFrontmatter = lead?.type === 'frontmatter' && lead.attrs === undefined ? lead : null
+  w.topBlocks = new Set(document.children)
+}
+
+/** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout),
   verifiedSourceBytes?: Uint8Array):
@@ -1514,10 +1547,8 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
   w.verifiedSourceBytes = verifiedSourceBytes
-  w.linkKeys = linkKeys ??
-    new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
-  if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
-  readAbbreviations(w, document)
+  prepareDocumentWriter(w, document, layout)
+  if (linkKeys !== undefined) w.linkKeys = linkKeys
   w.work.source = original?.length ?? 0
   const source = writeTrimmed(w, run, document, original)
   const diagnostics = writerDiagnostics(document, w)

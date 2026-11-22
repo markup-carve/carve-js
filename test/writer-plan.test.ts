@@ -126,27 +126,43 @@ describe('the planned writer', () => {
     ['C2-B-033: a marker before a tab is text', '-\ta\n'],
     ['C2-B-020: a list marker inside a quote of an item does not interrupt', '- > a\n  > - b\n'],
     ['C2-B-043: a bare dot before a dot and a space is no marker', '. . . and then silence\n'],
-    ['C2-B-043: a bare dot before a dot that ends the line is a marker, so the text takes a backslash', '\\. .\n'],
     ['C2-B-092: an attribute-shaped later line is text', 'a\n{.x}\n'],
     ['C2-B-138: a line comment on a later line stays in the paragraph', 'a\n%% c\nb\n'],
     ['C2-B-166: a pipe line without a closing pipe is text', 'a\n| b\n'],
     ['C2-I-072: a bracket pair with nothing glued to it is text', 'x [a] y\n'],
-    ['C2-I-073: an autolink of text takes its backslash, a broken one none', '\\<a:b> and <a b>\n'],
-    ['C2-I-089: an inline footnote of text takes the backslash on its bracket', 'x ^\\[a] and ^[a\n'],
-    ['C2-I-096: a cross-reference of text takes its backslash, an empty one none', '\\</#a> and </#>\n'],
     ['C2-I-104: straight quotes that read as smart quotes', 'a \'b\' c and it\'s, a "b" c\n'],
-    ['C2-I-115: an arrow of one hyphen stays as typed', 'a <- b and \\<= c\n'],
-    ['C2-I-074: an image sigil before a link of the tree, and before an open bracket', '\\![a](/u) and ![a\n'],
     ['C2-B-123: a line of a line block opens no block', '::: |\n- a\n# b\n  > c\n:::\n'],
     ['C2-B-135: in a line block `%%` is text', '::: |\n%% a\nb %% c\n:::\n'],
     ['C2-B-125: in a line block only a bare colon run closes', '::: |\n:: t\n::: x\n:::\n'],
-    ['C2-B-069: a later line of a term continues like paragraph text', ':: t\n   - a\n   :: e\n   \\::: x\n: d\n'],
     ['C2-W-091: a text backtick before a code span takes its backslash behind other text openers', 'x< \\`{#`a` y\n'],
     ['C2-W-091: a text backtick before a code span behind an angle that opens nothing', 'x<a \\`b`a` c\n'],
     ['C2-B-167: a quote behind the last brace of a pipe line decides no row attribute', 'a\n| a |{*=}\'\n'],
     ['C2-B-167: a quote behind a row attribute after one space', 'a\n| a | {=\'\n'],
     ['C2-B-167: a quote glued behind a row attribute', '| a |{.c}\'\n'],
   ]
+  // C2-W-088 (markup-carve/carve-js#5283, option B): a round escapes every opener of a reported kind in its block, so
+  // these take more backslashes than their opener, and where the plan cannot tell the kind the rounds write them.
+  const KIND_ROUNDS: readonly [string, string, string][] = [
+    ['C2-B-043: a bare dot before a dot that ends the line is a marker, so the text takes a backslash', '\\. .\n', '\\. .\n'],
+    ['C2-I-073: an autolink of text takes its backslash, and the broken one the escape of its kind',
+      '\\<a:b> and <a b>\n', '\\<a:b> and \\<a b>\n'],
+    ['C2-I-089: an inline footnote of text takes the backslash on its bracket, and so does the open one',
+      'x ^\\[a] and ^[a\n', 'x ^\\[a] and ^\\[a\n'],
+    ['C2-I-096: a cross-reference of text takes its backslash, and the empty one the escape of its kind',
+      '\\</#a> and </#>\n', '\\</#a> and \\</#>\n'],
+    ['C2-I-115: an arrow of one hyphen takes the escape of the reported `<`', 'a <- b and \\<= c\n', 'a \\<- b and \\<= c\n'],
+    ['C2-I-074: an image sigil before a link of the tree, and before an open bracket',
+      '\\![a](/u) and ![a\n', '\\![a](/u) and \\![a\n'],
+    ['C2-B-069: a later line of a term continues like paragraph text, each colon line of the kind escaped',
+      ':: t\n   - a\n   :: e\n   \\::: x\n: d\n', ':: t\n   - a\n   \\:: e\n   \\::: x\n: d\n'],
+  ]
+  for (const [clause, source, written] of KIND_ROUNDS) {
+    it(`${clause}, written by the rounds with the bytes of the plan`, () => {
+      expect(formatBy(source, 'plan').output.source).toBe(written)
+      expect(formatBy(written, 'both').stats.differences).toEqual([])
+    })
+  }
+
   for (const [clause, source] of PLANNED) {
     it(`${clause}, planned with no parse`, () => {
       const result = formatBy(source, 'plan')
@@ -349,7 +365,12 @@ describe('the planned writer', () => {
   })
 
   it('C2-I-087, C2-I-079: a text `[^` before a label that is not blank opens a footnote reference and is planned escaped', () => {
-    for (const source of ['a \\[^b] c\n', 'x \\[^a] y\n', 'x \\[^a b] y\n', 'x [^a\n', 'x [\\[^a] y\n', 'x \\[^a [b] c] y\n', 'x ^\\[^a] y\n']) {
+    // C2-W-088 (carve-js#5283, option B): `x [\\[^a] y` takes the escape of the reported bracket kind on both brackets.
+    expect(formatBy('x [\\[^a] y\n', 'plan').output.source).toBe('x \\[\\[^a] y\n')
+    expect(formatBy('x \\[\\[^a] y\n', 'both').stats.differences).toEqual([])
+    expect(formatBy('x \\[^a [b] c] y\n', 'plan').output.source).toBe('x \\[^a \\[b] c] y\n')
+    expect(formatBy('x \\[^a \\[b] c] y\n', 'both').stats.differences).toEqual([])
+    for (const source of ['a \\[^b] c\n', 'x \\[^a] y\n', 'x \\[^a b] y\n', 'x [^a\n', 'x ^\\[^a] y\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
@@ -388,7 +409,12 @@ describe('the planned writer', () => {
   })
 
   it('C2-I-115: a run of `=` holds no replaced run unless `==>` or `<==` reaches into it', () => {
-    for (const source of ['a ====== b\n', 'a =\\==> b\n', 'x ===\\==> y\n', 'a \\<\\==> b\n']) {
+    // C2-W-088 (carve-js#5283, option B): the reported `=` kind escapes the first sign of each run of the block.
+    for (const [source, written] of [['a =\\==> b\n', 'a \\=\\==> b\n'], ['x ===\\==> y\n', 'x \\===\\==> y\n']]) {
+      expect(formatBy(source!, 'plan').output.source).toBe(written)
+      expect(formatBy(written!, 'both').stats.differences).toEqual([])
+    }
+    for (const source of ['a ====== b\n', 'a \\<\\==> b\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
@@ -436,7 +462,8 @@ describe('the planned writer', () => {
 
   it('C2-W-091: a backtick behind a delimiter of text is left to the repair, which escapes the delimiter first', () => {
     const result = formatBy('*\\`*𫐍`*\n', 'both')
-    expect(result.output.source).toBe('\\*\\`*𫐍`*\n')
+    // C2-W-088 (carve-js#5283, option B): the reported backtick kind escapes the last backtick as well.
+    expect(result.output.source).toBe('\\*\\`*𫐍\\`*\n')
     expect(result.stats.differences).toEqual([])
   })
 
@@ -533,7 +560,12 @@ describe('the planned writer', () => {
   })
 
   it('C2-I-075, C2-I-079: a collapsed reference takes its label from its pair, so a blank one forms nothing', () => {
-    for (const source of ['x[ ][]a\n', 'x\\[b][]a\n', 'x\\[@][]\n', 'x[\\ ][]a\n']) {
+    // C2-W-088 (carve-js#5283, option B): the reported bracket kind escapes the bracket of `[]` as well.
+    expect(formatBy('x\\[b][]a\n', 'plan').output.source).toBe('x\\[b]\\[]a\n')
+    expect(formatBy('x\\[b]\\[]a\n', 'both').stats.differences).toEqual([])
+    expect(formatBy('x\\[@][]\n', 'plan').output.source).toBe('x\\[@]\\[]\n')
+    expect(formatBy('x\\[@]\\[]\n', 'both').stats.differences).toEqual([])
+    for (const source of ['x[ ][]a\n', 'x[\\ ][]a\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
@@ -542,7 +574,10 @@ describe('the planned writer', () => {
   })
 
   it('C2-I-028, C2-W-090: a brace of text behind a host takes the backslash where it would open an attribute block', () => {
-    for (const source of ['*a*\\{.c} x\n', '`a`\\{k=v}\n', '*a*\\{.c}{.d}\n', '*a*{} b\n', '*a*{.c U-210#i} and\n']) {
+    // C2-W-088 (carve-js#5283, option B): the reported `{.` kind escapes the second attribute block as well.
+    expect(formatBy('*a*\\{.c}{.d}\n', 'plan').output.source).toBe('*a*\\{.c}\\{.d}\n')
+    expect(formatBy('*a*\\{.c}\\{.d}\n', 'both').stats.differences).toEqual([])
+    for (const source of ['*a*\\{.c} x\n', '`a`\\{k=v}\n', '*a*{} b\n', '*a*{.c U-210#i} and\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)

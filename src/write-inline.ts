@@ -419,6 +419,7 @@ function textBracketPlaces(node: TextNode, scan: BracketScan): void {
 /** The brackets of a link's text that have no partner there: closers first, then openers (C2-W-125 case five). */
 interface BracketCounts { closers: number, openers: number }
 const linkBrackets = new WeakMap<Writer, Map<LinkNode, BracketCounts>>()
+const linkEscapePositions = new WeakMap<Writer, Map<LinkNode, Map<TextNode, number[]>>>()
 
 /**
  * A bracket paired inside a nested link stays paired in every link around it, and the nested link escapes its own
@@ -450,13 +451,30 @@ function countedBrackets({ closers, openers }: BracketCounts, scan: BracketScan)
 function loneLinkBrackets(w: Writer, nodes: readonly Inline[], scan: BracketScan): void {
   for (const node of nodes) {
     if (node.type === 'text') textBracketPlaces(node, scan)
-    else if (node.type === 'link') countedBrackets(nestedLinkBrackets(w, node), scan)
+    else if (node.type === 'link') {
+      // A nested link is a boundary for bracket pairs in the containing label. Brackets on either side
+      // cannot pair through its own bracketed spelling, even when the whole label happens to read back.
+      for (const place of scan.open) if (typeof place !== 'number') scan.lone.push(place)
+      scan.loneCount += scan.size
+      scan.open = []
+      scan.size = 0
+      countedBrackets(nestedLinkBrackets(w, node), scan)
+    }
     else if ('children' in node && node.type !== 'citation_group') loneLinkBrackets(w, node.children, scan)
   }
 }
 
 /** Merge two ascending escape lists without lengthening a link's write beyond its text. */
-function mergeLinkEscapes(escapes: readonly number[], positions: readonly number[]): number[] {
+export function mergeLinkEscapes(escapes: number[], positions: readonly number[]): number[] {
+  if (positions.length === 0) return escapes
+  let existing = 0
+  let wanted = 0
+  while (existing < escapes.length && wanted < positions.length) {
+    if (escapes[existing] === positions[wanted]) { existing++; wanted++ }
+    else if (escapes[existing]! < positions[wanted]!) existing++
+    else break
+  }
+  if (wanted === positions.length) return escapes
   const merged: number[] = []
   let prior = 0, next = 0
   while (prior < escapes.length || next < positions.length) {
@@ -468,18 +486,26 @@ function mergeLinkEscapes(escapes: readonly number[], positions: readonly number
 }
 
 /** C2-W-125 case five: a bracket without a partner in link text would take the link's own closer. */
-function escapeLoneLinkBrackets(w: Writer, children: readonly Inline[]): void {
-  const scan: BracketScan = { open: [], size: 0, lone: [], loneCount: 0 }
-  loneLinkBrackets(w, children, scan)
-  const byNode = new Map<TextNode, number[]>()
-  for (const place of [...scan.lone, ...scan.open]) {
-    if (typeof place === 'number') continue
-    const positions = byNode.get(place.node) ?? []
-    positions.push(place.at)
-    byNode.set(place.node, positions)
+function escapeLoneLinkBrackets(w: Writer, link: LinkNode): void {
+  let cache = linkEscapePositions.get(w)
+  if (cache === undefined) linkEscapePositions.set(w, cache = new Map<LinkNode, Map<TextNode, number[]>>())
+  let byNode = cache.get(link)
+  if (byNode === undefined) {
+    const scan: BracketScan = { open: [], size: 0, lone: [], loneCount: 0 }
+    loneLinkBrackets(w, link.children, scan)
+    byNode = new Map<TextNode, number[]>()
+    for (const place of [...scan.lone, ...scan.open]) {
+      if (typeof place === 'number') continue
+      const positions = byNode.get(place.node) ?? []
+      positions.push(place.at)
+      byNode.set(place.node, positions)
+    }
+    cache.set(link, byNode)
   }
   for (const [node, positions] of byNode) {
-    w.escapes.set(node, mergeLinkEscapes(w.escapes.get(node) ?? [], positions))
+    const current = w.escapes.get(node) ?? []
+    const merged = mergeLinkEscapes(current, positions)
+    if (merged !== current) w.escapes.set(node, merged)
   }
 }
 
@@ -487,7 +513,7 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
   escapeLeadingCaret(w, node.children, flags)
-  escapeLoneLinkBrackets(w, node.children)
+  escapeLoneLinkBrackets(w, node)
   if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
   const content = writeInlines(w, node.children, flags | IN_BRACKET)
   return `[${collapsedContent(node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`

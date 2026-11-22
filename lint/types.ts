@@ -5,6 +5,7 @@ import { type RuleId } from './catalog.ts'
 import { type DataWalk } from './data-model.ts'
 import { type ExtensionDefinition } from '../src/extensions/types.ts'
 import { type HeadingIds } from '../src/options.ts'
+import { type ResolvedTree } from '../src/api.ts'
 
 export interface LintOptions {
   rules?: Partial<Record<RuleId, 'on' | 'off'>>
@@ -43,6 +44,8 @@ export interface LintContext {
   findingLines: number[]
   /** The records of the data rules, filled during the visit when they are on. */
   dataWalk?: DataWalk
+  /** The resolved tree of the parse, which the id records render (C2-W-150). */
+  resolved?: ResolvedTree
   state: {
     headingLevel: number
     headingKinds: Set<string>

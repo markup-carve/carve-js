@@ -24,7 +24,7 @@ import { atDepthCap, countBracedOpen } from './inline-depth.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
   codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, NO_BREAK_SPACE,
-  isWordCharacter, NO_CHARACTER,
+  isMark, isWordCharacter, NO_CHARACTER,
 } from './unicode.ts'
 
 const ASCII = 128
@@ -347,8 +347,16 @@ function dottedNameEnd(text: string, pos: number, end: number): number {
   return p > pos && letters ? p : NONE
 }
 
+/** C2-I-092: the run of name characters and dots behind a sigil ends at a word edge, or the sigil starts no form. */
+function endsAtWordEdge(state: InlineState, pos: number): boolean {
+  let p = pos
+  while (p < state.end && (inClass(state.text.charCodeAt(p), CLASS_MENTION) || state.text.charCodeAt(p) === DOT)) p++
+  const next = codePointAt(state.text, p, state.end)
+  return !isWordCharacter(next) && !isMark(next)
+}
+
 function mentionOrTag(state: InlineState, pos: number, kind: number): number {
-  if (!atSigilBoundary(state, pos)) return pos + 1
+  if (!atSigilBoundary(state, pos) || !endsAtWordEdge(state, pos + 1)) return pos + 1
   const end = dottedNameEnd(state.text, pos + 1, state.end)
   if (end === NONE) return pos + 1
   pushToken(state, kind, pos, end, pos + 1, end, 0, NONE)

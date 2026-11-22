@@ -203,7 +203,8 @@ describe('text and literal payload', () => {
     expect([ofType(block('--- json\n{}'), 'frontmatter').format, ofType(block('---ini2  \r\na\r\n---'), 'frontmatter').format, ofType(block('---\r\na\r\n---'), 'frontmatter').format]).toEqual(['json', 'ini2', 'yaml'])
     expect(ofType(block('---markdown\nx\n---'), 'frontmatter').format).toBe('markdown')
     expect(ofType(block('--- toml\nx\n---'), 'frontmatter').format).toBe('toml')
-    expect(refusal(documentOf(paragraph('a'), { type: 'frontmatter', format: 'yaml', value: '' }))).toBe('/children/1: frontmatter is not the first child')
+    // Prototype (metadata blocks): frontmatter may stand after other children.
+    expect(refusal(documentOf(paragraph('a'), { type: 'frontmatter', format: 'yaml', value: '' }))).toBeNull()
   })
 })
 

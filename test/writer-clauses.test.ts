@@ -1011,13 +1011,19 @@ describe('escaping', () => {
   })
 
   it('C2-W-094: a bracket that would form a construct is escaped', () => {
-    for (const src of ['\\[a](u)', '\\[a][b]', '\\[a][]', '\\[a]{.x}', '\\![a](u)', '\\[^a]']) expect(format(src)).toBe(`${src}\n`)
+    // C2-W-088 (carve-js#5283, option B): the reported bracket kind escapes the label bracket too.
+    expect(format('\\[a][b]')).toBe('\\[a]\\[b]\n')
+    expect(format('\\[a][]')).toBe('\\[a]\\[]\n')
+    for (const src of ['\\[a](u)', '\\[a]{.x}', '\\![a](u)', '\\[^a]']) expect(format(src)).toBe(`${src}\n`)
     expect(format('\\^[a]')).toBe('^\\[a]\n')
     expect(format('\\[a] (u)')).toBe('[a] (u)\n')
   })
 
   it('C2-W-095: a sigil that would form is escaped', () => {
-    for (const src of ['\\@user', '\\#tag', '\\:smile:', '\\:ext[c]', '\\<https://a.b>', '\\</#id>', '\\`a`', '\\$`m`', '\\...', 'x \\"a\\"']) expect(format(src)).toBe(`${src}\n`)
+    // C2-W-088 (carve-js#5283, option B): the reported colon and backtick kinds escape the closing mark too.
+    expect(format('\\:smile:')).toBe('\\:smile\\:\n')
+    expect(format('\\`a`')).toBe('\\`a\\`\n')
+    for (const src of ['\\@user', '\\#tag', '\\:ext[c]', '\\<https://a.b>', '\\</#id>', '\\$`m`', '\\...', 'x \\"a\\"']) expect(format(src)).toBe(`${src}\n`)
     expect(format('a\\@b \\: c')).toBe('a@b : c\n')
   })
 

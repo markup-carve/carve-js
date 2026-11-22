@@ -299,7 +299,7 @@ function spanMarkerBeforeAttrs(node: Node, path: string, context: LintContext): 
 }
 
 function carveVersion(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'frontmatter') return
+  if (node.type !== 'frontmatter' || path !== '/children/0' || node.pos?.startLine !== 1) return
   const range = bounds(node, context)
   if (range === null) return
   const source = raw(node, context)

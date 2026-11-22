@@ -775,7 +775,8 @@ describe('what the random writer gate found after the third review', () => {
   })
 
   it('C2-W-088: a bracket run stops at a bracket of another opener', () => {
-    expect(format(`x![^${BACKSLASH}[]`)).toBe(`x![^${BACKSLASH}[]\n`)
+    // C2-W-088 (carve-js#5283, option B): the reported bracket kind escapes the image bracket as well.
+    expect(format(`x![^${BACKSLASH}[]`)).toBe(`x!${BACKSLASH}[^${BACKSLASH}[]\n`)
   })
 })
 

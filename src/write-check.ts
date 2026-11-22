@@ -3,8 +3,8 @@
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
 import {
-  captionOf, childNodes, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord, type Node,
-  type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
+  captionOf, childNodes, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord,
+  type LinkNode, type Node, type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
 import { applyExtensions } from './extensions/claims.ts'
@@ -12,7 +12,7 @@ import { AST_RESULTS } from './ast-tables.ts'
 import { sourceCoreEquivalent } from './write-extension-source.ts'
 import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
 import {
-  firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
+  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
@@ -77,12 +77,16 @@ export interface Check {
   source: string | null
   /** The UTF-8 bytes of `source`, read when an offset of the parse is checked against it. */
   bytes: Uint8Array | null
+  /** C2-W-088: the escapes among `escapes` that make a line opener text, by text node. */
+  lineEscapes: Map<TextNode, Set<number>>
+  /** C2-W-088: block openers inside a line, which take their own escape and no kind. */
+  ownEscapes: Map<TextNode, Set<number>>
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
-    spanMarks: false, owner: null, chains: [], source: null, bytes: null,
+    spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
   }
 }
 
@@ -175,7 +179,7 @@ function isEscaped(c: Check, node: TextNode, at: number): boolean {
 }
 
 /** Asks for a backslash before the character `at` of the text node. False where that character takes none. */
-function escapeAt(c: Check, node: TextNode, at: number): boolean {
+export function escapeAt(c: Check, node: TextNode, at: number): boolean {
   const value = node.value
   if (at < 0 || at >= value.length || !isAsciiPunctuation(value.charCodeAt(at)) || isEscaped(c, node, at)) return false
   c.escapes.push([node, at])
@@ -188,7 +192,7 @@ function escapeAt(c: Check, node: TextNode, at: number): boolean {
  * C2-W-099: of a hyphen run the second hyphen. An ordered marker is escaped at its delimiter,
  * since a backslash before a digit or a letter is no escape (C2-I-012).
  */
-function openerOffsets(value: string): number[] {
+export function openerOffsets(value: string): number[] {
   const offsets: number[] = []
   if (value.startsWith('--')) offsets.push(1)
   offsets.push(0)
@@ -215,7 +219,11 @@ function escapeLeadingOpener(c: Check, texts: readonly TextNode[]): boolean {
   for (let offset of openerOffsets(joinedValue(texts))) {
     let k = 0
     while (k < texts.length - 1 && offset >= texts[k]!.value.length) offset -= texts[k++]!.value.length
-    if (escapeAt(c, texts[k]!, offset)) return true
+    if (!escapeAt(c, texts[k]!, offset)) continue
+    // C2-W-088: the line kind is read from the first text of the line; a run split over nodes gives no kind.
+    const escapes = k === 0 ? c.lineEscapes : c.ownEscapes
+    escapes.set(texts[k]!, (escapes.get(texts[k]!) ?? new Set<number>()).add(offset))
+    return true
   }
   return false
 }
@@ -645,6 +653,7 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]!
   if (!isPairedMark(e) || !textsBelow(e).some((text) => opensAcross(text.value))) return false
   const flags = contentFlags(c, e)
+  if (e.type === 'link' && !canCrossLinkCloser(c.w, e.children, flags)) return false
   const spelled = writeInlines(c.w, [e], c.flags)
   const content = writeInlines(c.w, e.children, flags)
   const suffix = e.type === 'link' ? spelled.slice(1 + content.length) :
@@ -663,6 +672,54 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   // Bare, a name sigil keeps its boundary; behind a word, no block opens and a leading space stays.
   return probeEscapes(c, e, inlines, flags, 'across', takes) === true ||
     probeEscapes(c, e, [word, ...inlines], flags, 'across', takes) === true
+}
+
+/** The terminal link of a nested chain has no markup that can expose another label opener. */
+function settledTerminal(link: LinkNode): boolean {
+  if (link.children.some((child) => child.type === 'link')) return true
+  const child = link.children[0]
+  return link.children.length === 1 && child?.type === 'text'
+}
+
+/** Whether bare text contains another construct opener or an unclosed bracket. */
+function textCanCross(w: Writer, node: TextNode, flags: number, state: { brackets: number }): boolean {
+  const escaped = escapeOffsets(w, node, flags)
+  let next = 0
+  for (let at = 0; at < node.value.length; at++) {
+    if (escaped[next] === at) {
+      next++
+      continue
+    }
+    const char = node.value[at]
+    if (char === '`' || char === '<' || char === '{' || char === '$' || char === ':') return true
+    if (char === '[') state.brackets++
+    else if (char === ']' && state.brackets > 0) state.brackets--
+  }
+  return false
+}
+
+/** A link bounds its own bracket pairs only if every nested label is settled as well. */
+interface CrossItem { node: Node, flags: number }
+
+function pushCrossChildren(pending: CrossItem[], node: EmphasisNode | StrongNode, flags: number): void {
+  const inside = flags | (node.type === 'strong' ? IN_STRONG : IN_EMPHASIS)
+  for (let at = node.children.length - 1; at >= 0; at--) pending.push({ node: node.children[at]!, flags: inside })
+}
+
+function crossNode(w: Writer, item: CrossItem, pending: CrossItem[], state: { brackets: number }): boolean {
+  const { node } = item
+  if (node.type === 'link') return !settledTerminal(node) || canCrossLinkCloser(w, node.children, item.flags | IN_BRACKET)
+  if (node.type === 'text') return textCanCross(w, node, item.flags, state)
+  if (node.type !== 'strong' && node.type !== 'emphasis') return true
+  pushCrossChildren(pending, node, item.flags)
+  return false
+}
+
+function canCrossLinkCloser(w: Writer, children: readonly Node[], flags: number): boolean {
+  const state = { brackets: 0 }
+  const pending = children.map((node) => ({ node, flags })).reverse()
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) if (crossNode(w, item, pending, state)) return true
+  return state.brackets !== 0
 }
 
 // The inlines behind a node that a probe across its closing mark reads, at most.
@@ -1393,6 +1450,53 @@ function resync(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor):
   return false
 }
 
+/**
+ * A leading space or tab of supplied text can be lost at a paragraph start while the rest of the
+ * text joins the next node in the read-back parse. Continue at the surviving suffix so later
+ * constructs and fields are still compared (C2-W-117).
+ */
+function hasAuthoredTextFields(node: TextNode): boolean {
+  return node.lang !== undefined || node.dir !== undefined || node.metadata !== undefined ||
+    node.attrs !== undefined || node.data !== undefined
+}
+
+function stepOverLostText(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
+  const expected = es[at.i]
+  const actual = as[at.j]
+  if (expected?.type !== 'text' || actual?.type !== 'text' || at.vi !== 0) return false
+  const kept = expected.value.replace(/^[ \t]+/, '')
+  if (kept.length === expected.value.length || !actual.value.startsWith(kept, at.aj)) return false
+  if (hasAuthoredTextFields(expected)) {
+    const last = c.losses.length - 1
+    if (c.losses[last]?.[0] === expected) c.losses[last] = [expected, '']
+  }
+  at.i++
+  at.aj += kept.length
+  if (at.aj === actual.value.length) {
+    at.j++
+    at.aj = 0
+  }
+  return true
+}
+
+/** A failed construct on one line cannot hide constructs on following lines of the same paragraph. */
+function nextBreak(nodes: readonly Node[], from: number): number {
+  for (let at = from; at < nodes.length; at++) if (isBreak(nodes[at])) return at
+  return nodes.length
+}
+
+function resyncNextConstructLine(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
+  if (es[at.i]?.type === 'text') return false
+  const i = nextBreak(es, at.i + 1)
+  const j = nextBreak(as, at.j)
+  if (i === es.length || j === as.length || es[i]?.type !== as[j]?.type) return false
+  const expected = es[i]?.pos
+  const actual = as[j]?.pos
+  if (expected === undefined || actual === undefined || expected.startLine !== actual.startLine) return false
+  if (changes(c) === 0) for (let k = at.i; k < i; k++) c.losses.push([es[k]!, null])
+  return resumeAt(at, i + 1, j + 1)
+}
+
 function compareInlines(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
   const outer = c.owner
   c.owner = owner
@@ -1406,7 +1510,8 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
     setAnchor(es, as, at)
     const e = es[at.i]!
     const more = e.type === 'text' ? matchText(c, e, es, as, at, owner) : matchNode(c, e, es, as, at, owner)
-    if (!more && !resync(c, es, as, at)) return
+    if (!more && !resync(c, es, as, at) && !stepOverLostText(c, es, as, at) &&
+      !resyncNextConstructLine(c, es, as, at)) return
   }
   if (at.j < as.length) c.losses.push([owner, null])
 }
@@ -1507,16 +1612,23 @@ function compareBlock(c: Check, e: Node, a: Node): boolean {
 }
 
 /** The places at which the parse `node` has a paragraph, and the lines at which it has a block, from the blocks below it. */
-function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: Set<number>): void {
+function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: Set<number>,
+  columns: Map<number, Set<number>>): void {
   for (const block of childNodes(node)) {
     const pos = block.pos
     if (pos !== undefined) {
-      lines.add(pos.startLine - offset)
+      const line = pos.startLine - offset
+      lines.add(line)
+      if (block.type !== 'paragraph') {
+        const starts = columns.get(line) ?? new Set<number>()
+        starts.add(pos.startColumn - 1)
+        columns.set(line, starts)
+      }
       if (block.type === 'paragraph') paragraphs.add((pos.startLine - offset) * PLACE_COLUMNS + pos.startColumn - 1)
     }
-    if (!isInlineParent(block)) readStarts(block, offset, paragraphs, lines)
+    if (!isInlineParent(block)) readStarts(block, offset, paragraphs, lines, columns)
     const caption = captionOf(block)
-    if (caption !== undefined) readStarts(caption, offset, paragraphs, lines)
+    if (caption !== undefined) readStarts(caption, offset, paragraphs, lines, columns)
   }
 }
 
@@ -1537,10 +1649,26 @@ function isPending(c: Check, node: Node | undefined): boolean {
  * Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a
  * block. A line can start inside an inline node, such as emphasis or an inline footnote over two lines.
  */
-function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>): void {
+function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>,
+  columns: Map<number, Set<number>>): void {
   const top = e.children
   if (!paragraphs.has(place) && hasOpenerShape(top, 0) && !isPending(c, top[0])) escapeLineStart(c, top, 0, e)
   let line = Math.floor(place / PLACE_COLUMNS)
+  const nested = (node: Node | undefined): void => {
+    if (node?.type !== 'text') return
+    const written = c.w.lines[line] ?? ''
+    const start = written.indexOf(node.value)
+    if (start < 0) return
+    for (const column of columns.get(line) ?? []) {
+      const at = column - start
+      if (at >= 0 && at < node.value.length && escapeAt(c, node, at)) {
+        const known = c.ownEscapes.get(node) ?? new Set<number>()
+        known.add(at)
+        c.ownEscapes.set(node, known)
+      }
+    }
+  }
+  nested(top[0])
   const visit = (nodes: readonly Node[]): void => {
     for (let at = 0; at < nodes.length; at++) {
       const node = nodes[at]!
@@ -1548,6 +1676,7 @@ function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs
       if (!isBreak(node)) continue
       line++
       if (lines.has(line) && hasOpenerShape(nodes, at + 1) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
+      nested(nodes[at + 1])
     }
   }
   visit(top)
@@ -1563,9 +1692,10 @@ export function escapeOpeners(c: Check, parsed: DocumentNode, offset: number): v
   if (!c.misaligned) return
   const paragraphs = new Set<number>()
   const lines = new Set<number>()
-  readStarts(parsed, offset, paragraphs, lines)
+  const columns = new Map<number, Set<number>>()
+  readStarts(parsed, offset, paragraphs, lines, columns)
   for (const [node, place] of c.w.starts) {
-    if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, paragraphs, lines)
+    if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, paragraphs, lines, columns)
   }
 }
 

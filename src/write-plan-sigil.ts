@@ -3,6 +3,7 @@
 import {
   CHARACTER_CLASSES, CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST, CLASS_MENTION, CLASS_SYMBOL_FIRST, CLASS_SYMBOL_REST,
 } from './inline-tables.ts'
+import { isMark, isWordCharacter } from './unicode.ts'
 import { type Leaf, TEXT } from './write-plan-model.ts'
 
 const DOT = 46
@@ -24,9 +25,23 @@ function isInnerDot(leaf: Leaf, at: number, start: number): boolean {
   return leaf.codes[at] === DOT && at !== start && leaf.codes[at - 1] !== DOT && isNameCharacter(leaf.codes[at + 1] ?? -1)
 }
 
+/** C2-I-092: the run of name characters and dots from `start` stands before a letter, number or mark of text. */
+function beforeWordCharacter(leaf: Leaf, start: number): boolean {
+  let end = start
+  while (leaf.kinds[end] === TEXT && (isNameCharacter(leaf.codes[end] ?? -1) || leaf.codes[end] === DOT)) end++
+  if (leaf.kinds[end] !== TEXT) return false
+  const high = leaf.codes[end] ?? -1
+  if (high < 128) return false
+  const low = leaf.codes[end + 1] ?? -1
+  const code = high >= 0xd800 && high <= 0xdbff && low >= 0xdc00 && low <= 0xdfff && leaf.kinds[end + 1] === TEXT
+    ? (high - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000 : high
+  return isWordCharacter(code) || isMark(code)
+}
+
 /** NAME where a name with a letter follows the sigil at `at`, NO_NAME where none does, UNKNOWN otherwise. */
 export function sigilName(leaf: Leaf, at: number): number {
   const start = at + 1
+  if (beforeWordCharacter(leaf, start)) return NO_NAME
   let end = start
   let letters = false
   for (; end < leaf.codes.length; end++) {
