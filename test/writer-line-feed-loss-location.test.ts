@@ -47,3 +47,13 @@ it('does not report line feeds inside an include expansion it does not write', (
   expect(result.source).toBe('{{ a.crv }}\n')
   expect(result.diagnostics).toEqual([])
 })
+
+it('keeps a wrapper report when a sibling has an independent loss', () => {
+  const block = { type: 'paragraph', children: [
+    { type: 'text', value: 'a\n\nb' },
+    { type: 'text', value: 'c', metadata: { title: [{ type: 'text', value: 'title' }] } },
+  ] } as Block
+  const rows = writeWithDiagnostics(documentOf(block)).diagnostics
+  expect(rows.map(row => [row.code, row.path])).toContainEqual(['structure-unspellable', '/children/0'])
+  expect(rows.map(row => [row.code, row.path])).toContainEqual(['field-unspellable', '/children/0/children/0/value'])
+})

@@ -101,6 +101,19 @@ function nodeAt(document: DocumentNode, path: string): Node | null {
   return isNode(at) ? at : null
 }
 
+/** A wrapper whose only written content is the text that holds the line feed. */
+function onlyLineFeedLeaf(wrapper: Node): TextNode | null {
+  let at = wrapper
+  while (at.type !== 'text') {
+    if (!['document', 'paragraph', 'line', 'line_block'].includes(at.type)) return null
+    if (Object.keys(at).some(key => !['type', 'children', 'pos', 'astVersion'].includes(key))) return null
+    const children = childNodes(at)
+    if (children.length !== 1) return null
+    at = children[0]!
+  }
+  return at
+}
+
 /** How far the wraps of one text node have been read: a byte offset of its value and the string offset of it. */
 interface WrapCursor {
   bytes: number
@@ -1419,7 +1432,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   // A line feed supplied inside one text value is read as a line boundary.
   // The block comparison can see only the changed wrapper, so move that loss
   // to the leaf field that actually failed to read back (C2-W-117, C2-W-124).
-  const textLineFeeds: string[] = []
+  const textLineFeeds: Array<{ path: string; node: TextNode }> = []
   const commentLines: string[] = []
   const lossNodes = new Set(w.losses.nodes)
   type LossFrame = { node: Node; path: string; parent: LossFrame | null; inLineBlock: boolean }
@@ -1436,7 +1449,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
         }
       }
       if (wrapperLost) {
-        textLineFeeds.push(path)
+        textLineFeeds.push({ path, node })
         if (!w.lost.has(node)) lose(w, node, 'value')
       }
     }
@@ -1452,8 +1465,9 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   // so source ranges and include ancestry are retained.
   const diagnostics = locateFindings(document, w.losses)
   if (textLineFeeds.length > 0) {
+    const leaves = new Set(textLineFeeds.map(entry => entry.node))
     const ancestors = new Set<string>()
-    for (const path of textLineFeeds) {
+    for (const { path } of textLineFeeds) {
       for (let end = path.lastIndexOf('/'); end > 0; end = path.lastIndexOf('/', end - 1)) ancestors.add(path.slice(0, end))
       ancestors.add('')
     }
@@ -1461,7 +1475,10 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
       const entry = diagnostics[at]!
       if (entry.code !== 'structure-unspellable' || !ancestors.has(entry.path ?? '')) continue
       const wrapper = nodeAt(document, entry.path ?? '')
-      if (wrapper !== null && ['document', 'paragraph', 'line', 'line_block'].includes(wrapper.type)) diagnostics.splice(at, 1)
+      if (wrapper !== null) {
+        const leaf = onlyLineFeedLeaf(wrapper)
+        if (leaf !== null && leaves.has(leaf)) diagnostics.splice(at, 1)
+      }
     }
   }
   for (const path of commentLines) {
