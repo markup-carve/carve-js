@@ -99,19 +99,18 @@ function openFrontmatter(state: BlockState, end: number): boolean {
   return true
 }
 
-/**
- * Prototype: after line 1 a typed opener at column 0 opens a metadata block at the top level, after a blank
- * line or after attribute lines that stand at the top level. A list closes before it; any other container keeps it text.
- */
+/** C2-B-232: a typed opener after separation opens a top-level metadata block, closing a preceding list. */
 function openMetadataBlock(state: BlockState, matched: number, lineStart: number, end: number): boolean {
   const src = state.src
   const above = state.above
   const containers = state.containers
   if (src.charCodeAt(lineStart) !== HYPHEN || !isTypedFrontmatterOpener(src, lineStart, end)) return false
-  for (let index = 1; index < matched; index++) if (!isList(containers.kind[index]!)) return false
+  for (let index = 1; index < matched; index++) {
+    if (!isList(containers.kind[index]!) && containers.kind[index] !== ITEM) return false
+  }
   const attributes = above.attributesDepth !== NO_DEPTH
-  if (attributes ? above.attributesDepth !== 1 || containers.depth !== 1 : above.blankCount === 0) return false
-  if (!attributes) closeTo(state, 1)
+  if (attributes ? above.attributesDepth !== 1 : above.blankCount === 0) return false
+  closeTo(state, 1)
   above.takeAttributes = attributes
   above.attributesDepth = NO_DEPTH
   above.captionDepth = NO_DEPTH
@@ -123,6 +122,17 @@ function openMetadataBlock(state: BlockState, matched: number, lineStart: number
   above.blankCount = 0
   state.contentEnd = end
   return true
+}
+
+/** C2-B-232: a column-0 typed opener ends a list even when it cannot itself open a block. */
+function closeListForMetadata(state: BlockState, lineStart: number, end: number, matched: number): number {
+  if (state.containers.depth <= 1 || state.src.charCodeAt(lineStart) !== HYPHEN ||
+    !isTypedFrontmatterOpener(state.src, lineStart, end)) return matched
+  for (let index = 1; index < state.containers.depth; index++) {
+    if (!isList(state.containers.kind[index]!) && state.containers.kind[index] !== ITEM) return matched
+  }
+  closeTo(state, 1)
+  return 1
 }
 
 /** Closes the open leaf that is not text, which did not take the line. Returns the containers the line still matches. */
@@ -198,6 +208,7 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
     matched = closeBodyLeaf(state, matched, end, blank)
   }
   if (blank) return blankLine(state, matched)
+  matched = closeListForMetadata(state, lineStart, end, matched)
   if (leaf.kind === NO_LEAF && openMetadataBlock(state, matched, lineStart, end)) return
   // C2-B-154: a line that does not continue the open heading meets it closed.
   if (leaf.kind === HEADING && !continuesHeading(state, matched)) closeLeaf(state)

@@ -55,7 +55,8 @@ describe('metadata blocks after line 1', () => {
   it('every case reads back after the writer', () => {
     for (const src of ['a\n\n---yaml\nk: v\n---\n\nb\n', '---\nt: 1\n---\n\n# Ch\n\n{#c scope=s}\n---yaml\nx: 1\n---\n',
       '- a\n\n---toml\nk = 1\n---\n', '{#only}\n---json\n{}\n---\n\nbody\n']) {
-      const strip = (node: unknown): unknown => JSON.parse(JSON.stringify(node, (key, value) => key === 'pos' || key === 'srcByteLength' ? undefined : value))
+      const strip = (node: unknown): unknown => JSON.parse(JSON.stringify(node,
+        (key: string, value: unknown): unknown => key === 'pos' || key === 'srcByteLength' ? undefined : value)) as unknown
       expect(strip(parse(format(src)))).toEqual(strip(parse(src)))
     }
   })

@@ -585,6 +585,14 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
+  "frontmatter-crossref": { severity: "error", default: "on", messages: [
+    [
+      "Cross-reference </#${target}> names a metadata key, which has no HTM",
+      "L target. Read the block through the tree instead.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
   "frontmatter-shaped-thematic-break": { severity: "warning", default: "on", messages: [
     [
       "Three hyphens on line 1 open frontmatter, not a thematic break. Writ",

@@ -5,14 +5,15 @@ import { type DocumentNode, type Node } from './ast.ts'
 import { write } from './write.ts'
 
 /**
- * The children of each expanded include in its place, recursively; included frontmatter renders nothing and goes.
+ * The children of each expanded include in its place, recursively; only its line-1 frontmatter goes.
  * An include that did not expand has no `children` and stays, so it is written as its directive.
  */
 function spliced(nodes: readonly Node[]): Node[] {
   const result: Node[] = []
   for (const node of nodes) {
     const children = node.type === 'include' ? node.children : undefined
-    if (children !== undefined) result.push(...spliced(children.filter((child) => child.type !== 'frontmatter')))
+    if (children !== undefined) result.push(...spliced(children.filter((child) =>
+      child.type !== 'frontmatter' || child.pos?.startLine !== 1)))
     else result.push(withSplicedSlots(node))
   }
   return result

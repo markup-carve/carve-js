@@ -330,8 +330,11 @@ function locateAuthoredId(entry: Diagnostic, node: Node, parsed: ParsedTree, sou
   const limit = attributeLimit(raw, pos.startLine, markupLine)
   const at = authoredIdAt(raw, id, limit, limit < raw.length)
   if (at < 0) return
-  const startOffset = pos.startOffset + utf8Length(raw.slice(0, at))
-  entry.range = { startOffset, endOffset: startOffset + utf8Length(marker) }
+  // C2-A-218: a metadata key is authored by the attribute line, so point at
+  // its opening brace rather than the hash within it.
+  const begin = node.type === 'frontmatter' && at > 0 && raw[at - 1] === '{' ? at - 1 : at
+  const startOffset = pos.startOffset + utf8Length(raw.slice(0, begin))
+  entry.range = { startOffset, endOffset: startOffset + utf8Length(marker) + (at - begin) }
 }
 
 /** C2-B-085: the definition marker follows any attached attribute lines. */

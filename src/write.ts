@@ -1378,6 +1378,15 @@ function writeTrimmed(w: Writer, run: WriterRun, document: DocumentNode, origina
 }
 
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
+function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteOptions['layout']): void {
+  w.linkKeys = new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
+  if (layout !== undefined && w.facts !== null) readLayout(w, w.facts, document, layout.nodes)
+  readAbbreviations(w, document)
+  const lead = document.children[0]
+  w.leadingFrontmatter = lead?.type === 'frontmatter' && lead.attrs === undefined ? lead : null
+}
+
+/** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout)):
   { output: WriteOutput, stats: WriterStats } {
@@ -1386,13 +1395,9 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   const layout = options?.layout
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
-  w.linkKeys = linkKeys ??
-    new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
-  if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
-  readAbbreviations(w, document)
+  prepareDocumentWriter(w, document, layout)
+  if (linkKeys !== undefined) w.linkKeys = linkKeys
   w.work.source = original?.length ?? 0
-  const lead = document.children[0]
-  w.leadingFrontmatter = lead?.type === 'frontmatter' && lead.attrs === undefined ? lead : null
   const source = writeTrimmed(w, run, document, original)
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
