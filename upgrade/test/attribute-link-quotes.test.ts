@@ -28,7 +28,8 @@ describe('attribute-like text around old inline forms', () => {
       const url = `u${Math.floor(n / 23)}`
       const prefix = n % 5 === 0 ? '> ' : n % 7 === 0 ? '- ' : ''
       const tail = n % 2 === 0 ? '\nnext\n' : ''
-      const source = `${prefix}x{.k title="\`"} y\n${prefix}x{.k title="\`"} y\n\n${prefix}x{title="[${word}"}](${url})\n \n${prefix}x{*a { b*} c\n${tail}`
+      const source = `${prefix}x{.k title="\`"} y\n${prefix}x{.k title="\`"} y\n\n`
+        + `${prefix}x{title="[${word}"}](${url})\n \n${prefix}x{*a { b*} c\n${tail}`
       const result = upgrade(source)
       if (!canWriteUpgrade(result)) continue
       accepted++
