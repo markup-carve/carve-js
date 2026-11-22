@@ -64,3 +64,13 @@ it('keeps a wrapper report when the same text also loses another field', () => {
   expect(rows.map(row => [row.code, row.path])).toContainEqual(['structure-unspellable', '/children/0'])
   expect(rows.map(row => [row.code, row.path])).toContainEqual(['field-unspellable', '/children/0/children/0/value'])
 })
+
+it('removes wrapper reports when a plain sibling reads back', () => {
+  const block = { type: 'paragraph', children: [
+    { type: 'text', value: 'a\n\nb' }, { type: 'emphasis', children: [{ type: 'text', value: 'c' }] },
+  ] } as Block
+  const rows = writeWithDiagnostics(documentOf(block)).diagnostics
+  expect(rows.map(row => [row.code, row.path])).toEqual([
+    ['field-unspellable', '/children/0/children/0/value'],
+  ])
+})

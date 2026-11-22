@@ -101,18 +101,25 @@ function nodeAt(document: DocumentNode, path: string): Node | null {
   return isNode(at) ? at : null
 }
 
-/** A wrapper whose only written content is the text that holds the line feed. */
+/** A wrapper whose only unspellable content is one plain line-feed text. */
 function onlyLineFeedLeaf(wrapper: Node): TextNode | null {
-  let at = wrapper
-  while (at.type !== 'text') {
-    if (!['document', 'paragraph', 'line', 'line_block'].includes(at.type)) return null
+  const pending = [wrapper]
+  let leaf: TextNode | null = null
+  while (pending.length > 0) {
+    const at = pending.pop()!
+    if (at.type === 'text') {
+      if (Object.keys(at).some(key => !['type', 'value', 'pos'].includes(key))) return null
+      if (at.value.includes('\n')) {
+        if (leaf !== null) return null
+        leaf = at
+      }
+      continue
+    }
+    if (!['document', 'paragraph', 'line', 'line_block', 'emphasis', 'strong', 'underline', 'strike', 'highlight'].includes(at.type)) return null
     if (Object.keys(at).some(key => !['type', 'children', 'pos', 'astVersion'].includes(key))) return null
-    const children = childNodes(at)
-    if (children.length !== 1) return null
-    at = children[0]!
+    for (const child of childNodes(at)) pending.push(child)
   }
-  if (Object.keys(at).some(key => !['type', 'value', 'pos'].includes(key))) return null
-  return at
+  return leaf
 }
 
 /** How far the wraps of one text node have been read: a byte offset of its value and the string offset of it. */
@@ -1430,6 +1437,13 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   readAbbreviations(w, document)
   w.work.source = original?.length ?? 0
   const source = writeTrimmed(w, run, document, original)
+  if (!w.losses.entries.some((entry, at) => entry.code === 'structure-unspellable' ||
+    (entry.code === 'field-unspellable' && w.losses.nodes[at]?.type === 'comment'))) {
+    const diagnostics = locateFindings(document, w.losses)
+    rootMetadataLosses(document, diagnostics)
+    stats.parses = w.parses
+    return { output: { source, diagnostics }, stats }
+  }
   // A line feed supplied inside one text value is read as a line boundary.
   // The block comparison can see only the changed wrapper, so move that loss
   // to the leaf field that actually failed to read back (C2-W-117, C2-W-124).
