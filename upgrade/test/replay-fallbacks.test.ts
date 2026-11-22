@@ -4,6 +4,14 @@ import { render } from '../../src/index.ts'
 import { upgrade } from '../src/index.ts'
 
 describe('replay fallback families', () => {
+  it('keeps repeated indented notes together before a following fence', () => {
+    const input = 'x[^1]\n  \n  [^1]: > q\n  [^1]: > q\n\n        ```js\n       c\n        ```\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('x[^1]\n  \n[^1]: > q\n[^1]: > q\n\n        ```js\n       c\n        ```\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('keeps a heading below a marker-line attribute without visible attribute text', () => {
     const input = '1.{#k} {#h}\n\n   # h\n'
     const result = upgrade(input)

@@ -25,6 +25,7 @@ import {
   literalIncludeMentions, literalLinkBeforeCode, literalNarrowSpaceLinks,
   literalQuoteAfterAttributes, literalTableHeader, quotedColonOpenerText,
   nestedFootnoteAfterItem,
+  repeatedIndentedNote,
   siblingHeadingBoundary, siblingListBoundary, tabbedFootnoteContinuation, wrappedCodeTableRow,
   siblingQuoteParagraphs,
 } from './replay-fallbacks.ts'
@@ -64,5 +65,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
     literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
     markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows,
-    attributeAcrossFootnoteDefinition, siblingQuoteParagraphs, attributeLinkQuotes],
+    attributeAcrossFootnoteDefinition, siblingQuoteParagraphs, attributeLinkQuotes, repeatedIndentedNote],
 ]
