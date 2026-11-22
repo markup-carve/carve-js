@@ -9,4 +9,10 @@ describe('old description marker columns', () => {
     expect(canWriteUpgrade(result)).toBe(true)
     expect(result.records.map(({ entry }) => entry)).toContain('U-435')
   })
+
+  it('preserves the interior indent of an already aligned sibling fence', () => {
+    const source = '- intro\n  :: term\n   : body\n\n  ```\n    code\n  ```\n'
+    const result = upgrade(source)
+    expect(result.output).toContain('  ```\n    code\n  ```')
+  })
 })

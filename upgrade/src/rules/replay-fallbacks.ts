@@ -161,14 +161,17 @@ function alignFollowingSibling(ctx: Context, visit: Visit, termColumn: number): 
   const next = visit.siblings[visit.index + 1]
   if (next?.pos === undefined || visit.node.pos === undefined
     || next.pos.startLine <= visit.node.pos.endLine + 1) return
+  const firstIndent = /^ */u.exec(lineText(ctx.lines, next.pos.startLine))![0].length
+  const shift = firstIndent - termColumn
+  if (shift <= 0) return
   for (let line = next.pos.startLine; line <= next.pos.endLine; line++) {
     const value = lineText(ctx.lines, line)
     const indent = /^ */u.exec(value)![0].length
-    if (indent <= termColumn || value.trim() === '') continue
+    if (indent < shift || value.trim() === '') continue
     if (ctx.findings.some(({ edit }) => edit !== null && edit.start >= lineStart(ctx.lines, line)
       && edit.start < lineStart(ctx.lines, line) + indent && edit.end > edit.start)) continue
-    change(ctx, 'U-435', lineStart(ctx.lines, line) + termColumn,
-      lineStart(ctx.lines, line) + indent, '',
+    change(ctx, 'U-435', lineStart(ctx.lines, line),
+      lineStart(ctx.lines, line) + shift, '',
       'old sibling block kept outside the preceding definition')
   }
 }
