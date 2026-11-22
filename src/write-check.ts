@@ -372,6 +372,8 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
       attempt.escapes.push(c.escapes[at]!)
       if (step !== escapeLoneBracket && step !== escapeContentOpener) c.trials.push(c.escapes[at]!)
     }
+    // Each newly escaped braced opener can reveal another one in the same text.
+    if (step === escapeContentOpener) attempt.step--
     return true
   }
   c.losses.push([e, null])

@@ -8,3 +8,11 @@ it('C2-W-011: an escaped caret and brace in superscript remain spellable', () =>
   expect(written.diagnostics).toEqual([])
   expect(treesEqual(parse(written.source), tree)).toBe(true)
 })
+
+it('C2-W-011: repeated braced openers in child text are repaired in order', () => {
+  const source = String.raw`{^\{\^\{yx\^\{\^xy\{\^xy\{^}`
+  const tree = parse(source)
+  const written = writeWithDiagnostics(tree)
+  expect(written.diagnostics).toEqual([])
+  expect(treesEqual(parse(written.source), tree)).toBe(true)
+})
