@@ -48,12 +48,58 @@ const STAR = 0x2a
  * The kind of the opener escaped at `at`, as a key: `L` and the shape for a line start, else the escaped character,
  * with the mark of a braced opener and `-` twice for the second hyphen of a run (C2-W-090, C2-W-099).
  */
-function kindKey(value: string, at: number, line: boolean): string {
+function kindKey(block: KindBlock, index: number, at: number, line: boolean): string {
+  const value = textOf(block, index)
   if (line) return `L${lineShape(value)}`
   const ch = value[at]!
   if (ch === '{' && at + 1 < value.length) return `{${value[at + 1]}`
-  if (ch === '-' && value[at - 1] === '-') return '--'
+  if (ch === '-' && hyphenRun(block, index, at)[1] > 1) return '--'
   return ch
+}
+
+function textOf(block: KindBlock, index: number): string {
+  return (block.leaves[index] as { text: TextNode }).text.value
+}
+
+/** The text leaf before or after `index` with nothing between them, or -1. */
+function adjacentText(block: KindBlock, index: number, step: number): number {
+  const leaf = block.leaves[index + step]
+  return leaf !== undefined && leaf.text !== null ? index + step : -1
+}
+
+/**
+ * The place of the hyphen at `at` in its run and the length of the run, where a run goes on over adjacent text
+ * nodes, since the written text joins them (C2-W-099).
+ */
+function hyphenRun(block: KindBlock, index: number, at: number): [number, number] {
+  const value = textOf(block, index)
+  let start = at
+  while (start > 0 && value[start - 1] === '-') start--
+  let end = at + 1
+  while (end < value.length && value[end] === '-') end++
+  const before = start === 0 ? runOver(block, index, -1) : 0
+  const after = end === value.length ? runOver(block, index, 1) : 0
+  return [before + at - start, before + end - start + after]
+}
+
+/** The hyphens that the adjacent text nodes in direction `step` add to a run that reaches the edge of `index`. */
+function runOver(block: KindBlock, index: number, step: number): number {
+  let total = 0
+  for (let leaf = adjacentText(block, index, step); leaf >= 0; leaf = adjacentText(block, leaf, step)) {
+    const text = textOf(block, leaf)
+    let run = 0
+    while (run < text.length && text[step < 0 ? text.length - 1 - run : run] === '-') run++
+    total += run
+    if (run < text.length) break
+  }
+  return total
+}
+
+/** Whether the hyphen at `at` stands next to the markup of another node, such as the source of a smart dash. */
+function touchesMarkup(block: KindBlock, index: number, at: number): boolean {
+  const isMarkup = (leaf: Leaf | undefined): boolean => leaf !== undefined && leaf.text === null && leaf.kind === 'markup'
+  return (at === 0 && isMarkup(block.leaves[index - 1])) ||
+    (at === textOf(block, index).length - 1 && isMarkup(block.leaves[index + 1]))
 }
 
 /** The shape of a line opener: its first character, or `0` and the delimiter for an ordered marker. */
@@ -77,23 +123,20 @@ function lineOffsets(key: string, leaf: { text: TextNode, lineStart: boolean }):
   return [value.startsWith('--') ? 1 : 0]
 }
 
-/** The start of the run of hyphens that holds `at`. */
-function runStart(value: string, at: number): number {
-  let start = at
-  while (start > 0 && value[start - 1] === '-') start--
-  return start
-}
-
 /** Whether `at` is a hyphen of a run of two or more that C2-W-099 leaves bare: the first, the third and so on. */
-function isBareHyphen(value: string, at: number): boolean {
-  if (value[at] !== '-' || (value[at - 1] !== '-' && value[at + 1] !== '-')) return false
-  return (at - runStart(value, at)) % 2 === 0
+function isBareHyphen(block: KindBlock, index: number, at: number): boolean {
+  if (textOf(block, index)[at] !== '-') return false
+  const [place, length] = hyphenRun(block, index, at)
+  return length > 1 && place % 2 === 0
 }
 
 /** C2-W-099: every second hyphen of each run of two or more, starting with the second. */
-function hyphenOffsets(value: string): number[] {
+function hyphenOffsets(block: KindBlock, index: number): number[] {
+  const value = textOf(block, index)
   const offsets: number[] = []
-  for (let at = 1; at < value.length; at++) if (value[at] === '-' && value[at - 1] === '-' && !isBareHyphen(value, at)) offsets.push(at)
+  for (let at = value.indexOf('-'); at >= 0; at = value.indexOf('-', at + 1)) {
+    if (hyphenRun(block, index, at)[0] % 2 === 1) offsets.push(at)
+  }
   return offsets
 }
 
@@ -113,7 +156,7 @@ function charOffsets(key: string, block: KindBlock, index: number, value: string
 function kindOffsets(key: string, block: KindBlock, index: number): number[] {
   const leaf = block.leaves[index] as { text: TextNode, lineStart: boolean }
   if (key.startsWith('L')) return lineOffsets(key, leaf)
-  if (key === '--') return hyphenOffsets(leaf.text.value)
+  if (key === '--') return hyphenOffsets(block, index)
   return charOffsets(key, block, index, leaf.text.value)
 }
 
@@ -154,7 +197,8 @@ export function escapeKinds(check: Check, group: readonly Node[]): void {
   for (const [node, at] of reported) {
     const block = owners.get(node)
     if (block === undefined) continue
-    const key = kindKey(node.value, at, check.lineEscapes.get(node)?.has(at) === true)
+    const key = kindKey(block, block.leaves.findIndex((leaf) => leaf.text === node), at,
+      check.lineEscapes.get(node)?.has(at) === true)
     const keys = done.get(block) ?? new Set<string>()
     if (keys.has(key)) continue
     done.set(block, keys.add(key))
@@ -168,13 +212,14 @@ export function escapeKinds(check: Check, group: readonly Node[]): void {
 
 /** C2-W-099: a hyphen run takes the backslash on every second hyphen only, whichever hyphen of it a parse reports. */
 function dropBareHyphens(check: Check, block: KindBlock): void {
-  const texts = new Set(block.leaves.map((leaf) => leaf.text))
+  const texts = new Map(block.leaves.map((leaf, index) => [leaf.text, index]))
   const trials = new Set(check.trials)
   for (let place = check.escapes.length - 1; place >= 0; place--) {
     const escape = check.escapes[place]!
     const [node, at] = escape
-    if (!texts.has(node) || trials.has(escape) || check.lineEscapes.get(node)?.has(at) === true) continue
-    if (isBareHyphen(node.value, at)) check.escapes.splice(place, 1)
+    const index = texts.get(node)
+    if (index === undefined || trials.has(escape) || check.lineEscapes.get(node)?.has(at) === true) continue
+    if (isBareHyphen(block, index, at) && !touchesMarkup(block, index, at)) check.escapes.splice(place, 1)
   }
 }
 
@@ -191,13 +236,13 @@ function isLineOpener(leaf: { text: TextNode, lineStart: boolean }, at: number):
 /** The kinds of the escapes `escapes` in `block`; without the parse a line-start escape may be of either kind. */
 function planKinds(block: KindBlock, escapes: ReadonlyMap<TextNode, readonly number[]>): Set<string> {
   const keys = new Set<string>()
-  for (const leaf of block.leaves) {
-    if (leaf.text === null) continue
+  block.leaves.forEach((leaf, index) => {
+    if (leaf.text === null) return
     for (const at of escapes.get(leaf.text) ?? []) {
-      keys.add(kindKey(leaf.text.value, at, false))
-      if (isLineOpener(leaf, at)) keys.add(kindKey(leaf.text.value, at, true))
+      keys.add(kindKey(block, index, at, false))
+      if (isLineOpener(leaf, at)) keys.add(kindKey(block, index, at, true))
     }
-  }
+  })
   return keys
 }
 
