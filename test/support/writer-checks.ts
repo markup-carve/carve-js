@@ -546,6 +546,48 @@ export function unaskedEscape(written: string, tree: DocumentNode): number {
   return -1
 }
 
+/** The bare text of `form` and, by bare offset, the backslashes it places. */
+function escapedOffsets(form: string): { bare: string, escaped: Set<number> } {
+  let bare = ''
+  const escaped = new Set<number>()
+  for (let at = 0; at < form.length; at++) {
+    if (form[at] === '\\' && at + 1 < form.length && isAsciiPunctuation(form.charCodeAt(at + 1))) {
+      escaped.add(bare.length)
+      bare += form[++at]
+      continue
+    }
+    bare += form[at]
+  }
+  return { bare, escaped }
+}
+
+/**
+ * C2-W-088: a round escapes every opener of a reported kind in its block, which the slow reference leaves out. The
+ * written form passes where it holds every backslash of the reference, and each other one stands in a block of
+ * lines in which the reference already escapes a character of that kind.
+ */
+function kindExplained(written: string, form: string): boolean {
+  const a = escapedOffsets(written)
+  const b = escapedOffsets(form)
+  if (a.bare !== b.bare) return false
+  for (const at of b.escaped) if (!a.escaped.has(at)) return false
+  const blockOf = (at: number): [number, number] => {
+    let start = a.bare.lastIndexOf('\n\n', at)
+    start = start < 0 ? 0 : start + 2
+    const end = a.bare.indexOf('\n\n', at)
+    return [start, end < 0 ? a.bare.length : end]
+  }
+  for (const at of a.escaped) {
+    if (b.escaped.has(at)) continue
+    const char = a.bare[at]!
+    const [start, end] = blockOf(at)
+    let kin = false
+    for (const other of b.escaped) if (other >= start && other < end && a.bare[other] === char) kin = true
+    if (!kin) return false
+  }
+  return true
+}
+
 function show(text: string): string {
   return JSON.stringify(text)
 }
@@ -603,7 +645,8 @@ function checkWritten(
     const reference = referenceForm(written, tree)
     if ('gap' in reference) undecided.push(`${path}: ${show(written)}: ${reference.gap}`)
     else if (reference.form !== written && !hasNestedLink(tree) && !written.includes('\\+') &&
-      !(original !== undefined && outsideRawReferences(written, reference.form, original))) {
+      !(original !== undefined && outsideRawReferences(written, reference.form, original)) &&
+      !kindExplained(written, reference.form)) {
       return `${path}: C2-W-088, written ${show(written)}, the procedure gives ${show(reference.form)}`
     }
   }

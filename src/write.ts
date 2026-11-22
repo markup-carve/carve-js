@@ -12,7 +12,7 @@ import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
-import { bareKindOpeners, escapeKinds } from './write-kinds.ts'
+import { escapeKinds } from './write-kinds.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -543,19 +543,6 @@ function addPlanned(w: Writer, plan: Plan): [TextNode, number[] | undefined][] {
   return replaced
 }
 
-/** The escapes of the text nodes of `group` before the plan placed `replaced`, to restore them with. */
-function groupEscapes(w: Writer, group: readonly Node[], replaced: readonly [TextNode, number[] | undefined][]):
-  [TextNode, number[] | undefined][] {
-  const before = new Map(replaced)
-  const saved: [TextNode, number[] | undefined][] = []
-  const pending = [...group]
-  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-    if (node.type === 'text') saved.push([node, before.has(node) ? before.get(node) : w.escapes.get(node)?.slice()])
-    forEachSlot(node, (children) => { for (const child of children) pending.push(child) })
-  }
-  return saved
-}
-
 function restoreEscapes(w: Writer, replaced: readonly [TextNode, number[] | undefined][]): void {
   for (const [node, previous] of replaced) {
     if (previous === undefined) w.escapes.delete(node)
@@ -708,6 +695,11 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   const reported = w.losses.entries.length
   const plan = settledPlan(w, run, group, first, reported)
   if (plan === null) return false
+  // C2-W-088: which openers a round escapes follows from the kinds its parse reports, which the plan cannot know.
+  if (w.kindRounds && plan.escapes.size > 0) {
+    noteReason(run, 'kind', '')
+    return false
+  }
   const replaced = addPlanned(w, plan)
   if (replaced.length > 0) {
     resetLines(w)
@@ -717,13 +709,8 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   for (const node of plan.lost) lose(w, node, 'value')
   const checked = run.check && plan.lost.length === 0 && w.lines.length > 0
   // The pair test reads its own spelling back, also where the run checks nothing, as the repair it replaces does.
-  const late = pairs.late && plan.lost.length === 0 && w.lines.length > 0 && run.path === 'plan'
-  const beforePairs = late && w.kindRounds ? groupEscapes(w, group, replaced) : null
-  const placed = late ? testLatePairs(w, group, first, pairs) : REFUSED
-  if (w.kindRounds && !closeKinds(w, group, first, checked, plan.escapes, beforePairs ?? replaced)) {
-    noteReason(run, 'kind', '')
-    return false
-  }
+  const placed = pairs.late && plan.lost.length === 0 && w.lines.length > 0 && run.path === 'plan'
+    ? testLatePairs(w, group, first, pairs) : REFUSED
   if (placed === PLACED) {
     // C2-W-089: the plan alone did not decide a group that needed a pair round and its parse.
     run.stats.repaired++
@@ -738,26 +725,6 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   // The pair rules asked nothing of the planned spelling, so the test after the write would find nothing either.
   if (placed === NONE_ASKED) pairs.settled = true
   return true
-}
-
-/**
- * C2-W-088: the rounds escape every opener of a kind they report in its block, so the plan adds the openers its
- * escapes leave bare. False, with the escapes of `before` restored, where that does not settle the group.
- */
-function closeKinds(w: Writer, group: readonly Node[], first: boolean, checked: boolean,
-  planned: ReadonlyMap<TextNode, readonly number[]>, before: readonly [TextNode, number[] | undefined][]): boolean {
-  const missing = bareKindOpeners(group, planned, w.escapes)
-  if (missing !== null && missing.size === 0) return true
-  if (missing !== null) {
-    for (const [node, offsets] of missing) {
-      w.escapes.set(node, [...new Set([...(w.escapes.get(node) ?? []), ...offsets])].sort((a, b) => a - b))
-    }
-    resetLines(w)
-    writeBlocks(w, group, '', 0, false)
-    if (bareKindOpeners(group, planned, w.escapes)?.size === 0 && (!checked || readsBack(w, group, first))) return true
-  }
-  restoreEscapes(w, before)
-  return false
 }
 
 const REFUSED = 0
