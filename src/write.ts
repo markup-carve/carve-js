@@ -1416,6 +1416,92 @@ function writeTrimmed(w: Writer, run: WriterRun, document: DocumentNode, origina
   }
 }
 
+type LossFrame = { node: Node; path: string; parent: LossFrame | null; inLineBlock: boolean }
+type LineFeedCandidate = { path: string; node: TextNode }
+
+function hasLostWrapper(frame: LossFrame, lossNodes: ReadonlySet<Node | null>): boolean {
+  for (let ancestor = frame.parent; ancestor !== null; ancestor = ancestor.parent) {
+    if (lossNodes.has(ancestor.node) && ['paragraph', 'line', 'line_block'].includes(ancestor.node.type)) return true
+  }
+  return false
+}
+
+/** Inspect written node slots; expanded includes and metadata text are not written here. */
+function lineFeedCandidates(document: DocumentNode, w: Writer):
+  { text: LineFeedCandidate[]; comments: string[] } {
+  const text: LineFeedCandidate[] = []
+  const comments: string[] = []
+  const lossNodes = new Set(w.losses.nodes)
+  const pending: LossFrame[] = [{ node: document, path: '', parent: null, inLineBlock: false }]
+  while (pending.length > 0) {
+    const frame = pending.pop()!
+    const { node, path, inLineBlock } = frame
+    if (node.type === 'text' && node.value.includes('\n') && hasLostWrapper(frame, lossNodes)) {
+      text.push({ path, node })
+      if (!w.lost.has(node)) lose(w, node, 'value')
+    }
+    if (inLineBlock && node.type === 'comment' && node.form === 'braced' && node.value.includes('\n')) {
+      comments.push(path)
+    }
+    if (node.type === 'include') continue
+    forEachSlot(node, (children, step, single) => {
+      if (step.startsWith('metadata/')) return
+      for (let at = children.length - 1; at >= 0; at--) {
+        pending.push({ node: children[at]!, path: `${path}/${step}${single ? '' : `/${at}`}`,
+          parent: frame, inLineBlock: inLineBlock || node.type === 'line_block' })
+      }
+    }, undefined, document.extensions ?? [])
+  }
+  return { text, comments }
+}
+
+function suppressLineFeedWrappers(document: DocumentNode, diagnostics: Diagnostic[], text: LineFeedCandidate[]): void {
+  if (text.length === 0) return
+  const leaves = new Set(text.map(entry => entry.node))
+  const ancestors = new Set<string>()
+  for (const { path } of text) {
+    for (let end = path.lastIndexOf('/'); end > 0; end = path.lastIndexOf('/', end - 1)) {
+      ancestors.add(path.slice(0, end))
+    }
+    ancestors.add('')
+  }
+  for (let at = diagnostics.length - 1; at >= 0; at--) {
+    const entry = diagnostics[at]!
+    if (entry.code !== 'structure-unspellable' || !ancestors.has(entry.path ?? '')) continue
+    const wrapper = nodeAt(document, entry.path ?? '')
+    if (wrapper === null) continue
+    const leaf = onlyLineFeedLeaf(wrapper)
+    if (leaf !== null && leaves.has(leaf)) diagnostics.splice(at, 1)
+  }
+}
+
+function relocateCommentLosses(diagnostics: Diagnostic[], comments: string[]): void {
+  for (const path of comments) {
+    const entry = diagnostics.find(row => row.path === `${path}/value` && row.code === 'field-unspellable')
+    if (entry === undefined) continue
+    entry.code = 'structure-unspellable'
+    entry.path = path
+    entry.message = 'Carve source cannot spell a comment node here'
+  }
+}
+
+/** Locate writer losses, moving a line-feed mismatch from a wrapper to its written leaf. */
+function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
+  if (!w.losses.entries.some((entry, at) => entry.code === 'structure-unspellable' ||
+    (entry.code === 'field-unspellable' && w.losses.nodes[at]?.type === 'comment'))) {
+    const diagnostics = locateFindings(document, w.losses)
+    rootMetadataLosses(document, diagnostics)
+    return diagnostics
+  }
+  const candidates = lineFeedCandidates(document, w)
+  // C2-W-103: locate original and added findings together, retaining ranges and include ancestry.
+  const diagnostics = locateFindings(document, w.losses)
+  suppressLineFeedWrappers(document, diagnostics, candidates.text)
+  relocateCommentLosses(diagnostics, candidates.comments)
+  rootMetadataLosses(document, diagnostics)
+  return diagnostics
+}
+
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout)):
@@ -1431,77 +1517,11 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   readAbbreviations(w, document)
   w.work.source = original?.length ?? 0
   const source = writeTrimmed(w, run, document, original)
-  if (!w.losses.entries.some((entry, at) => entry.code === 'structure-unspellable' ||
-    (entry.code === 'field-unspellable' && w.losses.nodes[at]?.type === 'comment'))) {
-    const diagnostics = locateFindings(document, w.losses)
-    rootMetadataLosses(document, diagnostics)
-    stats.parses = w.parses
-    return { output: { source, diagnostics }, stats }
-  }
-  // A line feed supplied inside one text value is read as a line boundary.
-  // The block comparison can see only the changed wrapper, so move that loss
-  // to the leaf field that actually failed to read back (C2-W-117, C2-W-124).
-  const textLineFeeds: Array<{ path: string; node: TextNode }> = []
-  const commentLines: string[] = []
-  const lossNodes = new Set(w.losses.nodes)
-  type LossFrame = { node: Node; path: string; parent: LossFrame | null; inLineBlock: boolean }
-  const pending: LossFrame[] = [{ node: document, path: '', parent: null, inLineBlock: false }]
-  while (pending.length > 0) {
-    const frame = pending.pop()!
-    const { node, path, inLineBlock } = frame
-    if (node.type === 'text' && node.value.includes('\n')) {
-      let wrapperLost = false
-      for (let ancestor = frame.parent; ancestor !== null; ancestor = ancestor.parent) {
-        if (lossNodes.has(ancestor.node) && ['paragraph', 'line', 'line_block'].includes(ancestor.node.type)) {
-          wrapperLost = true
-          break
-        }
-      }
-      if (wrapperLost) {
-        textLineFeeds.push({ path, node })
-        if (!w.lost.has(node)) lose(w, node, 'value')
-      }
-    }
-    if (inLineBlock && node.type === 'comment' && node.form === 'braced' && node.value.includes('\n')) commentLines.push(path)
-    // Expanded include children are not emitted by the writer.
-    if (node.type === 'include') continue
-    forEachSlot(node, (children, step, single) => {
-      if (step.startsWith('metadata/')) return
-      for (let at = children.length - 1; at >= 0; at--) pending.push({ node: children[at]!, path: `${path}/${step}${single ? '' : `/${at}`}`,
-        parent: frame, inLineBlock: inLineBlock || node.type === 'line_block' })
-    }, undefined, document.extensions ?? [])
-  }
-  // C2-W-103: locate both the original findings and the text findings together,
-  // so source ranges and include ancestry are retained.
-  const diagnostics = locateFindings(document, w.losses)
-  if (textLineFeeds.length > 0) {
-    const leaves = new Set(textLineFeeds.map(entry => entry.node))
-    const ancestors = new Set<string>()
-    for (const { path } of textLineFeeds) {
-      for (let end = path.lastIndexOf('/'); end > 0; end = path.lastIndexOf('/', end - 1)) ancestors.add(path.slice(0, end))
-      ancestors.add('')
-    }
-    for (let at = diagnostics.length - 1; at >= 0; at--) {
-      const entry = diagnostics[at]!
-      if (entry.code !== 'structure-unspellable' || !ancestors.has(entry.path ?? '')) continue
-      const wrapper = nodeAt(document, entry.path ?? '')
-      if (wrapper !== null) {
-        const leaf = onlyLineFeedLeaf(wrapper)
-        if (leaf !== null && leaves.has(leaf)) diagnostics.splice(at, 1)
-      }
-    }
-  }
-  for (const path of commentLines) {
-    const entry = diagnostics.find(row => row.path === `${path}/value` && row.code === 'field-unspellable')
-    if (entry === undefined) continue
-    entry.code = 'structure-unspellable'
-    entry.path = path
-    entry.message = 'Carve source cannot spell a comment node here'
-  }
-  rootMetadataLosses(document, diagnostics)
+  const diagnostics = writerDiagnostics(document, w)
   stats.parses = w.parses
   return { output: { source, diagnostics }, stats }
 }
+
 
 /** Writes a tree that is known to be valid. */
 export function writeTree(document: DocumentNode, options: WriteOptions | undefined, check?: boolean,
