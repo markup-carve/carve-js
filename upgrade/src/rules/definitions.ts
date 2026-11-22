@@ -14,6 +14,35 @@ interface Span {
   column: number
 }
 
+/** Recover an indented note range when the old parser kept only its positioned body. */
+function bodySpan(ctx: Context, label: string, value: Node01[]): Span | null {
+  if (value.length === 0) return null
+  let first = ctx.lines.count + 1
+  let last = 0
+  for (const node of value) {
+    if (node.pos === undefined) continue
+    first = Math.min(first, node.pos.startLine)
+    last = Math.max(last, node.pos.endLine)
+  }
+  if (last === 0) return null
+  const marker = /^([ \t]*)\[\^([^\]]+)\]:/u.exec(lineText(ctx.lines, first))
+  if (marker === null || marker[2] !== label || marker[1]!.length === 0) return null
+  return { first, last, column: marker[1]!.length }
+}
+
+function missingNoteSpans(ctx: Context, notes: unknown): Span[] {
+  const bodies = ctx.doc.footnoteDefs
+  if (typeof bodies !== 'object' || bodies === null) return []
+  const spans: Span[] = []
+  for (const [label, value] of Object.entries(bodies as Record<string, Node01[]>)) {
+    if (typeof notes === 'object' && notes !== null && label in notes) continue
+    if (!Array.isArray(value)) continue
+    const span = bodySpan(ctx, label, value)
+    if (span !== null) spans.push(span)
+  }
+  return spans
+}
+
 /** The lines of every definition of the document, in source order. */
 function definitionSpans(ctx: Context): Span[] {
   const spans: Span[] = []
@@ -28,6 +57,9 @@ function definitionSpans(ctx: Context): Span[] {
       spans.push({ first: pos.startLine, last: pos.endLine, column: pos.startColumn - 1 })
     }
   }
+  // The old parser sometimes retains a definition's positioned body but omits
+  // its definition position, especially when a comment interrupts its body.
+  spans.push(...missingNoteSpans(ctx, notes))
   spans.sort((a, b) => a.first - b.first)
   // Two definitions that open on one line, a note in the marker line of a note, are not moved.
   return spans.filter((span, index) => span.first !== spans[index - 1]?.first && span.first !== spans[index + 1]?.first)
