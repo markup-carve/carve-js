@@ -31,6 +31,7 @@ const PIPE = 124
 const SPACE = 32
 const TAB = 9
 const BACKTICK = 96
+const BRACE = 123
 
 /** A writer per inline node type, each of which reads a node of its own type. */
 type InlineWriters = { [T in keyof NodeOfType]?: (w: Writer, node: NodeOfType[T], flags: number) => string }
@@ -868,7 +869,8 @@ function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, f
   const part = writePart(w, nodes, at, end, flags)
   if ((node.type !== 'emphasis' && node.type !== 'strong') || part === '' || part.charCodeAt(0) !== before) return part
   w.forms.set(node, 1)
-  return writePart(w, nodes, at, end, flags)
+  // A braced part already opens with `{`; writing it again gives the same bytes and doubles the cost per level.
+  return part.charCodeAt(0) === BRACE ? part : writePart(w, nodes, at, end, flags)
 }
 
 /** C2-I-102: in a hard-break block a line ending alone at the start of a line is a blank line, so the break keeps its backslash. */

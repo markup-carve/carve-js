@@ -181,7 +181,8 @@ export function fastCoreHtml(source: string, settings: Settings): string | undef
       const language = current.slice(3)
       let close = at + 1
       while (close < lines.length && lines[close] !== '```') {
-        if (lines[close]!.startsWith('```')) return undefined
+        // C2-B-109: a closer may stand at any indent.
+        if (lines[close]!.trimStart().startsWith('```')) return undefined
         close++
       }
       if (close === lines.length) return undefined
