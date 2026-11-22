@@ -8,6 +8,7 @@ import {
   writeWithDiagnostics, type BlockExtensionNode, type DocumentNode, type ExtensionDefinition,
 } from '../src/index.ts'
 import { calloutExtension, calloutRenderer, diagramExtension, diagramRenderer } from './support/extensions.ts'
+import { writeTreeWithStats } from '../src/write.ts'
 
 const source = ':::: tabs\n::: tab "Install"\nRun setup.\n:::\n\n::: tab "Use"\nOpen the app.\n:::\n::::\n'
 const html = '<div class="tabs" role="group" aria-label="Tabs"><input type="radio" name="tabs-1" id="tabs-1-0" checked>'
@@ -38,6 +39,35 @@ function outer(document: DocumentNode): BlockExtensionNode {
 }
 
 describe('the extension interface', () => {
+  it('does not trust a claimed source whose rewritten title loses structure', () => {
+    const extension: ExtensionDefinition = {
+      name: 'test.box', version: '1', matcher: { form: 'div', name: 'box' }, props: {},
+      slots: { title: { kind: 'inline' } },
+      transform: (claim) => claim.form === 'div' ? {
+        type: 'block_extension', name: 'test.box', version: '1', children: [],
+        slots: { title: claim.node.title ?? [] }, fallback: claim.body,
+      } : null,
+    }
+    const input = '::: box "/A/ b"\nx\n:::\n'
+    const result = formatWithDiagnostics(input, { extensions: [extension] })
+    expect(result.source).toBe('x\n')
+    expect(result.diagnostics.map((entry) => entry.code)).toContain('structure-unspellable')
+  })
+
+  it('reuses source readback across writer passes for repeated extension blocks', () => {
+    const group = ':::: tabs\n::: tab "T0"\nsee [r0].\n:::\n::::\n'
+    const input = `[r0]: http://x/0\n\n${group.repeat(100)}`
+    const parsed = parseWithLayout(input, { extensions: tabsExtensions })
+    const { output, stats } = writeTreeWithStats(parsed.document,
+      { layout: parsed.layout, extensions: tabsExtensions }, 'plan', false, undefined, input)
+    expect(output.diagnostics).toEqual([])
+    expect(stats.parses).toBeLessThan(150)
+    const verified = writeTreeWithStats(parsed.document,
+      { layout: parsed.layout, extensions: tabsExtensions }, 'plan', false, undefined, input,
+      new TextEncoder().encode(input))
+    expect(verified.output).toEqual(output)
+    expect(verified.stats.parses).toBe(0)
+  })
   it.each(['see [r0].', '\\[r0] lit'])('C2-X-026: a tab body keeps its document link-key context: %s', (body) => {
     const input = `[r0]: http://x/0\n\n:::: tabs\n::: tab "T0"\n${body}\n:::\n::::\n`
     const result = formatWithDiagnostics(input, { extensions: tabsExtensions })

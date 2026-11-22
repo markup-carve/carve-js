@@ -36,7 +36,8 @@ export function formatWithDiagnostics(source: string, options?: FormatOptions): 
   // C2-W-127: with `normalize` the writer gets no sidecar, so every spelling takes its default form.
   // C2-W-091: the tree is the parse of the source, so the writer does not parse its plan again.
   const writeOptions = normalize ? { alignTables, extensions } : { layout: parsed.layout, alignTables, extensions }
-  const written = writeTree(parsed.document, writeOptions, false, source)
+  const written = writeTree(parsed.document, writeOptions, false, source,
+    extensions.length === 0 ? undefined : new TextEncoder().encode(source))
   // C2-N-005: a processor whose output is Carve source expands nothing, so no include is missing a resolver.
   const found = parsed.diagnostics.filter((entry) => entry.code !== 'include-no-resolver')
   return { source: written.source, diagnostics: [...found, ...written.diagnostics] }
