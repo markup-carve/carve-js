@@ -37,6 +37,13 @@ describe('lines consumed without output by the old parser', () => {
     expect(needsAttention(result)).toBe(false)
   })
 
+  it('finds the same ignored definition after ordinary preceding blocks', () => {
+    const source = `${'lead\n\n'.repeat(12)}[^f]: alpha\n :: term\n :: term\n- \nSe\`\`\`xe[^f]\n`
+    const result = upgrade(source)
+    expect(result.records.some((record) => record.entry === 'U-209' && record.line === 25)).toBe(true)
+    expect(canWriteUpgrade(result)).toBe(true)
+  })
+
   it('omits a definition that would make a following fence release its body', () => {
     const source = '[^a]: note\n [r]: /u\n ```x\nsee[^a] and [t][r]\n'
     const result = upgrade(source)

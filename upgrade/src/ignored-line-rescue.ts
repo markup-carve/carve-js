@@ -17,6 +17,17 @@ function originalLine(input: string, outputStart: number, value: string, edits: 
   return closest
 }
 
+function nearbyDefinitions(output: ReturnType<typeof readLines>, mismatchLine: number): number[] {
+  const found: number[] = []
+  for (let line = Math.min(mismatchLine, output.count); line >= 1 && found.length < 4; line--) {
+    if (/^[ \t]*\[\^[^\]\n]+\]:/u.test(lineText(output, line))) found.push(line)
+  }
+  for (let line = mismatchLine + 1; line <= Math.min(output.count, mismatchLine + 4) && found.length < 4; line++) {
+    if (/^[ \t]*\[\^[^\]\n]+\]:/u.test(lineText(output, line))) found.push(line)
+  }
+  return found
+}
+
 /** A line swallowed by the old parser can be omitted when both complete renders prove that it had no effect. */
 export function rescueIgnoredLine(input: string, output: string, mismatch: ReportRecord, edits: Edit[]):
   { output: string; record: ReportRecord } | null {
@@ -29,9 +40,7 @@ export function rescueIgnoredLine(input: string, output: string, mismatch: Repor
   for (let line = first; line <= last; line++) {
     if (/^[ \t]*>[ \t]+\S/u.test(lineText(lines, line))) candidates.push(line)
   }
-  for (let line = 1; line <= Math.min(4, lines.count); line++) {
-    if (/^[ \t]*\[\^[^\]\n]+\]:/u.test(lineText(lines, line))) candidates.push(line)
-  }
+  candidates.push(...nearbyDefinitions(lines, mismatch.line))
   for (const line of new Set(candidates)) {
     const start = lineStart(lines, line)
     const end = line < lines.count ? lineStart(lines, line + 1) : lineEnd(lines, line)
