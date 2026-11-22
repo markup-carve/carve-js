@@ -31,7 +31,8 @@ describe('direct core HTML path', () => {
 
   it('declines syntax whose ownership needs the full parser', () => {
     for (const source of ['---\nname: value\n---\n', ':: term\n: definition\n', '- first\n+\n> attached\n',
-      '```js\ncode\n````\n', ': definition\n', '- `a``b`\n', '#  A\n', '> A \n', '> \n', '> A\n> \n']) {
+      '```js\ncode\n````\n', ': definition\n', '- `a``b`\n', '#  A\n', '> A \n', '> \n', '> A\n> \n',
+      '# :ab:\n', 'Text :note[x](https://example.com)\n']) {
       expect(fastCoreHtml(source, settings)).toBeUndefined()
       expect(render(source)).toBe(renderWithDiagnostics(source).html)
     }

@@ -10,7 +10,7 @@ interface Definition { href: string }
 interface Result { html: string, next: number }
 
 const MARK = /[*/`\[]/g
-const COMPLEX = /[{}^\\<>_~!@$=#'"]|--|\.\.\.|\/\*|\*\/|``|\+-|\((?:c|r|tm)\)/
+const COMPLEX = /[{}^\\<>_~!@$=#:"']|--|\.\.\.|\/\*|\*\/|``|\+-|\((?:c|r|tm)\)/
 const BLOCK = /^(?:\s|#|\* |\+ |- |> |\||\{|:::|```|~~~|\.{1,9} |[A-Za-z0-9]+[.)] )/
 
 function plain(text: string): boolean {
@@ -161,7 +161,7 @@ export function fastCoreHtml(source: string, settings: Settings): string | undef
     const heading = /^(#{1,6}) ([^#].*)$/.exec(current)
     if (heading !== null) {
       const title = heading[2]!
-      if (title.startsWith(' ') || title.endsWith(' ') || !plain(title) || /[*\[\]/`]/.test(title)) return undefined
+      if (title.startsWith(' ') || title.endsWith(' ') || !/^[A-Za-z0-9 ]+$/.test(title)) return undefined
       const level = heading[1]!.length
       while (sections.at(-1) !== undefined && sections.at(-1)! >= level) {
         parts.push(`${indent(sections.length - 1)}</section>`)
