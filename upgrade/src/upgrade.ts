@@ -26,7 +26,7 @@ import { rescueDirectiveSocial } from './directive-social-rescue.ts'
 import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
 import { rescueEscape } from './escape-rescue.ts'
 import { rescueDashRun } from './dash-run-rescue.ts'
-import { rescueIgnoredQuote } from './ignored-quote-rescue.ts'
+import { rescueIgnoredLine } from './ignored-line-rescue.ts'
 import { LATE_VARIANTS, RULES } from './rules/index.ts'
 import { itemColumns, itemParagraphBreaks, nestedOrderedBreaks } from './rules/late.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
@@ -496,7 +496,7 @@ function rescueMismatch(input: string, output: string, mismatch: ReportRecord, r
     && !onLine.some((record) => record.class === 'rewrite' || record.class === 'escape')
   const rescues = [rescueFence, rescuePlus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
     rescueCombinedInline, rescueHeadingBraceTag, rescueTargeted, rescueMinor, rescueBacktick, rescueDirectiveSocial, rescueBraceOpenerTags,
-    rescueBracedBoldItalic, ...(reported ? [] : [rescueEscape, rescueDashRun]), rescueIgnoredQuote]
+    rescueBracedBoldItalic, ...(reported ? [] : [rescueEscape, rescueDashRun]), rescueIgnoredLine]
   for (const rescue of rescues) {
     const rescued = rescue(input, output, mismatch)
     if (rescued !== null) return rescued
