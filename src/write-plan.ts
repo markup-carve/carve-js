@@ -691,12 +691,13 @@ function mayCloseLineBlock(leaf: Leaf): boolean {
 function checkLines(leaf: Leaf, start: number, place: LeafPlace | undefined, escaped: Uint8Array): void {
   const rules = lineRules(start, place)
   const line = place?.line === true && start === LINE_START
+  let above = false
   for (let at = -1; at < leaf.codes.length && leaf.undecided === null; at++) {
     leaf.cursor = Math.max(at, 0)
     if (at < 0 ? start !== LINE_START : leaf.codes[at] !== LF || leaf.kinds[at] === TEXT) continue
     if (line && at < 0) undecidedIf(mayCloseLineBlock(leaf), leaf, 'line start')
     else if (rules === null) undecidedIf(opensBlock(leaf, at + 1), leaf, 'line start')
-    else checkLine(leaf, at, rules, escaped)
+    else above = checkLine(leaf, at, rules, escaped, above)
   }
 }
 
@@ -706,10 +707,18 @@ function lineRules(start: number, place: LeafPlace | undefined): LeafPlace | nul
   return (place.paragraph && start === LINE_START) || place.term ? place : null
 }
 
-function checkLine(leaf: Leaf, at: number, rules: LeafPlace, escaped: Uint8Array): void {
+/** Whether the line took an escape. `above` says the line above did, so in the bare text it opened a block. */
+function checkLine(leaf: Leaf, at: number, rules: LeafPlace, escaped: Uint8Array, above: boolean): boolean {
   const escape = lineEscape(leaf, at + 1, at < 0, rules)
+  // C2-W-088: the round that escapes the opener above reads this line below that block, not below paragraph text.
+  const asFirst = above ? lineEscape(leaf, at + 1, true, rules) : escape
+  if (asFirst !== escape && asFirst !== UNDECIDED) {
+    undecide(leaf, 'line below an opener')
+    return false
+  }
   if (escape === UNDECIDED) undecide(leaf, `line start ${String.fromCharCode(code(leaf, at + 1))}`)
   else if (escape >= 0) escaped[escape] = 1
+  return escape >= 0
 }
 
 /** C2-I-090, C2-W-125 six: a mention or a tag forms after a boundary, and a name character behind it lengthens it. */
