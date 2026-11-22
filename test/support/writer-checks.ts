@@ -29,6 +29,11 @@ function endsLineWithCr(value: string): boolean {
 export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]): boolean {
   return diagnostics.some((entry) => {
     if (entry.code === 'writer-refused') return true
+    // C2-B-232: a top-level paragraph that starts with the smart dash of a typed opener has no spelling (carve#6389).
+    if (entry.code === 'structure-unspellable' && /^\/children\/\d+$/.test(entry.path ?? '')) {
+      const paragraph = nodeAt(tree, entry.path!)
+      if (isNode(paragraph) && paragraph.type === 'paragraph' && childNodes(paragraph)[0]?.type === 'smart_punctuation') return true
+    }
     const found = entry.path === undefined ? undefined : nodeAt(tree, entry.path)
     const parentPath = entry.path?.slice(0, entry.path.lastIndexOf('/')) ?? ''
     const parent = nodeAt(tree, parentPath)

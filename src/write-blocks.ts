@@ -17,6 +17,7 @@ import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
 import { BARE_BREAKS, bracedComment, IN_FIGURE_GROUP, lineCommentText, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
+import { isTypedFrontmatterOpener } from './lines.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
 import { AFTER_MARK, AS_CONTENT, AS_INLINES, AS_LINE, IN_TITLE, LINE_START, planLeaf, unplanned } from './write-plan.ts'
 import { parseChunk } from './write-check.ts'
@@ -191,7 +192,18 @@ function textLeaf(
   if (node.type === 'paragraph') notePlace(w, node, prefix)
   w.lead = (w.lead ?? prefix) + mark
   const start = node.type === 'paragraph' ? LINE_START : AFTER_MARK
+  const first = w.lines.length
   emitLines(w, prefix, indent, planLeaf(w, node.children, flags, writeContent(w, node.children, flags), AS_CONTENT, start))
+  if (node.type === 'paragraph' && w.topBlocks.has(node)) refuseTypedOpener(w, node, w.lines[first])
+}
+
+/**
+ * C2-B-232: a top-level paragraph whose first line is a typed opener reads as a metadata block. Where that line does
+ * not start with text, as with the smart punctuation of `---yaml`, no backslash makes it text.
+ */
+function refuseTypedOpener(w: Writer, node: ParagraphNode, line: string | undefined): void {
+  if (line === undefined || node.children[0]?.type === 'text' || !line.startsWith('---')) return
+  if (isTypedFrontmatterOpener(line, 0, line.length)) lose(w, node, null)
 }
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */

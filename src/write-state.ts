@@ -70,6 +70,8 @@ export interface Writer {
   bareAlts: boolean
   /** C2-W-088: false while a group is written again by rounds of the reported openers only. */
   kindRounds: boolean
+  /** The blocks of the document root: only there does a typed opener open a metadata block (C2-B-232). */
+  topBlocks: ReadonlySet<Node>
   /** C2-W-010: the plan is taken without the test of C2-W-088 kinds, after the rounds lost a node it keeps. */
   planKinds: boolean
   /** Why the plan left the last group to the repair, or null. */
@@ -117,7 +119,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
-    prewrittenAttributes: null, bareAlts: false, kindRounds: true, planKinds: false, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
+    prewrittenAttributes: null, bareAlts: false, kindRounds: true, topBlocks: new Set(), planKinds: false, planWhy: null, plan: null, parses: 0, parseCache: new Map(),
     extensionSources: new Map(), verifiedSourceBytes: undefined,
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
