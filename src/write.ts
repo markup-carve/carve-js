@@ -110,7 +110,7 @@ function onlyLineFeedLeaf(wrapper: Node): TextNode | null {
     const at = pending.pop()!
     if (at.type === 'text') {
       if (Object.keys(at).some(key => !['type', 'value', 'pos'].includes(key))) return null
-      if (at.value === '') return null
+      if (at.value.trim() === '') return null
       if (at.value.includes('\n')) {
         if (leaf !== null) return null
         leaf = at

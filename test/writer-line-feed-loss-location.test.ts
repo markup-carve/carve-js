@@ -109,3 +109,11 @@ it('keeps a value loss on a line comment that remains a comment', () => {
     'field-unspellable', '/children/0/children/0/children/0/children/1/value',
   ])
 })
+
+it('keeps a structural loss when sibling emphasis cannot form', () => {
+  const block = { type: 'paragraph', children: [
+    { type: 'text', value: 'a\n\nb' }, { type: 'emphasis', children: [{ type: 'text', value: ' ' }] },
+  ] } as Block
+  const rows = writeWithDiagnostics(documentOf(block)).diagnostics
+  expect(rows.map(row => [row.code, row.path])).toContainEqual(['structure-unspellable', '/children/0'])
+})
