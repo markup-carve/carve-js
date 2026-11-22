@@ -89,3 +89,11 @@ it('does not attribute unwritten metadata text to the body loss', () => {
   const rows = writeWithDiagnostics(documentOf(block)).diagnostics
   expect(rows.some(row => row.path?.includes('/metadata/'))).toBe(false)
 })
+
+it('keeps a structural loss when an adjacent text sibling merges', () => {
+  const block = { type: 'paragraph', children: [
+    { type: 'text', value: 'a\n\nb' }, { type: 'text', value: 'x' },
+  ] } as Block
+  const rows = writeWithDiagnostics(documentOf(block)).diagnostics
+  expect(rows.map(row => [row.code, row.path])).toContainEqual(['structure-unspellable', '/children/0'])
+})

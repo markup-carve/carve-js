@@ -119,7 +119,9 @@ function onlyLineFeedLeaf(wrapper: Node): TextNode | null {
     }
     if (!['document', 'paragraph', 'line', 'line_block', 'emphasis', 'strong', 'underline', 'strike', 'highlight'].includes(at.type)) return null
     if (Object.keys(at).some(key => !['type', 'children', 'pos', 'astVersion'].includes(key))) return null
-    for (const child of childNodes(at)) pending.push(child)
+    const children = childNodes(at)
+    if (children.some((child, index) => index > 0 && child.type === 'text' && children[index - 1]?.type === 'text')) return null
+    for (const child of children) pending.push(child)
   }
   return leaf
 }
