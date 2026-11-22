@@ -310,6 +310,23 @@ function escapeContentStart(c: Check, e: Node): boolean {
   return mark !== undefined && mark !== ']' && first?.type === 'text' && first.value.startsWith(mark) && escapeAt(c, first, 0)
 }
 
+/** An opener in superscript text mixed with other content can take the wrapper's closer. */
+function escapeContentOpener(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]!
+  if (e.type !== 'superscript') return false
+  const mark = CLOSING_MARKS.get(e.type)
+  if (mark === undefined || !('children' in e)) return false
+  let found = false
+  for (const child of e.children) {
+    // A run made entirely of openers follows the ordinary repair and budget rule.
+    if (child.type !== 'text' || !/[^{^]/.test(child.value)) continue
+    for (let at = child.value.indexOf(`{${mark}`); at >= 0; at = child.value.indexOf(`{${mark}`, at + 1)) {
+      found = escapeAt(c, child, at) || found
+    }
+  }
+  return found
+}
+
 function escapeFootnoteBrace(c: Check, e: Node): boolean {
   if (e.type !== 'inline_footnote') return false
   const first = e.children[0]
@@ -363,8 +380,10 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
     if (!step(c, es, i, attempt)) continue
     for (let at = before; at < c.escapes.length; at++) {
       attempt.escapes.push(c.escapes[at]!)
-      if (step !== escapeLoneBracket) c.trials.push(c.escapes[at]!)
+      if (step !== escapeLoneBracket && step !== escapeContentOpener) c.trials.push(c.escapes[at]!)
     }
+    // A deferred escape can leave another opener for the next round.
+    if (step === escapeContentOpener) attempt.step--
     return true
   }
   c.losses.push([e, null])
@@ -380,6 +399,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   (c, es, i) => escapeContentStart(c, es[i]!),
   (c, es, i) => escapeFootnoteBrace(c, es[i]!),
   (c, es, i) => escapeContentConstruct(c, es[i]!),
+  escapeContentOpener,
   escapeAcrossCloser,
   escapeInside,
   escapeCloserBeforeBrace,
