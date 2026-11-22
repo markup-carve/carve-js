@@ -103,12 +103,14 @@ function nodeAt(document: DocumentNode, path: string): Node | null {
 
 /** A wrapper whose only unspellable content is one plain line-feed text. */
 function onlyLineFeedLeaf(wrapper: Node): TextNode | null {
+  if (wrapper.type === 'document' && wrapper.children.length !== 1) return null
   const pending = [wrapper]
   let leaf: TextNode | null = null
   while (pending.length > 0) {
     const at = pending.pop()!
     if (at.type === 'text') {
       if (Object.keys(at).some(key => !['type', 'value', 'pos'].includes(key))) return null
+      if (at.value === '') return null
       if (at.value.includes('\n')) {
         if (leaf !== null) return null
         leaf = at
@@ -1472,6 +1474,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
     // Expanded include children are not emitted by the writer.
     if (node.type === 'include') continue
     forEachSlot(node, (children, step, single) => {
+      if (step.startsWith('metadata/')) return
       for (let at = children.length - 1; at >= 0; at--) pending.push({ node: children[at]!, path: `${path}/${step}${single ? '' : `/${at}`}`,
         parent: frame, inLineBlock: inLineBlock || node.type === 'line_block' })
     }, undefined, document.extensions ?? [])

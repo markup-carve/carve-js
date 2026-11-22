@@ -74,3 +74,18 @@ it('removes wrapper reports when a plain sibling reads back', () => {
     ['field-unspellable', '/children/0/children/0/value'],
   ])
 })
+
+it('retains an independently lost empty sibling', () => {
+  const block = { type: 'paragraph', children: [
+    { type: 'text', value: 'a\n\nb' }, { type: 'text', value: '' },
+  ] } as Block
+  const rows = writeWithDiagnostics(documentOf(block)).diagnostics
+  expect(rows.map(row => [row.code, row.path])).toContainEqual(['structure-unspellable', '/children/0'])
+})
+
+it('does not attribute unwritten metadata text to the body loss', () => {
+  const block = { type: 'paragraph', children: [{ type: 'text', value: 'a\n\nb' }],
+    metadata: { title: [{ type: 'text', value: 'other\nline' }] } } as Block
+  const rows = writeWithDiagnostics(documentOf(block)).diagnostics
+  expect(rows.some(row => row.path?.includes('/metadata/'))).toBe(false)
+})
