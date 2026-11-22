@@ -1,4 +1,5 @@
 import { type Context, type Rule } from '../context.ts'
+import { attributeLinkQuotes } from './attribute-link-quotes.ts'
 import { attributeLines, openers } from './attributes.ts'
 import { blankLines } from './blank-lines.ts'
 import {
@@ -63,5 +64,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
     literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
     markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows,
-    attributeAcrossFootnoteDefinition, siblingQuoteParagraphs],
+    attributeAcrossFootnoteDefinition, siblingQuoteParagraphs, attributeLinkQuotes],
 ]
