@@ -1138,7 +1138,10 @@ function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: 
   const pos = a.pos
   if (pos === undefined) return false
   const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, c.flags)
-  if (end < 0) return false
+  if (end < 0) {
+    escapeInnerQuotes(c, es, at.i, at.vi, a)
+    return false
+  }
   at.vi = end
   at.j++
   if (at.vi === e.value.length) {
@@ -1146,6 +1149,33 @@ function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: 
     at.vi = 0
   }
   return true
+}
+
+/**
+ * C2-W-088: the construct `a` that opens at `from` in `es[i]` reads on over the nodes behind it. A quote of the tree in
+ * that stretch that the parse holds in another direction is reported in the same round: its neighbor takes the
+ * backslash, as behind a construct (C2-W-125, case two).
+ */
+function escapeInnerQuotes(c: Check, es: readonly Node[], i: number, from: number, a: Node): void {
+  const pos = a.pos!
+  const quotes = new Map<number, string>()
+  const pending = [...childNodes(a)]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'smart_punctuation' && node.pos !== undefined) quotes.set(node.pos.startOffset, node.kind)
+    pending.push(...childNodes(node))
+  }
+  if (quotes.size === 0) return
+  const e = es[i] as TextNode
+  const escapes = c.w.escapes.get(e) ?? []
+  let offset = pos.startOffset + utf8Length(writeInline(c.w, e, c.flags)) - utf8Length(e.value.slice(0, from)) -
+    escapes.filter((at) => at < from).length
+  for (let k = i + 1; k < es.length && offset < pos.endOffset; k++) {
+    const node = es[k]!
+    const kind = quotes.get(offset)
+    const next = textAt(es, k + 1)
+    if (node.type === 'smart_punctuation' && kind !== undefined && kind !== node.kind && next !== null) escapeSmartNeighbor(c, next, false)
+    offset += utf8Length(writeInline(c.w, node, c.flags))
+  }
 }
 
 /** C2-W-125, case seven: escaping a comparison's first character would turn the preceding right quote left. */
