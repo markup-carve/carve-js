@@ -991,7 +991,22 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) checkPairs(leaf, escaped)
   if (leaf.undecided === null) percentsWithinTextOpeners(leaf, escaped)
   if (leaf.undecided === null) commentsBeforeClosers(leaf, escaped)
+  if (leaf.undecided === null) quotesBehindEscapes(leaf, escaped)
   return escaped
+}
+
+/**
+ * C2-I-104, C2-W-088: a quote reads its direction from the character before it. Where the run of punctuation before it
+ * holds an escape, that character may be markup of the construct the escape keeps from forming in the bare text.
+ */
+function quotesBehindEscapes(leaf: Leaf, escaped: Uint8Array): void {
+  for (let at = 1; at < leaf.codes.length; at++) {
+    const unit = leaf.codes[at]!
+    if (leaf.kinds[at] !== ATOM || (unit !== 34 && unit !== 39) || leaf.owners[at]?.type !== 'smart_punctuation') continue
+    for (let before = at - 1; before >= 0 && leaf.kinds[before] === TEXT && isAsciiPunctuation(leaf.codes[before]!); before--) {
+      if (escaped[before] !== 0) return undecide(leaf, 'quote behind an escape')
+    }
+  }
 }
 
 /** C2-I-023: a text opener can make a later `%%` text, but the reader decides whether it paired. */
