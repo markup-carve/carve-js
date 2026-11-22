@@ -20,7 +20,7 @@ interface Model { text_leaves: string[], verbatim_leaves: string[], row_leaves: 
 
 const NUMBER_OPS: ReadonlySet<string> = new Set(['len', 'add', 'sub', 'extend_left', 'skip_right', 'count', 'index_of', 'column'])
 const TEXT_OPS: ReadonlySet<string> = new Set(['slice', 'concat', 'trim_end', 'words', 'text_from', 'json_escape', 'lower', 'join',
-  'percent_decode'])
+  'percent_decode', 'nfc', 'fold', 'fold_space', 'quoted_list', 'plain_list'])
 
 // C2-W-142: a pattern with a Unicode property class or a `\u{...}` escape reads code points.
 const unicodeFlags = (source: string, flags: string): string => (/\\[pu]\{/.test(source) ? `${flags}u` : flags)
@@ -238,6 +238,11 @@ const VALUES: Record<string, Make> = {
   json_escape: (c, arg) => `JSON.stringify(${c.text(arg)}).slice(1, -1)`,
   lower: (c, arg) => `${c.text(arg)}.toLowerCase()`,
   join: (c, _arg, args) => `joinOf(${c.value(args[0])}, ${c.text(args[1])})`,
+  nfc: (c, arg) => `${c.text(arg)}.normalize('NFC')`,
+  fold: (c, arg) => `foldKey(${c.text(arg)})`,
+  fold_space: (c, arg) => `foldLabel(${c.text(arg)})`,
+  quoted_list: (c, arg) => `listOf(${c.value(arg)}, '"')`,
+  plain_list: (c, arg) => `listOf(${c.value(arg)}, '')`,
   find: (c, arg) => c.find(arg),
   percent_decode: (c, arg) => `percentDecode(${c.text(arg)})`,
   run: (_c, arg) => `runValue(context, ${literal(String(arg))})`,
@@ -322,6 +327,8 @@ function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string
 const PRELUDE = `import { type RuleId } from './catalog.ts'
 import { type ModelAttribute } from './data-attributes.ts'
 import { isAttributeLine } from '../src/lines.ts'
+import { foldLabel } from '../src/ast-attributes.ts'
+import { foldKey } from '../src/case-fold.ts'
 import { columnOf } from '../src/layout-lines.ts'
 import { type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
 import { linearPattern, type Pattern } from './linear-patterns.ts'
@@ -556,6 +563,14 @@ function findIn(list: unknown, where: (item: unknown) => boolean): unknown {
 
 const joinOf = (list: unknown, glue: string): string => (Array.isArray(list) ? list.map((item) => String(item)).join(glue) : '')
 
+// C2-W-150: X, X and Y, X, Y, and Z; each item between the given marks.
+function listOf(list: unknown, mark: string): string {
+  if (!Array.isArray(list)) return ''
+  const items = list.map((item) => mark + String(item) + mark)
+  if (items.length < 3) return items.join(' and ')
+  return items.slice(0, -1).join(', ') + ', and ' + items.at(-1)!
+}
+
 // C2-W-150: %HH decoded as UTF-8; a text in which that fails stays as written.
 function percentDecode(text: string): string {
   try { return decodeURIComponent(text) }
@@ -636,7 +651,10 @@ export function generateDataTables(json: string): string {
     return `  { id: ${literal(rule.id)}, over: ${literal(rule.over)}, types: ${types}, verbatim: new Set(${literal(rule.verbatim ?? [])}), `
       + `only: ${only === undefined ? 'undefined' : `new Set(${literal([...only].sort())})`}, needs: ${literal(needs[index])}, run: rule${index} },`
   })
-  return ['// Generated from data/lint-model.json by lint/generate-data-tables.ts. Do not edit.', PRELUDE,
+  // A value operator the model no longer uses leaves no helper behind.
+  const used = functions.join('\n')
+  const prelude = used.includes('joinOf(') ? PRELUDE : PRELUDE.replace(/^const joinOf = .*\n/m, '')
+  return ['// Generated from data/lint-model.json by lint/generate-data-tables.ts. Do not edit.', prelude,
     ...compiler.hoisted.map((code, index) => `const K${index} = ${code}`), '', ...functions.flatMap((code) => [code, '']),
     '/**',
     ' * `only`: the leaf of a line, the parent type of a block, the parent of an inline record or the kind of an attribute record',
