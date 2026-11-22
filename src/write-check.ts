@@ -11,7 +11,9 @@ import { applyExtensions } from './extensions/claims.ts'
 import { AST_RESULTS } from './ast-tables.ts'
 import { sourceCoreEquivalent } from './write-extension-source.ts'
 import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
-import { firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInlines } from './write-inline.ts'
+import {
+  firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
+} from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
@@ -1363,7 +1365,8 @@ function resync(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor):
   for (let k = at.anchor; k < es.length && !isBreak(es[k]); k++) {
     j = firstNodeFrom(as, j, offset)
     if (k > at.i && offset >= failed.endOffset && as[j]?.pos?.startOffset === offset) return resumeAt(at, k, j)
-    offset += utf8Length(writeInlines(c.w, [es[k]!], c.flags))
+    // The node alone, not as a list of one: a list places escapes for its end, which would land in the real writer.
+    offset += utf8Length(writeInline(c.w, es[k]!, c.flags))
   }
   return false
 }
