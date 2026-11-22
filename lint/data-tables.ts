@@ -99,7 +99,7 @@ function strictOpener(text: string, mark: string, start: number): boolean {
     && after !== undefined && !EDGE.test(after) && after !== mark[0] && (mark.length === 2 || !WORD.test(before))
 }
 
-// C2-W-147: the pair scan; each pair gives the groups open, inner, close, before and after.
+// C2-W-147: the pair scan; each pair also gives the contiguous backslash run before open.
 function* pairsOf(value: unknown, mark: string, strict: boolean): Generator<Record<string, [number, number]>> {
   if (typeof value !== 'string') return
   const width = mark.length
@@ -116,7 +116,9 @@ function* pairsOf(value: unknown, mark: string, strict: boolean): Generator<Reco
       || (strict && joinedAt(value, end + width)))) end = value.indexOf(mark, end + width)
     if (end < 0) return
     const after = end + width
-    yield { open: [start, start + width], inner: [start + width, end], close: [end, after],
+    let slashStart = start
+    while (value.charCodeAt(slashStart - 1) === 92) slashStart--
+    yield { backslashes: [slashStart, start], open: [start, start + width], inner: [start + width, end], close: [end, after],
       before: [start - widthBefore(value, start), start], after: [after, after + widthAt(value, after)] }
     at = after
   }

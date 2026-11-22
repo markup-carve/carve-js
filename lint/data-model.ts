@@ -851,10 +851,10 @@ function colonLayoutsOf(context: LintContext): ColonLayout[] {
   return found
 }
 
-/** The opener of a block whose source starts at its attached attribute lines: past them and the next line's prefixes. */
+/** The opener of a block whose source starts at attached attributes: past attributes and comment-only lines. */
 function openerStart(source: string, from: number, marks = Infinity): number {
   let at = from
-  while (source.charCodeAt(at) === 123) {
+  while (source.charCodeAt(at) === 123 || (source.charCodeAt(at) === 37 && source.charCodeAt(at + 1) === 37)) {
     const end = source.indexOf('\n', at)
     if (end < 0) return from
     at = end + 1
