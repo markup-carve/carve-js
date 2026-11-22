@@ -2,7 +2,7 @@
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
 import {
-  childNodes, type CommentNode, type DocumentNode, forEachSlot, type Inline, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode,
+  childNodes, type CommentNode, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode,
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
@@ -1054,7 +1054,7 @@ function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[],
   // A table can start on a later line of a paragraph, so block-by-block
   // comparison cannot always reach the text pipe that closes its row.
   if (group.length === 1 && group[0]?.type === 'paragraph' && parsed.children.some((node) => node.type === 'table')) {
-    const pending: Inline[] = [...group[0].children]
+    const pending: Node[] = [...group[0].children]
     while (pending.length > 0) {
       const node = pending.pop()!
       if (node.type === 'text') {
