@@ -18,7 +18,7 @@ import {
   emptyAttributeItemAfterDescription, emptyAttributeQuote, emptyQuoteInFootnote,
   emptyColonDiv, descriptionMarkerColumns,
   fenceAfterDescription, flippedStrong, footnoteQuoteAfterDescription, fusedCommentBlockOpener, inlineEditComposition,
-  innerFenceRun, lazyCaretAfterQuote, markerAttributeBeforeHeading, nestedDivInsideAdmonition,
+  innerFenceRun, lazyCaretAfterQuote, markerAttributeBeforeHeading, nestedDivInsideAdmonition, paddedTsvRows,
   legacyPlusDash, listAfterFootnote,
   literalIncludeMentions, literalLinkBeforeCode, literalNarrowSpaceLinks,
   literalQuoteAfterAttributes, literalTableHeader, quotedColonOpenerText,
@@ -60,5 +60,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
     footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
     literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
-    markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns],
+    markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows],
 ]
