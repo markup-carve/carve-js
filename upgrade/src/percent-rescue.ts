@@ -23,7 +23,7 @@ function percentCloser(lines: string[], open: number): number {
 }
 
 function candidateWindow(count: number, near: number): [number, number] {
-  return count <= 128 ? [0, count] : [Math.max(0, near - 12), Math.min(count, near + 12)]
+  return count <= 128 ? [0, count] : [Math.max(0, near - 24), Math.min(count, near + 24)]
 }
 
 function percentBoundaryCandidates(output: string, near: number): string[] {

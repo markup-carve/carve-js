@@ -595,7 +595,7 @@ function latePass(input: string, first: string, parsed: Context): UpgradeResult 
 }
 
 function hasFusedCommentBlockOpener(input: string, parsed: Context): boolean {
-  return /(?:^|\n)[ \t]*%{3,}:::[^\n]*$/u.test(input)
+  return /^[ \t]*%{3,}:::[^\n]*$/mu.test(input)
     && parsed.visits.some(({ node }) => node.type === 'comment' && node.block === true)
 }
 
