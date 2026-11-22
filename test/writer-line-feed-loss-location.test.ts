@@ -57,3 +57,10 @@ it('keeps a wrapper report when a sibling has an independent loss', () => {
   expect(rows.map(row => [row.code, row.path])).toContainEqual(['structure-unspellable', '/children/0'])
   expect(rows.map(row => [row.code, row.path])).toContainEqual(['field-unspellable', '/children/0/children/0/value'])
 })
+
+it('keeps a wrapper report when the same text also loses another field', () => {
+  const block = { type: 'paragraph', children: [{ type: 'text', value: 'a\n\nb', lang: 'de' }] } as Block
+  const rows = writeWithDiagnostics(documentOf(block)).diagnostics
+  expect(rows.map(row => [row.code, row.path])).toContainEqual(['structure-unspellable', '/children/0'])
+  expect(rows.map(row => [row.code, row.path])).toContainEqual(['field-unspellable', '/children/0/children/0/value'])
+})

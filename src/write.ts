@@ -111,6 +111,7 @@ function onlyLineFeedLeaf(wrapper: Node): TextNode | null {
     if (children.length !== 1) return null
     at = children[0]!
   }
+  if (Object.keys(at).some(key => !['type', 'value', 'pos'].includes(key))) return null
   return at
 }
 
@@ -1443,7 +1444,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
     if (node.type === 'text' && node.value.includes('\n')) {
       let wrapperLost = false
       for (let ancestor = frame.parent; ancestor !== null; ancestor = ancestor.parent) {
-        if (lossNodes.has(ancestor.node) && ['paragraph', 'line', 'line_block', 'document'].includes(ancestor.node.type)) {
+        if (lossNodes.has(ancestor.node) && ['paragraph', 'line', 'line_block'].includes(ancestor.node.type)) {
           wrapperLost = true
           break
         }
