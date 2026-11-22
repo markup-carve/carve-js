@@ -4,6 +4,14 @@ import { render } from '../../src/index.ts'
 import { upgrade } from '../src/index.ts'
 
 describe('replay fallback families', () => {
+  it('keeps an old admonition around a longer div with an unclosed fence', () => {
+    const input = '::: note\n- para\n  [^f]: n\n::::\n```\ncode\n::::\n:::\nafter *b*\n'
+    const result = upgrade(input)
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('[^f]: n\n\n::::: note\n- para\n::::\n```\ncode\n::::\n:::\nafter *b*\n')
+    expect(render(result.output)).toBe(carveToHtml(input))
+  })
+
   it('keeps repeated indented notes together before a following fence', () => {
     const input = 'x[^1]\n  \n  [^1]: > q\n  [^1]: > q\n\n        ```js\n       c\n        ```\n'
     const result = upgrade(input)

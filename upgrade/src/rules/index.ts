@@ -23,7 +23,7 @@ import {
   innerFenceRun, lazyCaretAfterQuote, markerAttributeBeforeHeading, nestedDivInsideAdmonition, paddedTsvRows,
   legacyPlusDash, listAfterFootnote,
   literalIncludeMentions, literalLinkBeforeCode, literalNarrowSpaceLinks,
-  literalQuoteAfterAttributes, literalTableHeader, quotedColonOpenerText,
+  literalQuoteAfterAttributes, literalTableHeader, outerAdmonitionAroundDiv, quotedColonOpenerText,
   nestedFootnoteAfterItem,
   repeatedIndentedNote,
   siblingHeadingBoundary, siblingListBoundary, tabbedFootnoteContinuation, wrappedCodeTableRow,
@@ -65,5 +65,6 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
     footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
     literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
     markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows,
-    attributeAcrossFootnoteDefinition, siblingQuoteParagraphs, attributeLinkQuotes, repeatedIndentedNote],
+    attributeAcrossFootnoteDefinition, siblingQuoteParagraphs, attributeLinkQuotes, repeatedIndentedNote,
+    outerAdmonitionAroundDiv],
 ]
