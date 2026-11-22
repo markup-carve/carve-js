@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { compareHtml } from '../src/compare.ts'
 import { html01, html02 } from '../src/engines.ts'
-import { canWriteUpgrade, upgrade } from '../src/index.ts'
+import { canWriteUpgrade, needsAttention, upgrade } from '../src/index.ts'
 
 describe('quote lines consumed without output by the old parser', () => {
   it('omits the old invisible quote after a footnote body', () => {
@@ -10,6 +10,7 @@ describe('quote lines consumed without output by the old parser', () => {
     expect(result.output).toBe('[^a]: +\n[^n]: a\n +\npara\n\n\n\nsee[^n]\n')
     expect(result.records.some((record) => record.entry === 'U-209')).toBe(true)
     expect(canWriteUpgrade(result)).toBe(true)
+    expect(needsAttention(result)).toBe(false)
   })
 
   it('retains a quote the old parser rendered', () => {

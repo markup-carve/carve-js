@@ -1,4 +1,4 @@
-import { compareHtml } from './compare.ts'
+import { compareHtmlExact } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
 import { lineEnd, lineStart, lineText, readLines } from './source.ts'
@@ -17,8 +17,9 @@ export function rescueIgnoredQuote(input: string, output: string, mismatch: Repo
     const end = line < lines.count ? lineStart(lines, line + 1) : lineEnd(lines, line)
     const candidate = output.slice(0, start) + output.slice(end)
     try {
-      if (!compareHtml(old, html01(candidate)).equal || !compareHtml(old, html02(candidate, false)).equal) continue
-      return { output: candidate, record: recordOf('U-209', line, 'a quote line the old parser did not render was omitted') }
+      if (!compareHtmlExact(old, html01(candidate)).equal || !compareHtmlExact(old, html02(candidate, false)).equal) continue
+      return { output: candidate, record: { ...recordOf('U-209', line,
+        'a quote line the old parser did not render was omitted'), class: 'rewrite' } }
     } catch { /* A candidate can be invalid under either grammar. */ }
   }
   return null
