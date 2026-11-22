@@ -3,8 +3,8 @@
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
 import {
-  captionOf, childNodes, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord, type Node,
-  type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
+  captionOf, childNodes, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord,
+  type LinkNode, type Node, type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
 import { applyExtensions } from './extensions/claims.ts'
@@ -12,7 +12,7 @@ import { AST_RESULTS } from './ast-tables.ts'
 import { sourceCoreEquivalent } from './write-extension-source.ts'
 import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
 import {
-  firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
+  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
@@ -645,6 +645,7 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]!
   if (!isPairedMark(e) || !textsBelow(e).some((text) => opensAcross(text.value))) return false
   const flags = contentFlags(c, e)
+  if (e.type === 'link' && !canCrossLinkCloser(c.w, e.children, flags)) return false
   const spelled = writeInlines(c.w, [e], c.flags)
   const content = writeInlines(c.w, e.children, flags)
   const suffix = e.type === 'link' ? spelled.slice(1 + content.length) :
@@ -663,6 +664,54 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   // Bare, a name sigil keeps its boundary; behind a word, no block opens and a leading space stays.
   return probeEscapes(c, e, inlines, flags, 'across', takes) === true ||
     probeEscapes(c, e, [word, ...inlines], flags, 'across', takes) === true
+}
+
+/** The terminal link of a nested chain has no markup that can expose another label opener. */
+function settledTerminal(link: LinkNode): boolean {
+  if (link.children.some((child) => child.type === 'link')) return true
+  const child = link.children[0]
+  return link.children.length === 1 && child?.type === 'text'
+}
+
+/** Whether bare text contains another construct opener or an unclosed bracket. */
+function textCanCross(w: Writer, node: TextNode, flags: number, state: { brackets: number }): boolean {
+  const escaped = escapeOffsets(w, node, flags)
+  let next = 0
+  for (let at = 0; at < node.value.length; at++) {
+    if (escaped[next] === at) {
+      next++
+      continue
+    }
+    const char = node.value[at]
+    if (char === '`' || char === '<' || char === '{' || char === '$' || char === ':') return true
+    if (char === '[') state.brackets++
+    else if (char === ']' && state.brackets > 0) state.brackets--
+  }
+  return false
+}
+
+/** A link bounds its own bracket pairs only if every nested label is settled as well. */
+interface CrossItem { node: Node, flags: number }
+
+function pushCrossChildren(pending: CrossItem[], node: EmphasisNode | StrongNode, flags: number): void {
+  const inside = flags | (node.type === 'strong' ? IN_STRONG : IN_EMPHASIS)
+  for (let at = node.children.length - 1; at >= 0; at--) pending.push({ node: node.children[at]!, flags: inside })
+}
+
+function crossNode(w: Writer, item: CrossItem, pending: CrossItem[], state: { brackets: number }): boolean {
+  const { node } = item
+  if (node.type === 'link') return !settledTerminal(node) || canCrossLinkCloser(w, node.children, item.flags | IN_BRACKET)
+  if (node.type === 'text') return textCanCross(w, node, item.flags, state)
+  if (node.type !== 'strong' && node.type !== 'emphasis') return true
+  pushCrossChildren(pending, node, item.flags)
+  return false
+}
+
+function canCrossLinkCloser(w: Writer, children: readonly Node[], flags: number): boolean {
+  const state = { brackets: 0 }
+  const pending = children.map((node) => ({ node, flags })).reverse()
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) if (crossNode(w, item, pending, state)) return true
+  return state.brackets !== 0
 }
 
 // The inlines behind a node that a probe across its closing mark reads, at most.

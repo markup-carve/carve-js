@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { type DocumentNode, formatWithDiagnostics, parse, treesEqual, writeWithDiagnostics } from '../src/index.ts'
 import { type Inline } from '../src/ast.ts'
+import { parseWithLayout } from '../src/api.ts'
 import { writeTreeWithStats } from '../src/write.ts'
 
 const cases = (JSON.parse(readFileSync(new URL('../data/conformance/clause-cases.json', import.meta.url), 'utf8')) as {
@@ -35,6 +36,16 @@ it('C2-W-092 plans text fence and continuation lines at the block depth cap', ()
   expect(result.stats.planned).toBe(1)
   expect(result.stats.parses).toBe(0)
   expect(result.output.diagnostics).toEqual([])
+  expect(treesEqual(parse(result.output.source), parse(input))).toBe(true)
+})
+
+it('C2-W-088 bounds probe work for nested links with literal terminal labels', () => {
+  const n = 546
+  const input = '^*[*[[*'.repeat(n) + '^*[*x](u)' + '^]]](u)'.repeat(n) + '\n'
+  const parsed = parseWithLayout(input)
+  const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false, undefined, input)
+  expect(result.output.diagnostics).toEqual([])
+  expect(result.stats.work[0]![1]).toBeLessThan(225 * input.length)
   expect(treesEqual(parse(result.output.source), parse(input))).toBe(true)
 })
 
