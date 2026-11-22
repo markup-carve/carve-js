@@ -430,6 +430,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   dropLineDuplicates(check)
   if (w.kindRounds) escapeKinds(check, group)
   extendChains(check)
+  extendForms(w, check, group)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
     // C2-W-005: what only line 1 reads differently is written below one blank line, and the
@@ -438,6 +439,33 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     if (w.blankFirst) return true
   }
   return applyChanges(w, check)
+}
+
+/**
+ * C2-W-075: a reference whose recorded text did not read back is written from the tree, and so is each reference of
+ * the group recorded with the same text, so the rounds do not grow with the number of such references.
+ */
+function extendForms(w: Writer, check: Check, group: readonly Node[]): void {
+  const texts = new Set<string>()
+  for (const node of check.forms) {
+    const raw = recordedReference(w, node)
+    if (raw !== undefined) texts.add(raw)
+  }
+  if (texts.size === 0) return
+  const asked = new Set(check.forms)
+  const pending = [...group]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    const raw = asked.has(node) || (w.forms.get(node) ?? 0) > 0 ? undefined : recordedReference(w, node)
+    if (raw !== undefined && texts.has(raw)) {
+      check.forms.push(node)
+      asked.add(node)
+    }
+    forEachSlot(node, (children) => { for (const child of children) pending.push(child) })
+  }
+}
+
+function recordedReference(w: Writer, node: Node): string | undefined {
+  return 'key' in node && node.key !== undefined ? w.facts?.get(node)?.rawRef : undefined
 }
 
 /**
