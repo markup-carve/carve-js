@@ -13,7 +13,7 @@ import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { escapeKinds } from './write-kinds.ts'
-import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk, parseWritten } from './write-check.ts'
+import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk, parseWritten } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { createWriter, type LossMark, lose, markLosses, rollBackLosses, type Writer, type WriterFacts } from './write-state.ts'
@@ -425,6 +425,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     dropped = true
   }
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
+  dropLineDuplicates(check)
   if (w.kindRounds) escapeKinds(check, group)
   extendChains(check)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
@@ -435,6 +436,22 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     if (w.blankFirst) return true
   }
   return applyChanges(w, check)
+}
+
+/**
+ * C2-W-092, C2-W-152: a line whose opener this round escapes takes no second backslash on that opener, from a
+ * C2-W-125 trial or from the column of the block the parse opened there.
+ */
+function dropLineDuplicates(check: Check): void {
+  if (check.lineEscapes.size === 0) return
+  const trials = new Set(check.trials)
+  for (let place = check.escapes.length - 1; place >= 0; place--) {
+    const escape = check.escapes[place]!
+    const [node, at] = escape
+    const line = check.lineEscapes.get(node)
+    if (line === undefined || line.has(at) || !openerOffsets(node.value).includes(at)) continue
+    if (trials.has(escape) || check.ownEscapes.get(node)?.has(at) === true) check.escapes.splice(place, 1)
+  }
 }
 
 function nodeId(ids: Map<Node, number>, node: Node): number {

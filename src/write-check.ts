@@ -192,7 +192,7 @@ export function escapeAt(c: Check, node: TextNode, at: number): boolean {
  * C2-W-099: of a hyphen run the second hyphen. An ordered marker is escaped at its delimiter,
  * since a backslash before a digit or a letter is no escape (C2-I-012).
  */
-function openerOffsets(value: string): number[] {
+export function openerOffsets(value: string): number[] {
   const offsets: number[] = []
   if (value.startsWith('--')) offsets.push(1)
   offsets.push(0)
