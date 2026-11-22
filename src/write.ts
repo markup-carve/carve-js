@@ -1045,28 +1045,36 @@ function reportUnread(w: Writer, group: readonly Node[]): void {
   }
 }
 
+/** C2-B-166: an inline span can put the table opener beyond a text escape. Its closing text pipe can stop the row. */
+function escapeTableCloser(w: Writer, check: Check, group: readonly Node[], parsed: DocumentNode): boolean {
+  // A table can start on a later line of a paragraph, so block-by-block
+  // comparison cannot always reach the text pipe that closes its row.
+  const paragraph = group.length === 1 && group[0]?.type === 'paragraph' ? group[0] : null
+  if (paragraph === null || !parsed.children.some((node) => node.type === 'table') ||
+    !paragraph.children.some((node) => 'value' in node && typeof node.value === 'string' &&
+      node.value.includes('\n') && node.value.includes('|'))) return false
+  const pending: Node[] = [...paragraph.children]
+  while (pending.length > 0) {
+    const node = pending.pop()!
+    if (node.type === 'text') {
+      const at = node.value.lastIndexOf('|')
+      if (at >= 0 && !(w.escapes.get(node) ?? []).includes(at)) {
+        check.escapes.push([node, at])
+        return true
+      }
+    }
+    if ('children' in node) for (const child of node.children) pending.push(child)
+  }
+  return false
+}
+
 function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): Check {
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
   check.source = source
   const parsed = parseChunk(w, source)
   w.parsed = parsed
-  // A table can start on a later line of a paragraph, so block-by-block
-  // comparison cannot always reach the text pipe that closes its row.
-  if (group.length === 1 && group[0]?.type === 'paragraph' && parsed.children.some((node) => node.type === 'table')) {
-    const pending: Node[] = [...group[0].children]
-    while (pending.length > 0) {
-      const node = pending.pop()!
-      if (node.type === 'text') {
-        const at = node.value.lastIndexOf('|')
-        if (at >= 0 && !(w.escapes.get(node) ?? []).includes(at)) {
-          check.escapes.push([node, at])
-          return check
-        }
-      }
-      if ('children' in node) for (const child of node.children) pending.push(child)
-    }
-  }
+  if (escapeTableCloser(w, check, group, parsed)) return check
   compareBlocks(check, group, parsed.children, document)
   escapeOpeners(check, parsed, first ? 1 : 2)
   return check
