@@ -187,7 +187,8 @@ function bareOpener(block: KindBlock, key: string, placed: ReadonlyMap<TextNode,
 export function leavesKindBare(group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>,
   placed: ReadonlyMap<TextNode, readonly number[]>): boolean {
   for (const block of new Set(kindBlocks(group).values())) {
-    for (const key of planKinds(block, escapes)) if (bareOpener(block, key, placed)) return true
+    // A hyphen run takes its escapes round by round as the escapes split it (C2-W-099), which the plan does not follow.
+    for (const key of planKinds(block, escapes)) if (key === '--' || bareOpener(block, key, placed)) return true
   }
   return false
 }
