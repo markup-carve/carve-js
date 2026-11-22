@@ -465,7 +465,16 @@ function loneLinkBrackets(w: Writer, nodes: readonly Inline[], scan: BracketScan
 }
 
 /** Merge two ascending escape lists without lengthening a link's write beyond its text. */
-function mergeLinkEscapes(escapes: readonly number[], positions: readonly number[]): number[] {
+export function mergeLinkEscapes(escapes: number[], positions: readonly number[]): number[] {
+  if (positions.length === 0) return escapes
+  let existing = 0
+  let wanted = 0
+  while (existing < escapes.length && wanted < positions.length) {
+    if (escapes[existing] === positions[wanted]) { existing++; wanted++ }
+    else if (escapes[existing]! < positions[wanted]!) existing++
+    else break
+  }
+  if (wanted === positions.length) return escapes
   const merged: number[] = []
   let prior = 0, next = 0
   while (prior < escapes.length || next < positions.length) {
@@ -494,7 +503,9 @@ function escapeLoneLinkBrackets(w: Writer, link: LinkNode): void {
     cache.set(link, byNode)
   }
   for (const [node, positions] of byNode) {
-    w.escapes.set(node, mergeLinkEscapes(w.escapes.get(node) ?? [], positions))
+    const current = w.escapes.get(node) ?? []
+    const merged = mergeLinkEscapes(current, positions)
+    if (merged !== current) w.escapes.set(node, merged)
   }
 }
 

@@ -18,6 +18,7 @@ export interface Attributes {
  * those. A no-break space and every other character are kept as they stand.
  */
 export function foldLabel(source: string): string {
+  if (!/[ \t\n]/u.test(source)) return source
   let out = ''
   let gap = false
   let start = 0
