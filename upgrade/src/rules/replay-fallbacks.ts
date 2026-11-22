@@ -83,6 +83,62 @@ export function quotedColonOpenerText(ctx: Context): void {
   }
 }
 
+function nestedDivWidth(ctx: Context, div: Node01): number {
+  if (div.pos === undefined) return 0
+  let width = 0
+  for (let line = div.pos.startLine; line <= div.pos.endLine; line++) {
+    width = Math.max(width, /^\s*(:{3,})/u.exec(lineText(ctx.lines, line))?.[1]?.length ?? 0)
+  }
+  return width
+}
+
+function closeOldQuoteCode(ctx: Context, quote: Node01): void {
+  if (quote.pos === undefined) return
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'code' || node.pos === undefined || node.pos.startLine >= node.pos.endLine
+      || node.pos.startOffset < quote.pos.startOffset || node.pos.endOffset > quote.pos.endOffset) continue
+    const marks = /^`+/u.exec(ctx.src.slice(node.pos.startOffset))?.[0]
+    if (marks === undefined || ctx.findings.some(({ record, edit }) => record.entry === 'U-258'
+      && edit?.start === node.pos!.endOffset && edit.end === edit.start)) continue
+    change(ctx, 'U-258', node.pos.endOffset, node.pos.endOffset, marks, 'old cross-line code span closed at its end')
+  }
+}
+
+function moveNestedDefinition(ctx: Context, quote: Node01): boolean {
+  if (quote.pos === undefined) return false
+  const definition = (ctx.doc.children ?? []).find((child) => child.type === 'link_reference_definition'
+    && child.pos !== undefined && quote.pos!.startLine < child.pos.startLine
+    && child.pos.startLine <= quote.pos!.endLine)
+  if (definition?.pos === undefined) return false
+  const moved = ctx.findings.find(({ record, edit }) => record.entry === 'U-038' && edit !== null
+    && edit.start === edit.end && edit.text.includes(`[${String(definition.label)}]:`))
+  if (moved?.edit === null || moved?.edit === undefined) return false
+  moved.edit = { ...moved.edit, start: 0, end: 0, text: `${moved.edit.text.trimStart()}\n` }
+  moved.record.message = 'definition hoisted above the old nested div'
+  return true
+}
+
+function repairNestedAdmonition(ctx: Context, node: Node01): void {
+  if (node.pos === undefined) return
+  const quote = node.children?.find((child) => child.type === 'block_quote')
+  const div = node.children?.find((child) => child.type === 'div' && child.children?.some((inner) => inner.type === 'div'))
+  if (quote?.pos === undefined || div?.pos === undefined || div.pos.endLine !== node.pos.endLine) return
+  const run = /^([ \t]*)(:{3,})(?=[ \t])/u.exec(lineText(ctx.lines, node.pos.startLine))
+  if (run === null || !moveNestedDefinition(ctx, quote)) return
+  const width = nestedDivWidth(ctx, div)
+  if (width >= run[2]!.length) {
+    const at = lineStart(ctx.lines, node.pos.startLine) + run[1]!.length + run[2]!.length
+    change(ctx, 'U-049', at, at, ':'.repeat(width + 1 - run[2]!.length),
+      'outer admonition widened past its old nested div')
+  }
+  closeOldQuoteCode(ctx, quote)
+}
+
+/** Keep the old nested div and quote when a shorter colon run would close their admonition. */
+export function nestedDivInsideAdmonition(ctx: Context): void {
+  for (const { node } of ctx.visits) if (node.type === 'admonition') repairNestedAdmonition(ctx, node)
+}
+
 /** The longest backtick run of the body that 0.2 would close the fence at, 0 for none; the fence must exceed it. */
 function longestBodyRun(ctx: Context, firstLine: number, lastLine: number, width: number): number {
   const closer = lineText(ctx.lines, lastLine)
