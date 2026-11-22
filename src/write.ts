@@ -101,29 +101,19 @@ function nodeAt(document: DocumentNode, path: string): Node | null {
   return isNode(at) ? at : null
 }
 
-/** A wrapper whose only unspellable content is one plain line-feed text. */
+/** A wrapper whose only written content is one plain line-feed text. */
 function onlyLineFeedLeaf(wrapper: Node): TextNode | null {
   if (wrapper.type === 'document' && wrapper.children.length !== 1) return null
-  const pending = [wrapper]
-  let leaf: TextNode | null = null
-  while (pending.length > 0) {
-    const at = pending.pop()!
-    if (at.type === 'text') {
-      if (Object.keys(at).some(key => !['type', 'value', 'pos'].includes(key))) return null
-      if (at.value.trim() === '') return null
-      if (at.value.includes('\n')) {
-        if (leaf !== null) return null
-        leaf = at
-      }
-      continue
-    }
-    if (!['document', 'paragraph', 'line', 'line_block', 'emphasis', 'strong', 'underline', 'strike', 'highlight'].includes(at.type)) return null
+  let at = wrapper
+  while (at.type !== 'text') {
+    if (!['document', 'paragraph', 'line', 'line_block'].includes(at.type)) return null
     if (Object.keys(at).some(key => !['type', 'children', 'pos', 'astVersion'].includes(key))) return null
     const children = childNodes(at)
-    if (children.some((child, index) => index > 0 && child.type === 'text' && children[index - 1]?.type === 'text')) return null
-    for (const child of children) pending.push(child)
+    if (children.length !== 1) return null
+    at = children[0]!
   }
-  return leaf
+  if (Object.keys(at).some(key => !['type', 'value', 'pos'].includes(key))) return null
+  return at.value.trim() === '' ? null : at
 }
 
 /** How far the wraps of one text node have been read: a byte offset of its value and the string offset of it. */
