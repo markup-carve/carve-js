@@ -19,6 +19,16 @@ describe('C2-W-125: a caret that only an escaped closer behind it needs keeps it
   })
 })
 
+describe('C2-W-091: a tree from a parse that every earlier form lost (#5468)', () => {
+  it('writes the former unspellable example of the property suite', () => {
+    const source = 'x{/^[/}@\\`\\]\\`"\''
+    const written = writeWithDiagnostics(parse(source))
+    expect(written.diagnostics).toEqual([])
+    expect(written.source).toBe('x{/^\\[/}@\\`]\\`"\'\n')
+    expect(treesEqual(parse(written.source), parse(source))).toBe(true)
+  })
+})
+
 describe('the writer keeps its form where it already read back (#5468)', () => {
   it('writes a note that closes with the bracket behind it as before', () => {
     expect(format('^[a\\^[b][[b]\\]]]')).toBe('^[a^[b][[b]\\]]]\n')
