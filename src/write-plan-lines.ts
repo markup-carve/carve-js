@@ -557,5 +557,26 @@ export function lineEscape(leaf: Leaf, at: number, first: boolean, place: LeafPl
   if (capped !== null) return capped
   const escape = first ? firstLine(leaf, at, place) : laterLine(leaf, at, place)
   if (escape < 0) return escape
-  return leaf.kinds[escape] === TEXT && leaf.kinds[escape - 1] !== ESCAPE ? escape : UNDECIDED
+  if (leaf.kinds[escape] !== TEXT || leaf.kinds[escape - 1] === ESCAPE) return UNDECIDED
+  return mayOpenBehindMarker(leaf, escape) ? UNDECIDED : escape
+}
+
+// The marks that end a container marker: a bullet, a quote mark, a description mark, an ordered delimiter.
+const CONTAINER_MARKS: ReadonlySet<number> = new Set([42, 43, 45, 46, 41, 58, 62])
+
+/**
+ * C2-W-088: a block opener behind the marker of another block on the same line takes its own escape. The plan escapes
+ * only the marker, so a line where text that may open a block follows the marker is left to the repair, which escapes
+ * each block its parse starts there.
+ */
+function mayOpenBehindMarker(leaf: Leaf, escape: number): boolean {
+  if (!CONTAINER_MARKS.has(code(leaf, escape)) || !isBlank(code(leaf, escape + 1))) return false
+  let behind = escape + 1
+  while (isBlank(code(leaf, behind))) behind++
+  if (leaf.kinds[behind] !== TEXT) return false
+  const value = code(leaf, behind)
+  if (value >= 33 && value <= 126 && !isLetter(value) && !(value >= 48 && value <= 57)) return true
+  let end = behind
+  while (isLetter(code(leaf, end)) || (code(leaf, end) >= 48 && code(leaf, end) <= 57)) end++
+  return end > behind && (code(leaf, end) === 46 || code(leaf, end) === 41)
 }
