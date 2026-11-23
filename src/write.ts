@@ -393,6 +393,7 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
   const placed = w.escapes
   const lines = w.lines
   const lead = w.lead
+  const leadSkip = w.leadSkip
   const starts = new Map(w.starts)
   const order = textOrder(group, new Map())
   const rank = order.get(node) ?? -1
@@ -409,6 +410,7 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
   w.escapes = placed
   w.lines = lines
   w.lead = lead
+  w.leadSkip = leadSkip
   w.starts.clear()
   for (const [key, value] of starts) w.starts.set(key, value)
   return asked

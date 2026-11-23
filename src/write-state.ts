@@ -41,6 +41,11 @@ export interface Writer {
   lines: string[]
   /** What the next line starts with instead of its prefix: the markers of the items it opens (C2-W-027). */
   lead: string | null
+  /**
+   * C2-B-003: the width of the pending lead in front of its innermost quote mark that the prefix of the continuation
+   * lines does not have, so a body opened behind that mark does not count it.
+   */
+  leadSkip: number
   /** C2-W-044: the bare-dot item marker, with its attributes and space, waiting on this line. */
   bareDotLead: string | null
   /** C2-W-088: the offsets in the value of a text node that take a backslash, in ascending order. */
@@ -127,7 +132,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
   extensions: readonly ExtensionDefinition[] = []): Writer {
   return {
     extensions,
-    lines: [], lead: null, bareDotLead: null, escapes: new Map(), forms: new Map(), starts: new Map(),
+    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), forms: new Map(), starts: new Map(),
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
@@ -172,6 +177,7 @@ export function trimEnd(text: string): string {
 export function emit(w: Writer, prefix: string, text: string): void {
   const head = w.lead ?? prefix
   w.lead = null
+  w.leadSkip = 0
   w.bareDotLead = null
   w.lines.push(text === '' ? trimEnd(head) : head + text)
 }
