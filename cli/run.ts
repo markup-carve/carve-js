@@ -353,8 +353,9 @@ function hasRawHtml(document: DocumentNode): boolean {
 const RAW_HTML_FORMAT = Buffer.from('=html')
 
 // A raw format is the name right behind `=` (C2-I-021, C2-B-116), so bytes without `=html` hold no raw HTML.
-function mayHoldRawHtml(bytes: Uint8Array): boolean {
-  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).includes(RAW_HTML_FORMAT)
+function holdsRawHtml(input: DocumentNode | Uint8Array): boolean {
+  if (!(input instanceof Uint8Array)) return hasRawHtml(input)
+  return Buffer.from(input.buffer, input.byteOffset, input.byteLength).includes(RAW_HTML_FORMAT) && hasRawHtml(parse(input))
 }
 
 let rawHtmlEscaped = false
@@ -408,7 +409,7 @@ function renderFile(path: string, display: string, bytes: Uint8Array, args: Pars
   process.stderr.write(lines(display, source, retained, fromAst ? undefined : bytes))
   if (strict) return { ...file, status: 1 }
   file.status = strictStatus(args, retained)
-  rawHtmlEscaped ||= settings.rawHtml !== true && (fromAst ? hasRawHtml(input as DocumentNode) : mayHoldRawHtml(bytes) && hasRawHtml(parse(bytes)))
+  rawHtmlEscaped ||= settings.rawHtml !== true && holdsRawHtml(fromAst ? input as DocumentNode : bytes)
   emit(`${result.html}\n`)
   return file
 }
