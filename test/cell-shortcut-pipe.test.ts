@@ -43,3 +43,9 @@ it('C2-B-224, C2-I-005: backticks in a braced comment are no code span, so its `
   expect(render('| [a{% `\\|` %}b][] |\n\n[a{% `|` %}b]: /u\n')).toContain('<td><a href="/u">ab</a></td>')
   expect(render('| [a `\\|` \\| b] |\n\n[a `\\|` | b]: /u\n')).toContain('<td><a href="/u">a <code>\\|</code> | b</a></td>')
 })
+
+it('C2-B-224: an attribute block on a code span is not raw, so its `\\|` is a literal pipe in the key', () => {
+  const source = '| [`c`{title="a\\|b"}][] |\n\n[`c`{title="a|b"}]: /u\n'
+  expect(render(source)).toContain('<td><a href="/u"><code title="a|b">c</code></a></td>')
+  expect(render('| [`c`{title="a\\|b"}] |\n\n[`c`{title="a|b"}]: /u\n')).toContain('<a href="/u">')
+})

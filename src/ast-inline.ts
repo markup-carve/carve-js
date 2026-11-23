@@ -288,10 +288,26 @@ function addNode(ctx: TreeContext, spans: number[], list: Inline[], node: Inline
 }
 
 /** C2-B-224: a code span of a cell keeps `\\|` as two characters in the key of each frame around it. */
-function noteCodeSpan(node: InlineFrame, open: readonly InlineFrame[]): void {
+function noteCodeSpan(src: string, node: InlineFrame, open: readonly InlineFrame[]): void {
   const kind = node.kind
   if (kind !== CODE_SPAN && kind !== LITERAL && kind !== MATH && kind !== RAW_INLINE) return
-  for (const frame of open) (frame.raw ??= []).push(node.start, node.end)
+  const end = codeSpanEnd(src, node.start, node.end)
+  for (const frame of open) (frame.raw ??= []).push(node.start, end)
+}
+
+/** The end of the backtick run that closes the code span at `start`; an attribute block after it is not raw. */
+function codeSpanEnd(src: string, start: number, end: number): number {
+  let open = src.indexOf('`', start)
+  const run = open
+  while (src[open] === '`') open++
+  const size = open - run
+  for (let at = src.indexOf('`', open); at >= 0 && at < end; at = src.indexOf('`', at)) {
+    let close = at
+    while (src[close] === '`') close++
+    if (close - at === size) return close
+    at = close
+  }
+  return end
 }
 
 function isPart(kind: number): boolean {
@@ -415,7 +431,7 @@ function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): Inlin
       node.end = event.end()
       top = open.length > 0 ? open[open.length - 1]! : null
       closeFrame(ctx, spans, node, top, top === null ? root : top.children!, flow)
-      if (ctx.inline.cell) noteCodeSpan(node, open)
+      if (ctx.inline.cell) noteCodeSpan(ctx.src, node, open)
     }
   }
   return root
