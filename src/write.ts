@@ -410,6 +410,12 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
   return asked
 }
 
+/** C2-W-088: a lone backtick trial that the test kept stopped a code span of the parse, which reports the backtick kind. */
+function keepCodeTrial(check: Check): void {
+  const trial = check.trials[0]
+  if (check.trials.length === 1 && trial !== undefined && check.codeTrials.has(trial) && check.escapes.includes(trial)) check.trials = []
+}
+
 /**
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
  * false when the group reads back as its blocks. C2-W-088 places all escapes reported by the same read-back parse.
@@ -427,6 +433,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     dropped = true
   }
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
+  keepCodeTrial(check)
   dropLineDuplicates(check)
   if (w.kindRounds) {
     escapeKinds(check, group)

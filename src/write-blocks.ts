@@ -1,5 +1,6 @@
 // The block nodes as Carve source: the layout of C2-W-017 to C2-W-034 and the canonical forms of
 // C2-W-035 to C2-W-060. A block writes its lines behind `prefix`, the prefix of its containers.
+import { escapeBacktickKind } from './write-backtick-kind.ts'
 import {
   type AbbreviationDefNode, type AdmonitionNode, type BlockQuoteNode, captionOf, type CaptionNode, childNodes, type CodeBlockNode,
   type CommentNode, type DefinitionDescriptionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode, type DivNode,
@@ -195,6 +196,7 @@ function textLeaf(
   w.lead = (w.lead ?? prefix) + mark
   const start = node.type === 'paragraph' ? LINE_START : AFTER_MARK
   const first = w.lines.length
+  escapeBacktickKind(w, node.children)
   emitLines(w, prefix, indent, planLeaf(w, node.children, flags, writeContent(w, node.children, flags), AS_CONTENT, start))
   if (node.type === 'paragraph' && w.topBlocks.has(node)) indentTypedOpener(w, node, first, attributed)
 }
@@ -412,6 +414,7 @@ function blockQuote(w: Writer, node: BlockQuoteNode, prefix: string, flags: numb
 function titleTail(w: Writer, node: DivNode | AdmonitionNode | DirectiveNode, flags: number): string {
   const inlines = node.title
   // C2-B-119: the quoted title is one line of inline content behind the opener.
+  if (inlines !== undefined) escapeBacktickKind(w, inlines)
   const title = inlines === undefined ? null : planLeaf(w, inlines, flags, writeInlines(w, inlines, flags), AS_INLINES, IN_TITLE)
   return openerTail(w, node, title, title ?? '')
 }
@@ -463,6 +466,7 @@ function caption(w: Writer, node: CaptionNode | undefined, prefix: string, flags
   const parts: string[] = []
   for (const block of blocks) {
     if (holdsMarkBeforeNumber(childNodes(block))) unplanned(w, 'caption number')
+    escapeBacktickKind(w, childNodes(block))
     parts.push(planLeaf(w, childNodes(block), flags, writeContent(w, childNodes(block), flags), AS_CONTENT, AFTER_MARK))
   }
   w.lead = `${w.lead ?? prefix}^ `
@@ -546,6 +550,7 @@ function lazyComment(w: Writer, node: CommentNode, prefix: string): void {
 
 /** A line of a line block. A hard break at its end is the backslash that ends its source line, behind the text as it is. */
 function lineContent(w: Writer, nodes: readonly Node[], flags: number): string {
+  escapeBacktickKind(w, nodes)
   if (nodes[nodes.length - 1]?.type !== 'hard_break') {
     return planLeaf(w, nodes, flags, writeContent(w, nodes, flags), AS_CONTENT, LINE_START)
   }
