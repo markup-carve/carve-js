@@ -233,7 +233,7 @@ const NO_LAZY_LINE: ReadonlySet<string> = new Set(['code_block', 'raw_block', 'd
 /** Whether a column-0 line directly below `node` would be a lazy line of the block it ends in (C2-B-024). */
 function takesLazyLine(w: Writer, node: Node): boolean {
   let at = node
-  while (at.type === 'list' || at.type === 'list_item') {
+  while (at.type === 'list' || at.type === 'list_item' || at.type === 'block_quote') {
     const children = childNodes(at)
     if (children.length === 0) return at.type === 'list'
     at = children[children.length - 1]!
