@@ -956,13 +956,15 @@ const TOP_PLACE: LeafPlace = {
   line: false, term: false, capped: false,
 }
 
+// C2-B-015, C2-B-020: inside a quote or a fenced container, a list marker no longer interrupts the paragraph of the item around it.
+const ITEM_BREAKERS: ReadonlySet<string> = new Set(['block_quote', 'div', 'admonition', 'directive', 'block_extension'])
+
 /** The place of the slots of `node`, which stands in `place` behind a block of the type `before`, and before a block where `followed`. */
 function innerPlace(node: Node, place: LeafPlace, before: string | null, followed: boolean): LeafPlace {
   const type = node.type
   return {
     paragraph: type === 'paragraph',
-    // C2-B-020: inside a quote, a list marker no longer interrupts the paragraph of the item around it.
-    inItem: type !== 'block_quote' && (place.inItem || type === 'list_item' || type === 'definition_description' || type === 'footnote'),
+    inItem: !ITEM_BREAKERS.has(type) && (place.inItem || type === 'list_item' || type === 'definition_description' || type === 'footnote'),
     inQuote: place.inQuote || type === 'block_quote',
     inDescriptionList: place.inDescriptionList || type === 'definition_list',
     nested: place.nested || type !== 'paragraph',
