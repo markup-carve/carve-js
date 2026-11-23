@@ -113,14 +113,15 @@ interface Pairs {
   closing: Set<number>
   demote: Set<number> | null
   caret: boolean
+  /** The open notes, and those of them in `demote`, counted as the stack changes so that no opener scans it. */
+  notes: number
+  demoted: number
 }
 
 /** C2-I-089: whether a note in which a caret pair opens nothing is open; the first pass demotes in none. */
 function demoted(pairs: Pairs): boolean {
-  const demote = pairs.demote
-  const inNote = pairs.open.some((start) => start >= 0)
-  if (inNote) pairs.caret = true
-  return inNote && demote !== null && pairs.open.some((start) => start >= 0 && demote.has(start))
+  if (pairs.notes > 0) pairs.caret = true
+  return pairs.demoted > 0
 }
 
 /** C2-I-087, C2-I-089: pushes the bracket at `p`, a footnote reference or a note opener; returns the offset behind it. */
@@ -128,6 +129,8 @@ function openAt(line: ImageLine, pairs: Pairs, p: number): number {
   if (line.src.charCodeAt(p) === CARET) {
     if (demoted(pairs)) return p + 1
     pairs.open.push(p)
+    pairs.notes++
+    if (pairs.demote?.has(p) === true) pairs.demoted++
     return p + 2
   }
   const reference = line.src.charCodeAt(p + 1) === CARET && !demoted(pairs) ? footnoteReferenceEnd(line, p) : p
@@ -139,6 +142,8 @@ function openAt(line: ImageLine, pairs: Pairs, p: number): number {
 function closeAt(line: ImageLine, pairs: Pairs, p: number): number {
   const note = pairs.open.pop()!
   if (note < 0) return nestedTailEnd(line, p)
+  pairs.notes--
+  if (pairs.demote?.has(note) === true) pairs.demoted--
   pairs.closing.add(note)
   return p + 1
 }
@@ -175,7 +180,7 @@ const MAX_NOTE_PASSES = 8
 function bracketClose(line: ImageLine, pos: number): number {
   let demote: Set<number> | null = null
   for (let pass = 0; ; pass++) {
-    const pairs: Pairs = { open: [-1], closing: new Set(), demote, caret: false }
+    const pairs: Pairs = { open: [-1], closing: new Set(), demote, caret: false, notes: 0, demoted: 0 }
     const close = bracketPass(line, pos, pairs)
     if (!pairs.caret || pass >= MAX_NOTE_PASSES) return close
     // C2-I-074: the alt of an image that forms is source text, so a note in it is no note that closed.
