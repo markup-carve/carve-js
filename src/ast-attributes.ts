@@ -13,6 +13,23 @@ export interface Attributes {
   keyIndex?: Map<string, number>
 }
 
+/**
+ * C2-B-224: `text[start, end)` with each escaped pipe a literal pipe, as a cell reads it, except inside the ranges
+ * `raw` (pairs of offsets: the code spans, where `\\|` stays two characters).
+ */
+export function cellKeySource(text: string, start: number, end: number, raw: readonly number[] | null): string {
+  let out = ''
+  let from = start
+  for (let at = 0; raw !== null && at < raw.length; at += 2) {
+    const rawStart = Math.max(from, raw[at]!)
+    const rawEnd = Math.min(end, raw[at + 1]!)
+    if (rawStart >= rawEnd) continue
+    out += text.slice(from, rawStart).replaceAll('\\|', '|') + text.slice(rawStart, rawEnd)
+    from = rawEnd
+  }
+  return out + text.slice(from, end).replaceAll('\\|', '|')
+}
+
 // Native substring scans are an order of magnitude faster than a regex test on long labels.
 function hasFoldSpace(source: string): boolean {
   return source.includes(' ') || source.includes('\t') || source.includes('\n')

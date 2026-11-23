@@ -5,7 +5,7 @@ import {
   type SuperscriptNode, type TextNode, type UnderlineNode,
 } from './ast.ts'
 import { CR, LF } from './chars.ts'
-import { type Attributes, attributeSink, emptyAttributes, foldLabel } from './ast-attributes.ts'
+import { type Attributes, attributeSink, cellKeySource, emptyAttributes, foldLabel } from './ast-attributes.ts'
 import { emptyMemo, readAttributeBlock, unescape } from './attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
@@ -40,6 +40,8 @@ export interface InlineFrame {
   title: string | null
   key: string | null
   attributes: Attributes | null
+  /** C2-B-224: in a cell, the code spans inside the frame, as pairs of offsets; null where none closed. */
+  raw: number[] | null
 }
 
 /** What the source-layout record reads beside the tree (C2-A-003). Filled only on request. */
@@ -285,8 +287,42 @@ function addNode(ctx: TreeContext, spans: number[], list: Inline[], node: Inline
   list.push(isPlaced(spans, flow, node.start, node.end) ? place(ctx, out, node.start, end) : out)
 }
 
+/** C2-B-224: a code span of a cell keeps `\\|` as two characters in the key of each frame around it. */
+function noteCodeSpan(src: string, node: InlineFrame, open: readonly InlineFrame[]): void {
+  const kind = node.kind
+  if (kind !== CODE_SPAN && kind !== LITERAL && kind !== MATH && kind !== RAW_INLINE) return
+  const end = codeSpanEnd(src, node.start, node.end)
+  for (const frame of open) (frame.raw ??= []).push(node.start, end)
+}
+
+/** The end of the backtick run that closes the code span at `start`; an attribute block after it is not raw. */
+function codeSpanEnd(src: string, start: number, end: number): number {
+  let open = src.indexOf('`', start)
+  const run = open
+  while (src[open] === '`') open++
+  const size = open - run
+  for (let at = src.indexOf('`', open); at >= 0 && at < end; at = src.indexOf('`', at)) {
+    let close = at
+    while (src[close] === '`') close++
+    if (close - at === size) return close
+    at = close
+  }
+  return end
+}
+
 function isPart(kind: number): boolean {
   return kind === ATTRIBUTE_BLOCK || kind === DESTINATION || kind === TITLE || kind === LABEL
+}
+
+/** C2-B-224: `contentSource` of a cell, each escaped pipe a literal pipe outside the code spans `raw`. */
+function cellContentSource(src: string, spans: number[], start: number, end: number, raw: readonly number[] | null): string {
+  const lines: string[] = []
+  for (let at = 0; at < spans.length; at += 2) {
+    const from = Math.max(start, spans[at]!)
+    const to = Math.min(end, spans[at + 1]!)
+    if (from < to) lines.push(cellKeySource(src, from, to, raw))
+  }
+  return lines.join('\n')
 }
 
 /** The source of `[start, end)` without the prefixes of the lines it crosses: its parts inside `spans`, joined by line feeds. */
@@ -320,8 +356,10 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
     host.title = unescape(value, 0, value.length)
   } else if ((host.flags & (FLAG_COLLAPSED | FLAG_SHORTCUT)) !== 0) {
     // C2-I-072: the label of a collapsed reference is the source of its own text.
-    const source = contentSource(ctx.src, spans, host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1)
-    host.key = foldLabel(ctx.inline.cell ? source.replaceAll('\\|', '|') : source)
+    const start = host.start + (host.kind === IMAGE ? 2 : 1)
+    host.key = foldLabel(ctx.inline.cell
+      ? cellContentSource(ctx.src, spans, start, node.start - 1, host.kind === IMAGE ? null : host.raw)
+      : contentSource(ctx.src, spans, start, node.start - 1))
   } else {
     host.key = foldLabel(ctx.inline.cell ? value.replaceAll('\\|', '|') : value)
   }
@@ -330,7 +368,7 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
 function openFrame(kind: number, start: number, flags: number, aux: number): InlineFrame {
   return {
     kind, start, end: start, flags, aux, children: isInlineContainer(kind) ? [] : null,
-    value: '', spanned: false, destination: null, title: null, key: null, attributes: null,
+    value: '', spanned: false, destination: null, title: null, key: null, attributes: null, raw: null,
   }
 }
 
@@ -393,6 +431,7 @@ function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): Inlin
       node.end = event.end()
       top = open.length > 0 ? open[open.length - 1]! : null
       closeFrame(ctx, spans, node, top, top === null ? root : top.children!, flow)
+      if (ctx.inline.cell) noteCodeSpan(ctx.src, node, open)
     }
   }
   return root
