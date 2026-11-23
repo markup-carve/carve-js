@@ -4,6 +4,7 @@ import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
 import { quotePrefix } from './blank-lines.ts'
+import { refusedCloserRun } from './fences.ts'
 import {
   attributeLinesAbove,
   bodyOffset,
@@ -12,6 +13,7 @@ import {
   insideQuotes,
   isBlankInQuotes,
   isGap,
+  lastLine,
   removeAttribute
 } from './lines.ts'
 
@@ -57,7 +59,8 @@ function plusInBody(ctx: Context, column: number, visit: Visit, line: number): v
     ctx,
     id,
     first,
-    child.pos!.endLine,
+    // U-049 closes such a block on its own last line, so the line where 0.1 ended it stays outside.
+    refusedCloserRun(ctx, child) > 0 ? lastLine(child.pos!) : child.pos!.endLine,
     column - bodyOffset(lineText(ctx.lines, first), depth),
     message,
     depth

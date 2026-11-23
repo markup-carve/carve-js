@@ -1,5 +1,6 @@
 // Helpers for rules that work on whole lines of the source.
 import { change, type Context } from '../context.ts'
+import { type Pos } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
 import { isAttributeLine, quotePrefix } from './blank-lines.ts'
 
@@ -57,6 +58,11 @@ export function indentLines(ctx: Context, id: string, first: number, last: numbe
     const at = lineStart(ctx.lines, line) + (marks > 0 && text[marks] === ' ' ? marks + 1 : marks)
     change(ctx, id, at, at, ' '.repeat(count), message)
   }
+}
+
+/** The last line that holds part of a block: a 0.1 block can end at the first column of the next line. */
+export function lastLine(pos: Pos): number {
+  return pos.endColumn === 1 && pos.endLine > pos.startLine ? pos.endLine - 1 : pos.endLine
 }
 
 /** Removes `count` leading spaces of every line of `first` to `last` that has them. */
