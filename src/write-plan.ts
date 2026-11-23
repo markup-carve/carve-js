@@ -438,8 +438,9 @@ function caret(leaf: Leaf, at: number, escaped: Uint8Array): void {
   const before = code(leaf, at - 1)
   const textBefore = leaf.kinds[at - 1] === TEXT
   if (before === 123 && textBefore && !isLiteral(leaf, at - 1, escaped)) return
-  // C2-I-089: inside a note a caret pair opens nothing.
-  if (inNote(leaf, at)) return
+  // C2-I-089: inside a note a caret pair opens nothing. Glued to the bracket of a node, as a link, the bare pair can
+  // keep the note from closing where the tree has it, so the repair decides it.
+  if (inNote(leaf, at)) return undecidedIf(nextIs(leaf, at, '[') && leaf.kinds[at + 1] !== TEXT, leaf, 'note caret pair')
   if ((before === 123 && !textBefore) || (before === 91 && leaf.lastBracket > at && !footnotePlanned(leaf, at - 1, escaped))) {
     return undecide(leaf, 'footnote bracket')
   }
