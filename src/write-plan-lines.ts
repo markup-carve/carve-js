@@ -133,9 +133,9 @@ function tickBehind(leaf: Leaf, from: number): boolean {
 function divLine(leaf: Leaf, at: number, end: number): number {
   let after = end
   while (code(leaf, after) === SPACE) after++
-  if (isLineEnd(code(leaf, after))) return at
-  // C2-B-033: a tab before further text leaves the line text.
-  if (code(leaf, after) !== TAB) return after > end ? at : NO_ESCAPE
+  if (isLineEnd(code(leaf, after)) || after > end) return at
+  // A tab glued to the run before further text leaves the line text.
+  if (code(leaf, after) !== TAB) return NO_ESCAPE
   while (isBlank(code(leaf, after))) after++
   return isLineEnd(code(leaf, after)) ? at : NO_ESCAPE
 }

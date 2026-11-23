@@ -432,8 +432,8 @@ describe('the defects the PHP port found', () => {
     expect(outer).toMatchObject({ pos: { startOffset: 0, endOffset: 42 } })
   })
 
-  it('C2-B-033, C2-B-119: a tab after the colon run of a div opener makes the line text', () => {
-    for (const src of [':::\tx\ny', '::: \tx\ny']) expect(parse(src).children.map((node) => node.type), src).toEqual(['paragraph'])
+  it('C2-B-119: a tab glued to the colon run of a div opener makes the line text', () => {
+    expect(parse(':::\tx\ny').children.map((node) => node.type)).toEqual(['paragraph'])
     expect(parse(':::\t\ny\n:::').children[0]).toMatchObject({ type: 'div' })
     expect(format(':::\tx\ny')).toBe(':::\tx\ny\n')
   })
