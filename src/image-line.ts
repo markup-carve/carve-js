@@ -104,54 +104,96 @@ function nestedTailEnd(line: ImageLine, p: number): number {
   return close === NONE ? NONE : close + 1
 }
 
-/** The open brackets of the alt scan: per bracket, whether it opened an inline footnote (C2-I-089). */
+/**
+ * The open brackets of the alt scan: per bracket, the offset of the inline footnote it opened, or -1 (C2-I-089).
+ * `closing` holds the notes that closed in this pass, `demote` the notes in which a caret pair opens nothing.
+ */
 interface Pairs {
-  open: boolean[]
-  notes: number
+  open: number[]
+  closing: Set<number>
+  demote: Set<number> | null
+  caret: boolean
+}
+
+/** C2-I-089: whether a note in which a caret pair opens nothing is open; the first pass demotes in none. */
+function demoted(pairs: Pairs): boolean {
+  const demote = pairs.demote
+  const inNote = pairs.open.some((start) => start >= 0)
+  if (inNote) pairs.caret = true
+  return inNote && demote !== null && pairs.open.some((start) => start >= 0 && demote.has(start))
 }
 
 /** C2-I-087, C2-I-089: pushes the bracket at `p`, a footnote reference or a note opener; returns the offset behind it. */
 function openAt(line: ImageLine, pairs: Pairs, p: number): number {
   if (line.src.charCodeAt(p) === CARET) {
-    pairs.open.push(true)
-    pairs.notes++
+    if (demoted(pairs)) return p + 1
+    pairs.open.push(p)
     return p + 2
   }
-  // C2-I-089: in a note `[^` opens no footnote reference.
-  const reference = pairs.notes === 0 ? footnoteReferenceEnd(line, p) : p
-  if (reference === p) pairs.open.push(false)
+  const reference = line.src.charCodeAt(p + 1) === CARET && !demoted(pairs) ? footnoteReferenceEnd(line, p) : p
+  if (reference === p) pairs.open.push(-1)
   return Math.max(reference, p + 1)
 }
 
 /** Closes the nearest open bracket at `p`; a note takes no tail or label. Returns the offset the scan goes on from. */
 function closeAt(line: ImageLine, pairs: Pairs, p: number): number {
   const note = pairs.open.pop()!
-  pairs.notes -= Number(note)
-  return note ? p + 1 : nestedTailEnd(line, p)
+  if (note < 0) return nestedTailEnd(line, p)
+  pairs.closing.add(note)
+  return p + 1
 }
 
 /**
  * C2-I-006, C2-I-074: the offset of the `]` that closes the bracket at `pos` on the line, or NONE. An inline footnote
  * closes taking no tail or label (C2-I-089).
  */
-function bracketClose(line: ImageLine, pos: number): number {
+function bracketPass(line: ImageLine, pos: number, pairs: Pairs): number {
   const src = line.src
-  const pairs: Pairs = { open: [false], notes: 0 }
   let p = pos + 1
   while (p < line.end) {
     const skipped = skipAtom(line, p)
     if (skipped === NONE) return NONE
     const code = src.charCodeAt(p)
     if (skipped !== p) p = skipped
-    else if (code === BRACKET_OPEN || (code === CARET && src.charCodeAt(p + 1) === BRACKET_OPEN && pairs.notes === 0)) {
-      p = openAt(line, pairs, p)
-    } else if (bracedMarkEnd(line, p) > p) p += 2
+    else if (code === BRACKET_OPEN || (code === CARET && src.charCodeAt(p + 1) === BRACKET_OPEN)) p = openAt(line, pairs, p)
+    else if (bracedMarkEnd(line, p) > p) p += 2
     else if (code !== BRACKET_CLOSE) p++
     else if (pairs.open.length === 1) return p
     else p = closeAt(line, pairs, p)
     if (p === NONE) return NONE
   }
   return NONE
+}
+
+// As in the inline scan, a note whose closing depends on how a caret pair in it reads takes a bounded number of passes.
+const MAX_NOTE_PASSES = 8
+
+/**
+ * C2-I-089: the close of the bracket at `pos`, read in passes as the inline scan reads it: the notes that close with
+ * every caret pair read are taken first, and each later pass keeps those that closed again.
+ */
+function bracketClose(line: ImageLine, pos: number): number {
+  let demote: Set<number> | null = null
+  for (let pass = 0; ; pass++) {
+    const pairs: Pairs = { open: [-1], closing: new Set(), demote, caret: false }
+    const close = bracketPass(line, pos, pairs)
+    if (!pairs.caret || pass >= MAX_NOTE_PASSES) return close
+    // C2-I-074: the alt of an image that forms is source text, so a note in it is no note that closed.
+    const closing = close === NONE ? pairs.closing : new Set<number>()
+    if (demote !== null && !narrows(demote, closing)) return close
+    demote ??= closing
+  }
+}
+
+/** Keeps the notes of `demote` that closed again in `closing`, and returns whether that changed the set. */
+function narrows(demote: Set<number>, closing: Set<number>): boolean {
+  let changed = false
+  for (const start of demote) {
+    if (closing.has(start)) continue
+    demote.delete(start)
+    changed = true
+  }
+  return changed
 }
 
 function bracedMarkEnd(line: ImageLine, at: number): number {
