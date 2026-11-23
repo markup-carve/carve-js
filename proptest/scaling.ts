@@ -134,13 +134,26 @@ function cpuMs(): number {
   return (usage.user + usage.system) / 1000
 }
 
-/** The best of `runs` timings; the minimum filters scheduler noise on a loaded machine. */
+// A single call on a small input takes well under a millisecond, below the resolution of the CPU clock on CI
+// runners, so one timing of it read as a fraction of its real cost and a linear curve looked superlinear.
+const RUN_MS = 10
+
+/**
+ * The best of `runs` per-call timings, each repeating `work` until the run lasts `RUN_MS`; the minimum filters
+ * scheduler noise on a loaded machine.
+ */
 function best(work: () => unknown, runs: number): number {
   let low = Infinity
   for (let at = 0; at < runs; at++) {
     const start = cpuMs()
-    work()
-    low = Math.min(low, cpuMs() - start)
+    let calls = 0
+    let elapsed = 0
+    do {
+      work()
+      calls++
+      elapsed = cpuMs() - start
+    } while (elapsed < RUN_MS)
+    low = Math.min(low, elapsed / calls)
   }
   return low
 }
