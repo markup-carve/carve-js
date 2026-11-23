@@ -1,9 +1,10 @@
 // Contract 3: text that 0.1 left text and 0.2 reads as a construct.
-import { ancestor } from '../blocks.ts'
+import { ancestor, quotesOf } from '../blocks.ts'
 import { foldLabel } from '../../../src/ast-attributes.ts'
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01, probe02 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
+import { quotePrefix } from './blank-lines.ts'
 import { insideQuotes, isGap, trimmedEnd } from './lines.ts'
 import { headingTexts, plainText } from './references.ts'
 
@@ -106,6 +107,10 @@ function underNote(ctx: Context, line: number): boolean {
 function shortIndent(ctx: Context, visit: Visit): void {
   const pos = visit.node.pos!
   const indent = indentOf(lineText(ctx.lines, pos.startLine))
+  if (visit.parent!.node !== ctx.doc) {
+    nestedShortIndent(ctx, visit)
+    return
+  }
   if (indent === 0 || visit.parent!.node !== ctx.doc || visit.siblings !== ctx.doc.children) return
   // Under a list of the document, also an empty one, or under the body of a footnote.
   const list = visit.index > 0 && visit.siblings[visit.index - 1]!.type === 'list'
@@ -116,6 +121,43 @@ function shortIndent(ctx: Context, visit: Visit): void {
   for (let line = pos.startLine; line <= last; line++) {
     const cut = Math.min(indent, indentOf(lineText(ctx.lines, line)))
     if (cut > 0) change(ctx, 'U-109', lineStart(ctx.lines, line), lineStart(ctx.lines, line) + cut, '', message)
+  }
+}
+
+const NESTED_SHORT_INDENT = new Set(['paragraph', 'block_quote'])
+
+/** The first item of the list just before `visit` that starts on an earlier line, or null. */
+function listAbove(ctx: Context, visit: Visit): Node01 | null {
+  // Description bodies, tables and fences after a nested list have their own rows (U-228, U-247, U-122).
+  if (!NESTED_SHORT_INDENT.has(visit.node.type) || visit.parent!.node.type === 'definition_list') return null
+  const list = visit.index > 0 ? visit.siblings[visit.index - 1]! : undefined
+  const item = list?.type === 'list' ? list.items?.[0] : undefined
+  if (item?.pos === undefined || item.pos.startLine >= visit.node.pos!.startLine) return null
+  // A block a `+` line attaches is U-016's.
+  return insideQuotes(lineText(ctx.lines, visit.node.pos!.startLine - 1)).trim() === '+' ? null : item
+}
+
+/** U-237: a block that 0.1 put after a nested list moves to that list's marker column (C2-B-015, C2-B-076). */
+function nestedShortIndent(ctx: Context, visit: Visit): void {
+  const item = listAbove(ctx, visit)
+  if (item === null) return
+  const itemStart = lineStart(ctx.lines, item.pos!.startLine)
+  const itemLine = lineText(ctx.lines, item.pos!.startLine)
+  const marker = item.pos!.startOffset - itemStart + indentOf(itemLine.slice(item.pos!.startOffset - itemStart))
+  const pos = visit.node.pos!
+  const first = lineText(ctx.lines, pos.startLine)
+  const depth = quotesOf(visit).length
+  const prefix = quotePrefix(first, depth).length
+  if (prefix !== quotePrefix(itemLine, depth).length || prefix > marker) return
+  const indent = prefix + indentOf(first.slice(prefix))
+  if (indent <= marker) return
+  const message = 'the follower was moved to its outer item content column'
+  const last = visit.node.type === 'paragraph' ? pos.startLine : pos.endLine
+  for (let line = pos.startLine; line <= last; line++) {
+    const own = indentOf(lineText(ctx.lines, line).slice(prefix))
+    const cut = Math.min(indent - marker, own)
+    const at = lineStart(ctx.lines, line) + prefix + own
+    if (cut > 0) change(ctx, 'U-237', at - cut, at, '', message)
   }
 }
 
