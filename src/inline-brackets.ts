@@ -70,18 +70,20 @@ function footnoteReference(state: InlineState, pos: number): number {
 }
 
 export function scanBracketOpen(state: InlineState, pos: number): number {
-  if (state.text.charCodeAt(pos + 1) === CARET && !demotedInNote(state)) return footnoteReference(state, pos)
+  if (state.text.charCodeAt(pos + 1) === CARET && !demotedInNote(state, pos)) return footnoteReference(state, pos)
   return openBracket(state, pos, pos + 1, OPEN_PLAIN)
 }
 
 /** C2-I-089: `^[` opens an inline footnote; inside an open one the caret is text and the bracket an ordinary one. */
 export function scanFootnoteOpen(state: InlineState, pos: number): number {
-  if (demotedInNote(state)) return pos + 1
+  if (demotedInNote(state, pos)) return pos + 1
+  if (state.textNotes?.has(pos) === true) return pos + 2
   return openBracket(state, pos, pos + 2, OPEN_FOOTNOTE)
 }
 
-/** Whether a note that closes is open at the scan, so that a caret pair here opens nothing (C2-I-089). */
-function demotedInNote(state: InlineState): boolean {
+/** Whether a note that closes is open at the scan, or a note that is text spans `pos`: a caret pair here opens nothing (C2-I-089). */
+function demotedInNote(state: InlineState, pos: number): boolean {
+  if (state.textNotes?.covers(pos) === true) return true
   if (state.notesOpen === 0) return false
   const closed = state.closedNotes
   if (closed === null) {

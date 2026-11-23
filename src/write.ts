@@ -20,6 +20,7 @@ import {
 } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
+import { isAsciiPunctuation } from './unicode.ts'
 import { createWriter, type LossMark, lose, markLosses, rollBackLosses, type Writer, type WriterFacts } from './write-state.ts'
 import { createPlan, notePlaces, type Plan } from './write-plan.ts'
 import { plainParagraph } from './write-plain.ts'
@@ -1325,7 +1326,7 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   const next = source[at + 1]
   if (next === '*') return prunableStar(w, source, at, scan)
   if (next === '[') {
-    if (source.startsWith('^]', at + 2)) return true
+    if (source.startsWith('^]', at + 2)) return !behindNoteOpener(source, at) || !opensInBare(w, source, at + 1)
     if (!source.startsWith('----', at + 2)) return false
     if (source[at - 1] !== '^') return true
     const close = nextIndex(scan, source, ']', at + 2)
@@ -1338,6 +1339,84 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   const close = nextIndex(scan, source, '}', at + 3)
   const escapedDash = nextIndex(scan, source, '\\-', at + 3)
   return close >= 0 && (escapedDash < 0 || escapedDash > close)
+}
+
+/**
+ * C2-I-089, C2-W-091: inside the brackets of a `^[` of the line, read bare, a `[^` can be an ordinary bracket of a note
+ * that reads as text, so its backslash is one the procedure placed for a reported bracket and stays.
+ */
+function behindNoteOpener(source: string, at: number): boolean {
+  const lineStart = source.lastIndexOf('\n', at) + 1
+  if (noteSpanCache.source !== source || noteSpanCache.lineStart !== lineStart) {
+    noteSpanCache = { source, lineStart, inside: noteSpans(source, lineStart) }
+  }
+  return noteSpanCache.inside.has(at)
+}
+
+let noteSpanCache: { source: string, lineStart: number, inside: Set<number> } = { source: '', lineStart: -1, inside: new Set() }
+
+/** The offsets of the line at `lineStart` that stand inside the brackets of a `^[`, its backslashes read as text. */
+function noteSpans(source: string, lineStart: number): Set<number> {
+  const inside = new Set<number>()
+  const open: boolean[] = []
+  let notes = 0
+  for (let at = lineStart; at < source.length && source[at] !== '\n'; at++) {
+    if (notes > 0) inside.add(at)
+    if (source[at] === '[') {
+      const note = isNoteBracket(source, at)
+      open.push(note)
+      if (note) notes++
+    } else if (source[at] === ']' && open.pop() === true) {
+      notes--
+    }
+  }
+  return inside
+}
+
+/** Whether the bracket at `at` follows a caret, with or without a backslash between them. */
+function isNoteBracket(source: string, at: number): boolean {
+  return source[at - 1] === '^' || (source[at - 1] === '\\' && source[at - 2] === '^')
+}
+
+/**
+ * C2-W-088: the first round reads the text bare, so a `[` that opens a bracket construct in that parse was reported
+ * and its backslash stays.
+ */
+function opensInBare(w: Writer, source: string, at: number): boolean {
+  if (bareBracketCache.source !== source) bareBracketCache = { source, starts: bareBracketStarts(w, source) }
+  return bareBracketCache.starts.has(at)
+}
+
+let bareBracketCache: { source: string, starts: Set<number> } = { source: '', starts: new Set() }
+
+/** The offsets in `source` of each `[` that opens an inline node of the parse of `source` without its escapes. */
+function bareBracketStarts(w: Writer, source: string): Set<number> {
+  const drop: number[] = []
+  for (let at = 0; at < source.length; at++) {
+    if (source[at] === '\\' && isAsciiPunctuation(source.charCodeAt(at + 1))) drop.push(at++)
+  }
+  const text = withoutBackslashes(source, drop).text
+  const bytes = nodeStarts(parseChunk(w, text).children)
+  const starts = new Set<number>()
+  let byte = 0
+  let dropped = 0
+  for (let index = 0; index < text.length; index++) {
+    while (dropped < drop.length && drop[dropped]! - dropped <= index) dropped++
+    if (text[index] === '[' && bytes.has(byte)) starts.add(index + dropped)
+    byte += unitBytes(text, index)
+  }
+  return starts
+}
+
+/** The UTF-8 start offsets of the nodes below `nodes` other than text. */
+function nodeStarts(nodes: readonly Node[]): Set<number> {
+  const bytes = new Set<number>()
+  const pending = [...nodes]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type !== 'text' && node.pos !== undefined) bytes.add(node.pos.startOffset)
+    for (const child of childNodes(node)) pending.push(child)
+  }
+  return bytes
 }
 
 /** Whether `parsed` reads back as the blocks of `group`. */

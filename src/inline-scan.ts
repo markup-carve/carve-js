@@ -14,11 +14,12 @@ import {
 import { pairDelimiters, scanBareMark, scanBracedMark } from './inline-delimiters.ts'
 import { writeEvents } from './inline-emit.ts'
 import {
-  type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, setContent, TOKEN_A, TOKEN_C, TOKEN_OPEN, TOKEN_START, TOKEN_WIDTH,
+  type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, setContent, TOKEN_A, TOKEN_B, TOKEN_C, TOKEN_OPEN, TOKEN_START, TOKEN_WIDTH,
 } from './inline-state.ts'
 import { IMAGE, INLINE_FOOTNOTE } from './inline-kinds.ts'
 import { BARE_MARKS, BRACED_MARKS, CHARACTER_CLASSES, CLASS_SMART_TRIGGER } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
+import { TextNotes } from './text-notes.ts'
 import { BIDI_FIRST, BIDI_LAST, holdsBidiControl, isBidiControl } from './unicode.ts'
 
 type Scanner = (state: InlineState, pos: number) => number
@@ -134,17 +135,21 @@ function scanPass(state: InlineState): void {
 // A note whose closing depends on how a caret pair in it reads has no reading; this bounds the passes such notes take.
 const MAX_NOTE_PASSES = 8
 
-/** Keeps the notes of the last pass that closed again, and returns whether that changed the set. */
-function narrowsNotes(state: InlineState, closed: Set<number>): boolean {
+/**
+ * Keeps the notes of the last pass that closed again, and returns whether that changed the set. One that no longer
+ * closes closed only because a caret pair in it opened, so it is text from now on (C2-I-089).
+ */
+function narrowsNotes(state: InlineState, closed: Map<number, number>): boolean {
   const before = state.closedNotes
   if (before === null) {
     state.closedNotes = closed
     return true
   }
   let changed = false
-  for (const start of before) {
+  for (const [start, end] of before) {
     if (closed.has(start)) continue
     before.delete(start)
+    ;(state.textNotes ??= new TextNotes()).add(start, end)
     changed = true
   }
   return changed
@@ -177,12 +182,12 @@ function formedImages(state: InlineState): Set<number> {
   return formed
 }
 
-function closedNotes(state: InlineState): Set<number> {
-  const closed = new Set<number>()
+function closedNotes(state: InlineState): Map<number, number> {
+  const closed = new Map<number, number>()
   const tokens = state.tokens
   for (let at = 0; at < state.tokenLength; at += TOKEN_WIDTH) {
     if (tokens[at] === TOKEN_OPEN && tokens[at + TOKEN_A] === OPEN_FOOTNOTE && tokens[at + TOKEN_C] === INLINE_FOOTNOTE) {
-      closed.add(tokens[at + TOKEN_START]!)
+      closed.set(tokens[at + TOKEN_START]!, tokens[tokens[at + TOKEN_B]! + TOKEN_START]!)
     }
   }
   return closed
@@ -205,12 +210,13 @@ export function scanInline(
   state.cell = cell
   state.commentLines = null
   state.closedNotes = null
+  state.textNotes = null
   state.caretInNote = false
   state.formedImages = null
   state.percentInImage = false
   scanPass(state)
   // C2-I-089: inside a note that closes, a caret pair opens nothing. The notes that close with every caret pair read
-  // are taken first; a pass that reads them as text may leave one unclosed, and the next pass reads it as text.
+  // are taken first; a pass that reads them as text may leave one unclosed, which is text from then on.
   // C2-I-074: images narrow the same way, so a `%%` stays alt source only inside an image that forms.
   for (let pass = 0; (state.caretInNote || state.percentInImage) && pass < MAX_NOTE_PASSES; pass++) {
     const notes = state.caretInNote && narrowsNotes(state, closedNotes(state))

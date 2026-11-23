@@ -576,7 +576,26 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeInside,
   (c, es, i) => escapeInContent(c, es[i]!),
   escapeLoneBracket,
+  escapeTextNote,
 ]
+
+/**
+ * C2-I-089, C2-W-125: a `^[` of text before `es[i]` that reads as a note closing only through a caret pair in it is
+ * text, and its caret pairs are ordinary brackets, so a node of the tree in its span does not form. Its bracket takes
+ * the backslash (C2-W-090).
+ */
+function escapeTextNote(c: Check, es: readonly Node[], i: number): boolean {
+  // Escaping one opener can make the next `^[` such a note, so each `^[` of text before the node takes one.
+  let asked = false
+  for (let j = 0; j < i; j++) {
+    const text = es[j]!
+    if (text.type !== 'text') continue
+    for (let at = text.value.indexOf('^['); at >= 0; at = text.value.indexOf('^[', at + 1)) {
+      if (!isEscaped(c, text, at) && !isEscaped(c, text, at + 1)) asked = escapeAt(c, text, at + 1) || asked
+    }
+  }
+  return asked
+}
 
 /**
  * C2-W-125: a lone bracket in the content of an inline footnote or extension, where its closer was not asked for.
