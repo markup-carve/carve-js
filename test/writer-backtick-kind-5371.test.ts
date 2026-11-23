@@ -42,6 +42,8 @@ it.each([
 it.each([
   ['x`a`\\`', 'x`a`\\`\n'],
   ['x`a`\\` ``` b', 'x`a`\\` ``` b\n'],
+  // A raw span ends in its format suffix, so the backtick behind it lengthens nothing.
+  ['x`a`{=html}`a``', 'x`a`{=html}`a``\n'],
 ])('C2-W-125 case six: a glued backtick alone gives no kind %j', (input, expected) => {
   expect(bothPaths(input)).toEqual([expected, expected])
   expect(checkWriter(input)).toBeNull()

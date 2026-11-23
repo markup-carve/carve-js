@@ -5,6 +5,8 @@ import { codeSpan } from './write-inline.ts'
 import type { Writer } from './write-state.ts'
 
 const CODE_LIKE: ReadonlySet<string> = new Set(['code', 'literal_inline', 'math', 'raw_inline'])
+// The spans whose closing run the text behind them touches; a raw span ends in its `{=format}` suffix.
+const GLUED: ReadonlySet<string> = new Set(['code', 'literal_inline', 'math'])
 const BACKTICK = 96
 const BACKSLASH = 92
 
@@ -20,16 +22,11 @@ interface Bare {
 function flatten(nodes: readonly Node[], bare: Bare): void {
   let before: Node | undefined
   for (const node of nodes) {
-    if (node.type === 'text') {
-      if (node.value.charCodeAt(0) === BACKTICK && before !== undefined && CODE_LIKE.has(before.type) &&
-        before.attrs === undefined) bare.glued = true
-      bare.leaves.push([node, bare.text.length])
-      bare.text += node.value
-      for (let at = 0; at < node.value.length; at++) bare.fromText.push(true)
-    } else if (CODE_LIKE.has(node.type) && 'value' in node && typeof node.value === 'string') {
+    if (node.type === 'text') addText(bare, node, before)
+    else if (CODE_LIKE.has(node.type) && 'value' in node && typeof node.value === 'string') {
       const spelled = codeSpan(node.value)
       bare.spans.push(`${bare.text.length}:${bare.text.length + spelled.length}`)
-      add(bare, spelled)
+      add(bare, node.type === 'raw_inline' ? `${spelled}\u0001` : spelled)
     } else if (isBreak(node)) add(bare, '\n')
     else {
       add(bare, '\u0001')
@@ -38,6 +35,14 @@ function flatten(nodes: readonly Node[], bare: Bare): void {
     }
     before = node
   }
+}
+
+function addText(bare: Bare, node: TextNode, before: Node | undefined): void {
+  if (node.value.charCodeAt(0) === BACKTICK && before !== undefined && GLUED.has(before.type) &&
+    before.attrs === undefined) bare.glued = true
+  bare.leaves.push([node, bare.text.length])
+  bare.text += node.value
+  for (let at = 0; at < node.value.length; at++) bare.fromText.push(true)
 }
 
 function add(bare: Bare, spelled: string): void {
