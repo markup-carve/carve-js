@@ -9,6 +9,7 @@ import { foldLabel } from './ast-attributes.ts'
 import { inlineContent } from './ast-blocks.ts'
 import { parseChunk } from './write-check.ts'
 import { unitBytes } from './positions.ts'
+import { emailEnd, urlEnd } from './inline-atoms.ts'
 import { isAsciiPunctuation } from './unicode.ts'
 import { braceBlock, quoted } from './write-attributes.ts'
 import { lose, trimEnd, type Writer } from './write-state.ts'
@@ -632,7 +633,7 @@ function imageNode(w: Writer, node: ImageNode, flags: number): string {
   if (raw !== null) return `!${raw}`
   const pipes = (flags & IN_CELL) !== 0
   if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
-  const alt = collapsedAlt(node, altSource(node.alt ?? '', w.bareAlts))
+  const alt = collapsedAlt(node, imageAlt(node, w.bareAlts))
   return `![${pipes ? escapePipes(alt) : alt}]${target(node, node.src, pipes)}`
 }
 
@@ -652,7 +653,7 @@ function collapsedAlt(node: ImageNode, alt: string): string {
  * footnote label and end the image text early, so a `]` right behind `[^` counts as one, and a lone `]` after such a
  * pair takes over its `[`.
  */
-function unpartnered(alt: string, raw: Uint8Array, lone: Set<number>): void {
+function unpartnered(alt: string, raw: Uint8Array, lone: Set<number>, swap: boolean): void {
   const open: number[] = []
   const notes: number[] = []
   for (let at = 0; at < alt.length; at++) {
@@ -660,18 +661,52 @@ function unpartnered(alt: string, raw: Uint8Array, lone: Set<number>): void {
     if (alt[at] === '[') open.push(at)
     else if (alt[at] !== ']') continue
     else if (at >= 2 && alt[at - 1] === '^' && open.at(-1) === at - 2) lone.add(at)
-    else if (open.length > 0) closeBracket(alt, open.pop()!, at, notes)
-    else lone.add(notes.pop() ?? at)
+    else if (open.length > 0) at = closeBracket(alt, open.pop()!, at, notes, raw)
+    else lone.add((swap ? notes.pop() : undefined) ?? at)
   }
   for (const at of open) lone.add(at)
 }
 
-function closeBracket(alt: string, opener: number, at: number, notes: number[]): void {
-  if (alt[opener + 1] === '^') notes.push(at)
+/** C2-I-066 to C2-I-069: the end of the link tail whose `(` is at `at` of `alt`, or -1; it stands on one line. */
+function tailEnd(alt: string, at: number): number {
+  let level = 0
+  let p = at + 1
+  // The writer doubles every backslash before punctuation (C2-W-097), so no backslash of the alt escapes a parenthesis.
+  for (; p < alt.length && !isLabelSpace(alt[p]!); p++) {
+    if (alt[p] === '(') level++
+    else if (alt[p] === ')' && level-- === 0) return p + 1
+  }
+  return level === 0 && alt[p] === ' ' ? titleTailEnd(alt, p + 1) : -1
 }
 
-/** The end of the code span or braced comment that opens at `at` of `alt`, -1 if it has no closer, 0 if none opens. */
+/** C2-I-068: the end of a quoted title at `at` of `alt`, optional spaces and `)`, or -1. */
+function titleTailEnd(alt: string, at: number): number {
+  const quote = alt[at]
+  if (quote !== '"' && quote !== "'") return -1
+  let q = at + 1
+  while (q < alt.length && alt[q] !== quote && alt[q] !== '\n') q++
+  if (alt[q] !== quote) return -1
+  q++
+  while (alt[q] === ' ') q++
+  return alt[q] === ')' ? q + 1 : -1
+}
+
+/** Closes the pair `opener` at `at` and returns the offset the scan goes on from: a link tail glued to it is an atom. */
+function closeBracket(alt: string, opener: number, at: number, notes: number[], raw: Uint8Array): number {
+  if (alt[opener + 1] === '^') {
+    notes.push(at)
+    return at
+  }
+  const end = alt[at + 1] === '(' && raw[at + 1] !== 1 ? tailEnd(alt, at + 1) : -1
+  return end < 0 ? at : end - 1
+}
+
+/**
+ * The end of the code span, braced comment, autolink or cross-reference that opens at `at` of `alt`, -1 if a code span
+ * or comment has no closer, 0 if none opens (C2-I-005).
+ */
 function atomEnd(alt: string, at: number): number {
+  if (alt[at] === '<') return angleAtomEnd(alt, at)
   if (alt[at] === '{' && (alt[at + 1] === '#' || alt[at + 1] === '%')) {
     const close = alt.indexOf(`${alt[at + 1]!}}`, at + 2)
     return close < 0 ? -1 : close + 2
@@ -688,9 +723,22 @@ function atomEnd(alt: string, at: number): number {
   return -1
 }
 
+/** C2-I-073, C2-I-096: the end of the autolink or cross-reference at `at` of `alt`, or 0. */
+function angleAtomEnd(alt: string, at: number): number {
+  if (alt[at + 1] === '/' && alt[at + 2] === '#') {
+    let close = at + 3
+    while (close < alt.length && alt[close] !== '>' && alt[close] !== ' ' && alt[close] !== '\n') close++
+    return alt[close] === '>' && close > at + 3 ? close + 1 : 0
+  }
+  let close = urlEnd(alt, at + 1, alt.length)
+  if (close < 0) close = emailEnd(alt, at + 1, alt.length)
+  return close < 0 ? 0 : close + 1
+}
+
 /**
- * Marks the content of code spans and braced comments in `alt` as raw. An opener with no closer in `alt` counts as
- * lone: its content is raw, so the reader would take a closer behind the image and end the image text early.
+ * Marks the content of code spans, braced comments, autolinks and cross-references in `alt` as raw. An opener with no
+ * closer in `alt` counts as lone: its content is raw, so the reader would take a closer behind the image and end the
+ * image text early.
  */
 function rawAtoms(alt: string, lone: Set<number>): Uint8Array {
   const raw = new Uint8Array(alt.length)
@@ -708,10 +756,11 @@ function rawAtoms(alt: string, lone: Set<number>): Uint8Array {
  * C2-W-097: alt text doubles a backslash before ASCII punctuation or at its end, and escapes a bracket with no partner.
  * An opener of raw content with no closer takes one for the same reason (G-G8 in _SPEC_GAPS.md).
  */
-function altSource(alt: string, bare = false): string {
+function altSource(alt: string, bare = false, swap = true, every = false): string {
   const lone = new Set<number>()
   const raw = rawAtoms(alt, lone)
-  if (!bare) unpartnered(alt, raw, lone)
+  if (every) everyBracket(alt, raw, lone)
+  else if (!bare) unpartnered(alt, raw, lone, swap)
   let out = ''
   for (let at = 0; at < alt.length; at++) {
     const char = alt[at]!
@@ -720,6 +769,46 @@ function altSource(alt: string, bare = false): string {
     out += char
   }
   return out
+}
+
+/** Every bracket of `alt` outside raw content, which then pairs with nothing. */
+function everyBracket(alt: string, raw: Uint8Array, lone: Set<number>): void {
+  for (let at = 0; at < alt.length; at++) if (raw[at] !== 1 && (alt[at] === '[' || alt[at] === ']')) lone.add(at)
+}
+
+/**
+ * C2-W-089, C2-W-097: the alt text of an image as C2-W-097 spells it. The clause's bracket count cannot see every atom
+ * (a reference label after `[^` is taken whole, C2-I-076), so where that spelling does not read back as the image with
+ * its alt, the alt is written with its brackets bare, then with each bracket without a partner escaped itself rather
+ * than the `]` of a `[^` pair, then with every bracket escaped; the first of these forms that reads back is taken.
+ */
+function imageAlt(node: ImageNode, bare: boolean): string {
+  const alt = node.alt ?? ''
+  const spelled = altSource(alt, bare)
+  // C2-W-075: a collapsed or shortcut alt is checked against its key by `collapsedAlt`.
+  const keyed = node.refForm === 'collapsed' || node.refForm === 'shortcut'
+  if (bare || keyed || !mayMisread(alt)) return spelled
+  const tail = node.key === undefined ? '()' : '[k]'
+  if (readsBackAlt(spelled, alt, tail)) return spelled
+  for (const form of [altSource(alt, true), altSource(alt, false, false), altSource(alt, false, true, true)]) {
+    if (form !== spelled && readsBackAlt(form, alt, tail)) return form
+  }
+  return spelled
+}
+
+/**
+ * Whether `alt` holds a bracket beside a form that changes how brackets pair: a caret (C2-I-087, C2-I-089), a tail or
+ * label glued to a closing bracket (C2-I-066, C2-I-072), or the opener of an atom (C2-I-005). Brackets with none of
+ * these pair as C2-W-097 counts them.
+ */
+function mayMisread(alt: string): boolean {
+  return (alt.includes('[') || alt.includes(']')) && /[\^(<`{]|\]\[/u.test(alt)
+}
+
+/** Whether `![spelled]` with `tail` reads as one image whose alt is `alt` (C2-I-074). */
+function readsBackAlt(spelled: string, alt: string, tail: string): boolean {
+  const read = inlineContent(`![${spelled}]${tail}`)
+  return read.length === 1 && read[0]!.type === 'image' && read[0]!.alt === alt
 }
 
 /** C2-W-116: an autolink is its target in angle brackets; the text of an email address is the address. */
