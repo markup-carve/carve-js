@@ -292,31 +292,28 @@ function isPlainRow(row: RowEntry, header: boolean): boolean {
   return row.type === 'table_row' && row.attrs === undefined && row.children.every((cell) => isPlainCell(cell, header))
 }
 
-function isPlainGroup(group: TableEntry, header: boolean): boolean {
-  return group.type === 'comment' || group.children.every((row) => isPlainRow(row, header))
-}
-
 /** C2-L-006: whether a delimited table can hold `table`. */
 function fitsDelimited(table: TableNode): boolean {
-  const groups = table.children
-  const head = groups.filter((group) => group.type === 'table_head')
-  const body = groups.filter((group) => group.type === 'table_body')
-  if (head.length + body.length !== groups.length || head.length > 1 || body.length > 1) return false
-  return fitsPartition(groups)
+  return fitsPartition(table.children)
 }
 
 /**
- * Whether a delimited table gives the head of `headRows` rows and the body `body` (C2-B-209, C2-A-088). Without
- * `header-rows` it has one head row; with it the body says so, and a table with no body takes the count of its
- * head (C2-B-221).
+ * Whether a delimited table gives the groups `groups` (C2-B-209, C2-A-088): a head first, bodies, then a foot, each
+ * with plain cells, which `header-rows`, `body-rows`, `body-header-rows` and `footer-rows` partition (C2-B-221,
+ * C2-B-230). The head and the leading header rows of a body hold header cells, every other row data cells.
  */
 function fitsPartition(groups: readonly TableEntry[]): boolean {
-  return hasPlainGroups(groups)
+  let at = 0
+  if (groups[at]?.type === 'table_head') at++
+  while (groups[at]?.type === 'table_body') at++
+  if (groups[at]?.type === 'table_foot') at++
+  return at === groups.length && groups.every((group) => group.type !== 'comment' && group.attrs === undefined &&
+    (group.type === 'table_body' ? isPlainBody(group) : group.children.every((row) => isPlainRow(row, group.type === 'table_head'))))
 }
 
-/** Whether every cell of `groups` is plain, a header cell in the head. */
-function hasPlainGroups(groups: readonly TableEntry[]): boolean {
-  return groups.every((group) => isPlainGroup(group, group.type === 'table_head'))
+function isPlainBody(body: TableBodyNode): boolean {
+  const header = leadingHeaderRows(body)
+  return body.children.every((row, at) => isPlainRow(row, at < header))
 }
 
 /** The value of the first node of the first block of `cell`, where that node has one. */
