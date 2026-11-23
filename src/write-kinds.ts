@@ -1,7 +1,7 @@
 // C2-W-088: a round escapes every potential opener of each kind its parse reports in a leaf block.
 import { childNodes, isBreak, isInlineParent } from './ast.ts'
 import type { Node, TextNode } from './ast-nodes.ts'
-import { type Check, escapeAt } from './write-check.ts'
+import { BRACKETED, type Check, contentClosers, escapeAt, isEscaped } from './write-check.ts'
 import { isAsciiAlphanumeric, isBoundarySpace, isWordCharacter } from './unicode.ts'
 
 /** One leaf of the inline content of a block: a text node, a break, or the markup of another inline node. */
@@ -197,6 +197,23 @@ export function escapeKinds(check: Check, group: readonly Node[]): void {
       if (leaf.text === null) return
       for (const offset of kindOffsets(key, block, index)) escapeAt(check, leaf.text, offset)
     })
+  }
+}
+
+/**
+ * C2-W-125, case five: a `[` that is escaped in the content of a bracketed node leaves the `]` that closes it in
+ * the text bare, which would end that node early; that `]` takes its backslash in the same round.
+ */
+export function escapePartnerClosers(check: Check, group: readonly Node[]): void {
+  const pending = [...group]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (!BRACKETED.has(node.type)) {
+      for (const child of childNodes(node)) pending.push(child)
+      continue
+    }
+    for (const [text, at, partner] of contentClosers(childNodes(node), () => true, pending)) {
+      if (partner !== null && isEscaped(check, partner[0], partner[1])) escapeAt(check, text, at)
+    }
   }
 }
 
