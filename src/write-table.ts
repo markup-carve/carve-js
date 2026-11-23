@@ -62,7 +62,8 @@ function columnList(table: TableNode, field: 'align' | 'valign' | 'width'): stri
  * that `attrs` holds too is written from the fields, and the key in `attrs` is reported where `w` is given.
  */
 function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly [string, string])[]): BlockParts {
-  const keys: (readonly [string, string])[] = [...first]
+  const leadingKeys = first.length === 0 ? first : [first[0]!]
+  const keys: (readonly [string, string])[] = []
   const aligns = columnList(table, 'align')
   const valigns = columnList(table, 'valign')
   // C2-W-062: `baseline` has no spelling, in a cell mark or in `valigns`.
@@ -72,15 +73,16 @@ function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly
   if (aligns !== null) keys.push(['aligns', aligns])
   if (valigns !== null) keys.push(['valigns', valigns])
   if (widths !== null) keys.push(['widths', widths])
+  if (first.length > 1) keys.push(first[1]!)
   if (footRows > 0) keys.push(['footer-rows', String(footRows)])
   keys.push(...bodyKeys(table))
   const skipKeys: string[] = []
   table.attrs?.keyValues?.forEach(([key], index) => {
-    if (!keys.some((pair) => pair[0] === key)) return
+    if (!leadingKeys.some((pair) => pair[0] === key) && !keys.some((pair) => pair[0] === key)) return
     skipKeys.push(key)
     if (w !== null) loseKey(w, table, index, key)
   })
-  return { keys, skipKeys }
+  return { keys: leadingKeys, keysAfterAttrs: keys, skipKeys }
 }
 
 function isHeaderRow(row: RowEntry): boolean {
