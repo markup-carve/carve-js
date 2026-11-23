@@ -171,7 +171,7 @@ function mark(c: Check, node: TextNode, at: number, escaped: boolean): void {
   c.marks.set(node, marks)
 }
 
-function isEscaped(c: Check, node: TextNode, at: number): boolean {
+export function isEscaped(c: Check, node: TextNode, at: number): boolean {
   const asked = c.marks.get(node)?.get(at)
   if (asked !== undefined) return asked
   const written = c.w.escapes.get(node) ?? []
@@ -288,12 +288,64 @@ function escapeEnd(c: Check, text: TextNode | null, braces: boolean): boolean {
   return braces && escapeAt(c, text, value.lastIndexOf('{'))
 }
 
-/** Asks for a backslash before the first bare closing mark of `e` in its content, or before the first bracket in it. */
+/**
+ * Asks for a backslash before the first bare closing mark of `e` in its content, or before the first bracket in it.
+ * C2-W-125, case five: of brackets, each bare `]` that closes no bare `[` of the content ends `e` early in turn, so all
+ * of them take one in this round.
+ */
 function escapeInContent(c: Check, e: Node): boolean {
   const mark = CLOSING_MARKS.get(e.type)
   if (mark === undefined || !('children' in e)) return false
+  if (mark === ']' && escapeLoneClosers(c, e)) return true
   return escapeMark(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
 }
+
+function escapeLoneClosers(c: Check, e: Node): boolean {
+  let asked = false
+  for (const [text, at, partner] of contentClosers(childNodes(e), (node, offset) => !isEscaped(c, node, offset), null)) {
+    if (partner === null) asked = escapeAt(c, text, at) || asked
+  }
+  return asked
+}
+
+/** The nodes whose content a `]` closes. */
+export const BRACKETED: ReadonlySet<string> = new Set(['link', 'span', 'inline_footnote', 'inline_extension'])
+
+/**
+ * The bare `]` in `nodes`, the content of a bracketed node, each with the bare `[` of that content it closes, or
+ * null. A bracketed node inside has its own content: it is skipped, or pushed to `inner` where that is given.
+ */
+export function contentClosers(nodes: readonly Node[], bare: (node: TextNode, at: number) => boolean,
+  inner: Node[] | null): Closer[] {
+  const closers: Closer[] = []
+  const open: [TextNode, number][] = []
+  const pending = [...nodes].reverse()
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (BRACKETED.has(node.type)) inner?.push(node)
+    else if (node.type === 'text') pairBrackets(node, bare, open, closers)
+    else {
+      const children = childNodes(node)
+      for (let at = children.length - 1; at >= 0; at--) pending.push(children[at]!)
+    }
+  }
+  return closers
+}
+
+type Closer = [TextNode, number, [TextNode, number] | null]
+
+function pairBrackets(node: TextNode, bare: (node: TextNode, at: number) => boolean, open: [TextNode, number][],
+  closers: Closer[]): void {
+  const value = node.value
+  for (let at = 0; at < value.length; at++) {
+    const ch = value.charCodeAt(at)
+    if ((ch !== OPEN_BRACKET && ch !== CLOSE_BRACKET) || !bare(node, at)) continue
+    if (ch === OPEN_BRACKET) open.push([node, at])
+    else closers.push([node, at, open.pop() ?? null])
+  }
+}
+
+const OPEN_BRACKET = 0x5b
+const CLOSE_BRACKET = 0x5d
 
 /** Whether the text before `es[i]` ends in a character that reads on into the markup of `es[i]` (C2-W-125). */
 function joinsNext(es: readonly Node[], i: number): boolean {
@@ -1574,7 +1626,11 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
     if (!more && !resync(c, es, as, at) && !stepOverLostText(c, es, as, at) &&
       !resyncNextConstructLine(c, es, as, at)) return
   }
-  if (at.j < as.length) c.losses.push([owner, null])
+  if (at.j >= as.length) return
+  // C2-W-005: the content read on past its end, as its closer paired later. The kind rounds leave it unread (CC-1633);
+  // the rounds of the reported openers take the braced form rather than lose the node.
+  if (!c.w.kindRounds && isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
+  else c.losses.push([owner, null])
 }
 
 /** Compares a node that the writer took from the sidecar as it was typed: any difference sends it back to the tree form. */

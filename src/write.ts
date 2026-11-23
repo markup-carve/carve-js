@@ -12,7 +12,7 @@ import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
-import { escapeKinds, leavesKindBare } from './write-kinds.ts'
+import { escapeKinds, escapePartnerClosers, leavesKindBare } from './write-kinds.ts'
 import {
   type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk, parseWritten,
 } from './write-check.ts'
@@ -428,7 +428,10 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   }
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
   dropLineDuplicates(check)
-  if (w.kindRounds) escapeKinds(check, group)
+  if (w.kindRounds) {
+    escapeKinds(check, group)
+    escapePartnerClosers(check, group)
+  }
   extendChains(check)
   extendForms(w, check, group)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
