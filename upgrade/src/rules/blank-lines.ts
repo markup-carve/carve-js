@@ -208,6 +208,7 @@ function attributeLine(ctx: Context, above: Visit, line: number): boolean {
 
 export function blankLines(ctx: Context): void {
   const notes = footnoteStarts(ctx)
+  const empty = emptyQuotes(ctx)
   for (let line = 2; line <= ctx.lines.count; line++) {
     const kind = textAbove(ctx, line - 1)
     if (kind === null) continue
@@ -215,6 +216,7 @@ export function blankLines(ctx: Context): void {
     const below = ctx.blocks.leaf[line]
     if (below === null || below === undefined) {
       attributeAbove(ctx, above, line)
+      emptyQuoteBelow(ctx, above, line, empty)
       continue
     }
     if (below === above || below.node.pos!.startLine !== line || ctx.repairs === true && onNewMarker(above, below, line)) continue
@@ -234,6 +236,32 @@ export function blankLines(ctx: Context): void {
       outOfDescription(ctx, entry, above, below, line, line)
     }
   }
+}
+
+/** The empty quotes of the 0.1 tree by their first line. */
+function emptyQuotes(ctx: Context): Map<number, Visit> {
+  const found = new Map<number, Visit>()
+  for (const visit of ctx.visits) {
+    const { node } = visit
+    if (node.type === 'block_quote' && node.fenced !== true && (node.children?.length ?? 0) === 0
+      && node.pos !== undefined && !found.has(node.pos.startLine)) found.set(node.pos.startLine, visit)
+  }
+  return found
+}
+
+/**
+ * U-126: an empty quote 0.1 opened under the text of a note body would be a lazy line of the note in 0.2.
+ * Under other text the U-126 rescue writes the same blank line.
+ */
+function emptyQuoteBelow(ctx: Context, above: Visit, line: number, empty: Map<number, Visit>): void {
+  if (above.parent?.node !== ctx.doc || above.siblings === ctx.doc.children) return
+  const quote = empty.get(line)
+  if (quote === undefined || isInside(above, quote)) return
+  const outer = sharedQuotes(above, quote)
+  if (outer !== quotesOf(quote).length) return
+  const at = lineStart(ctx.lines, line)
+  change(ctx, 'U-126', at, at, quotePrefix(lineText(ctx.lines, line), outer) + '\n',
+    'a blank line opens the quote under the 0.2 paragraph boundary rule')
 }
 
 /** A block on the marker line of a later item of a list the text above is in: the marker ends it (C2-B-015). */
