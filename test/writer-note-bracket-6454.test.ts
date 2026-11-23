@@ -10,7 +10,8 @@ describe('C2-W-125 case five: a bare bracket in the content of a note that holds
     ['^[[{^]\\]\\]^}]\n', '^[[{^]\\]\\]^}]\n'],
     // A bracket pair of the content stays bare; the strong takes its braces, as it ends in a space.
     ['x ^[{*\\[\\[\\] *}]\n', 'x ^[{*\\[[] *}]\n'],
-    ['^[*\\]\\[\\]\\[*]a]\n', '^[*\\]\\[\\]\\[*]a\\]\n'],
+    // Once the strong closes in place, nothing opens on the text `]` behind the note (#5456).
+    ['^[*\\]\\[\\]\\[*]a]\n', '^[*\\]\\[\\]\\[*]a]\n'],
     // The strong that did not form behind the text `*a` takes its braces, not the emphasis around it.
     ['x ^[/*a{*a\\[a*}/]\n', 'x ^[/*a{*a\\[a*}/]\n'],
     // A lone closer repair gives no kind, so the text `]` behind the note stays bare.
