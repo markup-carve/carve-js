@@ -1268,7 +1268,7 @@ function comparisonBehindQuote(prior: Node | undefined, before: Node | undefined
  */
 function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Node): boolean {
   const next = textAt(es, i + 1)
-  if (next !== null && !sameValue(e.attrs, a.attrs) && next.value.startsWith('{')) return escapeAt(c, next, 0)
+  if (next !== null && a.attrs !== undefined && !sameValue(e.attrs, a.attrs) && next.value.startsWith('{')) return escapeAt(c, next, 0)
   // C2-I-015: a backtick behind a closing run makes it longer, so the span reads on into the text behind it.
   // C2-I-090: a name character behind a mention or a tag makes the name longer.
   if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
@@ -1348,6 +1348,8 @@ function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], 
     return false
   }
   if (a.type !== e.type || at.aj > 0) {
+    // C2-W-125: behind a content that ended early the parse reads its neighbors otherwise, which no respelling repairs.
+    if (c.cut) return false
     if (respell(c, es, at.i)) return stepOver(c, es, as, at)
     return stepOverLost(c, e, es, as, at)
   }
@@ -1647,8 +1649,8 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
     const more = e.type === 'text' ? matchText(c, e, es, as, at, owner) : matchNode(c, e, es, as, at, owner)
     if (!more && !resync(c, es, as, at) && !stepOverLostText(c, es, as, at) &&
       !resyncNextConstructLine(c, es, as, at)) return
-    // The lists are aligned again behind a content that ended early.
-    if (!more) c.cut = false
+    // C2-W-125: behind a content that ended early a text difference asks for nothing in this list, even where the
+    // lists align again; the procedure runs again from the backslash that round placed.
   }
   if (at.j >= as.length) return
   // C2-W-005: the content read on past its end, as its closer paired later. The kind rounds leave it unread (CC-1633);
@@ -1743,6 +1745,8 @@ function compareBlock(c: Check, e: Node, a: Node): boolean {
   if (e.type === 'table' && a.type === 'table') c.spanMarks = hasSpanMarks(e) || hasSpanMarks(a)
   if (e.type === 'table_cell') c.flags |= IN_CELL
   compareFields(c, e, a)
+  // A content that ended early in another block keeps nothing of this one from being compared.
+  c.cut = false
   if (isInlineParent(e)) compareInlines(c, e.children, childNodes(a), e)
   // C2-N-081: the children of an include are a result of its expansion, which the source does not hold.
   else if (e.type !== 'include') compareBlocks(c, childNodes(e), childNodes(a), e)
