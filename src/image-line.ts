@@ -80,11 +80,14 @@ function isBlank(src: string, start: number, end: number): boolean {
   return true
 }
 
-/** C2-I-087: the offset behind the footnote reference at `p`, or `p` when `[` opens a plain bracket. */
+/**
+ * C2-I-087: the offset behind the footnote reference at `p`, or `p` when `[` opens a plain bracket. A `[^` whose label
+ * is none is text and opens no bracket pair, so the scan goes on behind the `[`.
+ */
 function footnoteReferenceEnd(line: ImageLine, p: number): number {
   if (line.src.charCodeAt(p + 1) !== CARET) return p
   const close = labelClose(line, p + 1)
-  return close === NONE || isBlank(line.src, p + 2, close) ? p : close + 1
+  return close === NONE || isBlank(line.src, p + 2, close) ? p + 1 : close + 1
 }
 
 /** C2-I-066 to C2-I-072: the offset behind what is glued to the closing bracket at `p` of a nested pair. */
@@ -101,31 +104,52 @@ function nestedTailEnd(line: ImageLine, p: number): number {
   return close === NONE ? NONE : close + 1
 }
 
-/** C2-I-006, C2-I-074: the offset of the `]` that closes the bracket at `pos` on the line, or NONE. */
+/** The open brackets of the alt scan: per bracket, whether it opened an inline footnote (C2-I-089). */
+interface Pairs {
+  open: boolean[]
+  notes: number
+}
+
+/** C2-I-087, C2-I-089: pushes the bracket at `p`, a footnote reference or a note opener; returns the offset behind it. */
+function openAt(line: ImageLine, pairs: Pairs, p: number): number {
+  if (line.src.charCodeAt(p) === CARET) {
+    pairs.open.push(true)
+    pairs.notes++
+    return p + 2
+  }
+  // C2-I-089: in a note `[^` opens no footnote reference.
+  const reference = pairs.notes === 0 ? footnoteReferenceEnd(line, p) : p
+  if (reference === p) pairs.open.push(false)
+  return Math.max(reference, p + 1)
+}
+
+/** Closes the nearest open bracket at `p`; a note takes no tail or label. Returns the offset the scan goes on from. */
+function closeAt(line: ImageLine, pairs: Pairs, p: number): number {
+  const note = pairs.open.pop()!
+  pairs.notes -= Number(note)
+  return note ? p + 1 : nestedTailEnd(line, p)
+}
+
+/**
+ * C2-I-006, C2-I-074: the offset of the `]` that closes the bracket at `pos` on the line, or NONE. An inline footnote
+ * closes taking no tail or label (C2-I-089).
+ */
 function bracketClose(line: ImageLine, pos: number): number {
   const src = line.src
-  let depth = 1
+  const pairs: Pairs = { open: [false], notes: 0 }
   let p = pos + 1
   while (p < line.end) {
     const skipped = skipAtom(line, p)
     if (skipped === NONE) return NONE
     const code = src.charCodeAt(p)
-    if (skipped !== p) {
-      p = skipped
-    } else if (code === BRACKET_OPEN) {
-      const reference = footnoteReferenceEnd(line, p)
-      depth += Number(reference === p)
-      p = Math.max(reference, p + 1)
-    } else if (bracedMarkEnd(line, p) > p) {
-      p += 2
-    } else if (code !== BRACKET_CLOSE) {
-      p++
-    } else if (--depth === 0) {
-      return p
-    } else {
-      p = nestedTailEnd(line, p)
-      if (p === NONE) return NONE
-    }
+    if (skipped !== p) p = skipped
+    else if (code === BRACKET_OPEN || (code === CARET && src.charCodeAt(p + 1) === BRACKET_OPEN && pairs.notes === 0)) {
+      p = openAt(line, pairs, p)
+    } else if (bracedMarkEnd(line, p) > p) p += 2
+    else if (code !== BRACKET_CLOSE) p++
+    else if (pairs.open.length === 1) return p
+    else p = closeAt(line, pairs, p)
+    if (p === NONE) return NONE
   }
   return NONE
 }
