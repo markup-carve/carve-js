@@ -104,13 +104,17 @@ export interface Check {
   codeTrials: Set<[TextNode, number]>
   /** Escapes of a closer that ended a node early (C2-W-125, case five); in a probe round they give no kind (C2-W-088). */
   closers: Set<[TextNode, number]>
+  /** The inline nodes around the content under comparison, innermost last, each as its list and its place there. */
+  around: [readonly Node[], number, number][]
+  /** Escapes of a construct a probe found running over the closers around its node: reported, so no trial (C2-W-088). */
+  reported: Set<[TextNode, number]>
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
-    cut: false, codeTrials: new Set(), closers: new Set(),
+    cut: false, codeTrials: new Set(), closers: new Set(), around: [], reported: new Set(),
   }
 }
 
@@ -513,7 +517,7 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
     if (!step(c, es, i, attempt)) continue
     for (let at = before; at < c.escapes.length; at++) {
       attempt.escapes.push(c.escapes[at]!)
-      if (step === escapeLoneBracket || step === escapeOwnerBrackets || step === escapeContentOpener) continue
+      if (!isTrial(c, step, c.escapes[at]!)) continue
       c.trials.push(c.escapes[at]!)
       if (stopsCodeSpan(step, c.escapes[at]!)) c.codeTrials.add(c.escapes[at]!)
     }
@@ -526,6 +530,11 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
 }
 
 type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) => boolean
+
+/** Whether the escape a step asked for is a C2-W-125 trial, which the round tests on its own and which gives no kind. */
+function isTrial(c: Check, step: RespellStep, escape: [TextNode, number]): boolean {
+  return step !== escapeLoneBracket && step !== escapeOwnerBrackets && step !== escapeContentOpener && !c.reported.has(escape)
+}
 
 /**
  * C2-W-088: a backtick that a probe of the content escapes can open a code span the tree does not hold. Where the
@@ -594,7 +603,11 @@ function escapeLoneBracket(c: Check, es: readonly Node[], i: number): boolean {
 
 /** The flags the content of `e` is written with. */
 function contentFlags(c: Check, e: Node): number {
-  return c.flags | (e.type === 'emphasis' ? IN_EMPHASIS : e.type === 'strong' ? IN_STRONG : e.type === 'link' ? IN_BRACKET : 0)
+  return c.flags | contentFlag(e.type)
+}
+
+function contentFlag(type: string): number {
+  return type === 'emphasis' ? IN_EMPHASIS : type === 'strong' ? IN_STRONG : type === 'link' ? IN_BRACKET : 0
 }
 
 // The rounds of one probe: past it, the step runs again in the next round of the writer.
@@ -773,27 +786,96 @@ function escapeContentConstruct(c: Check, e: Node): boolean {
  */
 function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]!
-  if (!isPairedMark(e) || !textsBelow(e).some((text) => opensAcross(text.value))) return false
   const flags = contentFlags(c, e)
-  if (e.type === 'link' && !canCrossLinkCloser(c.w, e.children, flags)) return false
-  const spelled = writeInlines(c.w, [e], c.flags)
-  const content = writeInlines(c.w, e.children, flags)
-  const suffix = e.type === 'link' ? spelled.slice(1 + content.length) :
-    spelled.slice(spelled.length - (spelled.length - content.length) / 2)
-  const closer: Node = standIn(c.w, e, 'closer', suffix)
-  const word: Node = standIn(c.w, e, 'word', 'x')
+  const suffix = mayCross(c, e, flags) ? closerOf(c.w, e, c.flags) : null
+  if (suffix === null) return false
   let end = i + 1
   // A label or a bracket pair can run on over a line break (C2-I-076).
   while (end < es.length && end - i <= MAX_ACROSS) end++
-  const inlines = [...e.children, closer, ...es.slice(i + 1, end)]
+  const outer = end === es.length ? outerInlines(c, end - i) : []
+  const closer: Node = standIn(c.w, e, 'closer', suffix)
+  const word: Node = standIn(c.w, e, 'word', 'x')
+  const behind = new Set(outer.flatMap((node) => (node.type === 'text' ? [node] : textsBelow(node))))
+  const inlines = [...childNodes(e), closer, ...es.slice(i + 1, end), ...outer]
   // The stand-ins for markup take no escape, and neither does a mark of the node in its content,
   // which asks for the braced form instead (C2-W-069).
   const mark = CLOSING_MARKS.get(e.type)
   const own = new Set(textsBelow(e))
-  const takes = (node: TextNode, at: number): boolean => node !== closer && node !== word && !(own.has(node) && node.value[at] === mark)
+  // Behind the closers around it, the stand-ins read as text, not as the closers they are, so what stands there takes none.
+  // A mark of the node behind it would pair with the stand-in of its closer, and one of a paired node around it asks for
+  // the braced form of that node.
+  const marks = outer.length > 0 ? aroundMarks(c, mark) : ''
+  const takes = (node: TextNode, at: number): boolean => node !== closer && node !== word && !behind.has(node) &&
+    !(own.has(node) && node.value[at] === mark) && !marks.includes(node.value[at]!)
   // Bare, a name sigil keeps its boundary; behind a word, no block opens and a leading space stays.
-  return probeEscapes(c, e, inlines, flags, 'across', takes) === true ||
+  const before = c.escapes.length
+  const found = probeEscapes(c, e, inlines, flags, 'across', takes) === true ||
     probeEscapes(c, e, [word, ...inlines], flags, 'across', takes) === true
+  if (found && outer.length > 0) reportOpeners(c, before)
+  return found
+}
+
+/** Whether a construct can open in the content of `e` and run on over its closer. */
+function mayCross(c: Check, e: Node, flags: number): boolean {
+  const type: string = e.type
+  // A span is written as a link label is; the content of a note is read behind its sigil, which the probe does not hold.
+  if ((!isPairedMark(e) && type !== 'span') || !('children' in e)) return false
+  if (!textsBelow(e).some((text) => opensAcross(text.value))) return false
+  return type !== 'link' || canCrossLinkCloser(c.w, e.children as Node[], flags)
+}
+
+/** The opener of a construct that runs on over the closers around its node is reported; any other backslash is a trial. */
+function reportOpeners(c: Check, from: number): void {
+  for (const escape of c.escapes.slice(from)) if (ACROSS_OPENERS.includes(escape[0].value[escape[1]]!)) c.reported.add(escape)
+}
+
+/**
+ * At the end of its list, the construct runs on over the closers of the nodes around it and the inlines behind them,
+ * up to `MAX_ACROSS` nodes in all.
+ */
+function outerInlines(c: Check, taken: number): Node[] {
+  const inlines: Node[] = []
+  for (let k = c.around.length - 1; k >= 0 && taken <= MAX_ACROSS; k--) {
+    const [list, at, flags] = c.around[k]!
+    const owner = list[at]!
+    const suffix = closerOf(c.w, owner, flags)
+    if (suffix === null) break
+    inlines.push(standIn(c.w, owner, 'closer', closingStandIn(owner, suffix)))
+    let end = at + 1
+    while (end < list.length && taken <= MAX_ACROSS) {
+      inlines.push(list[end++]!)
+      taken++
+    }
+    if (end < list.length) break
+  }
+  return inlines
+}
+
+/** The mark `mark` and those of the paired nodes around the content under comparison. */
+function aroundMarks(c: Check, mark: string | undefined): string {
+  let marks = mark ?? ''
+  for (const [list, at] of c.around) {
+    const owner = list[at]!
+    if (isPairedMark(owner) && owner.type !== 'link') marks += CLOSING_MARKS.get(owner.type) ?? ''
+  }
+  return marks
+}
+
+/** A closing mark of an outer node pairs with nothing in the probe, so it stands in as characters that open nothing. */
+function closingStandIn(node: Node, suffix: string): string {
+  return BRACKETED.has(node.type) || node.type === 'link' ? suffix : ';'.repeat(suffix.length)
+}
+
+/** The markup that closes a paired or bracketed node, as it is written: its spelling behind its content, or null. */
+function closerOf(w: Writer, node: Node, flags: number): string | null {
+  const type = node.type
+  if ((!PAIRED_MARKS.includes(type) && !BRACKETED.has(type)) || !('children' in node)) return null
+  const spelled = writeInlines(w, [node], flags)
+  const content = writeInlines(w, node.children as Node[], flags | contentFlag(type))
+  if (type === 'link') return spelled.slice(1 + content.length)
+  if (PAIRED_MARKS.includes(type)) return spelled.slice(spelled.length - (spelled.length - content.length) / 2)
+  const start = type === 'inline_footnote' ? 2 : spelled.indexOf('[') + 1
+  return start > 0 && spelled.slice(start, start + content.length) === content ? spelled.slice(start + content.length) : null
 }
 
 /** The terminal link of a nested chain has no markup that can expose another label opener. */
@@ -848,8 +930,10 @@ function canCrossLinkCloser(w: Writer, children: readonly Node[], flags: number)
 const MAX_ACROSS = 16
 
 /** Whether `value` holds the opener of a construct that can run on over a closing mark: a bracket, a backtick, `<`, `{`, `$` or `:`. */
+const ACROSS_OPENERS = '[`<{$:'
+
 function opensAcross(value: string): boolean {
-  for (const opener of '[`<{$:') if (value.includes(opener)) return true
+  for (const opener of ACROSS_OPENERS) if (value.includes(opener)) return true
   return false
 }
 
@@ -1491,7 +1575,9 @@ function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], 
   const outer = c.cut
   const asked = changes(c)
   c.cut = false
+  c.around.push([es, at.i, c.flags])
   compareInline(c, e, a)
+  c.around.pop()
   // C2-W-125: a content that read on or ended early was repaired inside; behind it the parse is read again next round.
   if (changes(c) > asked && BRACKETED.has(e.type) && extentDiffers(c, e, a)) c.cut = true
   c.cut ||= outer
