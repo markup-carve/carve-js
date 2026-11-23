@@ -16,6 +16,7 @@ import {
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
+import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
@@ -1154,7 +1155,9 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolea
     // C2-W-125: behind a content that ended early the parse holds the rest of that content as text, which opens nothing.
     if (c.cut) return false
     // The parse read a character of the text as markup, such as a backslash before punctuation (C2-W-097).
-    if (!escapeAt(c, e, at.vi + k)) c.losses.push([e, 'value'])
+    if (escapeAt(c, e, at.vi + k)) return false
+    // C2-I-089: a footnote reference shape in a note reads as its source, its backslashes too, so its bracket takes one.
+    if (other.charCodeAt(at.aj + k) !== BACKSLASH || !escapeNoteReference(c, e, at.vi + k)) c.losses.push([e, 'value'])
     return false
   }
   at.vi += length
@@ -1164,6 +1167,22 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolea
     at.aj = 0
   }
   return true
+}
+
+/**
+ * C2-I-089: escapes the `[` of the earliest `[^` before `to` in `node` whose label is still open at `to`: inside an
+ * inline footnote that shape is text kept as written, so a backslash of the writer in it would read as a character.
+ */
+function escapeNoteReference(c: Check, node: TextNode, to: number): boolean {
+  const value = node.value
+  let open = -1
+  for (let at = 0; at < to; at++) {
+    const code = value.charCodeAt(at)
+    if (code === BACKSLASH) at++
+    else if (code === BRACKET_CLOSE) open = -1
+    else if (open < 0 && code === BRACKET_OPEN && value.charCodeAt(at + 1) === CARET && !isEscaped(c, node, at)) open = at
+  }
+  return open >= 0 && escapeAt(c, node, open)
 }
 
 /**
