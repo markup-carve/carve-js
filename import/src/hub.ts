@@ -2,6 +2,7 @@
 // the 0.2 HTML importer reads it. Hooks here only shape what the library's HTML cannot carry on its own.
 import { compile, parse as parseMarkdown, postprocess, preprocess } from 'micromark'
 import type { CompileContext, Construct, Event, Extension, Handle, HtmlExtension, Options, State, Token } from 'micromark-util-types'
+import { EditMap } from 'micromark-util-edit-map'
 import { gfm } from 'micromark-extension-gfm'
 import { gfmAutolinkLiteralHtml } from 'micromark-extension-gfm-autolink-literal'
 import { gfmFootnoteHtml } from 'micromark-extension-gfm-footnote'
@@ -412,6 +413,40 @@ function patchDjotImageMarker(): void {
 }
 
 patchDjotImageMarker()
+
+/**
+ * micromark-util-edit-map 1.0.0 rebuilds the whole event list on every `consume`, and micromark's document tokenizer
+ * consumes once per closed container, so a document of many quotes took quadratic time. Edits that sit near the end of
+ * the list are spliced in place; anything else keeps the library's rebuild.
+ */
+function patchEditMapConsume(): void {
+  const prototype = EditMap.prototype as EditMap & { carveSplice?: true }
+  if (prototype.carveSplice === true) return
+  const consume = prototype.consume
+  prototype.consume = function (this: EditMap, events: Event[]) {
+    const map = this.map.sort((a, b) => a[0] - b[0])
+    let moved = 0
+    for (const [index, [at, remove, add]] of map.entries()) {
+      const next = map[index + 1]
+      moved += events.length - at + add.length
+      if (moved > events.length || add.length > SPLICE_LIMIT || (next !== undefined && at + remove > next[0])) {
+        consume.call(this, events)
+        return
+      }
+    }
+    for (let index = map.length - 1; index >= 0; index--) {
+      const [at, remove, add] = map[index]!
+      events.splice(at, remove, ...add)
+    }
+    map.length = 0
+    this.index.clear()
+  }
+  prototype.carveSplice = true
+}
+
+const SPLICE_LIMIT = 10_000
+
+patchEditMapConsume()
 
 interface InTags { inTags: (tag: string, node: unknown, newlines: number, extra: Record<string, string>) => string }
 

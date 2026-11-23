@@ -21,3 +21,12 @@ describe('C2-H-182 import time grows linearly with the input', () => {
     expect(excess).toBeLessThan(LINEARITY_LIMIT)
   })
 })
+
+describe('C2-H-182 Markdown import time grows linearly with the input', () => {
+  it('C2-H-182 importing quotes apart from each other eight times as many takes about eight times the work', () => {
+    const small = '> a\n\n'.repeat(1000)
+    const large = '> a\n\n'.repeat(8000)
+    const excess = linearityExcess(() => importDocument(small, { from: 'gfm' }), () => importDocument(large, { from: 'gfm' }), 8)
+    expect(excess).toBeLessThan(LINEARITY_LIMIT)
+  })
+})
