@@ -3,6 +3,7 @@ import { compareHtml } from './compare.ts'
 import { makeContext } from './context.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
+import { type Gate, OPEN_GATE, OPEN_SITE, type Site } from './rescue-site.ts'
 
 export interface Candidate {
   id: string
@@ -60,7 +61,17 @@ function opaqueMask(output: string): Uint8Array {
  * C2-I-017, U-258: a backtick run with no closing run of its length in its content is text in 0.2, where 0.1 read code
  * to the end of the content. Each candidate closes the first such run at one line end of its paragraph.
  */
-export function closedRunCandidates(output: string, id = 'U-258'): Candidate[] {
+function closingCandidates(output: string, at: number, length: number, ends: number[], id: string): Candidate[] {
+  const found: Candidate[] = []
+  const mark = '`'.repeat(length)
+  for (const end of ends) found.push({ id, output: output.slice(0, end) + mark + output.slice(end) })
+  // C2-I-016: a value that starts or ends with a backtick needs a space on each side.
+  const open = at + length
+  for (const end of ends) found.push({ id, output: `${output.slice(0, open)} ${output.slice(open, end)} ${mark}${output.slice(end)}` })
+  return found
+}
+
+export function closedRunCandidates(output: string, id = 'U-258', gate: Gate = OPEN_GATE): Candidate[] {
   if (!output.includes('`')) return []
   const found: Candidate[] = []
   const opaque = opaqueMask(output)
@@ -79,18 +90,13 @@ export function closedRunCandidates(output: string, id = 'U-258'): Candidate[] {
       at = close + length - 1
       continue
     }
-    const mark = '`'.repeat(length)
-    for (const end of ends) found.push({ id, output: output.slice(0, end) + mark + output.slice(end) })
-    // C2-I-016: a value that starts or ends with a backtick needs a space on each side.
-    const open = at + length
-    for (const end of ends) found.push({ id, output: `${output.slice(0, open)} ${output.slice(open, end)} ${mark}${output.slice(end)}` })
-    return found
+    return gate.at(at, limit) ? closingCandidates(output, at, length, ends, id) : found
   }
   return found
 }
 
 /** C2-B-173, C2-B-174, U-259: a span mark alone in a cell that cannot join is removed, which leaves an empty cell. */
-export function spanMarkCandidates(output: string): Candidate[] {
+export function spanMarkCandidates(output: string, gate: Gate = OPEN_GATE): Candidate[] {
   if (!output.includes('|')) return []
   const found: Candidate[] = []
   for (const { node } of makeContext(output).visits) {
@@ -99,16 +105,17 @@ export function spanMarkCandidates(output: string): Candidate[] {
     const content = source.trim().replace(/^=/u, '').trim()
     if (content !== '^' && content !== '<') continue
     const at = node.pos.startOffset + source.indexOf(content)
-    found.push({ id: 'U-259', output: output.slice(0, at) + output.slice(at + 1) })
+    if (gate.at(at)) found.push({ id: 'U-259', output: output.slice(0, at) + output.slice(at + 1) })
   }
   return found
 }
 
 /** The first candidate whose 0.2 HTML is the 0.1 HTML of `input`. */
 export function rescueBacktick(input: string, output: string, mismatch: ReportRecord,
-  extra: readonly Candidate[] = []): { output: string, record: ReportRecord } | null {
+  extra: readonly Candidate[] = [], site: Site = OPEN_SITE): { output: string, record: ReportRecord } | null {
   const expected = html01(input)
-  for (const candidate of [...closedRunCandidates(output), ...spanMarkCandidates(output), ...extra]) {
+  const near = site.output
+  for (const candidate of [...closedRunCandidates(output, 'U-258', near), ...spanMarkCandidates(output, near), ...extra]) {
     try {
       if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
       const message = 'the clause-backed spelling preserves the complete 0.1 HTML'

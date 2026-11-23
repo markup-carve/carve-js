@@ -20,18 +20,20 @@ export const OPEN_GATE: Gate = { lines: () => true, at: () => true }
 export const OPEN_SITE: Site = { input: OPEN_GATE, output: OPEN_GATE }
 
 const DEFINITION = /\[([^\]\n]+)\]:/gu
+const HEADING = /^[ \t]*(?:>[ \t]?)*#{1,6}[ \t]+(.*?)[ \t]*$/u
 const fold = (text: string): string => text.toLowerCase().replace(/\s+/gu, ' ')
 
 /**
  * An edit outside the site reaches the difference only through a document-wide reading: a
- * definition whose label the site names, or a heading or id.
+ * definition whose label the site names, or a heading whose text an implicit reference there names.
  */
 function gate(lines: Lines, first: number, last: number, notesPlaced: boolean): Gate {
   let site = ''
   for (let line = first; line <= last; line++) site += fold(lineText(lines, line)) + '\n'
   const reaches = (line: number): boolean => {
     const text = lineText(lines, line)
-    if (text.includes('#')) return true
+    const heading = HEADING.exec(text)?.[1]
+    if (heading !== undefined && heading !== '' && site.includes(fold(heading))) return true
     for (const match of text.matchAll(DEFINITION)) if (notesPlaced || site.includes(fold(match[1]!))) return true
     return false
   }

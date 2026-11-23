@@ -504,8 +504,10 @@ function rescueMismatch(input: string, output: string, mismatch: ReportRecord, r
   const near = (): Site => site ??= rescueSite(input, output, edits)
   const targeted = (i: string, o: string, m: ReportRecord) => rescueTargeted(i, o, m, near())
   const minor = (i: string, o: string, m: ReportRecord) => rescueMinor(i, o, m, near())
-  const rescues = [rescueFence, rescuePlus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
-    rescueCombinedInline, rescueHeadingBraceTag, targeted, minor, rescueBacktick, rescueDirectiveSocial, rescueBraceOpenerTags,
+  const plus = (i: string, o: string, m: ReportRecord) => rescuePlus(i, o, m, near())
+  const backtick = (i: string, o: string, m: ReportRecord) => rescueBacktick(i, o, m, [], near())
+  const rescues = [rescueFence, plus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
+    rescueCombinedInline, rescueHeadingBraceTag, targeted, minor, backtick, rescueDirectiveSocial, rescueBraceOpenerTags,
     rescueBracedBoldItalic, ...(reported ? [] : [rescueEscape, rescueDashRun])]
   for (const rescue of rescues) {
     const rescued = rescue(input, output, mismatch)

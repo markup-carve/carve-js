@@ -217,10 +217,8 @@ function lineCandidates(output: string, gate: Gate): Candidate[] {
   let descriptionFence = 0
   for (let line = 1; line <= lines.count; line++) {
     const value = lineText(lines, line)
-    if (!gate.lines(line, line + 2)) {
-      if (value.includes(': ```')) descriptionFence = line
-      continue
-    }
+    if (value.includes(': ```')) descriptionFence = line
+    if (!gate.lines(line, line + 2)) continue
     const start = lineStart(lines, line)
     if (value.startsWith('[@]:'))
       found.push({ id: 'U-187', output: output.slice(0, start) + ' ' + output.slice(start) })
@@ -238,7 +236,6 @@ function lineCandidates(output: string, gate: Gate): Candidate[] {
         found.push({ id: 'U-183', output: escaped.slice(0, nextCaption) + '\n' + escaped.slice(nextCaption) })
       }
     }
-    if (value.includes(': ```')) descriptionFence = line
     found.push(...descriptionLineCandidates(output, lines, line, descriptionFence))
   }
   return found
@@ -329,7 +326,7 @@ export function rescueTargeted(
     ...itemDefinitionCandidates(input, site.input),
     ...tableCodeSpanCandidates(input, site.input),
     ...smartQuoteCandidates(output, expected, near),
-    ...smartQuoteCandidates(output, expected, near).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190')),
+    ...smartQuoteCandidates(output, expected, near).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190', near)),
     ...languageCandidates(output, near),
     ...substitutionAttributeCandidates(input, output, near),
     ...floatingAttributeCandidates(output, near),
