@@ -7,6 +7,14 @@ import { commonmarkCases, djotCases, gfmCases } from '../scripts/suites.ts'
 
 const source = (input: string, from: Format): string => importDocument(input, { from }).source
 
+describe('empty library output', () => {
+  it('writes no Carve source for an unused GFM footnote definition', () => {
+    expect(source('[^a]: note\n', 'gfm')).toBe('')
+    expect(source('', 'gfm')).toBe('')
+    expect(format('')).toBe('')
+  })
+})
+
 describe('Markdown and Djot through the HTML hub', () => {
   it('keeps a raw HTML block and inline HTML raw, as the 0.1 importer did', () => {
     expect(source('<div>\n*a*\n</div>\n\nx <b>y</b>\n', 'markdown'))

@@ -1808,7 +1808,8 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   prepareDocumentWriter(w, document, layout)
   if (linkKeys !== undefined) w.linkKeys = linkKeys
   w.work.source = original?.length ?? 0
-  const source = writeTrimmed(w, run, document, original)
+  const written = writeTrimmed(w, run, document, original)
+  const source = document.children.length === 0 ? '' : written
   const diagnostics = writerDiagnostics(document, w)
   stats.parses = w.parses
   return { output: { source, diagnostics }, stats }
