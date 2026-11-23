@@ -67,6 +67,8 @@ export interface Writer {
   /** C2-W-011: what could not be written, one entry per node. */
   losses: Findings
   lost: Set<Node>
+  /** C2-B-137: the line comments reported because the open container above reads them in. */
+  readComments: Set<Node>
   /** C2-W-136: the keys of `attrs` of a node that were reported and not written; the reparse check does not ask for them. */
   lostKeys: Map<Node, string[]>
   /** What `lose` and `loseKey` added, in order (a key, or null for the node), so a refused round takes it back. */
@@ -136,7 +138,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     extensions,
     lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), forms: new Map(), starts: new Map(),
     attempts: new Map(), facts, wrapPoints: null,
-    wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
+    wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(), readComments: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
     prewrittenAttributes: null, bareAlts: false, kindRounds: true, closerKinds: false, topBlocks: new Map(),

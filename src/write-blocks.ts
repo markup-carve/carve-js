@@ -292,7 +292,7 @@ function openerRuns(w: Writer): OpenerRuns {
   const index = new Map(blocks.map((node, at) => [node, at]))
   const runs: OpenerRuns = {
     blocks, index, first: new Int32Array(blocks.length).fill(-1), columnZero: new Int32Array(blocks.length).fill(-1),
-    end: new Int32Array(blocks.length), passed: passedComments(w, blocks, index),
+    end: new Int32Array(blocks.length), passed: passedComments(w, blocks),
   }
   for (let at = 0; at < blocks.length; at++) {
     const above = w.topBlocks.get(blocks[at]!)
@@ -323,12 +323,10 @@ function runEnds(runs: OpenerRuns): void {
 }
 
 /** C2-B-137: the line comments a block's predecessor passes over; they stay at column 0 and end no run. */
-function passedComments(w: Writer, blocks: readonly Node[], index: ReadonlyMap<Node, number>): Uint8Array {
+function passedComments(w: Writer, blocks: readonly Node[]): Uint8Array {
   const passed = new Uint8Array(blocks.length)
-  for (let at = 0; at < blocks.length; at++) {
-    const above = w.topBlocks.get(blocks[at]!)
-    for (let comment = above === undefined ? 0 : index.get(above)! + 1; comment < at; comment++) passed[comment] = 1
-  }
+  // The block behind a passed comment has the same predecessor as the comment, not the comment itself.
+  for (let at = 0; at + 1 < blocks.length; at++) if (w.topBlocks.get(blocks[at + 1]!) !== blocks[at]) passed[at] = 1
   return passed
 }
 
@@ -897,10 +895,10 @@ function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
   if (isCommentLine(node) && isOpenContainer(w, before) && !isRegionMarker(node)) {
     // C2-B-138: the line stays in the container, unless it ends a fence that the container ends with.
     if (lastFence(w, before) !== null) return 0
-    lose(w, node, null)
+    loseReadComment(w, node)
     return 1
   }
-  if (followsReadComment(w, before, node)) lose(w, node, null)
+  if (followsReadComment(w, before, node)) loseReadComment(w, node)
   return takesLineBelow(w, before) || (w.forms.get(node) ?? 0) > 0 ? 1 : 0
 }
 
@@ -922,7 +920,12 @@ export function topPredecessors(w: Writer, nodes: readonly Node[]): Map<Node, No
 
 /** C2-B-137: a line comment directly below one that the container above read in is read into it as well. */
 function followsReadComment(w: Writer, before: Node, node: Node): boolean {
-  return isCommentLine(node) && isCommentLine(before) && w.lost.has(before) && !isRegionMarker(node)
+  return isCommentLine(node) && w.readComments.has(before) && w.lost.has(before) && !isRegionMarker(node)
+}
+
+function loseReadComment(w: Writer, node: Node): void {
+  lose(w, node, null)
+  w.readComments.add(node)
 }
 
 /** C2-W-034, C2-B-137: a region marker line ends the leaf and the unowned containers above it, so it keeps its line. */

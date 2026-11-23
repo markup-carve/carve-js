@@ -47,3 +47,19 @@ describe('C2-W-155, C2-B-137: a line comment between an open container and the b
     })
   })
 })
+
+describe('C2-B-137: only a comment the container read in carries its loss to the comment below (carve#6430)', () => {
+  it('writes a comment below one lost for its value as itself', () => {
+    const output = writeWithDiagnostics(document(comment('a\n'), comment('c')))
+    expect(output.diagnostics.map((entry) => entry.path)).not.toContain('/children/1')
+  })
+
+  it('walks a long run of line comments below an open list in linear time', () => {
+    const run = (n: number) => document(list('-', 'a'), ...Array.from({ length: n }, (_, at) => comment(`c${at}`)), list('*', 'b'), typed)
+    writeWithDiagnostics(run(200))
+    const time = (n: number) => { const start = performance.now(); writeWithDiagnostics(run(n)); return performance.now() - start }
+    const small = Math.min(time(1000), time(1000))
+    const large = Math.min(time(8000), time(8000))
+    expect(large / small).toBeLessThan(24)
+  })
+})
