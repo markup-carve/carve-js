@@ -209,7 +209,7 @@ function colonFences(ctx: Context): ColonFence[] {
   for (const visit of ctx.visits) {
     const { node } = visit
     if (node.pos === undefined) continue
-    const opener = /^(:{3,})(.*)$/u.exec(lineText(ctx.lines, node.pos.startLine).slice(node.pos.startOffset - lineStart(ctx.lines, node.pos.startLine)))
+    const opener = /^(:{3,})(.*)$/u.exec(ctx.src.slice(node.pos.startOffset, lineEnd(ctx.lines, node.pos.startLine)))
     if (opener === null || lineStart(ctx.lines, node.pos.startLine) > node.pos.startOffset) continue
     let above = visit.parent
     while (above !== null && !byNode.has(above.node)) above = above.parent
@@ -236,12 +236,14 @@ function fenceHeights(fences: readonly ColonFence[]): Map<ColonFence, number> {
   return heights
 }
 
+const RELENGTHED = 'div fence runs shortened toward the inside so 0.2 keeps the old nesting'
+
 function relengthFences(ctx: Context, fence: ColonFence, heights: Map<ColonFence, number>): void {
   const run = ':'.repeat(3 + heights.get(fence)!)
   const opener = fence.node.pos!.startOffset
-  change(ctx, 'U-049', opener, opener + fence.run, run, 'div fence runs shortened toward the inside so 0.2 keeps the old nesting')
+  change(ctx, 'U-049', opener, opener + fence.run, run, RELENGTHED)
   if (fence.closer !== null) {
-    change(ctx, 'U-049', fence.closer, fence.closer + fence.run, run, 'div fence runs shortened toward the inside so 0.2 keeps the old nesting')
+    change(ctx, 'U-049', fence.closer, fence.closer + fence.run, run, RELENGTHED)
   }
   for (const child of fence.children) relengthFences(ctx, child, heights)
 }
