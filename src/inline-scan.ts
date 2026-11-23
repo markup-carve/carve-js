@@ -98,6 +98,8 @@ function resetScan(state: InlineState): void {
   state.notesOpen = 0
   state.swallowedNotes.length = 0
   state.closedNotesOpen = 0
+  state.probesOpen = 0
+  state.ownReads.stop()
   state.depthLength = 0
   state.depthLive = 0
   state.depthFloor = NONE
@@ -175,6 +177,8 @@ function settlesSwallowed(state: InlineState, candidates: Map<number, number>): 
   if (state.swallowedNotes.length === 0) return false
   const unclosed = new Set<number>()
   for (let at = 0; at < state.bracketDepth; at++) unclosed.add(state.tokens[state.brackets[at]! + TOKEN_START]!)
+  // Past the cap (C2-I-118) a closer may pop a swallowed `[` that its own reading keeps open.
+  if (state.ownReads.on) state.ownReads.unclosed(unclosed)
   const settled: number[] = []
   // The swallowed notes come in source order; one inside a note settled before it is covered by that note.
   let reach = -1

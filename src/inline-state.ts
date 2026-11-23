@@ -2,6 +2,7 @@
 // are kept across contents, and a pass started inside another one takes its own state from the pool.
 import { EVENT_WIDTH } from './events.ts'
 import type { TextNotes } from './text-notes.ts'
+import { OwnReads } from './inline-own-reads.ts'
 import { NO_CHARACTER } from './unicode.ts'
 
 // A token is seven ints: kind, start, end and four fields whose meaning depends on the kind.
@@ -98,6 +99,11 @@ export interface InlineState {
   swallowedNotes: number[]
   /** How many notes of `closedNotes` are open at the scan. */
   closedNotesOpen: number
+  /** Per open bracket, whether it is the `[` of a swallowed note; and how many of them are open. */
+  bracketProbes: Uint8Array
+  probesOpen: number
+  /** The swallowed notes as each reads on its own (C2-I-089 with C2-I-118). */
+  ownReads: OwnReads
   /**
    * C2-I-074: the starts of the images that formed in the first pass, whose alt keeps a `%%` as source; null in the
    * first pass, which keeps it inside every open image and only notes whether one stood there.
@@ -189,6 +195,9 @@ function createState(): InlineState {
     caretInNote: false,
     swallowedNotes: [],
     closedNotesOpen: 0,
+    bracketProbes: new Uint8Array(INITIAL_STACK),
+    probesOpen: 0,
+    ownReads: new OwnReads(),
     formedImages: null,
     percentInImage: false,
     notesOpen: 0,
