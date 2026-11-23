@@ -52,11 +52,10 @@ it('C2-W-011: field losses name the field path', () => {
   expect(xref.codes).toContain('field-unspellable /children/0/children/1/display')
 })
 
-it('C2-W-011: a structure lost after round escapes reports the supplied child path', () => {
+it('C2-W-069, C2-W-011: a strong whose closer pairs inside its braced child takes the braced form and reports no loss', () => {
   const output = formatWithDiagnostics('//</\\**{#}#}{/\\/{c}`*/')
-  expect(output.diagnostics.map((entry) => `${entry.code} ${entry.path}`)).toContain(
-    'structure-unspellable /children/0/children/1/children/1',
-  )
+  expect(output.diagnostics).toEqual([])
+  expect(output.source).toBe('//<{/*{*{#}#}{//{c}`*}/}\n')
 })
 
 describe('bodies opened behind a task box or attributes', () => {
