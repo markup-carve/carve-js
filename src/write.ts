@@ -8,7 +8,7 @@ import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import {
-  blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, isIndentedTop, writeBlocks,
+  blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, joinsIndentedRun, topPredecessors, writeBlocks,
 } from './write-blocks.ts'
 import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
@@ -329,7 +329,7 @@ function refuseLeafLines(w: Writer, node: Node, depth: number): void {
 /** Whether `node` is written into one group with the block `before` above it. */
 function joinsGroup(w: Writer, before: Node, node: Node): boolean {
   // C2-W-155: an indented block reads back only with the blocks below it down to the typed-opener paragraph.
-  if (isIndentedTop(w, before)) return true
+  if (joinsIndentedRun(w, before)) return true
   // C2-B-016: a description mark reads differently below a description list, also behind a blank line.
   if (node.type === 'paragraph') return before.type === 'definition_list' || followsContainerDirectly(w, before, node)
   return node.type === 'comment' && blankLinesBetween(w, before, null, node, false) === 0
@@ -1803,7 +1803,7 @@ function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteO
   readAbbreviations(w, document)
   const lead = document.children[0]
   w.leadingFrontmatter = lead?.type === 'frontmatter' && lead.attrs === undefined ? lead : null
-  w.topBlocks = new Map(document.children.map((node, index) => [node, document.children[index - 1]]))
+  w.topBlocks = topPredecessors(w, document.children)
   w.openerRuns = null
 }
 
