@@ -173,7 +173,11 @@ function moveToTop(ctx: Context, id: string, span: Span, cut: number, message: s
   const at = lineStart(ctx.lines, span.first)
   // An empty braced comment keeps the block 0.1 opened for the definition (C2-I-025).
   const kept = top === 'kept' ? lineText(ctx.lines, span.first).slice(0, cut) + '{%%}\n' : ''
-  change(ctx, id, at, lineStart(ctx.lines, span.last + 1), kept, message)
+  const end = lineStart(ctx.lines, span.last + 1)
+  // An earlier edit inside the cut lines would win the conflict and leave them in place; the moved copy
+  // is written from the source, so the edit gives way instead.
+  ctx.findings = ctx.findings.filter(({ edit }) => edit === null || edit.start <= at || edit.start >= end || edit.end > end)
+  change(ctx, id, at, end, kept, message)
   change(ctx, id, 0, 0, withoutPrefix(ctx, span, cut) + '\n', message)
 }
 
