@@ -253,14 +253,14 @@ it('C2-W-138, C2-B-210: the hand-written table attribute rules read behind conta
   for (const mode of ['code', 'data']) expect(findings('| a |\n%% c  \n+ b |\n', mode)).toEqual(['comment-splits-table-row@6-10'])
 })
 
-it('C2-W-138: a data finding on a comment line of a table names the table', () => {
+it('C2-W-157: a data finding on a comment line inside a pipe table row names the row', () => {
   const paths = (mode) => {
     if (mode === 'data') process.env.CARVE_LINT_RULES = 'data'
     else delete process.env.CARVE_LINT_RULES
     return lint('> | a |\n> %% c\n> + d |\n').filter((entry) => entry.code === 'comment-splits-table-row').map((entry) => entry.path)
   }
   expect(paths('data')).toEqual(paths('code'))
-  expect(paths('data')).toEqual(['/children/0/children/0'])
+  expect(paths('data')).toEqual(['/children/0/children/0/children/0/children/0'])
 })
 
 it('C2-W-149: row_index counts rows, not the comments among them', () => {

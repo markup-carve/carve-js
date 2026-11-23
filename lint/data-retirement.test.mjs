@@ -21,7 +21,7 @@ it('keeps data rule paths and tie order at their source nodes', () => {
   const heading = lint('# A {.c}\n').map((entry) => entry.code)
   expect(heading).toEqual(['heading-trailing-attribute', 'unattached-inline-attribute'])
   const item = lint('- a\n\n b').find((entry) => entry.code === 'list-item-body-below-content-column')
-  expect(item?.path).toBe('/children/0/children/0')
+  expect(item?.path).toBe('/children/0/children/0/children/1')
   const comment = lint('> %%%%\n> %%%% x', { upgrade: true }).find((entry) => entry.code === 'comment-fence-closer-with-text')
   expect(comment?.path).toBe('/children/0/children/0')
 })

@@ -866,6 +866,61 @@ function blockSpan(item: Walked, context: LintContext): { start: number, end: nu
   return { start: context.chars[layout.startByte] ?? 0, end: context.chars[layout.endByte] ?? context.source.length }
 }
 
+interface LineSpans { first: Int32Array, last: Int32Array, kind: Uint8Array }
+
+const underRow = (path: string, row: string): boolean =>
+  row !== '' && path.length > row.length && path.startsWith(row) && path.charCodeAt(row.length) === 47
+
+/** The first and last line index of each walked block, -1 for one that names none, and 2 for a leaf, 1 for another block. */
+function lineSpans(walked: readonly Walked[], context: LintContext, count: number): LineSpans {
+  const size = walked.length
+  const spans: LineSpans = { first: new Int32Array(size).fill(-1), last: new Int32Array(size), kind: new Uint8Array(size) }
+  let row = ''
+  for (let index = 1; index < size; index++) {
+    const { node, path, format } = walked[index]!
+    // A block under a row of a pipe table counts as the row.
+    if (underRow(path, row)) continue
+    if (node.type === 'table_row' && format === 'pipe') row = path
+    const span = blockSpan(walked[index]!, context)
+    if (span === undefined) continue
+    spans.first[index] = (context.offsetLines[span.start] ?? 1) - 1
+    const end = node.pos === undefined ? context.offsetLines[Math.max(span.start, span.end! - 1)] ?? 1 : node.pos.endLine
+    spans.last[index] = Math.min(count - 1, end - 1)
+    spans.kind[index] = LEAF_TYPES.has(blockType(node)) || node.type === 'cell_paragraph' ? 2 : 1
+  }
+  return spans
+}
+
+/**
+ * C2-W-157: the path a line finding names, per line index: the innermost leaf block that holds the line, a caption
+ * naming its paragraph (C2-A-081), else the innermost block whose source holds it, else `''`.
+ */
+export function linePaths(walked: readonly Walked[], context: LintContext, count: number): string[] {
+  const out = new Array<string>(count).fill('')
+  const { first, last, kind } = lineSpans(walked, context, count)
+  // Walked in reverse document order, a block comes before the blocks that hold it; `next` skips the lines already named.
+  const next = new Int32Array(count + 1)
+  for (let index = 0; index <= count; index++) next[index] = index
+  const free = (index: number): number => {
+    let at = index
+    while (next[at] !== at) at = next[at]!
+    while (next[index] !== at) [index, next[index]] = [next[index]!, at]
+    return at
+  }
+  for (const wanted of [2, 1]) {
+    for (let index = walked.length - 1; index > 0; index--) {
+      if (kind[index]! < wanted) continue
+      const { node, path } = walked[index]!
+      const name = node.type === 'caption' && node.children[0]?.type === 'paragraph' ? `${path}/children/0` : path
+      for (let line = free(first[index]!); line <= last[index]!; line = free(line)) {
+        out[line] = name
+        next[line] = line + 1
+      }
+    }
+  }
+  return out
+}
+
 // A lookup that names no block types reads every block.
 const isNeeded = (needed: ReadonlySet<string>, type: string): boolean => needed.has(type) || needed.has('*')
 
