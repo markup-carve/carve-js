@@ -94,6 +94,10 @@ export interface Writer {
   closerKinds: boolean
   /** C2-W-125: true while a group that every other form lost is written again keeping a trial that gives the tree. */
   wholeTrials: boolean
+  /** C2-W-125: the trials of a `wholeTrials` pass, tested again together once the escapes behind them are placed. */
+  trialLog: [TextNode, number][] | null
+  /** C2-W-125: true once a `wholeTrials` pass tested its logged trials together, which it does once. */
+  trialsRetested: boolean
   /** The blocks of the document root, each with the one before it: only there does a typed opener open a metadata block (C2-B-232). */
   topBlocks: ReadonlyMap<Node, Node | undefined>
   /** C2-W-155: the departures of every run of top-level lists, built once on first use (write-blocks.ts). */
@@ -146,6 +150,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
     prewrittenAttributes: null, bareAlts: false, cappedRuns: [], kindRounds: true, closerKinds: false, wholeTrials: false,
+    trialLog: null, trialsRetested: false,
     topBlocks: new Map(),
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
     parses: 0, parseCache: { trees: new Map(), treeChars: 0 },

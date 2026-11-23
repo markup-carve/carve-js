@@ -431,6 +431,71 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
   return asked
 }
 
+// The trials a pass tests together at most: the subsets grow as 2^n, and a group that needs more loses the node as before.
+const MAX_RETESTED_TRIALS = 8
+
+/** Records each trial and escape a `wholeTrials` pass asks for once, in the order the rounds asked for it. */
+function logTrials(w: Writer, trials: readonly [TextNode, number][]): void {
+  const log = w.trialLog
+  if (log === null) return
+  for (const [node, at] of trials) {
+    if (!log.some((entry) => entry[0] === node && entry[1] === at)) log.push([node, at])
+  }
+}
+
+/**
+ * C2-W-125: each trial was tested with only the escapes placed before it, so one that needs a closer escape placed in
+ * a later round was dropped (the caret of `^[\[^[a\^[b][[b]\]]`), and one that a later escape makes harmful was kept
+ * (the bracket of ` [^` in `^[ [^[b][[^b]\[]]`). Where the pass then loses a node, the trials are tested again
+ * together with the other escapes the pass asked for, fewest first, and the first set that gives the tree is taken.
+ */
+function retestTrials(w: Writer, group: readonly Node[], first: boolean, check: Check): void {
+  const log = w.trialLog
+  if (check.escapes.length + check.forms.length + check.retracted.length > 0 || check.losses.length === 0) return
+  if (log === null || w.trialsRetested || log.length === 0 || log.length > MAX_RETESTED_TRIALS) return
+  w.trialsRetested = true
+  const placed = w.escapes
+  const base = new Map<TextNode, number[]>()
+  for (const [node, offsets] of placed) {
+    base.set(node, offsets.filter((at) => !log.some((entry) => entry[0] === node && entry[1] === at)))
+  }
+  const lines = w.lines
+  const lead = w.lead
+  const leadSkip = w.leadSkip
+  const starts = new Map(w.starts)
+  let found = -1
+  const subsets = [...Array(1 << log.length).keys()].sort((a, b) => bitCount(a) - bitCount(b) || a - b)
+  for (const subset of subsets) {
+    const escapes = new Map(base)
+    log.forEach(([node, at], bit) => {
+      if ((subset & (1 << bit)) !== 0) escapes.set(node, [...(escapes.get(node) ?? []), at].sort((a, b) => a - b))
+    })
+    const parsed = groupTree(w, group, first, escapes).children
+    if (parsed.length === group.length && parsed.every((block, index) => writerEqual(group[index]!, block))) {
+      found = subset
+      break
+    }
+  }
+  w.escapes = placed
+  w.lines = lines
+  w.lead = lead
+  w.leadSkip = leadSkip
+  w.starts.clear()
+  for (const [key, value] of starts) w.starts.set(key, value)
+  if (found < 0) return
+  log.forEach((escape, bit) => {
+    const isPlaced = placed.get(escape[0])?.includes(escape[1]) === true
+    if ((found & (1 << bit)) !== 0 && !isPlaced) check.escapes.push(escape)
+    else if ((found & (1 << bit)) === 0 && isPlaced) check.retracted.push(escape)
+  })
+}
+
+function bitCount(value: number): number {
+  let count = 0
+  for (let rest = value; rest !== 0; rest &= rest - 1) count++
+  return count
+}
+
 /** C2-W-088: a lone backtick trial that the test kept stopped a code span of the parse, which reports the backtick kind. */
 function keepCodeTrial(check: Check): void {
   const trial = check.trials[0]
@@ -452,6 +517,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   // C2-W-125 tries to form a missing node separately from the constructs C2-W-088 found in the
   // read-back parse. A lone ineffective trial takes no escape. Multiple trials can work together.
   let dropped = false
+  logTrials(w, check.trials)
   for (const [node, at] of check.trials.length <= 4 ? check.trials : []) {
     if (check.trials.length > 1) continue
     if (isAsked(w, group, first, node, at)) continue
@@ -466,6 +532,8 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   extendChains(check)
   extendForms(w, check, group)
   escapeCappedRun(check)
+  retestTrials(w, group, first, check)
+  logTrials(w, check.escapes)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
     // C2-W-005: what only line 1 reads differently is written below one blank line, and the
@@ -1092,18 +1160,25 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   }
   // C2-W-125: where every form loses a node, a trial that gives the tree only with a backslash behind it is kept.
   let last = unrepaired
-  for (const kinds of [true, false]) {
-    restoreGroup(w, last)
-    last = saveGroup(w, saved.end)
-    w.wholeTrials = true
-    w.kindRounds = kinds
-    try {
-      const trials = repairOnce(w, document, from, first, reported)
-      if (w.losses.entries.length === reported) return trials
-    } finally {
-      w.wholeTrials = false
-      w.kindRounds = true
+  // The pass by kinds can ask for a trial whose kind escapes then lose the node; the pass after it tests it too.
+  w.trialLog = []
+  try {
+    for (const kinds of [true, false]) {
+      restoreGroup(w, last)
+      last = saveGroup(w, saved.end)
+      w.wholeTrials = true
+      w.trialsRetested = false
+      w.kindRounds = kinds
+      try {
+        const trials = repairOnce(w, document, from, first, reported)
+        if (w.losses.entries.length === reported) return trials
+      } finally {
+        w.wholeTrials = false
+        w.kindRounds = true
+      }
     }
+  } finally {
+    w.trialLog = null
   }
   restoreGroup(w, last)
   w.kindRounds = false
