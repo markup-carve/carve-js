@@ -364,7 +364,8 @@ function indentedDescriptionList(ctx: Context, visit: Visit, items: Node01[]): b
   if (visit.parent!.node.type !== 'definition_list' || items.length < 2) return false
   return items.every((item) => {
     const text = lineText(ctx.lines, item.pos!.startLine)
-    return markerSpan(ctx, item)[0] === lineStart(ctx.lines, item.pos!.startLine) + indentOf(text) && /^[ ]*(?:[-*+]|\d+[.)])[ \t]/u.test(text)
+    return markerSpan(ctx, item)[0] === lineStart(ctx.lines, item.pos!.startLine) + indentOf(text)
+      && /^[ ]*(?:[-*+]|\d+[.)])[ \t]/u.test(text)
   })
 }
 
