@@ -136,10 +136,11 @@ function scanPass(state: InlineState): void {
 const MAX_NOTE_PASSES = 8
 
 /**
- * Keeps the notes of the last pass that closed again, and returns whether that changed the set. One that no longer
- * closes closed only because a caret pair in it opened, so it is text from now on (C2-I-089).
+ * Keeps the notes of the last pass that closed again, and returns whether that changed the set. One that opened and no
+ * longer closes closed only because a caret pair in it opened, so it is text from now on (C2-I-089). One whose `^[` an
+ * enclosing note swallowed was not read on its own, so it keeps its place until a pass opens it.
  */
-function narrowsNotes(state: InlineState, closed: Map<number, number>): boolean {
+function narrowsNotes(state: InlineState, closed: Map<number, number>, opened: Set<number>): boolean {
   const before = state.closedNotes
   if (before === null) {
     state.closedNotes = closed
@@ -147,7 +148,7 @@ function narrowsNotes(state: InlineState, closed: Map<number, number>): boolean 
   }
   let changed = false
   for (const [start, end] of before) {
-    if (closed.has(start)) continue
+    if (closed.has(start) || !opened.has(start)) continue
     before.delete(start)
     ;(state.textNotes ??= new TextNotes()).add(start, end)
     changed = true
@@ -182,13 +183,14 @@ function formedImages(state: InlineState): Set<number> {
   return formed
 }
 
-function closedNotes(state: InlineState): Map<number, number> {
+/** The notes of the last pass that closed, by start, and fills `opened` with the start of every `^[` that opened one. */
+function closedNotes(state: InlineState, opened: Set<number>): Map<number, number> {
   const closed = new Map<number, number>()
   const tokens = state.tokens
   for (let at = 0; at < state.tokenLength; at += TOKEN_WIDTH) {
-    if (tokens[at] === TOKEN_OPEN && tokens[at + TOKEN_A] === OPEN_FOOTNOTE && tokens[at + TOKEN_C] === INLINE_FOOTNOTE) {
-      closed.set(tokens[at + TOKEN_START]!, tokens[tokens[at + TOKEN_B]! + TOKEN_START]!)
-    }
+    if (tokens[at] !== TOKEN_OPEN || tokens[at + TOKEN_A] !== OPEN_FOOTNOTE) continue
+    opened.add(tokens[at + TOKEN_START]!)
+    if (tokens[at + TOKEN_C] === INLINE_FOOTNOTE) closed.set(tokens[at + TOKEN_START]!, tokens[tokens[at + TOKEN_B]! + TOKEN_START]!)
   }
   return closed
 }
@@ -219,7 +221,8 @@ export function scanInline(
   // are taken first; a pass that reads them as text may leave one unclosed, which is text from then on.
   // C2-I-074: images narrow the same way, so a `%%` stays alt source only inside an image that forms.
   for (let pass = 0; (state.caretInNote || state.percentInImage) && pass < MAX_NOTE_PASSES; pass++) {
-    const notes = state.caretInNote && narrowsNotes(state, closedNotes(state))
+    const opened = new Set<number>()
+    const notes = state.caretInNote && narrowsNotes(state, closedNotes(state, opened), opened)
     const images = state.percentInImage && narrowsImages(state, formedImages(state))
     if (!notes && !images) break
     scanPass(state)
