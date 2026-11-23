@@ -14,6 +14,7 @@ import {
   isBlankInQuotes,
   isGap,
   lastLine,
+  quoteDepth,
   removeAttribute
 } from './lines.ts'
 
@@ -187,8 +188,12 @@ function emptyFirst(ctx: Context, host: Visit, from: number, text: string): void
   const message = '+ of a first block that attaches nothing removed, 0.1 left the container empty'
   change(ctx, 'U-017', from, lineEnd(ctx.lines, line), text, message)
   const outer = host.node.type === 'list_item' ? host.parent! : host
-  if (leavesHost(ctx, outer, line))
-    change(ctx, 'U-017', lineStart(ctx.lines, line + 1), lineStart(ctx.lines, line + 1), '\n', message)
+  if (!leavesHost(ctx, outer, line)) return
+  // Below an item in a quote the blank line keeps the marks the next line holds, or it ends those quotes.
+  // An empty quote leaves its quoted blank line to U-125.
+  const next = lineText(ctx.lines, line + 1)
+  const marks = host.node.type === 'list_item' ? quotePrefix(next, Math.min(quoteDepth(next), quotesOf(host).length)) : ''
+  change(ctx, 'U-017', lineStart(ctx.lines, line + 1), lineStart(ctx.lines, line + 1), `${marks}\n`, message)
 }
 
 /**
