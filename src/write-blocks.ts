@@ -211,7 +211,7 @@ function indentTypedOpener(w: Writer, node: ParagraphNode, first: number, attrib
   if (line === undefined || node.children[0]?.type === 'text' || !line.startsWith('---')) return
   if (!isTypedFrontmatterOpener(line, 0, line.length)) return
   const before = w.topBlocks.get(node)
-  if (attributed || !INDENT_TAKERS.has(before?.type ?? '')) {
+  if (attributed || !INDENT_TAKERS.has(before?.type ?? '') || indentsContainer(w, before!, node)) {
     w.lines[first] = ` ${line}`
     return
   }
@@ -222,12 +222,26 @@ function indentTypedOpener(w: Writer, node: ParagraphNode, first: number, attrib
 
 /** C2-W-154: whether the paragraph `node` is written on the line directly below the list, footnote or description list `before`. */
 export function followsContainerDirectly(w: Writer, before: Node, node: Node): boolean {
+  return opensTypedBelow(w, before, node) && !takesLazyLine(w, before)
+}
+
+/**
+ * C2-W-155: whether the list or description list `before`, which ends in a block that takes a lazy line, is written
+ * indented by one space, so the indented first line of the paragraph `node` below it stays outside the item.
+ */
+export function indentsContainer(w: Writer, before: Node, node: Node | undefined): boolean {
+  if (before.type !== 'list' && before.type !== 'definition_list') return false
+  return node !== undefined && opensTypedBelow(w, before, node) && takesLazyLine(w, before)
+}
+
+/** Whether `node` is a top-level paragraph without attributes below a container whose first line reads as a typed opener. */
+function opensTypedBelow(w: Writer, before: Node, node: Node): boolean {
   if (!INDENT_TAKERS.has(before.type) || node.type !== 'paragraph' || !w.topBlocks.has(node) || node.attrs !== undefined) return false
   const [lead, next, after] = node.children
   if (lead?.type !== 'smart_punctuation' || lead.source !== '---') return false
   if (after !== undefined && after.type !== 'soft_break') return false
   const line = `---${next?.type === 'text' ? next.value : ''}`
-  return isTypedFrontmatterOpener(line, 0, line.length) && !takesLazyLine(w, before)
+  return isTypedFrontmatterOpener(line, 0, line.length)
 }
 
 const INDENT_TAKERS: ReadonlySet<string> = new Set(['list', 'footnote', 'definition_list'])
@@ -832,7 +846,7 @@ function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags:
     markFenceBeforeComment(w, node, next)
     const written = w.lines.length
     if (node.type === 'code_block' && node.caption !== undefined) at = captionedCode(w, nodes, at, prefix, flags)
-    else writeBlock(w, node, prefix, flags)
+    else writeBlock(w, node, w.topBlocks.has(node) && indentsContainer(w, node, next) ? `${prefix} ` : prefix, flags)
     if (w.lines.length === written) {
       // C2-W-029: a block that writes nothing leaves no blank line behind.
       w.lines.length = start
