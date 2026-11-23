@@ -49,7 +49,7 @@ it('C2-W-010: a repeated reference label chain takes a constant number of parses
 // C2-W-003: the resync of the comparison reads lines from the written spelling, not from the source of the tree.
 it('C2-W-003: a reference label over a line end formats like its folded spelling', () => {
   const once = format('{=\\`=}[^\n"]\n`\n:')
-  expect(once).toBe('{=\\`=}[^"]\n`\n:\n')
+  expect(once).toBe('{=\\`=}[^"]\n\\`\n:\n')
   expect(format(once)).toBe(once)
 })
 

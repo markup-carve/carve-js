@@ -1,5 +1,6 @@
 // Tables as Carve source (C2-W-061 to C2-W-068, C2-W-118): a pipe table, with the continuation
 // rows the sidecar records, or a delimited table.
+import { escapeBacktickKind } from './write-backtick-kind.ts'
 import {
   childNodes, type CommentNode, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
 } from './ast.ts'
@@ -126,6 +127,7 @@ function cellContent(w: Writer, cell: TableCellNode, flags: number): string {
   if (blocks.length > 1 || (blocks.length === 1 && blocks[0]!.type !== 'cell_paragraph')) lose(w, cell, null)
   // C2-W-012: the content of two former blocks is kept apart by a space.
   if (blocks.length > 1) unplanned(w, 'cell blocks')
+  for (const block of blocks) escapeBacktickKind(w, childNodes(block))
   const content = blocks.map((block) => planLeaf(w, childNodes(block), flags | IN_CELL,
     writeInlines(w, childNodes(block), flags | IN_CELL), AS_INLINES, AFTER_MARK)).join(' ')
   // C2-W-063: a cell whose content is only a span mark and that is no span takes an escape.

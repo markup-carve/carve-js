@@ -468,7 +468,8 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
     if (!step(c, es, i, attempt)) continue
     for (let at = before; at < c.escapes.length; at++) {
       attempt.escapes.push(c.escapes[at]!)
-      if (step !== escapeLoneBracket && step !== escapeContentOpener) c.trials.push(c.escapes[at]!)
+      const report = step === escapeLoneBracket || step === escapeContentOpener || reportsCodeSpan(step, c.escapes[at]!)
+      if (!report) c.trials.push(c.escapes[at]!)
     }
     // A deferred escape can leave another opener for the next round.
     if (step === escapeContentOpener) attempt.step--
@@ -480,13 +481,23 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
 
 type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) => boolean
 
+/**
+ * C2-W-088: a backtick that a probe of the content escapes opened a code span the tree does not hold, which the
+ * parse reports, so it gives the backtick kind; C2-W-125 covers only a character that opens nothing.
+ */
+function reportsCodeSpan(step: RespellStep, [node, at]: [TextNode, number]): boolean {
+  return (step === escapeAcrossCloser || step === contentConstruct || step === escapeInside) && node.value[at] === '`'
+}
+
+const contentConstruct: RespellStep = (c, es, i) => escapeContentConstruct(c, es[i]!)
+
 // C2-W-088: the leftmost construct takes the backslash first, so a construct inside the content is
 // escaped before the end of the content and the text behind the node.
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   (c, es, i) => escapeContentStart(c, es[i]!),
   (c, es, i) => escapeFootnoteBrace(c, es[i]!),
-  (c, es, i) => escapeContentConstruct(c, es[i]!),
+  contentConstruct,
   escapeContentOpener,
   escapeAcrossCloser,
   escapeInside,
