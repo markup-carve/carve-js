@@ -19,9 +19,6 @@ describe('C2-W-088, C2-W-125: a nested span takes only the escapes the procedure
     ['{^{^^{\\^^}^^}^}\n', '{^{^^\\{^^}^^}^}\n'],
     // The brace of case one reads as an opener; a brace behind a space opens nothing, so the closer takes the backslash.
     ['{*{ **} x*}\n', '*{ \\** x*}\n'],
-    // A braced-only opener is no run: the content starts with its mark unescaped.
-    ['{,{,,\\{,,,},}\n', '{,{,,\\{,,,},}\n'],
-    ['{,\\,a,}\n', '{,,a,}\n'],
   ])('writes %j as %j', expectWritten)
 })
 

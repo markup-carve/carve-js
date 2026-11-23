@@ -443,8 +443,6 @@ function isExtensionNameChar(code: number): boolean {
  * that mark, as `{-` and a hyphen read as a dash, so the first character of the content takes the backslash.
  */
 function escapeContentStart(c: Check, e: Node): boolean {
-  // The opener of a span that has only a braced form is no run: `{,,` is the opener and a comma of the content.
-  if (e.type === 'subscript' || e.type === 'superscript') return false
   const mark = CLOSING_MARKS.get(e.type)
   const first = 'children' in e ? e.children[0] : undefined
   return mark !== undefined && mark !== ']' && first?.type === 'text' && first.value.startsWith(mark) && escapeAt(c, first, 0)
