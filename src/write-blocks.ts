@@ -211,7 +211,10 @@ function indentTypedOpener(w: Writer, node: ParagraphNode, first: number, attrib
   if (line === undefined || node.children[0]?.type === 'text' || !line.startsWith('---')) return
   if (!isTypedFrontmatterOpener(line, 0, line.length)) return
   const before = w.topBlocks.get(node)
-  if (attributed || !INDENT_TAKERS.has(before?.type ?? '') || indentsContainer(w, before!, node)) {
+  const departure = openerDeparture(w, node)
+  // C2-W-155: where no departure keeps the tree, the line stays at column 0 and the paragraph is reported.
+  if (departure === REFUSED) return lose(w, node, null)
+  if (attributed || !INDENT_TAKERS.has(before?.type ?? '') || departure !== null) {
     w.lines[first] = ` ${line}`
     return
   }
@@ -232,6 +235,98 @@ export function followsContainerDirectly(w: Writer, before: Node, node: Node): b
 export function indentsContainer(w: Writer, before: Node, node: Node | undefined): boolean {
   if (before.type !== 'list' && before.type !== 'definition_list') return false
   return node !== undefined && opensTypedBelow(w, before, node) && takesLazyLine(w, before)
+}
+
+/**
+ * C2-W-155: the top-level blocks from index `first` to `last` are written one space in, and the attribute line of the
+ * block at `columnZero` stays at column 0 (-1 for none).
+ */
+export type OpenerDeparture = { readonly first: number, readonly last: number, readonly columnZero: number }
+
+const REFUSED: OpenerDeparture = { first: -1, last: -1, columnZero: -1 }
+
+/**
+ * C2-W-155 (carve#6418): where an attribute line of an indented block and indenting the list above it both keep the
+ * tree, the attribute line goes first. Flipping this flips the order of the two departures.
+ */
+const ATTRIBUTE_LINE_FIRST = true
+
+/**
+ * Per top-level index of a list or description list: the first block its run indents (-1 where the run is refused),
+ * the block whose attribute line stays at column 0, and the index of the first block behind the run.
+ */
+export type OpenerRuns = {
+  blocks: readonly Node[], index: Map<Node, number>, first: Int32Array, columnZero: Int32Array, end: Int32Array
+}
+
+function isListLike(node: Node | undefined): boolean {
+  return node?.type === 'list' || node?.type === 'definition_list'
+}
+
+/**
+ * C2-W-155, C2-W-005: below a list, description list or footnote the indented block would belong to it (C2-B-025),
+ * so the smallest departure is taken in a fixed order. One pass from the top, each run reusing the block above.
+ */
+function openerRuns(w: Writer): OpenerRuns {
+  if (w.openerRuns !== null) return w.openerRuns
+  const blocks = [...w.topBlocks.keys()]
+  const runs: OpenerRuns = {
+    blocks, index: new Map(blocks.map((node, at) => [node, at])), first: new Int32Array(blocks.length).fill(-1),
+    columnZero: new Int32Array(blocks.length).fill(-1), end: new Int32Array(blocks.length),
+  }
+  for (let at = 0; at < blocks.length; at++) {
+    const above = blocks[at - 1]
+    if (!isListLike(blocks[at])) continue
+    if (above === undefined || !INDENT_TAKERS.has(above.type)) { runs.first[at] = at; continue }
+    // C2-B-097, C2-B-091: an attribute line at column 0 closes the container above and still applies to the block.
+    const attributed = followingAttributes(w, blocks[at]) !== ''
+    if (above.type === 'footnote' || (attributed && ATTRIBUTE_LINE_FIRST)) {
+      if (attributed) runs.first[at] = runs.columnZero[at] = at
+      continue
+    }
+    runs.first[at] = runs.first[at - 1]!
+    runs.columnZero[at] = runs.columnZero[at - 1]!
+  }
+  for (let at = blocks.length - 1; at >= 0; at--) runs.end[at] = isListLike(blocks[at]) ? runs.end[at + 1] ?? at + 1 : at
+  w.openerRuns = runs
+  return runs
+}
+
+/** C2-W-155: how the list above the typed-opener paragraph `node` stays top-level, REFUSED, or null where it does not apply. */
+export function openerDeparture(w: Writer, node: Node): OpenerDeparture | null {
+  const list = w.topBlocks.get(node)
+  if (list === undefined || !indentsContainer(w, list, node)) return null
+  const runs = openerRuns(w)
+  const last = runs.index.get(list)!
+  const first = runs.first[last]!
+  return first < 0 ? REFUSED : { first, last, columnZero: runs.columnZero[last]! }
+}
+
+/** C2-W-155: whether the top-level block `node` is written one space in for the typed-opener paragraph below its run. */
+export function isIndentedTop(w: Writer, node: Node): boolean {
+  if (!isListLike(node) || !w.topBlocks.has(node)) return false
+  const runs = openerRuns(w)
+  const at = runs.index.get(node)!
+  const paragraph = runs.blocks[runs.end[at]!]
+  const departure = paragraph === undefined ? null : openerDeparture(w, paragraph)
+  return departure !== null && departure !== REFUSED && departure.first <= at
+}
+
+type OpenerDepartures = { readonly indented: ReadonlySet<Node>, readonly columnZero: ReadonlySet<Node> }
+
+/** The top-level blocks of `nodes` that C2-W-155 writes one space in, and those whose attribute line stays at column 0. */
+function openerDepartures(w: Writer, nodes: readonly Node[]): OpenerDepartures {
+  const indented = new Set<Node>()
+  const columnZero = new Set<Node>()
+  for (const node of nodes) {
+    if (node.type !== 'paragraph') continue
+    const departure = openerDeparture(w, node)
+    if (departure === null || departure === REFUSED) continue
+    const runs = openerRuns(w)
+    for (let at = departure.first; at <= departure.last; at++) indented.add(runs.blocks[at]!)
+    if (departure.columnZero >= 0) columnZero.add(runs.blocks[departure.columnZero]!)
+  }
+  return { indented, columnZero }
 }
 
 /** Whether `node` is a top-level paragraph without attributes below a container whose first line reads as a typed opener. */
@@ -831,12 +926,22 @@ function beforeSibling(w: Writer, nodes: readonly Node[], at: number, before: No
   }
 }
 
+/** C2-W-155: a top-level block, one space in where a typed-opener paragraph below needs it. */
+function writeTopBlock(w: Writer, node: Node, prefix: string, flags: number, departures: OpenerDepartures): void {
+  if (departures.columnZero.has(node)) {
+    emit(w, prefix, followingAttributes(w, node))
+    w.prewrittenAttributes = node
+  }
+  writeBlock(w, node, departures.indented.has(node) ? `${prefix} ` : prefix, flags)
+}
+
 function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags: number, layout: number): void {
   let before: Node | null = null
   // The last block that is no comment: comments do not keep two lists apart (C2-B-053).
   let list: Node | null = null
   // Kept across a run of comment lines, which is walked once rather than once per comment.
   let after = -1
+  const departures = w.topBlocks.has(nodes[0]!) ? openerDepartures(w, nodes) : null
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     const start = w.lines.length
@@ -846,7 +951,8 @@ function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags:
     markFenceBeforeComment(w, node, next)
     const written = w.lines.length
     if (node.type === 'code_block' && node.caption !== undefined) at = captionedCode(w, nodes, at, prefix, flags)
-    else writeBlock(w, node, w.topBlocks.has(node) && indentsContainer(w, node, next) ? `${prefix} ` : prefix, flags)
+    else if (departures === null) writeBlock(w, node, prefix, flags)
+    else writeTopBlock(w, node, prefix, flags, departures)
     if (w.lines.length === written) {
       // C2-W-029: a block that writes nothing leaves no blank line behind.
       w.lines.length = start

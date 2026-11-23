@@ -106,7 +106,9 @@ function openMetadataBlock(state: BlockState, matched: number, lineStart: number
   const containers = state.containers
   if (src.charCodeAt(lineStart) !== HYPHEN || !isTypedFrontmatterOpener(src, lineStart, end)) return false
   for (let index = 1; index < matched; index++) {
-    if (!isList(containers.kind[index]!) && containers.kind[index] !== ITEM) return false
+    // C2-B-025, C2-B-026: a list or description list that the column-0 line does not indent past closes.
+    const kind = containers.kind[index]!
+    if (!isList(kind) && kind !== ITEM && kind !== DESCRIPTION_LIST && kind !== DESCRIPTION) return false
   }
   const attributes = above.attributesDepth !== NO_DEPTH
   if (attributes ? above.attributesDepth !== 1 : above.blankCount === 0) return false

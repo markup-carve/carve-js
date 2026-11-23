@@ -4,6 +4,7 @@ import { type DocumentNode, type Node, type ParagraphNode, type TextNode } from 
 import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { type Plan } from './write-plan.ts'
+import { type OpenerRuns } from './write-blocks.ts'
 
 /**
  * The sources `parseChunk` has seen since the last clear, with the tree of each short or repeated one. A tree is not held
@@ -82,6 +83,8 @@ export interface Writer {
   kindRounds: boolean
   /** The blocks of the document root, each with the one before it: only there does a typed opener open a metadata block (C2-B-232). */
   topBlocks: ReadonlyMap<Node, Node | undefined>
+  /** C2-W-155: the departures of every run of top-level lists, built once on first use (write-blocks.ts). */
+  openerRuns: OpenerRuns | null
   /** C2-W-010: the plan is taken without the test of C2-W-088 kinds, after the rounds lost a node it keeps. */
   planKinds: boolean
   /** Why the plan left the last group to the repair, or null. */
@@ -129,7 +132,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
-    prewrittenAttributes: null, bareAlts: false, kindRounds: true, topBlocks: new Map(), planKinds: false, planWhy: null, plan: null,
+    prewrittenAttributes: null, bareAlts: false, kindRounds: true, topBlocks: new Map(),
+    openerRuns: null, planKinds: false, planWhy: null, plan: null,
     parses: 0, parseCache: { trees: new Map(), treeChars: 0 },
     extensionSources: new Map(), verifiedSourceBytes: undefined,
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
