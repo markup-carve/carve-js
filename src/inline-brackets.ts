@@ -27,7 +27,10 @@ export function openBracket(state: InlineState, start: number, end: number, form
     state.brackets = larger
   }
   state.brackets[state.bracketDepth++] = pushToken(state, TOKEN_OPEN, start, end, form, NONE, 0, NONE)
-  if (form === OPEN_FOOTNOTE) state.notesOpen++
+  if (form === OPEN_FOOTNOTE) {
+    state.notesOpen++
+    if (state.closedNotes?.has(start) === true) state.closedNotesOpen++
+  }
   enterBracket(state)
   return end
 }
@@ -76,7 +79,10 @@ export function scanBracketOpen(state: InlineState, pos: number): number {
 
 /** C2-I-089: `^[` opens an inline footnote; inside an open one the caret is text and the bracket an ordinary one. */
 export function scanFootnoteOpen(state: InlineState, pos: number): number {
-  if (demotedInNote(state, pos)) return pos + 1
+  if (demotedInNote(state, pos)) {
+    if (state.closedNotes?.has(pos) === true) state.swallowedNotes.push(pos)
+    return pos + 1
+  }
   if (state.textNotes?.has(pos) === true) return pos + 2
   return openBracket(state, pos, pos + 2, OPEN_FOOTNOTE)
 }
@@ -85,16 +91,11 @@ export function scanFootnoteOpen(state: InlineState, pos: number): number {
 function demotedInNote(state: InlineState, pos: number): boolean {
   if (state.textNotes?.covers(pos) === true) return true
   if (state.notesOpen === 0) return false
-  const closed = state.closedNotes
-  if (closed === null) {
+  if (state.closedNotes === null) {
     state.caretInNote = true
     return false
   }
-  for (let at = state.bracketDepth - 1; at >= 0; at--) {
-    const open = state.brackets[at]!
-    if (state.tokens[open + TOKEN_A] === OPEN_FOOTNOTE && closed.has(state.tokens[open + TOKEN_START]!)) return true
-  }
-  return false
+  return state.closedNotesOpen > 0
 }
 
 /** C2-I-074: `![` opens what may become an image. */
@@ -308,7 +309,10 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   if (state.bracketDepth === 0) return pos + 1
   const open = state.brackets[--state.bracketDepth]!
   const form = state.tokens[open + TOKEN_A]!
-  if (form === OPEN_FOOTNOTE) state.notesOpen--
+  if (form === OPEN_FOOTNOTE) {
+    state.notesOpen--
+    if (state.closedNotes?.has(state.tokens[open + TOKEN_START]!) === true) state.closedNotesOpen--
+  }
   if (form >= OPEN_FOOTNOTE) {
     closePair(state, open, pos, form === OPEN_FOOTNOTE ? INLINE_FOOTNOTE : INLINE_EXTENSION)
     leaveBracket(state, true)
