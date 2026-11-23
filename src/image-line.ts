@@ -154,6 +154,13 @@ function openAt(line: ImageLine, pairs: Pairs, p: number): number {
   return Math.max(reference, p + 1)
 }
 
+/** C2-I-087: the bracket of a nested image opener is plain, never a footnote reference, `![^]` included. */
+function openImage(pairs: Pairs, p: number): number {
+  pairs.open.push(-1)
+  pairs.starts.push(p + 2)
+  return p + 2
+}
+
 /** Closes the nearest open bracket at `p`; a note takes no tail or label. Returns the offset the scan goes on from. */
 function closeAt(line: ImageLine, pairs: Pairs, p: number): number {
   const note = pairs.open.pop()!
@@ -176,6 +183,7 @@ function bracketPass(line: ImageLine, pos: number, pairs: Pairs): number {
     if (skipped === NONE) return NONE
     const code = src.charCodeAt(p)
     if (skipped !== p) p = skipped
+    else if (code === BANG && src.charCodeAt(p + 1) === BRACKET_OPEN) p = openImage(pairs, p)
     else if (code === BRACKET_OPEN || (code === CARET && src.charCodeAt(p + 1) === BRACKET_OPEN)) p = openAt(line, pairs, p)
     else if (bracedMarkEnd(line, p) > p) p += 2
     else if (code !== BRACKET_CLOSE) p++
