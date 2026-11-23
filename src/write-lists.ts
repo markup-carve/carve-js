@@ -1,5 +1,6 @@
 // The markers of a list (C2-W-044, C2-W-045) and whether two lists would read as one (C2-W-028).
 import { type ListNode, type Node } from './ast.ts'
+import { braceBlock } from './write-attributes.ts'
 import { type Writer } from './write-state.ts'
 
 /** C2-B-036: a number marker has at most nine digits, and a roman numeral at most nine letters. */
@@ -72,9 +73,25 @@ function decimalMarkers(w: Writer, node: ListNode, delimiter: string, authored: 
   // list is written from 1 and the readback reports the field.
   const start = authored > MAX_DECIMAL ? 1 : authored
   // C2-L-031: a bare `)` is no marker. C2-L-030: with no fact a list with the period takes the bare dot.
-  const bare = delimiter === '.' && !w.bareDotLead && (w.facts?.get(node)?.bare ?? true)
+  // C2-W-044, C2-B-229: only a dot directly behind the bare dot reads as text; a task box or quote
+  // mark between them leaves it a marker.
+  const behindBareDot = w.bareDotLead !== null && (w.lead?.endsWith(w.bareDotLead) ?? false)
+  const bare = delimiter === '.' && !behindBareDot && !node.children.some(opensWithDot) &&
+    (w.facts?.get(node)?.bare ?? true)
   if (!bare) return numberedMarkers(delimiter, start, count)
   return { markers: new Array<string>(count).fill('.'), start: start === 1 ? null : String(start) }
+}
+
+/**
+ * C2-B-043: an item whose text starts with a dot and a space on its marker line leaves a bare dot before it no
+ * marker. Paragraph attributes put that text on a later line.
+ */
+function opensWithDot(item: ListNode['children'][number]): boolean {
+  if (item.task !== undefined) return false
+  const first = item.children[0]
+  if (first?.type !== 'paragraph' || braceBlock(first) !== '') return false
+  const lead = first.children[0]
+  return lead?.type === 'text' && lead.value.startsWith('. ')
 }
 
 /** The markers of the items of `node`, and the start value for its attribute line. */
