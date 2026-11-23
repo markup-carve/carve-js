@@ -1,7 +1,7 @@
 // The checks of the writer (spec/0.2/writer.md): its two gates, with and without the sidecar,
 // that a canonical input stays as it is, and that its escapes are those of the procedure of C2-W-088.
 import { format, formatWithDiagnostics, lint, parse, treesEqual, write, writeWithDiagnostics } from '../../src/index.ts'
-import { childNodes, type DocumentNode, type Node, type Position, type TextNode } from '../../src/ast.ts'
+import { childNodes, isInlineParent, type DocumentNode, type Node, type Position, type TextNode } from '../../src/ast.ts'
 import { type Diagnostic } from '../../src/diagnostics.ts'
 import { unitBytes } from '../../src/positions.ts'
 import { isNode } from './nodes.ts'
@@ -245,7 +245,8 @@ function neighborBackslash(type: string, start: number, bare: string, held: Map<
     const decided = quote !== null && quote[0] !== type && QUOTE_KINDS.includes(quote[0].slice(quote[0].indexOf(':') + 1))
     if (!decided) return -1
     if ('!<>'.includes(bare[start + 1] ?? '') && bare[start + 2] === '=') return start + 2
-    return isAsciiPunctuation(bare.charCodeAt(start + 1)) ? start + 1 : -1
+    // The quote is the tree's, read the other way: it is no construct to escape, and a neighbor of another kind decides.
+    return isAsciiPunctuation(bare.charCodeAt(start + 1)) ? start + 1 : UNFORMED
   }
   if (DASH_KINDS.includes(kind)) {
     const dash = heldAt(held, 'smart_punctuation:', start)
@@ -254,6 +255,9 @@ function neighborBackslash(type: string, start: number, bare: string, held: Map<
   }
   return -1
 }
+
+/** A node of the tree read in another direction, which takes no backslash of its own (C2-W-125). */
+const UNFORMED = -2
 
 /** Where the attribute block that ends the construct `[start, end)` of `bare`, which has one, starts. */
 function ownAttributes(bare: string, start: number, end: number): number {
@@ -340,6 +344,30 @@ interface BareText {
   held: Map<string, number>
   startsHeld: Set<number>
   attributed: Set<string>
+  /** The bare ranges of the text nodes of each leaf block, the unit of a kind round (C2-W-088). */
+  blocks: [number, number][][]
+}
+
+/** The bare ranges of the text nodes below each outermost inline parent of `tree`, block by block. */
+function textBlocks(tree: Node, offsets: Map<number, number>, toBare: (at: number) => number): [number, number][][] {
+  const blocks: [number, number][][] = []
+  const collect = (node: Node, out: [number, number][]): void => {
+    if (node.type === 'text' && node.pos !== undefined) {
+      out.push([toBare(offsets.get(node.pos.startOffset) ?? -1), toBare(offsets.get(node.pos.endOffset) ?? -1)])
+    }
+    for (const child of childNodes(node)) collect(child, out)
+  }
+  const visit = (node: Node): void => {
+    if (!isInlineParent(node)) {
+      for (const child of childNodes(node)) visit(child)
+      return
+    }
+    const ranges: [number, number][] = []
+    collect(node, ranges)
+    blocks.push(ranges)
+  }
+  visit(tree)
+  return blocks
 }
 
 function bareText(written: string): BareText {
@@ -357,7 +385,20 @@ function bareText(written: string): BareText {
   const held = constructEnds(placed, offsets, toBare)
   const startsHeld = new Set([...held.keys()].map((key) => Number(key.slice(key.lastIndexOf('@') + 1))))
   const attributed = new Set(constructEnds(placed.filter(({ node }) => node.attrs !== undefined), offsets, toBare).keys())
-  return { bare, held, startsHeld, attributed }
+  return { bare, held, startsHeld, attributed, blocks: textBlocks(parse(written), offsets, toBare) }
+}
+
+/** The bare offset the construct asks to escape and whether that escape gives a kind, or null for none. */
+function constructTarget(text: string, toBare: readonly number[], construct: Construct, source: BareText,
+  added: readonly number[]): [number, boolean] | null {
+  const neighbor = neighborBackslash(construct.type, toBare[construct.start]!, source.bare, source.held)
+  if (neighbor === UNFORMED) return null
+  if (neighbor >= 0) return [sigilTarget(source, added, neighbor), false]
+  const opener = openerAt(text, construct.start, construct.end, (at) => source.startsHeld.has(toBare[at]!))
+  if (opener < 0) return null
+  const target = toBare[opener]!
+  const adjusted = sigilTarget(source, added, target)
+  return [adjusted, adjusted === target]
 }
 
 /** The bare offsets this read-back parse asks to escape, one per unexpected construct. */
@@ -366,14 +407,33 @@ function roundEscapes(text: string, toBare: readonly number[], parsed: Node, sou
   const unheld = unheldConstructs(parsed, text, toBare, source.held)
   const targets: number[] = []
   for (const construct of unheld) {
-    const neighbor = neighborBackslash(construct.type, toBare[construct.start]!, source.bare, source.held)
-    const opener = neighbor >= 0 ? neighbor : openerAt(text, construct.start, construct.end,
-      (at) => source.startsHeld.has(toBare[at]!))
-    const target = opener < 0 ? -1 : neighbor >= 0 ? opener : toBare[opener]!
-    const adjusted = target < 0 ? -1 : sigilTarget(source, added, target)
-    if (adjusted >= 0 && !added.includes(adjusted) && !targets.includes(adjusted)) targets.push(adjusted)
+    const found = constructTarget(text, toBare, construct, source, added)
+    if (found === null || found[0] < 0) continue
+    const [target, kind] = found
+    if (!added.includes(target) && !targets.includes(target)) targets.push(target)
+    if (kind) kindTargets(source, added, target, targets)
   }
   return { targets, best: unheld[0] ?? null }
+}
+
+/**
+ * C2-W-088: the other openers of the kind of the escape at `at` in its block: the first character of each run of
+ * that character in the text of the block. Only the kinds of one character outside a line start are modeled; a
+ * brace, a slash, a star, a hyphen, a backtick and a line kind are left to `kindExplained`. A backslash of C2-W-125
+ * gives no kind.
+ */
+function kindTargets(source: BareText, added: readonly number[], at: number, targets: number[]): void {
+  const bare = source.bare
+  const ch = bare[at]!
+  if ('{/*-`'.includes(ch) || at === 0 || bare[at - 1] === '\n') return
+  const block = source.blocks.find((ranges) => ranges.some(([start, end]) => at >= start && at < end))
+  if (block === undefined) return
+  for (const [start, end] of block) {
+    for (let k = start; k < end; k++) {
+      if (bare[k] !== ch || (k > start && bare[k - 1] === ch) || k === 0 || bare[k - 1] === '\n') continue
+      if (!added.includes(k) && !targets.includes(k)) targets.push(k)
+    }
+  }
 }
 
 /**
