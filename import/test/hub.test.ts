@@ -145,4 +145,20 @@ describe('micromark 4.0.3 workarounds', () => {
     expect(source('    x\n> 10) y\n', 'gfm')).toBe('```\nx\n```\n\n> {start=10}\n> . y\n')
     expect(source('a\n10) y\n', 'gfm')).toBe('a\n10) y\n')
   })
+
+  it('gives an unclosed fence in a container each of its lines once', () => {
+    expect(source('- ```\n  a\n  b\n', 'gfm')).toBe('- ```\n  a\n  b\n  ```\n')
+    expect(source('- ```\n  a\n- c\n', 'gfm')).toBe('- ```\n  a\n  ```\n- c\n')
+    expect(source('> ```\n> a\n- c\n', 'gfm')).toBe('> ```\n> a\n> ```\n\n- c\n')
+    expect(source('- ```\n  a\n\nc\n', 'gfm')).toBe('- ```\n  a\n\n  ```\n\nc\n')
+    expect(source('> ```\n> a\n>', 'gfm')).toBe('> ```\n> a\n>\n> ```\n')
+    expect(source('> ```\n>\n', 'gfm')).toBe('> ```\n>\n> ```\n')
+  })
+
+  it('reads lists and quotes after an unclosed frontmatter fence', () => {
+    expect(source('---\n\n- y\n', 'gfm')).toBe('***\n\n- y\n')
+    expect(source('---\n\n12. y\n', 'markdown')).toBe('***\n\n{start=12}\n. y\n')
+    expect(source('+++\n\n> q\n', 'gfm')).toBe('+++\n\n> q\n')
+    expect(source('---\na: 1\n---\n\n- y\n', 'gfm')).toBe('---\na: 1\n---\n\n- y\n')
+  })
 })
