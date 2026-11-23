@@ -14,7 +14,7 @@ import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './posit
 import {
   escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
 } from './write-inline.ts'
-import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
+import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
@@ -22,20 +22,31 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   positions = true): DocumentNode {
   const cacheable = positions && src.length <= 8192 && w.extensions.length === 0 && w.abbreviations.size === 0 &&
     (linkKeys === null || linkKeys.size === 0)
-  if (cacheable) {
-    const cached = w.parseCache.get(src)
-    if (cached !== undefined) return cached
+  const cache = w.parseCache
+  const cached = cacheable ? cache.trees.get(src) : undefined
+  if (cached !== undefined && cached !== null) return cached
+  if (cached === undefined) {
+    w.parses++
+    w.work.chars += src.length
   }
-  w.parses++
-  w.work.chars += src.length
   const extensions = w.extensions
   const source = buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys)
   const parsed = applyExtensions(source, extensions, linkKeys).document
-  if (cacheable) {
-    if (w.parseCache.size >= 128) w.parseCache.clear()
-    w.parseCache.set(src, parsed)
-  }
+  if (cacheable && cached === undefined) remember(cache, src, parsed)
   return parsed
+}
+
+// The characters of the sources whose trees the parse cache keeps; the blocks it reuses are short.
+const MAX_TREE_CHARS = 16_384
+
+function remember(cache: ParseCache, src: string, parsed: DocumentNode): void {
+  if (cache.trees.size >= 128) {
+    cache.trees.clear()
+    cache.treeChars = 0
+  }
+  const kept = cache.treeChars + src.length <= MAX_TREE_CHARS
+  if (kept) cache.treeChars += src.length
+  cache.trees.set(src, kept ? parsed : null)
 }
 
 /** The tree of the whole written document, for the check of C2-W-144; it is no repair parse of a group. */
