@@ -1341,13 +1341,40 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
 }
 
 /**
- * C2-I-089, C2-W-091: behind a `^[` of the line, even an escaped `[`, a `[^` can be an ordinary bracket of a note that
- * reads as text, so its backslash is one the procedure placed for a reported bracket and stays.
+ * C2-I-089, C2-W-091: inside the brackets of a `^[` of the line, read bare, a `[^` can be an ordinary bracket of a note
+ * that reads as text, so its backslash is one the procedure placed for a reported bracket and stays.
  */
 function behindNoteOpener(source: string, at: number): boolean {
   const lineStart = source.lastIndexOf('\n', at) + 1
-  const line = source.slice(lineStart, at)
-  return line.includes('^[') || line.includes('^\\[')
+  if (noteSpanCache.source !== source || noteSpanCache.lineStart !== lineStart) {
+    noteSpanCache = { source, lineStart, inside: noteSpans(source, lineStart) }
+  }
+  return noteSpanCache.inside.has(at)
+}
+
+let noteSpanCache: { source: string, lineStart: number, inside: Set<number> } = { source: '', lineStart: -1, inside: new Set() }
+
+/** The offsets of the line at `lineStart` that stand inside the brackets of a `^[`, its backslashes read as text. */
+function noteSpans(source: string, lineStart: number): Set<number> {
+  const inside = new Set<number>()
+  const open: boolean[] = []
+  let notes = 0
+  for (let at = lineStart; at < source.length && source[at] !== '\n'; at++) {
+    if (notes > 0) inside.add(at)
+    if (source[at] === '[') {
+      const note = isNoteBracket(source, at)
+      open.push(note)
+      if (note) notes++
+    } else if (source[at] === ']' && open.pop() === true) {
+      notes--
+    }
+  }
+  return inside
+}
+
+/** Whether the bracket at `at` follows a caret, with or without a backslash between them. */
+function isNoteBracket(source: string, at: number): boolean {
+  return source[at - 1] === '^' || (source[at - 1] === '\\' && source[at - 2] === '^')
 }
 
 /** Whether `parsed` reads back as the blocks of `group`. */

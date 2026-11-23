@@ -40,4 +40,8 @@ describe('C2-I-089: a note that would close only because a caret pair inside it 
     expect(treesEqual(parse(out.source), parse(source))).toBe(true)
     expect(format(out.source)).toBe(out.source)
   })
+
+  it('C2-W-091: prunes the backslash of an empty reference behind a note opener that closed before it', () => {
+    expect(format('^\\[x] \\[^]\n')).toBe('^\\[x] [^]\n')
+  })
 })
