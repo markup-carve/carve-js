@@ -559,8 +559,9 @@ describe('what the four-token writer gate found', () => {
   })
 
   it('C2-W-093: a closing mark at the end of the content, glued to the closer, takes the backslash', () => {
-    expect(format(`x(/u)${BACKSLASH}//{/`)).toBe(`x(/u)${BACKSLASH}//{/\n`)
-    expect(format(`x(/u)${BACKSLASH}//}/`)).toBe(`x(/u)${BACKSLASH}//}/\n`)
+    // C2-W-069 (carve#6469 ruling): that mark could pair, so the emphasis takes its braced form instead.
+    expect(format(`x(/u)${BACKSLASH}//{/`)).toBe('x({/u)//}{/\n')
+    expect(format(`x(/u)${BACKSLASH}//}/`)).toBe('x({/u)//}}/\n')
   })
 
   it('C2-W-099: a content that starts with the mark of its opener continues the run, so its first hyphen is escaped', () => {
