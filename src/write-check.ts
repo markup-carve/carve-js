@@ -1145,7 +1145,7 @@ function endedEarly(c: Check, es: readonly Node[], i: number, owner: Node): void
 }
 
 /** Steps over the characters that the expected text `e` and the parsed text `a` share at the cursor. False where they differ. */
-function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolean {
+function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor, es: readonly Node[], owner: Node): boolean {
   const value = e.value
   const other = a.value
   const length = Math.min(value.length - at.vi, other.length - at.aj)
@@ -1153,6 +1153,15 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolea
     if (value.charCodeAt(at.vi + k) === other.charCodeAt(at.aj + k)) continue
     // C2-W-125: behind a content that ended early the parse holds the rest of that content as text, which opens nothing.
     if (c.cut) return false
+    // C2-W-124, C2-W-091: the blanks that start a line are dropped by the parse. They are the loss of the text, and the
+    // comparison goes on behind them, so that a construct there is reported in the same round.
+    if (isBlank(value.charCodeAt(at.vi + k)) && atLineStart(e, es, at.i, at.vi + k, owner)) {
+      c.losses.push([e, 'value'])
+      at.vi += k
+      at.aj += k
+      while (isBlank(value.charCodeAt(at.vi))) at.vi++
+      return matchCharacters(c, e, a, at, es, owner)
+    }
     // The parse read a character of the text as markup, such as a backslash before punctuation (C2-W-097).
     if (!escapeAt(c, e, at.vi + k)) c.losses.push([e, 'value'])
     return false
@@ -1213,8 +1222,8 @@ function matchText(c: Check, e: TextNode, es: readonly Node[], as: readonly Node
   const value = e.value
   const a = as[at.j]
   if (a === undefined) return parseEndsInText(c, es, at, owner)
-  if (a.type !== 'text') return skipConstruct(c, e, es, a, at)
-  if (!matchCharacters(c, e, a, at)) return false
+  if (a.type !== 'text') return skipConstruct(c, e, es, a, at, owner)
+  if (!matchCharacters(c, e, a, at, es, owner)) return false
   return at.vi < value.length || afterTextNode(c, es, as, at, owner)
 }
 
@@ -1237,15 +1246,37 @@ function stepOver(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor
   return true
 }
 
+function isBlank(value: number): boolean {
+  return value === 32 || value === 9
+}
+
+/** Whether the offset `at` of `e`, the node `es[i]` of `owner`, starts a line of the written content. */
+function atLineStart(e: TextNode, es: readonly Node[], i: number, at: number, owner: Node): boolean {
+  if (at > 0) return e.value[at - 1] === '\n'
+  return i > 0 ? isBreak(es[i - 1]) : owner.type === 'paragraph'
+}
+
+/**
+ * Where the construct `a` starts in `e`: past the blanks that start a line, which the parse drops (a lost value,
+ * C2-W-124), except for a comment, whose source holds them (C2-I-023).
+ */
+function constructStart(e: TextNode, es: readonly Node[], at: Cursor, a: Node, owner: Node): number {
+  const value = e.value
+  if (a.type === 'comment' || !atLineStart(e, es, at.i, at.vi, owner)) return at.vi
+  let start = at.vi
+  while (isBlank(value.charCodeAt(start))) start++
+  return start
+}
+
 /** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
-function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor): boolean {
+function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor, owner: Node): boolean {
   // C2-W-125: behind a content that ended early, the parse can open a construct on the markup of the tree.
   if (c.cut) return false
   if (comparisonBehindQuote(es[at.i - 2], es[at.i - 1], e, at.vi, a)) escapeAt(c, e, at.vi + 1)
   else escapeOpener(c, es, at.i, at.vi, a)
   const pos = a.pos
   if (pos === undefined) return false
-  const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, c.flags)
+  const end = spelledEnd(c.w, e, constructStart(e, es, at, a, owner), pos.endOffset - pos.startOffset, c.flags)
   if (end < 0) {
     escapeInnerQuotes(c, es, at.i, at.vi, a)
     return false
@@ -1834,6 +1865,17 @@ function hasOpenerShape(nodes: readonly Node[], from: number): boolean {
   return !isAsciiAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
 }
 
+/**
+ * C2-W-090, C2-W-099: the character that takes the backslash of a block that starts at `at`: the delimiter of an
+ * ordered marker, the second hyphen of a hyphen run, else the first character.
+ */
+function nestedOpener(value: string, at: number): number {
+  if (value.startsWith('--', at)) return at + 1
+  let end = at
+  while (end < value.length && isAsciiAlphanumeric(value.charCodeAt(end))) end++
+  return end
+}
+
 /** Whether the escapes of this round already touch `node`. */
 function isPending(c: Check, node: Node | undefined): boolean {
   return node?.type === 'text' && c.marks.has(node)
@@ -1855,7 +1897,7 @@ function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, starts: St
     const start = written.indexOf(node.value)
     if (start < 0) return
     for (const column of columns.get(line) ?? []) {
-      const at = column - start
+      const at = column - start < 0 ? -1 : nestedOpener(node.value, column - start)
       if (at >= 0 && at < node.value.length && escapeAt(c, node, at)) {
         const known = c.ownEscapes.get(node) ?? new Set<number>()
         known.add(at)
