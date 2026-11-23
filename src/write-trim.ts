@@ -20,6 +20,8 @@ interface Trimming {
   readonly values: [TextNode, string][]
   /** Each list that lost a text, with its nodes as they were. */
   readonly removed: [Node[], Node[]][]
+  /** The same for empty texts that coalesce away, shared with the cells of a table, which a table form never restores. */
+  readonly coalesced: [Node[], Node[]][]
 }
 
 // The attribute block of a text follows it, so a field dropped with the node is a loss.
@@ -39,9 +41,14 @@ function textRun(nodes: readonly Node[], start: number): [number, boolean] {
   return [end, filled && empty]
 }
 
+function holdsEmptyText(nodes: readonly Node[]): boolean {
+  for (const node of nodes) if (node.type === 'text' && node.value === '') return true
+  return false
+}
+
 /** Drops each empty text of a run of plain texts that holds a nonempty one: coalescing leaves nothing of it. */
-function dropEmptyTexts(nodes: Node[], run: Trimming): void {
-  if (!nodes.some((node) => node.type === 'text' && node.value === '')) return
+function dropEmptyTexts(nodes: Node[], coalesced: [Node[], Node[]][]): void {
+  if (!holdsEmptyText(nodes)) return
   // By position, not by node: a supplied tree may hold one node object at two places.
   const original = [...nodes]
   let kept = 0
@@ -56,12 +63,24 @@ function dropEmptyTexts(nodes: Node[], run: Trimming): void {
   }
   if (kept === nodes.length) return
   nodes.length = kept
-  run.removed.push([nodes, original])
+  coalesced.push([nodes, original])
+}
+
+/** Every list below the groups of a table. */
+function dropCellEmptyTexts(groups: Node[], coalesced: [Node[], Node[]][]): void {
+  dropEmptyTexts(groups, coalesced)
+  const pending = [...groups]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'text') continue
+    forEachSlot(node, (list, _, single) => {
+      if (!single) dropEmptyTexts(list as Node[], coalesced)
+      for (const child of list) pending.push(child as Node)
+    })
+  }
 }
 
 /** Right to left, so a text before a dropped text sees what follows it then. The list is compacted once. */
 function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimming): void {
-  if (!single) dropEmptyTexts(nodes, run)
   let next: Node | undefined
   let dropped: Set<Node> | undefined
   for (let i = nodes.length - 1; i >= 0; i--) {
@@ -103,6 +122,7 @@ function drain(run: Trimming, delimited: (table: TableNode) => boolean): void {
     if (node.type === 'text') continue
     const holder = LINE_HOLDERS.has(node.type)
     forEachSlot(node, (list, step, single) => {
+      if (!single) dropEmptyTexts(list as Node[], run.coalesced)
       if (node.type === 'table' && step === 'children') trimCells(node, list as Node[], run, delimited)
       else trimList(list as Node[], holder && step === 'children', single, run)
     })
@@ -111,8 +131,10 @@ function drain(run: Trimming, delimited: (table: TableNode) => boolean): void {
 
 /** A table that trimming would turn delimited keeps its cells as they are, as one that is delimited already. */
 function trimCells(table: TableNode, groups: Node[], run: Trimming, delimited: (table: TableNode) => boolean): void {
+  // Before the form is chosen: the cells of a tree and of its coalesced tree pick the same form.
+  dropCellEmptyTexts(groups, run.coalesced)
   if (delimited(table)) return
-  const cells: Trimming = { pending: [...groups].reverse(), values: [], removed: [] }
+  const cells: Trimming = { pending: [...groups].reverse(), values: [], removed: [], coalesced: run.coalesced }
   drain(cells, delimited)
   if (delimited(table)) {
     restore(cells)
@@ -122,12 +144,16 @@ function trimCells(table: TableNode, groups: Node[], run: Trimming, delimited: (
   run.removed.push(...cells.removed)
 }
 
-function restore({ values, removed }: Trimming): void {
+function restoreLists(removed: readonly [Node[], Node[]][]): void {
   for (let list = removed.length - 1; list >= 0; list--) {
     const [nodes, original] = removed[list]!
     nodes.length = original.length
     for (let at = 0; at < original.length; at++) nodes[at] = original[at]!
   }
+}
+
+function restore({ values, removed }: Trimming): void {
+  restoreLists(removed)
   for (const [text, value] of values) text.value = value
 }
 
@@ -138,8 +164,11 @@ function restore({ values, removed }: Trimming): void {
  * its caption is still trimmed. Returns the function that restores the tree, or null where nothing changed.
  */
 export function trimLineEnds(document: Node, delimited: (table: TableNode) => boolean): (() => void) | null {
-  const run: Trimming = { pending: [document], values: [], removed: [] }
+  const run: Trimming = { pending: [document], values: [], removed: [], coalesced: [] }
   drain(run, delimited)
-  if (run.values.length === 0 && run.removed.length === 0) return null
-  return () => restore(run)
+  if (run.values.length === 0 && run.removed.length === 0 && run.coalesced.length === 0) return null
+  return () => {
+    restore(run)
+    restoreLists(run.coalesced)
+  }
 }

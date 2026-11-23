@@ -48,6 +48,29 @@ describe('carve-js#5398: empty texts beside a nonempty text', () => {
     expect(checked).toBe(72)
   })
 
+  it('writes table cells as their coalesced trees, whatever table form that picks', () => {
+    // A cell text with a leading space is written in a delimited table, where trimming leaves the cell as it is.
+    for (const value of ['a', ' a', 'a ', '`x`']) {
+      const base = parse('| a | b |\n')
+      const variant = parse('| a | b |\n')
+      const cellTexts = (document: DocumentNode): Inline[][] => {
+        const lists: Inline[][] = []
+        const walk = (node: { children?: unknown[] }): void => {
+          const children = node.children as Inline[] | undefined
+          if (children === undefined) return
+          if (children[0]?.type === 'text') lists.push(children)
+          for (const child of children) walk(child as { children?: unknown[] })
+        }
+        walk(document)
+        return lists
+      }
+      cellTexts(base)[0]![0] = text(value)
+      cellTexts(variant)[0]!.splice(0, 1, text(value), text(''))
+      cellTexts(variant)[1]!.unshift(text(''))
+      expect(written(variant)).toEqual(written(base))
+    }
+  })
+
   it('leaves the supplied tree as it was', () => {
     const document = paragraph([text('a'), text(''), emphasis([text(''), text('b')])])
     const before = JSON.stringify(document)
