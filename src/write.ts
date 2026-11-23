@@ -274,6 +274,12 @@ function removeEscape(w: Writer, node: TextNode, at: number): boolean {
   return place >= 0
 }
 
+/** A form a comparison asked for: the node keeps it whatever stands before it. */
+function setForm(w: Writer, node: Node): void {
+  w.glued.delete(node)
+  w.forms.set(node, (w.forms.get(node) ?? 0) + 1)
+}
+
 /** Takes over what a comparison asked for. Returns false where it asked for no change. */
 function applyChanges(w: Writer, check: Check): boolean {
   // C2-W-091: the escapes are placed in the spelling of the nodes. Where a node first takes its other
@@ -281,12 +287,12 @@ function applyChanges(w: Writer, check: Check): boolean {
   if (check.forms.some((node) => !w.forms.has(node))) {
     w.escapes.clear()
     w.attempts.clear()
-    for (const node of check.forms) w.forms.set(node, (w.forms.get(node) ?? 0) + 1)
+    for (const node of check.forms) setForm(w, node)
     return true
   }
   for (const [node, at] of check.retracted) removeEscape(w, node, at)
   addEscapes(w, check.escapes)
-  for (const node of check.forms) w.forms.set(node, (w.forms.get(node) ?? 0) + 1)
+  for (const node of check.forms) setForm(w, node)
   if (check.escapes.length + check.forms.length + check.retracted.length > 0) return true
   for (const [node] of check.losses) refuseLeafLines(w, node, 0)
   for (const [node, field] of check.losses) lose(w, node, field)
@@ -599,6 +605,8 @@ function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistor
 }
 
 function resetLines(w: Writer): void {
+  for (const node of w.glued) if (w.forms.get(node) === 1) w.forms.delete(node)
+  w.glued.clear()
   w.lines = []
   w.lead = null
   w.bareDotLead = null
@@ -747,6 +755,7 @@ function settledPlan(w: Writer, run: WriterRun, group: readonly Node[], first: b
       break
     }
     for (const node of plan.respell) {
+      w.glued.delete(node)
       w.forms.set(node, 1)
       respelled.push(node)
     }
@@ -976,6 +985,7 @@ interface SavedGroup {
   lines: string[]
   escapes: Map<TextNode, number[]>
   forms: Map<Node, number>
+  glued: Set<Node>
   attempts: Writer['attempts']
   blankFirst: boolean
   losses: LossMark
@@ -985,7 +995,7 @@ interface SavedGroup {
 function saveGroup(w: Writer, end: number): SavedGroup {
   return {
     end, lines: [...w.lines], escapes: new Map([...w.escapes].map(([node, at]) => [node, [...at]])), forms: new Map(w.forms),
-    attempts: new Map(w.attempts), blankFirst: w.blankFirst, losses: markLosses(w), parsed: w.parsed,
+    glued: new Set(w.glued), attempts: new Map(w.attempts), blankFirst: w.blankFirst, losses: markLosses(w), parsed: w.parsed,
   }
 }
 
@@ -993,6 +1003,7 @@ function restoreGroup(w: Writer, saved: SavedGroup): number {
   w.lines = saved.lines
   w.escapes = saved.escapes
   w.forms = saved.forms
+  w.glued = saved.glued
   w.attempts = saved.attempts
   w.blankFirst = saved.blankFirst
   rollBackLosses(w, saved.losses)
