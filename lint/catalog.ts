@@ -22,7 +22,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "blank-reference-label": { severity: "warning", default: "on", messages: [
+  "blank-reference-label": { severity: "warning", default: "upgrade", messages: [
     [
       "This label holds only spaces, tabs or a line break, so it is no labe",
       "l and \"${text}\" stays text; 0.1 read it as a label. Give the label a",
@@ -205,7 +205,7 @@ export const CATALOG = {
     ].join(''),
     "the bare run is longer than the innermost opener",
   ] },
-  "comment-fence-closer-with-text": { severity: "warning", default: "on", messages: [
+  "comment-fence-closer-with-text": { severity: "warning", default: "upgrade", messages: [
     [
       "This line starts with a percent run and holds other text, so it is c",
       "ontent of the comment block and does not close it. Put the closing r",
@@ -326,7 +326,7 @@ export const CATALOG = {
     ].join(''),
     "the `+` is the text of a list item marker line",
   ] },
-  "deprecated-indented-line-under-heading": { severity: "warning", default: "on", messages: [
+  "deprecated-indented-line-under-heading": { severity: "warning", default: "upgrade", messages: [
     [
       "This indented line directly below a heading is part of the heading i",
       "n 0.2; in 0.1 it started a paragraph. Remove the indent to make it a",
@@ -863,7 +863,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "sigil-after-letter": { severity: "hint", default: "on", messages: [
+  "sigil-after-letter": { severity: "hint", default: "upgrade", messages: [
     [
       "A mention or tag does not start directly after a letter or number. P",
       "ut a space or punctuation before it.",
@@ -1004,7 +1004,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "tight-list-item-with-blank-line": { severity: "hint", default: "off", messages: [
+  "tight-list-item-with-blank-line": { severity: "hint", default: "upgrade", messages: [
     [
       "A blank line inside an item no longer makes the list loose. Put a bl",
       "ank line between the items if every item should render as a paragrap",
