@@ -1,6 +1,7 @@
 // C2-W-151: spaces and tabs that would end a source line in text are insignificant. They are taken out of the
 // supplied tree while the writer runs, so neither the write nor its comparison sees them, and put back after it.
-// Nodes keep their identity, so a loss is still located in the tree as supplied.
+// Nodes keep their identity, so a loss is still located in the tree as supplied. An empty text that coalesces into
+// a nonempty neighbor is taken out the same way (C2-A-040, C2-A-161).
 import { forEachSlot, type Node, type TableNode, type TextNode } from './ast.ts'
 
 /** The block nodes whose inline content ends at a line end. */
@@ -21,8 +22,42 @@ interface Trimming {
   readonly removed: [Node[], Node[]][]
 }
 
+// The attribute block of a text follows it, so a field dropped with the node is a loss.
+function isPlainText(node: Node): node is TextNode {
+  return node.type === 'text' && !('attrs' in node || 'data' in node || 'lang' in node || 'dir' in node || 'metadata' in node)
+}
+
+/** The end of the run of plain texts from `start`, and whether it holds an empty and a nonempty text. */
+function textRun(nodes: readonly Node[], start: number): [number, boolean] {
+  let end = start
+  let filled = false
+  let empty = false
+  for (; end < nodes.length && isPlainText(nodes[end]!); end++) {
+    if ((nodes[end] as TextNode).value === '') empty = true
+    else filled = true
+  }
+  return [end, filled && empty]
+}
+
+/** Drops each empty text of a run of plain texts that holds a nonempty one: coalescing leaves nothing of it. */
+function dropEmptyTexts(nodes: Node[], run: Trimming): void {
+  if (!nodes.some((node) => node.type === 'text' && node.value === '')) return
+  let dropped: Set<Node> | undefined
+  for (let start = 0; start < nodes.length; start++) {
+    const [end, mixed] = textRun(nodes, start)
+    for (let at = start; mixed && at < end; at++) {
+      if ((nodes[at] as TextNode).value !== '') continue
+      dropped ??= new Set()
+      dropped.add(nodes[at]!)
+    }
+    start = Math.max(start, end)
+  }
+  if (dropped !== undefined) dropTexts(nodes, dropped, run)
+}
+
 /** Right to left, so a text before a dropped text sees what follows it then. The list is compacted once. */
 function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimming): void {
+  if (!single) dropEmptyTexts(nodes, run)
   let next: Node | undefined
   let dropped: Set<Node> | undefined
   for (let i = nodes.length - 1; i >= 0; i--) {
@@ -33,8 +68,8 @@ function trimList(nodes: Node[], atLineEnd: boolean, single: boolean, run: Trimm
       run.pending.push(child)
       continue
     }
-    // The attribute block of a text follows it, so its spaces end no line; a field dropped with the node is a loss.
-    if ('attrs' in child || 'data' in child || 'lang' in child || 'dir' in child || 'metadata' in child) continue
+    // The attribute block of a text follows it, so its spaces end no line.
+    if (!isPlainText(child)) continue
     if (single || (after === undefined ? !atLineEnd : after.type !== 'soft_break')) continue
     const end = trimmedEnd(child.value)
     if (end === child.value.length) continue
@@ -94,9 +129,9 @@ function restore({ values, removed }: Trimming): void {
 
 /**
  * Drops the spaces and tabs at the end of each text node that stands before a soft break or at the end of the
- * content of a line holder, and the text nodes that hold nothing else. `delimited` says whether a table is written
- * in a delimited form, where a cell keeps them as data (C2-W-066) while its caption is still trimmed. Returns the
- * function that restores the tree, or null where nothing changed.
+ * content of a line holder, the text nodes that hold nothing else, and the empty texts that coalesce away.
+ * `delimited` says whether a table is written in a delimited form, where a cell keeps them as data (C2-W-066) while
+ * its caption is still trimmed. Returns the function that restores the tree, or null where nothing changed.
  */
 export function trimLineEnds(document: Node, delimited: (table: TableNode) => boolean): (() => void) | null {
   const run: Trimming = { pending: [document], values: [], removed: [] }
