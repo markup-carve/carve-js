@@ -41,8 +41,10 @@ export function advanceColumn(column: number, code: number): number {
 /** Column of `offset`, counted from the start of its line (C2-B-005). */
 export function columnAt(src: string, lineStarts: Int32Array, lineCount: number, offset: number): number {
   let column = 0
-  for (let pos = lineStarts[lineAt(lineStarts, lineCount, offset)]!; pos < offset; pos++) {
-    column = advanceColumn(column, src.charCodeAt(pos))
+  for (let pos = lineStarts[lineAt(lineStarts, lineCount, offset)]!; pos < offset;) {
+    const code = src.codePointAt(pos)!
+    column = advanceColumn(column, code)
+    pos += code > 0xffff ? 2 : 1
   }
   return column
 }

@@ -728,7 +728,11 @@ function siblingStyle(state: BlockState, style: number, single: boolean, roman: 
 /** Moves the cursor from a marker to `pos` and on to the content column. A marker holds no tab. */
 function moveTo(state: BlockState, pos: number, end: number): void {
   const cursor = state.cursor
-  cursor.column += pos - cursor.pos
+  for (let at = cursor.pos; at < pos;) {
+    const code = state.src.codePointAt(at)!
+    cursor.column = advanceColumn(cursor.column, code)
+    at += code > 0xffff ? 2 : 1
+  }
   cursor.pos = pos
   skipIndent(state, end)
 }
