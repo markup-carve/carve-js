@@ -525,6 +525,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   // C2-W-125 tries to form a missing node separately from the constructs C2-W-088 found in the
   // read-back parse. A lone ineffective trial takes no escape. Multiple trials can work together.
   let dropped = false
+  dropEarlyTrials(check)
   logTrials(w, check.trials)
   for (const [node, at] of check.trials.length <= 4 ? check.trials : []) {
     if (check.trials.length > 1) continue
@@ -550,6 +551,17 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     if (w.blankFirst) return true
   }
   return applyChanges(w, check)
+}
+
+/** C2-W-125, case eight: the trials of a round that escaped an early note closer read the note it undoes. */
+function dropEarlyTrials(check: Check): void {
+  if (!check.earlyCloser) return
+  for (const trial of check.trials) {
+    const place = check.escapes.indexOf(trial)
+    if (place >= 0) check.escapes.splice(place, 1)
+    check.marks.get(trial[0])?.delete(trial[1])
+  }
+  check.trials = []
 }
 
 /**
@@ -1563,7 +1575,7 @@ function noteSpans(source: string, lineStart: number): Set<number> {
       const note = isNoteBracket(source, at)
       open.push(note)
       if (note) notes++
-    } else if (source[at] === ']' && open.pop() === true) {
+    } else if (source[at] === ']' && source[at - 1] !== '\\' && open.pop() === true) {
       notes--
     }
   }
