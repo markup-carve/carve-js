@@ -275,23 +275,100 @@ function indentedCodeDoesNotInterrupt(): Extension {
   return { flowInitial: { [-2]: codeIndented, [-1]: codeIndented, 32: codeIndented } }
 }
 
+const CONTINUED_OVER_BLANKS = new Set(['listOrdered', 'listUnordered', 'gfmFootnoteDefinition'])
+const CONTAINERS = new Set([...CONTINUED_OVER_BLANKS, 'blockQuote'])
+
+/**
+ * micromark 4.0.3 ends an unclosed fence in a container with one line ending of its own, which doubles the last one
+ * when the code's text already holds it. The line endings the code is owed past its text, read from the events after it:
+ * one for a last line of quote markers only, or for text that ends inside a line, and one per blank line a closing list
+ * or note held.
+ */
+function owedLineEndings(events: Event[], exit: number, token: Token, text: string): number {
+  if (endsOnQuoteMarkers(events, exit + 1)) return 1
+  if (!/[\n\r]/u.test(text)) return 0
+  if (!/[\n\r]$/u.test(text) || token.end.column > 1) return 1
+  let continued = false
+  let blanks = 0
+  for (let index = exit + 1; index < events.length; index++) {
+    const [kind, next] = events[index]!
+    if (kind === 'exit' && CONTAINERS.has(next.type)) {
+      continued ||= CONTINUED_OVER_BLANKS.has(next.type)
+    } else if (next.type === 'lineEnding' && next.start.column === 1) {
+      if (kind === 'enter') blanks++
+    } else {
+      break
+    }
+  }
+  return continued ? blanks : 0
+}
+
+function endsOnQuoteMarkers(events: Event[], start: number): boolean {
+  let index = start
+  let markers = 0
+  const prefixAt = (at: number): string | undefined => {
+    const event = events[at]
+    return event?.[0] === 'enter' && /^(?:blockQuotePrefix|linePrefix)$/u.test(event[1].type) ? event[1].type : undefined
+  }
+  for (let type = prefixAt(index); type !== undefined; type = prefixAt(index)) {
+    while (index < events.length && !(events[index]![0] === 'exit' && events[index]![1].type === type)) index++
+    index++
+    if (type === 'blockQuotePrefix') markers++
+  }
+  if (markers === 0 || index >= events.length) return false
+  for (; index < events.length; index++) {
+    if (events[index]![0] !== 'exit' || !CONTAINERS.has(events[index]![1].type)) return false
+  }
+  return true
+}
+
+/** micromark's own exit of fenced code, with the line endings of an unclosed fence in a container counted. */
+function unclosedFenceLineEndings(events: Event[]): HtmlExtension {
+  const owed = new Map<Token, number>()
+  let depth = 0
+  events.forEach(([kind, token, context], index) => {
+    if (CONTAINERS.has(token.type)) depth += kind === 'enter' ? 1 : -1
+    if (kind === 'exit' && token.type === 'codeFenced' && depth > 0) {
+      owed.set(token, owedLineEndings(events, index, token, context.sliceSerialize(token)))
+    }
+  })
+  return { exit: { codeFenced(token) {
+    const count = this.getData('fencesCount')
+    const unclosed = count !== undefined && count < 2
+    if (unclosed) this.raw('\n'.repeat(owed.get(token) ?? 0))
+    if (this.getData('flowCodeSeenData')) this.lineEndingIfNeeded()
+    this.tag('</code></pre>')
+    if (unclosed) this.lineEndingIfNeeded()
+    this.setData('flowCodeSeenData')
+    this.setData('fencesCount')
+    this.setData('slurpOneLineEnding')
+  } } }
+}
+
 const GFM_HTML = (): HtmlExtension[] => [gfmAutolinkLiteralHtml(), gfmFootnoteHtml(), gfmStrikethroughHtml(), gfmTableHtml(),
   gfmTaskListItemHtml()]
+
+/**
+ * micromark-extension-frontmatter 2.0.0 tries an opening fence as a concrete construct up to the end of the input, so an
+ * unclosed `---` on the first line kept the document from opening any list or quote. It runs only on a closed one.
+ */
+const CLOSED_FRONTMATTER = /^\uFEFF?(---|\+\+\+)[ \t]*(?:\r\n?|\n)(?:[^\n\r]*(?:\r\n?|\n))*?\1[ \t]*(?:\r\n?|\n|$)/u
 
 /** Markdown (CommonMark) or GFM to HTML with micromark. */
 export function markdownHtml(input: string, format: 'markdown' | 'gfm', sink: Sink): string {
   const options: Options = {
     allowDangerousHtml: true,
     allowDangerousProtocol: true,
-    extensions: [frontmatter(['yaml', 'toml']), math(), containerDirectives(), indentedCodeDoesNotInterrupt(),
-      ...(format === 'gfm' ? [gfm()] : [])],
+    extensions: [...(CLOSED_FRONTMATTER.test(input) ? [frontmatter(['yaml', 'toml'])] : []), math(), containerDirectives(),
+      indentedCodeDoesNotInterrupt(), ...(format === 'gfm' ? [gfm()] : [])],
     htmlExtensions: [frontmatterCapture(sink), rawHtmlCarrier(sink), mathHtml(), codeLineEndings(), directiveHandlers(),
       ...(format === 'gfm' ? GFM_HTML() : [])],
   }
   // micromark's own pipeline, run here so the constructs come from the events it compiles.
   const events: Event[] = postprocess(parseMarkdown(options).document().write(preprocess()(input, undefined, true)))
   if (sink.constructs !== undefined) sink.constructs = markdownConstructs(events, input, format === 'gfm')
-  return compile(options)(events)
+  const htmlExtensions = [...options.htmlExtensions ?? [], unclosedFenceLineEndings(events)]
+  return compile({ ...options, htmlExtensions })(events)
 }
 
 /** djot.js generates a section id from each heading; Carve generates its own, so only an authored id is written. */
