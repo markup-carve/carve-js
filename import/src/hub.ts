@@ -1,7 +1,7 @@
 // Markdown, GFM and Djot import through the HTML hub (ruling of 17 November): the reference library renders HTML and
 // the 0.2 HTML importer reads it. Hooks here only shape what the library's HTML cannot carry on its own.
 import { compile, parse as parseMarkdown, postprocess, preprocess } from 'micromark'
-import type { CompileContext, Event, Extension, Handle, HtmlExtension, Options, Token } from 'micromark-util-types'
+import type { CompileContext, Construct, Event, Extension, Handle, HtmlExtension, Options, State, Token } from 'micromark-util-types'
 import { gfm } from 'micromark-extension-gfm'
 import { gfmAutolinkLiteralHtml } from 'micromark-extension-gfm-autolink-literal'
 import { gfmFootnoteHtml } from 'micromark-extension-gfm-footnote'
@@ -43,6 +43,7 @@ function mathHtml(): HtmlExtension {
       mathFlowFence(this: CompileContext) {
         if (!this.getData('mathFlowOpen')) {
           this.setData('mathFlowOpen', true)
+          this.setData('slurpAllLineEndings')
           this.setData('slurpOneLineEnding', true)
           this.buffer()
         }
@@ -114,6 +115,16 @@ function rawHtmlCarrier(sink: Sink): HtmlExtension {
       },
     },
   }
+}
+
+/**
+ * micromark 4.0.3 drops the line endings of a code block that follows a tight paragraph or a run of definitions: both
+ * leave `slurpAllLineEndings` on, and only a paragraph clears it. The code text clears it; neither token has an enter
+ * handler of its own.
+ */
+function codeLineEndings(): HtmlExtension {
+  const clear: Handle = function () { this.setData('slurpAllLineEndings') }
+  return { enter: { codeFencedFence: clear, codeFlowValue: clear } }
 }
 
 function rawBlockPlaceholder(sink: Sink, format: string, value: string): string {
@@ -243,6 +254,27 @@ function containerDirectives(): Extension {
   return { flow: { 58: constructs } }
 }
 
+/**
+ * micromark 4.0.3 reads every line below an open flow construct as an interruption, so a list after indented code has
+ * to start at 1 and cannot be empty. CommonMark 0.31 sets those conditions only for a list that interrupts a paragraph.
+ * The document reads `_gfmTableDynamicInterruptHack` on the flow as "this construct is not interrupted"; indented code
+ * sets it while it is open.
+ */
+function indentedCodeDoesNotInterrupt(): Extension {
+  const entry = parseMarkdown().constructs.flowInitial?.[32]
+  const code = Array.isArray(entry) ? entry[0] : entry
+  if (code?.tokenize === undefined) return {}
+  const codeIndented: Construct = { ...code, tokenize(effects, ok, nok) {
+    const done = (next: State): State => (value) => {
+      this._gfmTableDynamicInterruptHack = false
+      return next(value)
+    }
+    this._gfmTableDynamicInterruptHack = true
+    return code.tokenize.call(this, effects, done(ok), done(nok))
+  } }
+  return { flowInitial: { [-2]: codeIndented, [-1]: codeIndented, 32: codeIndented } }
+}
+
 const GFM_HTML = (): HtmlExtension[] => [gfmAutolinkLiteralHtml(), gfmFootnoteHtml(), gfmStrikethroughHtml(), gfmTableHtml(),
   gfmTaskListItemHtml()]
 
@@ -251,8 +283,9 @@ export function markdownHtml(input: string, format: 'markdown' | 'gfm', sink: Si
   const options: Options = {
     allowDangerousHtml: true,
     allowDangerousProtocol: true,
-    extensions: [frontmatter(['yaml', 'toml']), math(), containerDirectives(), ...(format === 'gfm' ? [gfm()] : [])],
-    htmlExtensions: [frontmatterCapture(sink), rawHtmlCarrier(sink), mathHtml(), directiveHandlers(),
+    extensions: [frontmatter(['yaml', 'toml']), math(), containerDirectives(), indentedCodeDoesNotInterrupt(),
+      ...(format === 'gfm' ? [gfm()] : [])],
+    htmlExtensions: [frontmatterCapture(sink), rawHtmlCarrier(sink), mathHtml(), codeLineEndings(), directiveHandlers(),
       ...(format === 'gfm' ? GFM_HTML() : [])],
   }
   // micromark's own pipeline, run here so the constructs come from the events it compiles.
