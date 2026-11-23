@@ -111,6 +111,13 @@ function partEnd(src: string, start: number, after: number, end: number): number
   return next > after ? next : -after - 1
 }
 
+/** Where the first part of a div opener starts: behind the spaces, so a tab starts the further words (C2-B-119, C2-B-122). */
+function divPartStart(src: string, pos: number, end: number): number {
+  if (skipSpaces(src, pos, end) === end) return end
+  while (pos < end && src.charCodeAt(pos) === SPACE) pos++
+  return pos
+}
+
 /**
  * Reads the opener line from `pos`, the offset behind the run. The parts stand in order and spaces
  * separate them: what is glued to a part, or follows the parts, is further words (C2-B-122).
@@ -125,7 +132,7 @@ export function readOpenerInfo(src: string, pos: number): OpenerInfo {
   }
   // C2-B-117, `code_fence_opener`: at most one space stands before the first part of a fence; one or more before a div's.
   const fence = src.charCodeAt(pos - 1) === BACKTICK
-  let p = fence ? (src.charCodeAt(pos) === SPACE ? pos + 1 : pos) : skipSpaces(src, pos, end)
+  let p = fence ? (src.charCodeAt(pos) === SPACE ? pos + 1 : pos) : divPartStart(src, pos, end)
   p = partEnd(src, p, readWord(src, p, end, info, fence), end)
   if (p >= 0) p = partEnd(src, p, readTitle(src, p, end, info), end)
   if (p >= 0) p = partEnd(src, p, readLabel(src, p, end, info), end)

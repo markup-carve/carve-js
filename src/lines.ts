@@ -343,9 +343,10 @@ export function divRunLength(src: string, pos: number, end: number): number {
   const length = fenceRunLength(src, pos, end, COLON)
   let after = pos + length
   while (after < end && src.charCodeAt(after) === SPACE) after++
-  if (after === end) return length
-  // C2-B-033, C2-B-119: only spaces stand before a name, a sigil, a title or a label; a tab leaves the run bare or text.
-  if (src.charCodeAt(after) !== TAB) return after > pos + length ? length : 0
+  // C2-B-119: behind a space the line opens a div whatever follows; a tab there starts further words (C2-B-122).
+  if (after === end || after > pos + length) return length
+  // A tab glued to the run leaves it bare or makes the line text.
+  if (src.charCodeAt(after) !== TAB) return 0
   return skipSpaces(src, after, end) === end ? length : 0
 }
 
@@ -362,7 +363,8 @@ export function isBareRun(src: string, pos: number, end: number, code: number, m
 
 /** The sigil of a div opener whose colon run ends at `pos`, or 0 for a name or nothing (C2-B-123, C2-B-124). */
 export function divSigil(src: string, pos: number, end: number): number {
-  const at = skipSpaces(src, pos, end)
+  let at = pos
+  while (at < end && src.charCodeAt(at) === SPACE) at++
   const code = src.charCodeAt(at)
   return at < end && isSigil(code) ? code : 0
 }
