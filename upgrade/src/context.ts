@@ -104,3 +104,9 @@ export function change(ctx: Context, id: string, start: number, end: number, tex
 export function note(ctx: Context, id: string, line: number, message: string): void {
   ctx.findings.push({ record: recordOf(id, line, message), offset: lineStart(ctx.lines, line), edit: null })
 }
+
+/** Collects a report of the entry `id` over the source range `start` to `end`, which begins on `line`. */
+export function noteRange(ctx: Context, id: string, line: number, start: number, end: number, message: string): void {
+  const record = { ...recordOf(id, line, message), class: 'report' as const, range: { startOffset: start, endOffset: end } }
+  ctx.findings.push({ record, offset: start, edit: null })
+}

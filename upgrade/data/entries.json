@@ -2156,6 +2156,18 @@
       "name": "nested ordered list starting above 1 directly below the item text",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-439",
+      "name": "unclosed inline run whose 0.1 value no 0.2 span spells",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-440",
+      "name": "empty unclosed literal-text run with content before it",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

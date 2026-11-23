@@ -14,13 +14,21 @@ describe('U-258: an unclosed 0.1 inline run', () => {
     },
   )
 
-  it('retains the plain unclosed code run under U-258', () => {
-    const result = upgrade('`\n')
-    expect(result.output).toBe('`\n')
+  it.each(['`\n', 'a ``\n', '> a `\n', '| a ` |\n'])('U-439 reports an empty unclosed code run: %j', (source) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(source)
     expect(result.check).toBe('explained')
-    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-258', class: 'report', line: 1,
-      range: { startOffset: 0, endOffset: 1 } }))
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-439', class: 'report', line: 1 }))
+    expect(result.records.map((record) => record.entry)).not.toContain('U-258')
   })
+
+  it.each([['`\n', 0, 1], ['!``\n', 0, 3], ['a !`\n', 2, 4]])('U-439 reports the parsed range of %j',
+    (source, startOffset, endOffset) => {
+      const result = upgrade(source)
+      expect(result.output).toBe(source)
+      expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-439', class: 'report', line: 1,
+        range: { startOffset, endOffset } }))
+    })
 
   it.each([
     ['```=html[^n]\n<b>x</b>\n```\n\n', '{%%}```=html[^n]\n<b>x</b>```\n```\n\n```\n'],

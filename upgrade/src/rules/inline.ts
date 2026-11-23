@@ -1,9 +1,8 @@
 // Contract 2.11 and 2.13: inline spellings, read off the inline nodes of the 0.1 tree.
 import { isAsciiDigit, isWordCharacter } from '../../../src/unicode.ts'
 import { ancestor, isInside } from '../blocks.ts'
-import { change, type Context, note, type Visit } from '../context.ts'
+import { change, type Context, note, noteRange, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
-import { recordOf } from '../report.ts'
 import { headingTexts, isUnresolved } from './references.ts'
 
 const BRACE = 0x7b
@@ -58,18 +57,35 @@ function unclosedRun(ctx: Context, visit: Visit): void {
     && !(finding.edit.entry === 'U-105' && finding.edit.start === start && finding.edit.end === start))) return
   // An empty run is only reported, so a quote can hold it too.
   if (end > openerEnd) {
-    if (!canCloseRun(visit, ctx.late)) return
-    // C2-I-016: a value that starts or ends with a backtick is padded with one space on each side.
-    const pad = ctx.src[end - 1] === '`'
-    const from = pad ? openerEnd : end
-    change(ctx, 'U-258', from, end, pad ? ` ${ctx.src.slice(openerEnd, end)} ${mark}` : mark,
-      'unclosed 0.1 inline run closed at its content end')
+    if (canCloseRun(visit, ctx.late)) closeRun(ctx, startLine, start, openerEnd, end, mark)
     return
   }
-  const record = { ...recordOf(node.type === 'math' ? 'U-396' : 'U-258', startLine,
-    'the empty 0.1 inline value has no verified 0.2 spelling'),
-    class: 'report' as const, range: { startOffset: start, endOffset: end } }
-  ctx.findings.push({ record, offset: start, edit: null })
+  // U-440: 0.1 wrote nothing for an empty literal-text run, so a late pass removes one with content before it
+  // or in a cell, which may be empty; the complete HTML check keeps the removal only where it holds.
+  if (ctx.late && node.type === 'literal_inline'
+    && (visit.parent?.node.type === 'table_cell' || visit.siblings.slice(0, visit.index).some(hasContent))) {
+    change(ctx, 'U-440', start, end, '', 'empty 0.1 literal-text run removed')
+    return
+  }
+  noteRange(ctx, node.type === 'math' ? 'U-396' : 'U-439', startLine, start, end,
+    'the empty 0.1 inline value has no verified 0.2 spelling')
+}
+
+function hasContent(node: Node01): boolean {
+  return node.type !== 'text' || String(node.value).trim() !== ''
+}
+
+function closeRun(ctx: Context, line: number, start: number, openerEnd: number, end: number, mark: string): void {
+  // C2-I-016: a value that starts or ends with a backtick is padded with one space on each side.
+  const pad = ctx.src[end - 1] === '`'
+  // C2-W-077: the pad before a leading line break is trailing whitespace, so such a value has no spelling.
+  if (pad && (ctx.src[openerEnd] === '\n' || ctx.src[openerEnd] === '\r')) {
+    noteRange(ctx, 'U-439', line, start, end, 'the 0.1 inline value starts with a line break and ends with a backtick')
+    return
+  }
+  const from = pad ? openerEnd : end
+  change(ctx, 'U-258', from, end, pad ? ` ${ctx.src.slice(openerEnd, end)} ${mark}` : mark,
+    'unclosed 0.1 inline run closed at its content end')
 }
 
 interface Bare {

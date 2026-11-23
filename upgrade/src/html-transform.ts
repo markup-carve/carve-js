@@ -262,30 +262,33 @@ function emptyRunMarkup(literal: string): string[] | null {
   return null
 }
 
-/** U-258: the parsed empty run has no adjacent closer spelling, so cite its literal 0.2 reading. */
+function emptyRunEntry(literal: string): string {
+  return literal.startsWith('$') ? 'U-396' : 'U-439'
+}
+
+/** U-396, U-439: the parsed empty run has no adjacent closer spelling, so cite its literal 0.2 reading. */
 export function explainEmptyRuns(old: string, literals: readonly string[], next = ''): Result {
   const tokens = htmlTokens(old)
   const target = new Set(htmlTokens(next))
-  let changed = false
+  const applied = new Set<string>()
   for (const literal of literals) {
     const before = emptyRunMarkup(literal)
     if (before === null) continue
     for (let at = 0; at <= tokens.length - before.length; at++) {
       if (!before.every((token, offset) => tokens[at + offset] === token)) continue
+      applied.add(emptyRunEntry(literal))
       // The tokens drop the soft break before the run; 0.2 keeps it in the text of the run.
       const text = tokens[at - 1]
       if (at > 0 && text !== undefined && !text.startsWith('<') && target.has(`${text}\n${literal}`)
         && !target.has(text + literal)) {
         tokens.splice(at - 1, before.length + 1, `${text}\n${literal}`)
-        changed = true
         break
       }
       tokens.splice(at, before.length, literal)
-      changed = true
       break
     }
   }
-  return { html: changed ? tokens.join('') : old, applied: changed ? ['U-258'] : [] }
+  return { html: applied.size > 0 ? tokens.join('') : old, applied: [...applied] }
 }
 
 export function applyHtmlTransformations(old: string, next: string, entries: readonly string[]): Result {
