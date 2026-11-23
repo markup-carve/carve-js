@@ -256,8 +256,9 @@ function planKinds(block: KindBlock, escapes: ReadonlyMap<TextNode, readonly num
 function bareOpener(block: KindBlock, key: string, placed: ReadonlyMap<TextNode, readonly number[]>): boolean {
   return block.leaves.some((leaf, index) => {
     if (leaf.text === null) return false
-    const there = placed.get(leaf.text) ?? []
-    return kindOffsets(key, block, index).some((offset) => !there.includes(offset))
+    // A set: a leaf can hold one escape per character, and a lookup in the list per opener is quadratic.
+    const there = new Set(placed.get(leaf.text) ?? [])
+    return kindOffsets(key, block, index).some((offset) => !there.has(offset))
   })
 }
 
