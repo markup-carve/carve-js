@@ -6,6 +6,7 @@ import { write, writeWithDiagnostics } from '../src/write.ts'
 import { lint } from '../lint/lint.ts'
 import { corpusResolver } from '../scripts/corpus.ts'
 import { type DocumentNode } from '../src/ast.ts'
+import { LINEARITY_LIMIT, linearityExcess } from './support/linearity.ts'
 
 describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
   it('reads a column-zero typed opener after a list without a blank line as a lazy line (carve#6389)', () => {
@@ -104,6 +105,17 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
       expect(result.diagnostics.map((entry) => [entry.code, entry.path]), above)
         .toEqual([['structure-unspellable', `/children/${tree.children.length}`]])
     }
+  })
+
+  it('C2-W-155: walks a long run of lists below a footnote in linear time (carve#6418)', () => {
+    const paragraph = parse('a\n\n ---yaml\nk: v\n---\n').children[1]!
+    const tree = (lists: number): DocumentNode => {
+      const document = parse(`a[^n]\n\n[^n]: x\n\n${':: t\n: d\n\n* x\n\n'.repeat(lists / 2)}`)
+      return { ...document, children: [...document.children, paragraph] }
+    }
+    const small = tree(250)
+    const large = tree(2000)
+    expect(linearityExcess(() => writeWithDiagnostics(small), () => writeWithDiagnostics(large), 8)).toBeLessThan(LINEARITY_LIMIT)
   })
 
   it('takes a top-level key after a list and keeps the block outside that list', () => {

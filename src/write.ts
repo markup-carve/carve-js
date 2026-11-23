@@ -8,7 +8,7 @@ import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import {
-  blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, openerDeparture, writeBlocks,
+  blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, isIndentedTop, writeBlocks,
 } from './write-blocks.ts'
 import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
@@ -326,10 +326,10 @@ function refuseLeafLines(w: Writer, node: Node, depth: number): void {
   for (const child of childNodes(node)) refuseLeafLines(w, child, depth + 1)
 }
 
-/** Whether `node` is written into one group with the block `before` above it; `indented` holds the C2-W-155 run around them. */
-function joinsGroup(w: Writer, before: Node, node: Node, indented: ReadonlySet<Node>): boolean {
+/** Whether `node` is written into one group with the block `before` above it. */
+function joinsGroup(w: Writer, before: Node, node: Node): boolean {
   // C2-W-155: an indented block reads back only with the blocks below it down to the typed-opener paragraph.
-  if (indented.has(before)) return true
+  if (isIndentedTop(w, before)) return true
   // C2-B-016: a description mark reads differently below a description list, also behind a blank line.
   if (node.type === 'paragraph') return before.type === 'definition_list' || followsContainerDirectly(w, before, node)
   return node.type === 'comment' && blankLinesBetween(w, before, null, node, false) === 0
@@ -346,39 +346,20 @@ function isBridged(w: Writer, nodes: readonly Node[], prior: Node | undefined, a
   return followingAttributes(w, node?.type === 'comment' ? following : node) !== ''
 }
 
-const NO_NODES: ReadonlySet<Node> = new Set()
-
-function isListLike(node: Node | undefined): boolean {
-  return node?.type === 'list' || node?.type === 'definition_list'
-}
-
-/** The blocks C2-W-155 indents for the paragraph behind the run of lists from `at`, and the index of that paragraph. */
-function indentedRun(w: Writer, nodes: readonly Node[], at: number): [ReadonlySet<Node>, number] {
-  let end = at
-  while (isListLike(nodes[end])) end++
-  const paragraph = nodes[end]
-  const departure = paragraph === undefined ? null : openerDeparture(w, paragraph)
-  return [departure === null ? NO_NODES : new Set(departure.indented), end]
-}
-
 function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
   let end = from + 1
   // The last block of the group that is no comment, and the first block behind the comment lines after `end`: kept
   // as the group grows, so a run of comments is walked once rather than once per comment.
   let priorAt = nodes[from]?.type === 'comment' ? from - 1 : from
   let after = -1
-  // The C2-W-155 run of lists and description lists that ends at index `runEnd`, found once per run.
-  let indented: ReadonlySet<Node> = NO_NODES
-  let runEnd = -1
   while (end < nodes.length) {
     const before = nodes[end - 1]!
     const node = nodes[end]!
     if (after <= end) after = commentLinesEnd(nodes, end)
-    if (end > runEnd && isListLike(before)) [indented, runEnd] = indentedRun(w, nodes, end - 1)
     const bridged = isBridged(w, nodes, nodes[priorAt], end, nodes[after])
     const hoisted = node.type === 'comment' && bridged
     const belongs = before.type === 'comment' && bridged
-    if (!hoisted && !belongs && !joinsGroup(w, before, node, indented)) break
+    if (!hoisted && !belongs && !joinsGroup(w, before, node)) break
     if (node.type !== 'comment') priorAt = end
     end++
   }
@@ -1808,6 +1789,7 @@ function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteO
   const lead = document.children[0]
   w.leadingFrontmatter = lead?.type === 'frontmatter' && lead.attrs === undefined ? lead : null
   w.topBlocks = new Map(document.children.map((node, index) => [node, document.children[index - 1]]))
+  w.openerRuns = null
 }
 
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */

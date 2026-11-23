@@ -237,10 +237,13 @@ export function indentsContainer(w: Writer, before: Node, node: Node | undefined
   return node !== undefined && opensTypedBelow(w, before, node) && takesLazyLine(w, before)
 }
 
-/** C2-W-155: the blocks above a typed-opener paragraph written one space in, and the one with its attribute line at column 0. */
-export type OpenerDeparture = { readonly indented: readonly Node[], readonly columnZero: Node | null }
+/**
+ * C2-W-155: the top-level blocks from index `first` to `last` are written one space in, and the attribute line of the
+ * block at `columnZero` stays at column 0 (-1 for none).
+ */
+export type OpenerDeparture = { readonly first: number, readonly last: number, readonly columnZero: number }
 
-const REFUSED: OpenerDeparture = { indented: [], columnZero: null }
+const REFUSED: OpenerDeparture = { first: -1, last: -1, columnZero: -1 }
 
 /**
  * C2-W-155 (carve#6418): where an attribute line of an indented block and indenting the list above it both keep the
@@ -249,39 +252,79 @@ const REFUSED: OpenerDeparture = { indented: [], columnZero: null }
 const ATTRIBUTE_LINE_FIRST = true
 
 /**
- * C2-W-155, C2-W-005: how the list or description list above the typed-opener paragraph `node` stays top-level, or
- * REFUSED where no spelling keeps the tree; null where C2-W-155 does not apply. Below a list, description list or
- * footnote the indented block would belong to it (C2-B-025), so the smallest departure is taken in a fixed order.
+ * Per top-level index of a list or description list: the first block its run indents (-1 where the run is refused),
+ * the block whose attribute line stays at column 0, and the index of the first block behind the run.
  */
+export type OpenerRuns = {
+  blocks: readonly Node[], index: Map<Node, number>, first: Int32Array, columnZero: Int32Array, end: Int32Array
+}
+
+function isListLike(node: Node | undefined): boolean {
+  return node?.type === 'list' || node?.type === 'definition_list'
+}
+
+/**
+ * C2-W-155, C2-W-005: below a list, description list or footnote the indented block would belong to it (C2-B-025),
+ * so the smallest departure is taken in a fixed order. One pass from the top, each run reusing the block above.
+ */
+function openerRuns(w: Writer): OpenerRuns {
+  if (w.openerRuns !== null) return w.openerRuns
+  const blocks = [...w.topBlocks.keys()]
+  const runs: OpenerRuns = {
+    blocks, index: new Map(blocks.map((node, at) => [node, at])), first: new Int32Array(blocks.length).fill(-1),
+    columnZero: new Int32Array(blocks.length).fill(-1), end: new Int32Array(blocks.length),
+  }
+  for (let at = 0; at < blocks.length; at++) {
+    const above = blocks[at - 1]
+    if (!isListLike(blocks[at])) continue
+    if (above === undefined || !INDENT_TAKERS.has(above.type)) { runs.first[at] = at; continue }
+    // C2-B-097, C2-B-091: an attribute line at column 0 closes the container above and still applies to the block.
+    const attributed = followingAttributes(w, blocks[at]) !== ''
+    if (above.type === 'footnote' || (attributed && ATTRIBUTE_LINE_FIRST)) {
+      if (attributed) runs.first[at] = runs.columnZero[at] = at
+      continue
+    }
+    runs.first[at] = runs.first[at - 1]!
+    runs.columnZero[at] = runs.columnZero[at - 1]!
+  }
+  for (let at = blocks.length - 1; at >= 0; at--) runs.end[at] = isListLike(blocks[at]) ? runs.end[at + 1] ?? at + 1 : at
+  w.openerRuns = runs
+  return runs
+}
+
+/** C2-W-155: how the list above the typed-opener paragraph `node` stays top-level, REFUSED, or null where it does not apply. */
 export function openerDeparture(w: Writer, node: Node): OpenerDeparture | null {
   const list = w.topBlocks.get(node)
   if (list === undefined || !indentsContainer(w, list, node)) return null
-  const indented = [list]
-  for (let at = list; ;) {
-    const above = w.topBlocks.get(at)
-    if (above === undefined || !INDENT_TAKERS.has(above.type)) return { indented, columnZero: null }
-    // C2-B-097, C2-B-091: an attribute line at column 0 closes the container above and still applies to the block.
-    const attributed = followingAttributes(w, at) !== ''
-    if (above.type === 'footnote' || (attributed && ATTRIBUTE_LINE_FIRST)) {
-      return attributed ? { indented, columnZero: at } : REFUSED
-    }
-    indented.push(above)
-    at = above
-  }
+  const runs = openerRuns(w)
+  const last = runs.index.get(list)!
+  const first = runs.first[last]!
+  return first < 0 ? REFUSED : { first, last, columnZero: runs.columnZero[last]! }
 }
 
-/** The top-level blocks of `nodes` that C2-W-155 writes one space in, and those whose attribute line stays at column 0. */
+/** C2-W-155: whether the top-level block `node` is written one space in for the typed-opener paragraph below its run. */
+export function isIndentedTop(w: Writer, node: Node): boolean {
+  if (!isListLike(node) || !w.topBlocks.has(node)) return false
+  const runs = openerRuns(w)
+  const at = runs.index.get(node)!
+  const paragraph = runs.blocks[runs.end[at]!]
+  const departure = paragraph === undefined ? null : openerDeparture(w, paragraph)
+  return departure !== null && departure !== REFUSED && departure.first <= at
+}
+
 type OpenerDepartures = { readonly indented: ReadonlySet<Node>, readonly columnZero: ReadonlySet<Node> }
 
+/** The top-level blocks of `nodes` that C2-W-155 writes one space in, and those whose attribute line stays at column 0. */
 function openerDepartures(w: Writer, nodes: readonly Node[]): OpenerDepartures {
   const indented = new Set<Node>()
   const columnZero = new Set<Node>()
   for (const node of nodes) {
     if (node.type !== 'paragraph') continue
     const departure = openerDeparture(w, node)
-    if (departure === null) continue
-    for (const block of departure.indented) indented.add(block)
-    if (departure.columnZero !== null) columnZero.add(departure.columnZero)
+    if (departure === null || departure === REFUSED) continue
+    const runs = openerRuns(w)
+    for (let at = departure.first; at <= departure.last; at++) indented.add(runs.blocks[at]!)
+    if (departure.columnZero >= 0) columnZero.add(runs.blocks[departure.columnZero]!)
   }
   return { indented, columnZero }
 }
