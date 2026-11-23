@@ -559,6 +559,7 @@ function dropEarlyTrials(check: Check): void {
   for (const trial of check.trials) {
     const place = check.escapes.indexOf(trial)
     if (place >= 0) check.escapes.splice(place, 1)
+    check.marks.get(trial[0])?.delete(trial[1])
   }
   check.trials = []
 }
