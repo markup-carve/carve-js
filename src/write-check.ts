@@ -1366,22 +1366,25 @@ function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: C
   if (at.aj === 0 || es[at.i]?.type === 'text') return true
   // The parse has more text here: the node after the text did not form. At the end of the content
   // the closing mark did not close, as a mark of the content glued to it makes a longer run (C2-W-093).
-  if (es[at.i] === undefined) {
-    // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark. Case one, that brace,
-    // is tried before case five, the closer. What the content took from behind its end is read again next round.
-    if (escapeOpeningBrace(c, owner) || escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
-      c.cut = true
-      return false
-    }
-    // C2-W-069: a closing mark that cannot close where it stands, as behind a space, closes in the braced form.
-    if (!c.w.kindRounds && isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
-    else c.losses.push([owner, null])
-  }
+  if (es[at.i] === undefined) readOnPastEnd(c, owner)
   else if (at.j + 1 >= as.length && isPaired(owner) && !joinsNext(es, at.i) && !holdsSpelling(c, es[at.i]!, as[at.j]!, at.aj)) {
     closedEarly(c, es, at.i, 0, owner)
   }
   else return respell(c, es, at.i) && stepOver(c, es, as, at)
   return false
+}
+
+/** The content of `owner` read on past its end: its closing mark did not close there. */
+function readOnPastEnd(c: Check, owner: Node): void {
+  // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark. Case one, that brace,
+  // is tried before case five, the closer. What the content took from behind its end is read again next round.
+  if (escapeOpeningBrace(c, owner) || escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
+    c.cut = true
+    return
+  }
+  // C2-W-069: a closing mark that cannot close where it stands, as behind a space, closes in the braced form.
+  if (!c.w.kindRounds && isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
+  else c.losses.push([owner, null])
 }
 
 /** C2-W-125, case one: the last brace of the content of `owner` that reads as a braced opener, with its mark behind it. */
