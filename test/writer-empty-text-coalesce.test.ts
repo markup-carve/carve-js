@@ -60,6 +60,14 @@ describe('carve-js#5398: empty texts beside a nonempty text', () => {
     expect(written(paragraph([text('a'), emphasis([text('')])]))[1]).not.toEqual([])
   })
 
+  it('drops one node object only where it stands beside a nonempty text', () => {
+    const shared = text('')
+    const code: Inline = { type: 'code', value: 'c' }
+    expect(written(paragraph([text('a'), shared, code, shared]))[1])
+      .toEqual(written(paragraph([text('a'), text(''), code, text('')]))[1])
+    expect(written(paragraph([text('a'), shared, code, shared]))[1]).not.toEqual([])
+  })
+
   it('keeps an empty text with a field, and locates later losses in the supplied tree', () => {
     expect(written(paragraph([text('a'), { ...text(''), lang: 'de' } as Inline]))[1])
       .toEqual(['structure-unspellable /children/0'])

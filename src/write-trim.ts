@@ -42,17 +42,21 @@ function textRun(nodes: readonly Node[], start: number): [number, boolean] {
 /** Drops each empty text of a run of plain texts that holds a nonempty one: coalescing leaves nothing of it. */
 function dropEmptyTexts(nodes: Node[], run: Trimming): void {
   if (!nodes.some((node) => node.type === 'text' && node.value === '')) return
-  let dropped: Set<Node> | undefined
-  for (let start = 0; start < nodes.length; start++) {
-    const [end, mixed] = textRun(nodes, start)
-    for (let at = start; mixed && at < end; at++) {
-      if ((nodes[at] as TextNode).value !== '') continue
-      dropped ??= new Set()
-      dropped.add(nodes[at]!)
+  // By position, not by node: a supplied tree may hold one node object at two places.
+  const original = [...nodes]
+  let kept = 0
+  for (let start = 0; start < original.length;) {
+    const [end, mixed] = textRun(original, start)
+    if (end === start) {
+      nodes[kept++] = original[start++]!
+      continue
     }
-    start = Math.max(start, end)
+    for (let at = start; at < end; at++) if (!mixed || (original[at] as TextNode).value !== '') nodes[kept++] = original[at]!
+    start = end
   }
-  if (dropped !== undefined) dropTexts(nodes, dropped, run)
+  if (kept === nodes.length) return
+  nodes.length = kept
+  run.removed.push([nodes, original])
 }
 
 /** Right to left, so a text before a dropped text sees what follows it then. The list is compacted once. */
