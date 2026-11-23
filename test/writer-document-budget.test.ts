@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { type DocumentNode, formatWithDiagnostics, parse, treesEqual } from '../src/index.ts'
+import { writeTreeWithStats } from '../src/write.ts'
 
 const source = readFileSync(join(import.meta.dirname, 'fixtures', 'writer-document-budget.crv'), 'utf8')
 
@@ -30,5 +31,22 @@ describe('the writes of the repair rounds', () => {
     const result = formatWithDiagnostics(source)
     expect(result.diagnostics).toEqual([])
     expect(parse(result.source)).toSatisfy((tree: DocumentNode) => treesEqual(tree, parse(source)))
+  }, 120_000)
+})
+
+/** The paragraph of nested superscripts with escaped braces from carve-rs#4538, its `x` replaced per copy. */
+const paragraph = readFileSync(join(import.meta.dirname, 'fixtures', 'writer-paragraph-budget.crv'), 'utf8').trimEnd()
+
+describe('the repair work of many paragraphs (carve#6304)', () => {
+  it('C2-W-010, C2-W-133: the repairs parse characters linear in the document, not a floor per paragraph', () => {
+    for (const count of [1, 4, 13]) {
+      const source = `${Array.from({ length: count }, (_, k) => paragraph.replaceAll('x', String.fromCharCode(97 + k))).join('\n\n')}\n`
+      const result = writeTreeWithStats(parse(source), undefined, 'plan', false)
+      expect(result.output.diagnostics).toEqual([])
+      expect(parse(result.output.source)).toSatisfy((tree: DocumentNode) => treesEqual(tree, parse(source)))
+      const work = result.stats.work.reduce((total, [, parsed]) => total + parsed, 0)
+      // Each paragraph parsed 641 characters per character before the shared budget and the probe fixes.
+      expect(work, `${count} paragraphs`).toBeLessThan(20 * source.length)
+    }
   }, 120_000)
 })
