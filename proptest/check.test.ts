@@ -139,8 +139,8 @@ void test('C2-W-011: an unspellable field is reported before checking stability'
   assert.equal(check('format', '\r', random(1))?.kind, 'writer-accounting')
 })
 
-void test('C2-W-011: an unspellable structure is reported before checking stability', () => {
-  assert.equal(check('format', '^[ [^[b][[^b]\\[]]', random(1))?.kind, 'writer-accounting')
+void test('C2-W-091: a note whose bracket trial a later closer escape makes harmful formats with no loss (#5482)', () => {
+  assert.equal(check('format', '^[ [^[b][[^b]\\[]]', random(1)), null)
 })
 
 void test('C2-W-066: a bare CSV cell whose value is a space is valid', () => {

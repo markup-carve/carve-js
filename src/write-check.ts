@@ -12,7 +12,8 @@ import { AST_RESULTS } from './ast-tables.ts'
 import { sourceCoreEquivalent } from './write-extension-source.ts'
 import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
 import {
-  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode, keyIsContent, spelledEnd,
+  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode, keyIsContent, leadingCaret,
+  spelledEnd,
   writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
@@ -586,6 +587,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeTextNote,
   (c, es, i) => escapeKeyCaret(c, es[i]!),
   inContentAlone,
+  (c, es, i) => escapeNoteCaret(c, es[i]!),
 ]
 
 /**
@@ -611,6 +613,20 @@ function escapeKeyCaret(c: Check, e: Node): boolean {
   if (e.type !== 'link' || (c.flags & IN_NOTE) !== 0 || !keyIsContent(e)) return false
   const first = e.children[0]
   return first?.type === 'text' && first.value.startsWith('^') && !isEscaped(c, first, 0) && escapeAt(c, first, 0)
+}
+
+/**
+ * C2-I-089, C2-W-125, case five: link or span text in a note is written with its leading caret bare, which holds there
+ * only while the note closes. Where the note did not form, that caret pair kept it open, so each such caret is tried.
+ */
+function escapeNoteCaret(c: Check, e: Node): boolean {
+  if (e.type !== 'inline_footnote') return false
+  let asked = false
+  for (const child of e.children) {
+    const first = 'children' in child ? child.children[0] : undefined
+    if (leadingCaret(child) && first?.type === 'text' && !isEscaped(c, first, 0)) asked = escapeAt(c, first, 0) || asked
+  }
+  return asked
 }
 
 /**
