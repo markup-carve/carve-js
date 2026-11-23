@@ -125,9 +125,9 @@ describe('the parse channel', () => {
     ])
   })
 
-  it('C2-B-163: frontmatter with no closer is reported, and the message says the whole document is hidden in it', () => {
+  it('C2-B-163: frontmatter with no closer is reported, and the message says it runs to the end of the document', () => {
     expect(reports('---\ntitle: x\n')).toEqual(['unclosed-frontmatter /children/0 0-12'])
-    expect(messages('---\ntitle: x\n')).toEqual(['The frontmatter opened on line 1 has no closing line, so the whole document is frontmatter.'])
+    expect(messages('---\ntitle: x\n')).toEqual(['This frontmatter block has no closing line, so it runs to the end of the document.'])
   })
 
   it('C2-B-111: a code fence and a raw block that end without their closer', () => {
