@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { carveToHtml } from '../../build/engine-0.1/index.js'
+import { render } from '../../src/index.ts'
 import { upgrade } from '../src/index.ts'
 
 describe('U-258: an unclosed 0.1 inline run', () => {
@@ -18,6 +20,17 @@ describe('U-258: an unclosed 0.1 inline run', () => {
     expect(result.check).toBe('explained')
     expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-258', class: 'report', line: 1,
       range: { startOffset: 0, endOffset: 1 } }))
+  })
+
+  it.each([
+    ['```=html[^n]\n<b>x</b>\n```\n\n', '{%%}```=html[^n]\n<b>x</b>```\n```\n\n```\n'],
+    ['- [^a]: note\n  ```=html[^n]\n- ```=html[^n]\n\n', '[^a]: note\n```=html[^n]```\n\n- {%%}\n- {%%}```=html[^n]```\n\n'],
+  ])('closes a run whose fence opener U-105 keeps as text: %j', (source, output) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(output)
+    expect(result.check).toBe('pass')
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-258', class: 'rewrite' }))
+    expect(render(result.output)).toBe(carveToHtml(source))
   })
 
   it('closes a nonempty math run using its 0.1 parse position', () => {
