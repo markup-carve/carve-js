@@ -47,6 +47,7 @@ The program follows `spec/0.2/tooling.md`; its commands and flags are the rows o
 ```sh
 carve render --heading-ids lower article.crv
 carve render --heading-shift=1 article.crv
+carve render --extensions '["carve.tabs"]' --extension-options '{"carve.tabs":{"mode":"aria"}}' guide.crv
 carve ast --envelope article.crv
 carve fmt --check article.crv
 carve diagnostics --json article.crv
@@ -56,7 +57,9 @@ carve import --from djot notes.dj
 carve upgrade --check legacy.crv
 ```
 
-`carve FILE...` is `carve render FILE...`. `render`, `ast`, `diagnostics` and `lint` expand includes, reading files below the directory of the entry file; `--include-root DIR` names another root and `--no-includes` turns expansion off. On standard input nothing is expanded unless `--include-root` is given. `fmt`, `import` and `migrate-ast` expand nothing. `extensions` and `renderers` are options of the library calls only.
+`carve FILE...` is `carve render FILE...`. `render`, `ast`, `diagnostics` and `lint` expand includes, reading files below the directory of the entry file; `--include-root DIR` names another root and `--no-includes` turns expansion off. On standard input nothing is expanded unless `--include-root` is given. `fmt`, `import` and `migrate-ast` expand nothing.
+
+`render`, `fmt`, `lint` and `ast` take `--extensions`, a JSON list of the standard extensions of `data/extensions.json` (`carve.tabs`, `carve.details`, `carve.fencedRender.mermaid`, `carve.mathBlock`, `carve.cite`, `carve.wiki` and the others), and register each; `render` registers its standard renderer too, and an extension with no standard renderer writes its fallback. `--extension-options` gives those renderers their options, keyed by extension name, as the `rendererOptions` of each row allow: `{"carve.tabs":{"mode":"aria"}}`. A name that is no standard extension, or one in `--extension-options` that `--extensions` does not list, is refused with the category `usage`, and so is an option or value the row does not name. Host extensions and renderers stay options of the library calls only (C2-T-010).
 
 Standard output carries the product of a command and nothing else; diagnostics, notes and failures go to standard error. A diagnostic line is `FILE:LINE:COLUMN: SEVERITY CODE MESSAGE`, or `FILE: SEVERITY CODE MESSAGE` for an entry with no range. `diagnostics --json`, `lint --json` and `--report-losses PATH` write a diagnostics report, `{"files": [{file, diagnostics, suppressed}]}`; `--report-includes PATH` writes the include dependencies, `{"files": [{file, dependencies}]}`. A report path of `-` is standard error.
 

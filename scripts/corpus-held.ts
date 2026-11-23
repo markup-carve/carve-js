@@ -1,19 +1,12 @@
 // What the corpus runner holds: the example and clause case fields whose stated result departs from its clause, and the
 // field each refused tree is refused at.
 
-// Engine lag behind the pin, held until the carve-js line of carve#6436 lands.
-const EXTENSION_FLAGS = 'carve#6436: --extensions and --extension-options (C2-T-010), the carve-js line of that ticket'
-
 /**
  * The fields of the examples and clause cases whose stated result departs from its own clause. Each is written up, with the
  * clause-correct result, in the spec gap report for the pin; the field must keep failing until the
  * corpus is corrected, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['CC-1717', { fields: ['status', 'stdout', 'stderrCategory'], fix: EXTENSION_FLAGS }],
-  ['CC-1718', { fields: ['status', 'stdout', 'stderrCategory'], fix: EXTENSION_FLAGS }],
-  ['CC-1721', { fields: ['status', 'stdout', 'stderrCategory'], fix: EXTENSION_FLAGS }],
-  ['CC-1722', { fields: ['status', 'stderrCategory'], fix: EXTENSION_FLAGS }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */

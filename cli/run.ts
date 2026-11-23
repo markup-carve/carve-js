@@ -1,7 +1,8 @@
 // The program of spec/0.2/tooling.md ("Commands" to "Exit codes"), and the engine's upgrade command (C2-T-003).
 import { readFileSync, writeFileSync } from 'node:fs'
 import { CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, CarveTreeError, CarveWriteError,
-  decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, renderWithDiagnostics, includeDependencies, type Diagnostic,
+  decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, renderWithDiagnostics, renderWithDocumentTransforms,
+  includeDependencies, type Diagnostic,
   type DocumentNode, type FormatOptions, type RenderOptions, write } from '../src/index.ts'
 import { writerHasLoss } from '../src/write.ts'
 import { forEachSlot, type Node } from '../src/ast.ts'
@@ -13,6 +14,7 @@ import cli from '../data/cli.json' with { type: 'json' }
 import lintRules from '../data/lint-rules.json' with { type: 'json' }
 import { FLAGS, type ParsedArgs, UsageError } from './flags.ts'
 import { cliIncludes } from './include-fs.ts'
+import { extensionNames, extensionOptions, type Registration, registration } from './standard-extensions.ts'
 import { DirectoryImportError, importMarkdownDirectory, type DirectoryFormat } from './directory-import.ts'
 import { lint } from '../lint/lint.ts'
 import { fixSource } from './fix.ts'
@@ -290,14 +292,34 @@ class FileFailure extends Error {
   }
 }
 
-/** C2-T-010: the options the flags of the command set. */
+const NO_EXTENSIONS: Registration = { extensions: [], renderers: {}, transforms: [] }
+
+/** The standard extensions of `--extensions` for the run (C2-T-010). */
+let standard = NO_EXTENSIONS
+
+/** C2-T-010: the options the flags of the command set; `--extensions` gives the registrations of the standard extensions. */
 function options(args: ParsedArgs): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   for (const flag of FLAGS) {
     const value = args.values[flag.name]
-    if (flag.option !== undefined && flag.commands.includes(args.command) && value !== undefined) result[flag.option] = value
+    if (flag.option !== undefined && flag.option !== 'extensions' && flag.commands.includes(args.command) && value !== undefined) {
+      result[flag.option] = value
+    }
   }
+  if (standard.extensions.length > 0) result['extensions'] = standard.extensions
+  if (Object.keys(standard.renderers).length > 0) result['renderers'] = standard.renderers
   return result
+}
+
+/** The `extensions` option of a parse, where `--extensions` registers any. */
+function registered(): { extensions?: Registration['extensions'] } {
+  return standard.extensions.length > 0 ? { extensions: standard.extensions } : {}
+}
+
+function standardExtensions(args: ParsedArgs): Registration {
+  if (args.values['extensions'] === undefined && args.values['extension-options'] === undefined) return NO_EXTENSIONS
+  const names = args.values['extensions'] === undefined ? [] : extensionNames(args.values['extensions'])
+  return registration(names, extensionOptions(args.values['extension-options'], names), args.command === 'render')
 }
 
 function allowedLosses(args: ParsedArgs): ReadonlySet<string> {
@@ -337,7 +359,7 @@ function includeEntry(display: string, document: DocumentNode): object {
 /** `render --to markdown|plain|ansi`: the export of the file, with the loss gate of `render`. */
 function exportFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs, target: ExportTarget): FileResult {
   const fromAst = args.values['from-ast'] === true
-  const document = fromAst ? tree(strictText(path, bytes)) : parse(bytes, includesOf(path, args))
+  const document = fromAst ? tree(strictText(path, bytes)) : parse(bytes, { ...includesOf(path, args), ...registered() })
   const source = fromAst ? '' : lenientText(bytes)
   const settings: MarkdownExportOptions = {}
   if (args.values['smart-typography'] !== undefined) settings.smartTypography = args.values['smart-typography'] as boolean
@@ -364,7 +386,9 @@ function renderFile(path: string, display: string, bytes: Uint8Array, args: Pars
   const input = fromAst ? tree(strictText(path, bytes)) : bytes
   const source = fromAst ? '' : lenientText(bytes)
   // C2-T-026: the allow list is applied before strictLosses, so the gate is the command's.
-  const result = renderWithDiagnostics(input, { ...settings, strictLosses: false, maxLosses: Number.MAX_SAFE_INTEGER })
+  const unlimited = { ...settings, strictLosses: false, maxLosses: Number.MAX_SAFE_INTEGER }
+  const result = standard.transforms.length > 0 ? renderWithDocumentTransforms(input, standard.transforms, unlimited)
+    : renderWithDiagnostics(input, unlimited)
   const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
   const file: FileResult = { status: 0, losses: { file: display,
     diagnostics: located(source, retained, fromAst ? undefined : bytes), suppressed } }
@@ -388,7 +412,7 @@ function strictStatus(args: ParsedArgs, written: readonly Diagnostic[]): number 
 }
 
 function astFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
-  const document = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args) })
+  const document = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args), ...registered() })
   emit(`${args.values['envelope'] === true ? encodeEnvelope(document) : encodeTree(document)}\n`)
   return { status: 0, includes: includeEntry(display, document) }
 }
@@ -693,6 +717,7 @@ export function run(args: ParsedArgs): number {
   const files = args.files.length === 0 ? ['-'] : args.files
   includedTexts.clear()
   rawHtmlEscaped = false
+  standard = standardExtensions(args)
   const collected: Collected = { diagnostics: [], losses: [], includes: [] }
   const output = args.values['output']
   product = typeof output === 'string' ? [] : null

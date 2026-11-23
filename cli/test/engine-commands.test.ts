@@ -149,3 +149,51 @@ describe('--output, --strict, --ignore and upgrade --migrate', () => {
     expect(migrated.stderr).toContain('u.crv:3: case-reference rewrite:')
   })
 })
+
+describe('--extensions and --extension-options (C2-T-010)', () => {
+  const tabs = ':::: tabs\n::: tab "A"\na\n:::\n::::\n'
+
+  it('registers every standard extension of the catalog on render, fmt, lint and ast', () => {
+    const dir = temp({ 'a.crv': tabs })
+    const catalog = JSON.parse(readFileSync(join(root, 'data/extensions.json'), 'utf8')) as { extensions: { name: string }[] }
+    const names = JSON.stringify(catalog.extensions.map((entry) => entry.name))
+    for (const command of ['render', 'fmt', 'lint', 'ast']) {
+      const result = cli([command, '--extensions', names, 'a.crv'], '', dir)
+      expect([command, result.status, result.stderr]).toEqual([command, 0, ''])
+    }
+  })
+
+  it('registers a tab together with its group, and the spoiler forms together (C2-X-064)', () => {
+    const dir = temp({ 'a.crv': tabs, 's.crv': ':spoiler[x]\n\n::: spoiler\ny\n:::\n' })
+    type Tree = { name?: string, children: Tree[] }
+    const tab = JSON.parse(cli(['ast', '--extensions', '["carve.tab"]', 'a.crv'], '', dir).stdout) as Tree
+    expect(tab.children[0]?.name).toBe('carve.tabs')
+    const spoiler = JSON.parse(cli(['ast', '--no-positions', '--extensions', '["carve.spoiler"]', 's.crv'], '', dir).stdout) as Tree
+    expect([spoiler.children[0]?.children[0]?.name, spoiler.children[1]?.name]).toEqual(['carve.spoiler', 'carve.spoilerBlock'])
+  })
+
+  it('registers them for render --to markdown as well', () => {
+    const dir = temp({ 'a.crv': tabs })
+    const core = cli(['render', '--to', 'markdown', 'a.crv'], '', dir)
+    expect(core.stderr).toContain('markdown-container-flattened')
+    const registered = cli(['render', '--to', 'markdown', '--extensions', '["carve.tabs"]', 'a.crv'], '', dir)
+    expect([registered.stdout, registered.stderr]).toEqual(['**A**\n\na\n', ''])
+  })
+
+  it('refuses with usage what the catalog does not name', () => {
+    const dir = temp({ 'a.crv': tabs })
+    const refused = [
+      ['--extensions', '"carve.tabs"'],
+      ['--extensions', '["all"]'],
+      ['--extension-options', '{"carve.tabs":{"mode":"aria"}}'],
+      ['--extensions', '["carve.tabs"]', '--extension-options', '[]'],
+      ['--extensions', '["carve.tabs"]', '--extension-options', '{"carve.tabs":{"mode":"radio"}}'],
+      ['--extensions', '["carve.tabs"]', '--extension-options', '{"carve.tabs":{"color":"red"}}'],
+      ['--extensions', '["carve.mathBlock"]', '--extension-options', '{"carve.mathBlock":{"mode":"aria"}}'],
+    ]
+    for (const flags of refused) {
+      const result = cli(['render', ...flags, 'a.crv'], '', dir)
+      expect([flags, result.status, result.stdout, /^carve\[usage\]:/.test(result.stderr)]).toEqual([flags, 2, '', true])
+    }
+  })
+})
