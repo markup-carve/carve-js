@@ -376,20 +376,19 @@ function delimitedRow(row: TableRowNode, separator: string): string {
   return row.children.map((cell) => delimitedCell(cell, separator)).join(separator)
 }
 
-function lastRowIsOneCell(table: TableNode): boolean {
-  const group = table.children[table.children.length - 1]
-  const row = group?.type === 'comment' ? undefined : group?.children[group.children.length - 1]
-  return row?.type === 'table_row' && row.children.length === 1
-}
-
 function delimitedBody(table: TableNode, separator: string): string[] {
   const body: string[] = []
+  let last: RowEntry | undefined
   for (const group of table.children) {
     if (group.type === 'comment') continue
-    for (const row of group.children) body.push(row.type === 'table_row' ? delimitedRow(row, separator) : '')
+    for (const row of group.children) {
+      body.push(row.type === 'table_row' ? delimitedRow(row, separator) : '')
+      last = row
+    }
   }
-  // C2-B-226, C2-W-005: an empty last line is dropped, so a last row of one empty cell takes the quoted spelling.
-  if (body.length > 0 && body[body.length - 1] === '' && lastRowIsOneCell(table)) body[body.length - 1] = '""'
+  // C2-B-226, C2-W-005: an empty last line is dropped, so a last row of one empty cell takes the quoted spelling,
+  // whichever group holds it.
+  if (body[body.length - 1] === '' && last?.type === 'table_row' && last.children.length === 1) body[body.length - 1] = '""'
   return body
 }
 
