@@ -50,6 +50,7 @@ describe('carve-js#5386: an item whose text starts with a dot and a space', () =
     expect(format('. z\n1. . . a\n')).toBe('1. z\n2. . . a\n')
     expect(format('. z\n1. .\ta\n')).toBe('. z\n. .\ta\n')
     expect(format('. z\n. [ ] . . a\n')).toBe('. z\n. [ ] . . a\n')
+    expect(format('. {#x}\n  \\. a\n')).toBe('. {#x}\n  \\. a\n')
   })
 })
 

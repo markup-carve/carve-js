@@ -1,5 +1,6 @@
 // The markers of a list (C2-W-044, C2-W-045) and whether two lists would read as one (C2-W-028).
 import { type ListNode, type Node } from './ast.ts'
+import { braceBlock } from './write-attributes.ts'
 import { type Writer } from './write-state.ts'
 
 /** C2-B-036: a number marker has at most nine digits, and a roman numeral at most nine letters. */
@@ -81,11 +82,14 @@ function decimalMarkers(w: Writer, node: ListNode, delimiter: string, authored: 
   return { markers: new Array<string>(count).fill('.'), start: start === 1 ? null : String(start) }
 }
 
-/** C2-B-043: an item whose text starts with a dot and a space leaves a bare dot before it no marker. */
+/**
+ * C2-B-043: an item whose text starts with a dot and a space on its marker line leaves a bare dot before it no
+ * marker. Paragraph attributes put that text on a later line.
+ */
 function opensWithDot(item: ListNode['children'][number]): boolean {
   if (item.task !== undefined) return false
   const first = item.children[0]
-  if (first?.type !== 'paragraph') return false
+  if (first?.type !== 'paragraph' || braceBlock(first) !== '') return false
   const lead = first.children[0]
   return lead?.type === 'text' && lead.value.startsWith('. ')
 }
