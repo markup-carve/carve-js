@@ -209,6 +209,8 @@ function textLeaf(
   attributeLine(w, node, prefix)
   const attributed = w.lines.length > above
   if (node.type === 'paragraph') notePlace(w, node, prefix)
+  // C2-B-154: a heading behind a lead continues past its own marker, wherever the content column of the body is.
+  if (node.type === 'heading') indent = ' '.repeat(leadIndent(w, prefix)) + indent
   w.lead = (w.lead ?? prefix) + mark
   const start = node.type === 'paragraph' ? LINE_START : AFTER_MARK
   const first = w.lines.length
@@ -405,7 +407,7 @@ function takesLazyLine(w: Writer, node: Node): boolean {
   return LAZY_LEAVES.has(at.type) || captionOf(at) !== undefined || isLeftOpen(w, at)
 }
 
-/** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
+/** C2-W-035: `=`, one per level, and one space; a continuation line stands at the column of the heading's text. */
 function heading(w: Writer, node: HeadingNode, prefix: string, flags: number): void {
   let level = node.level
   if (level > MAX_HEADING_LEVEL) {
