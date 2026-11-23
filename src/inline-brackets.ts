@@ -1,7 +1,7 @@
 // The bracket stack of the inline scan (C2-I-006): openers, the closing bracket and what is
 // glued to it, the link tail, reference labels and footnote references.
 import { emptyBlockEnd, readAttributeBlock } from './attributes.ts'
-import { foldLabel } from './ast-attributes.ts'
+import { cellLabelSource, foldLabel } from './ast-attributes.ts'
 import {
   APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN,
   PERCENT, QUOTE_MARK, SPACE,
@@ -276,9 +276,8 @@ function closeShortcut(state: InlineState, open: number, pos: number): number {
   const image = state.tokens[open + TOKEN_A] === OPEN_IMAGE
   // C2-I-101: a citation-shaped pair keeps its core reading as text and a mention.
   if (!image && state.text.charCodeAt(start) === AT_SIGN) return NONE
-  // C2-B-224: in a cell an escaped pipe is a literal pipe before inline parsing, so the shortcut's key holds `|`.
   const source = state.text.slice(start, pos)
-  const key = foldLabel(state.cell ? source.replaceAll('\\|', '|') : source)
+  const key = foldLabel(state.cell ? cellLabelSource(source, image) : source)
   if (key === '' || !definitions.has(key)) return NONE
   closePair(state, open, pos, image ? IMAGE : LINK)
   pushToken(state, LABEL, pos + 1, pos + 1, start, pos, FLAG_SHORTCUT, NONE)

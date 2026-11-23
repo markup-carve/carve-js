@@ -22,3 +22,18 @@ it('C2-W-088: text that would read as such a shortcut keeps its escape', () => {
   expect(written.diagnostics).toEqual([])
   expect(render(written.source)).toContain('<td>[r|s]</td>')
 })
+
+it('C2-B-224: in a code span of the text `\\|` stays two characters, for a shortcut and a collapsed reference', () => {
+  expect(render('| [`\\|`] |\n\n[`\\|`]: /u\n')).toContain('<td><a href="/u"><code>\\|</code></a></td>')
+  expect(render('| [`\\|`] |\n\n[`|`]: /u\n')).toContain('<td>[<code>\\|</code>]</td>')
+  expect(render('| [`\\|`][] |\n\n[`\\|`]: /u\n')).toContain('<td><a href="/u"><code>\\|</code></a></td>')
+  expect(render('| [`a` \\| `b`] |\n\n[`a` | `b`]: /u\n')).toContain('<td><a href="/u"><code>a</code> | <code>b</code></a></td>')
+})
+
+it('C2-B-224, C2-I-074: an image text in a cell is its alt, so its key holds `|` in a code span too', () => {
+  expect(render('| ![`\\|`] |\n\n[`|`]: /u\n')).toContain('<td><img src="/u" alt="`|`"></td>')
+  expect(render('| ![`\\|`][] |\n\n[`|`]: /u\n')).toContain('<td><img src="/u" alt="`|`"></td>')
+  const source = '| ![`\\|`][] |\n\n[`|`]: /u\n'
+  expect(format(source)).toBe(source)
+  expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
+})

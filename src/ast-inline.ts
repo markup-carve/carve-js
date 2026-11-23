@@ -5,7 +5,7 @@ import {
   type SuperscriptNode, type TextNode, type UnderlineNode,
 } from './ast.ts'
 import { CR, LF } from './chars.ts'
-import { type Attributes, attributeSink, emptyAttributes, foldLabel } from './ast-attributes.ts'
+import { type Attributes, attributeSink, cellLabelSource, emptyAttributes, foldLabel } from './ast-attributes.ts'
 import { emptyMemo, readAttributeBlock, unescape } from './attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
@@ -321,7 +321,7 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
   } else if ((host.flags & (FLAG_COLLAPSED | FLAG_SHORTCUT)) !== 0) {
     // C2-I-072: the label of a collapsed reference is the source of its own text.
     const source = contentSource(ctx.src, spans, host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1)
-    host.key = foldLabel(ctx.inline.cell ? source.replaceAll('\\|', '|') : source)
+    host.key = foldLabel(ctx.inline.cell ? cellLabelSource(source, host.kind === IMAGE) : source)
   } else {
     host.key = foldLabel(ctx.inline.cell ? value.replaceAll('\\|', '|') : value)
   }
