@@ -145,7 +145,6 @@ function fenceInfo(w: Writer, node: CodeBlockNode | RawBlockNode): string {
 /** C2-W-037, C2-W-038, C2-W-040: a code block, and a raw block as the fence with `=` and its format. */
 function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string): void {
   attributeLine(w, node, prefix)
-  const continuation = w.lead !== null && w.lead.startsWith('[^') && prefix.length > 2 ? ' '.repeat(w.lead.length) : prefix
   const lines = valueLines(w, node)
   const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
   let info = fenceInfo(w, node)
@@ -155,8 +154,8 @@ function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string
     info += openerTail(w, node, title, title === null ? '' : quoted(title).slice(1, -1))
   }
   emit(w, prefix, run + info)
-  for (const line of lines) emit(w, continuation, line)
-  if (!isLeftOpen(w, node)) emit(w, continuation, run)
+  for (const line of lines) emit(w, prefix, line)
+  if (!isLeftOpen(w, node)) emit(w, prefix, run)
 }
 
 /** C2-W-059: a line comment, and a comment block with the shortest percent run its body allows. */
