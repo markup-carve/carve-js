@@ -75,6 +75,15 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
     }
   })
 
+  it('C2-B-232: opens a metadata block at column 0 after a description list and a blank line (carve-js#5392)', () => {
+    for (const container of [':: t\n: d', ':: u\n: > e', ':: t\n: ```\n  k\n  ```', '{.c}\n:: t\n: d']) {
+      const children = parse(`${container}\n\n---yaml\nk: v\n---\n`).children
+      expect(children.map((node) => node.type), container).toEqual(['definition_list', 'frontmatter'])
+      expect(children[1]).toMatchObject({ format: 'yaml', value: 'k: v\n' })
+    }
+    expect(render(':: t\n: d\n\n---yaml\nk: v\n---\n')).toBe('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>')
+  })
+
   it('C2-W-155: below a list, description list or footnote, departs in order or refuses (carve#6418)', () => {
     const paragraph = parse('a\n\n ---yaml\nk: v\n---\n').children[1]!
     const spelled = [
