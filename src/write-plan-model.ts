@@ -4,7 +4,7 @@
 import { type CommentNode, forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
 import { braceBlock } from './write-attributes.ts'
 import {
-  BARE_BREAKS, edgeComment, escapeOffsets, IN_BRACKET, lineStartBreak, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode,
+  BARE_BREAKS, edgeComment, edgeSpace, escapeOffsets, IN_BRACKET, lineStartBreak, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode,
   kindsBelow, leadingCaret, rawReference, target, writeInline,
 } from './write-inline.ts'
 import { type Writer } from './write-state.ts'
@@ -182,7 +182,8 @@ function paired(mark: string, bit: number): ContainerModel<'emphasis' | 'strong'
   return (w, leaf, node, flags) => {
     if (node.children.length === 0) return false
     const inside = bit === 1 ? IN_EMPHASIS : IN_STRONG
-    const braced = (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node)
+    const braced = (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node) ||
+      edgeSpace(node)
     around(w, leaf, node, node.children, braced ? `{${mark}` : mark, braced ? `${mark}}` : mark, flags | inside)
     return true
   }

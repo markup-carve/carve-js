@@ -1520,11 +1520,38 @@ function nextIndex(scan: PruneScan, source: string, needle: string, from: number
   return at
 }
 
-function prunableStar(w: Writer, source: string, at: number, scan: PruneScan): boolean {
-  if (w.parsed === null || !(scan.stars ??= textAfterBreak(w.parsed.children))) return false
+/** The UTF-8 offset of `at` in `source`, for `at` that do not decrease within one scan. */
+function scanByte(scan: PruneScan, source: string, at: number): number {
   scan.byte += utf8Length(source.slice(scan.scanned, at))
   scan.scanned = at
-  return starAfterBreak(w.parsed.children, scan.byte, null)
+  return scan.byte
+}
+
+function prunableStar(w: Writer, source: string, at: number, scan: PruneScan): boolean {
+  if (w.parsed === null || !(scan.stars ??= textAfterBreak(w.parsed.children))) return false
+  return starAfterBreak(w.parsed.children, scanByte(scan, source, at), null)
+}
+
+/**
+ * Whether the parse opens a bare emphasis or strong at the mark behind the `\{` at `at`. Without the backslash `{` and
+ * the mark read as one braced opener, so that pair cannot form and the backslash stays (C2-I-057).
+ */
+function opensBarePair(w: Writer, source: string, at: number, scan: PruneScan): boolean {
+  if (w.parsed === null) return false
+  if (barePairCache.parsed !== w.parsed) barePairCache = { parsed: w.parsed, starts: barePairStarts(w.parsed.children) }
+  return barePairCache.starts.has(scanByte(scan, source, at) + 2)
+}
+
+let barePairCache: { parsed: DocumentNode | null, starts: Set<number> } = { parsed: null, starts: new Set() }
+
+function barePairStarts(nodes: readonly Node[]): Set<number> {
+  const bytes = new Set<number>()
+  const pending = [...nodes]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if ((node.type === 'emphasis' || node.type === 'strong') && node.pos !== undefined) bytes.add(node.pos.startOffset)
+    for (const child of childNodes(node)) pending.push(child)
+  }
+  return bytes
 }
 
 function prunableBracket(w: Writer, source: string, at: number, scan: PruneScan): boolean {
@@ -1543,7 +1570,7 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   if (next === '^') return source[at - 1] === '[' && !isNoteBracket(source, at - 1) && behindNoteOpener(source, at)
   if (next === '[') return prunableBracket(w, source, at, scan)
   if (next !== '{') return false
-  if (source[at + 2] === '/' || source[at + 2] === '*') return true
+  if (source[at + 2] === '/' || source[at + 2] === '*') return !opensBarePair(w, source, at, scan)
   if (source[at + 2] !== '#') return false
   const close = nextIndex(scan, source, '}', at + 3)
   const escapedDash = nextIndex(scan, source, '\\-', at + 3)

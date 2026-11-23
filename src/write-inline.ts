@@ -10,7 +10,7 @@ import { inlineContent } from './ast-blocks.ts'
 import { parseChunk } from './write-check.ts'
 import { unitBytes } from './positions.ts'
 import { emailEnd, urlEnd } from './inline-atoms.ts'
-import { isAsciiPunctuation } from './unicode.ts'
+import { isAsciiPunctuation, isBoundarySpace, isJoining } from './unicode.ts'
 import { braceBlock, quoted } from './write-attributes.ts'
 import { lose, trimEnd, type Writer } from './write-state.ts'
 
@@ -191,6 +191,25 @@ export function edgeComment(node: InlineParent): boolean {
   return (first?.type === 'comment' && first.form === 'line') || (last?.type === 'comment' && last.form === 'line')
 }
 
+/**
+ * C2-W-069, C2-I-047, C2-I-048, C2-I-050: content that starts with a space, a line break or a joining mark, or ends
+ * with a space or a line break, leaves the bare opener or closer unable to pair. That form is braced in every round
+ * (carve#6482).
+ */
+export function edgeSpace(node: InlineParent): boolean {
+  const first = node.children[0]
+  const last = node.children[node.children.length - 1]
+  if (first?.type === 'text' ? startsWithSpace(first.value) : SPACE_NODES.has(first?.type ?? '')) return true
+  return last?.type === 'text' ? isBoundarySpace(last.value.charCodeAt(last.value.length - 1)) : SPACE_NODES.has(last?.type ?? '')
+}
+
+const SPACE_NODES = new Set(['soft_break', 'hard_break', 'non_breaking_space'])
+
+function startsWithSpace(value: string): boolean {
+  const code = value.codePointAt(0)
+  return code !== undefined && (isBoundarySpace(code) || isJoining(code))
+}
+
 /** Whether emphasis (bit 1) and strong (bit 2) occur below `node` (C2-W-070). */
 export function kindsBelow(w: Writer, node: Node): number {
   const known = w.kindsBelow.get(node)
@@ -223,7 +242,8 @@ function paired(mark: string, bit: number, inside: number): InlineWriter {
 }
 
 function bracedPair(w: Writer, node: InlineParent, flags: number, bit: number, inside: number): boolean {
-  return (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node)
+  return (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node) ||
+    edgeSpace(node)
 }
 
 /** C2-W-071, C2-W-116: a span that has only a braced form. */
