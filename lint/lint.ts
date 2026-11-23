@@ -351,7 +351,6 @@ const NODE_ORDER: ReadonlyMap<string, number> = new Map([
   ['figure-group-nested', 30],
   ['figure-group-panel-number', 31],
   ['footnotes-placement-in-container', 32],
-  ['references-placement-in-container', 33],
   ['semantic-attribute-outside-span', 34],
   ['semantic-attribute-value-ignored', 35],
   ['table-column-arity', 36],
@@ -438,7 +437,6 @@ const LINE_ORDER: ReadonlyMap<string, number> = new Map([
   ['caption-looking-paragraph', 25],
   ['colon-fence-length-mismatch', 26],
   ['description-separator-below-content-column', 27],
-  ['table-row-without-closing-pipe', 28],
 ])
 
 const DIAGNOSTIC_KIND: ReadonlyMap<string, number> = new Map([
@@ -574,5 +572,8 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
 export const IMPLEMENTED_RULES: readonly Rule[] = [
   ...[...LINE_RULES, ...NODE_RULES].filter((rule) => !DATA_RULE_IDS.has(rule.id)),
   ...DATA_RULES.map((rule): Rule => ({ id: rule.id, ...(rule.over === 'line' ? { lines: true } : {}) })),
+  // A void catalog row is accepted as a rule setting and never reports.
+  ...(Object.keys(CATALOG) as RuleId[]).filter((id) => 'status' in CATALOG[id] && CATALOG[id].status === 'void')
+    .map((id): Rule => ({ id })),
 ]
 export type { LintOptions } from './types.ts'
