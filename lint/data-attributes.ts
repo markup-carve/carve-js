@@ -317,12 +317,15 @@ function markerParts(reader: Reader, start: number, end: number, cell: boolean):
   if (source.charCodeAt(at) === 123) reader.run(at, end, cell)
 }
 
-/** C2-I-036: the run of glued blocks that ends at the end of an inline node. */
-function inlineParts(reader: Reader, start: number, end: number): void {
+/** C2-I-036: the run of glued blocks that ends at the end of an inline node; it starts behind the node's content. */
+function inlineParts(reader: Reader, node: Node, start: number, end: number, context: LintContext): void {
   const source = reader.source
   if (source.charCodeAt(end - 1) !== 125) return
+  const children = (node as { children?: readonly Node[] }).children
+  const last = children?.[children.length - 1]?.pos
+  const from = Math.max(start + 1, last === undefined ? 0 : context.chars[last.endOffset] ?? 0)
   const kept = reader.out.length
-  for (let at = source.indexOf('{', start + 1); at >= 0 && at < end; at = source.indexOf('{', at + 1)) {
+  for (let at = source.indexOf('{', from); at >= 0 && at < end; at = source.indexOf('{', at + 1)) {
     if (reader.run(at, end, false) === end) return
     reader.rollback(kept, 0)
   }
@@ -388,7 +391,7 @@ export function attributeRecords(attributed: Attributed, context: LintContext, k
     const first = records.length
     reader.index = 0
     let opener = start
-    if (attributed.inline[item]) inlineParts(reader, start, end)
+    if (attributed.inline[item]) inlineParts(reader, node, start, end, context)
     else if (MARKER_OWNERS.has(node.type)) markerParts(reader, start, end, node.type === 'table_cell')
     else opener = lineParts(reader, node, start, path, context)
     if (records.length === first) continue
