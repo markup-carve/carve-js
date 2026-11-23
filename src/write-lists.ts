@@ -75,9 +75,19 @@ function decimalMarkers(w: Writer, node: ListNode, delimiter: string, authored: 
   // C2-W-044, C2-B-229: only a dot directly behind the bare dot reads as text; a task box or quote
   // mark between them leaves it a marker.
   const behindBareDot = w.bareDotLead && (w.lead?.endsWith('. ') ?? false)
-  const bare = delimiter === '.' && !behindBareDot && (w.facts?.get(node)?.bare ?? true)
+  const bare = delimiter === '.' && !behindBareDot && !node.children.some(opensWithDot) &&
+    (w.facts?.get(node)?.bare ?? true)
   if (!bare) return numberedMarkers(delimiter, start, count)
   return { markers: new Array<string>(count).fill('.'), start: start === 1 ? null : String(start) }
+}
+
+/** C2-B-043: an item whose text starts with a dot and a space leaves a bare dot before it no marker. */
+function opensWithDot(item: ListNode['children'][number]): boolean {
+  if (item.task !== undefined) return false
+  const first = item.children[0]
+  if (first?.type !== 'paragraph') return false
+  const lead = first.children[0]
+  return lead?.type === 'text' && lead.value.startsWith('. ')
 }
 
 /** The markers of the items of `node`, and the start value for its attribute line. */

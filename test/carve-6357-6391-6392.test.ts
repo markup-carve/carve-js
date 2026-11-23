@@ -1,4 +1,4 @@
-// carve#6392 (C2-W-044, C2-B-229), carve#6391 (C2-W-088) and carve#6357 (catalog deprecated-continuation-marker).
+// carve#6392 and carve-js#5386 (C2-W-044, C2-B-043, C2-B-229), carve#6391 (C2-W-088) and carve#6357 (catalog deprecated-continuation-marker).
 import { describe, expect, it } from 'vitest'
 import { type DocumentNode, type Inline, format, lint, parse, treesEqual, writeWithDiagnostics } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
@@ -35,6 +35,14 @@ describe('carve#6392: a bare dot behind a task box or quote mark', () => {
   it('writes the bare dot for a tree without sidecar facts', () => {
     const tree = parse('. > . a\n')
     expect(written(JSON.parse(JSON.stringify(tree)) as DocumentNode)).toBe('. > . a\n')
+  })
+})
+
+describe('carve-js#5386: an item whose text starts with a dot and a space', () => {
+  it('numbers the list, since a bare dot before that text is no marker', () => {
+    expect(format('. z\n1. . . a\n')).toBe('1. z\n2. . . a\n')
+    expect(format('. z\n1. .\ta\n')).toBe('. z\n. .\ta\n')
+    expect(format('. z\n. [ ] . . a\n')).toBe('. z\n. [ ] . . a\n')
   })
 })
 
