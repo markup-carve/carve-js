@@ -52,11 +52,6 @@ function bidiControl(node: Node, path: string, context: LintContext): void {
   }
 }
 
-function referencesPlacement(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'directive' || path.split('/').length <= 3) return
-  if (node.kind === 'references') reportNode('references-placement-in-container', node, path, context)
-}
-
 function platformIssue(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const source = raw(node, context)
@@ -165,7 +160,6 @@ function nodeRule(id: Rule['id'], nodes: readonly Node['type'][] , checkNode: No
 export const NODE_RULES: readonly Rule[] = [
                   nodeRule('deprecated-substitution-arrow', ['strike'], substitutionArrow),
   nodeRule('bidi-control-in-source', ['text', 'code', 'code_block', 'math'], bidiControl),
-    nodeRule('references-placement-in-container', ['directive'], referencesPlacement),
   nodeRule('platform-issue-reference', ['text'], platformIssue),
   nodeRule('platform-mention-token', ['text', 'mention'], platformMention),
       nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
