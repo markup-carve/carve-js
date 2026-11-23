@@ -17,7 +17,7 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
   it('C2-W-154: writes the paragraph directly below a list that ends in a block without lazy lines (carve#6394)', () => {
     const lists = ['- ```\n  x\n  ```', '- :::\n  x\n  :::', '- | a | b |', '- = H', '- a\n  - ```\n    x\n    ```', '- ***',
       '- > ```\n  > x\n  > ```', '- > = H', '- ::: >\n  q\n  :::', '- ::: |\n  a\n  :::',
-      '- %%%\n  hi\n  %%%']
+      '- %%%\n  hi\n  %%%', '- {{ foo }}', '- %% c', '- ```\n  x\n  ```\n  %% c']
     for (const list of lists) {
       const source = `${list}\n---yaml\nk: v\n---\n`
       expect(format(source)).toBe(source)

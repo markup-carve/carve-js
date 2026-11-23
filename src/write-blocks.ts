@@ -229,19 +229,19 @@ export function followsListDirectly(w: Writer, before: Node, node: Node): boolea
 }
 
 const INDENT_TAKERS: ReadonlySet<string> = new Set(['list', 'footnote', 'definition_list'])
-const NO_LAZY_LINE: ReadonlySet<string> = new Set(['code_block', 'raw_block', 'table', 'heading', 'thematic_break'])
+const LAZY_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'definition_term'])
+const LAZY_ENDS: ReadonlySet<string> = new Set(['list', 'list_item', 'block_quote', 'definition_list', 'definition_description'])
 
 /** Whether a column-0 line directly below `node` would be a lazy line of the block it ends in (C2-B-024). */
 function takesLazyLine(w: Writer, node: Node): boolean {
   let at = node
-  while ((at.type === 'list' || at.type === 'list_item' || at.type === 'block_quote') && !hasColonRun(w, at)) {
-    const children = childNodes(at)
+  while (LAZY_ENDS.has(at.type) && !hasColonRun(w, at)) {
+    // C2-B-137: a comment line opens and closes nothing, so the block above it decides.
+    const children = childNodes(at).filter((child) => !isCommentLine(child))
     if (children.length === 0) return at.type === 'list'
     at = children[children.length - 1]!
   }
-  if (captionOf(at) !== undefined || isLeftOpen(w, at)) return true
-  if (at.type === 'comment' && at.form === 'block') return false
-  return !hasColonRun(w, at) && !NO_LAZY_LINE.has(at.type)
+  return LAZY_LEAVES.has(at.type) || captionOf(at) !== undefined || isLeftOpen(w, at)
 }
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
