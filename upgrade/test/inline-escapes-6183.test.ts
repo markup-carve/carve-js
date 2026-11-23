@@ -15,6 +15,12 @@ describe('U-113: a bracket child of an unresolved reference', () => {
     expect(result.check).toBe('explained')
     expect(result.records.some((record) => record.entry === 'U-430')).toBe(false)
   })
+
+  it('does not escape the reference bracket twice when U-111 escaped it for a wrapped label', () => {
+    const result = upgrade('[a [x](u) b][r\nq]\n')
+    expect(result.output).toBe('\\[a \\[x](u) b][r\nq]\n')
+    expect(result.check).toBe('pass')
+  })
 })
 
 describe('U-273: the explicit inline spelling keeps a 0.1 braced span', () => {

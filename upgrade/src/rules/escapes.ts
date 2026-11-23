@@ -177,8 +177,8 @@ function underHeading(ctx: Context, visit: Visit): void {
 const INLINE_TEXT = new Set(['text', 'soft_break', 'escaped_text', 'non_breaking_space'])
 
 /** U-113: an unresolved reference renders its children in 0.2 (C2-I-085); 0.1 wrote it as typed. */
-function markupInside(ctx: Context, link: Node01): void {
-  let outer = false
+function markupInside(ctx: Context, link: Node01, escaped = false): void {
+  let outer = escaped
   for (const child of link.children ?? []) {
     if (INLINE_TEXT.has(child.type) || child.pos === undefined) continue
     const { startOffset: start, endOffset: end } = child.pos
@@ -233,7 +233,8 @@ function reference(ctx: Context, index: number, headings: Set<string>): void {
         'the wrapped label escaped because it would become a shortcut after the first escape'
       )
     }
-    markupInside(ctx, link)
+    // U-111 already escaped the reference's own bracket.
+    markupInside(ctx, link, true)
   } else if (headings.has(collapsed ? plainText(ctx.visits, index) : ref)) {
     // C2-I-081: the heading lookup applies to the full form too.
     if (!collapsed)
