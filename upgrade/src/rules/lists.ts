@@ -359,15 +359,27 @@ function listAbove(ctx: Context, visit: Visit): Node01 | null {
   return above
 }
 
+/** A list of a description body whose item lines hold only spaces before the marker, so its columns are its own. */
+function indentedDescriptionList(ctx: Context, visit: Visit, items: Node01[]): boolean {
+  if (visit.parent!.node.type !== 'definition_list' || items.length < 2) return false
+  return items.every((item) => {
+    const text = lineText(ctx.lines, item.pos!.startLine)
+    return markerSpan(ctx, item)[0] === lineStart(ctx.lines, item.pos!.startLine) + indentOf(text)
+      && /^[ ]*(?:[-*+]|\d+[.)])[ \t]/u.test(text)
+  })
+}
+
 /**
  * U-023: a marker right of the marker above it and short of that item's content column
  * nests in 0.2 (C2-B-015), so it moves to the column of the list. A marker at or left of the
  * marker above continues the list (C2-B-030, C2-B-054) and stays.
  */
 function markerColumns(ctx: Context, visit: Visit): void {
-  // Only a list of the document itself: inside a container the columns belong to the container.
-  if (visit.parent!.node !== ctx.doc || visit.siblings !== ctx.doc.children) return
+  // A list of the document, or in a late pass one of a description body on its own lines: elsewhere the
+  // columns belong to the container.
   const items = itemsOf(visit.node)
+  const top = visit.parent!.node === ctx.doc && visit.siblings === ctx.doc.children
+  if (!top && !(ctx.late && indentedDescriptionList(ctx, visit, items))) return
   if (items.length === 0) return
   let base = markerColumn(ctx, items[0]!)
   for (const item of items) base = Math.min(base, markerColumn(ctx, item))
