@@ -30,8 +30,8 @@ describe('Carve 0.2 importers', () => {
     })
 
   it('C2-W-134 returns writer refusal diagnostics with a valid imported tree', () => {
-    // Through the HTML hub a carriage return in code is normalized by the HTML parser, so an empty item is the refusal.
-    const result = importDocument('- a\n-\n- b\n', { from: 'djot' })
+    // Through the HTML hub a carriage return in code is normalized by the HTML parser, so a `dir` is the refusal.
+    const result = importDocument('- a\n\n{dir=rtl}\nb\n', { from: 'djot' })
     expect(() => validateTree(result.document)).not.toThrow()
     expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
       .includes(entry.code))).toBe(true)

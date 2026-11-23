@@ -129,6 +129,20 @@ describe('a denied block image', () => {
       expect(importDocument(input, { from }).diagnostics.some(entry => entry.code === 'import-destination-denied')).toBe(true)
     }
   })
+
+  it('leaves a Markdown or Djot item it empties holding a comment, the parsed empty item (carve#6428)', () => {
+    for (const from of ['markdown', 'gfm', 'djot'] as const) {
+      expect(source('- ![](data:x)\n', from)).toBe('- %%\n')
+      expect(source('> - ![](javascript:x)\n', from)).toBe('> - %%\n')
+      expect(source('p\n\n1. ![](data:x)\n', from)).toBe('p\n\n. %%\n')
+      const result = importDocument('- a\n- ![](data:x)\n', { from })
+      expect(result.source).toBe('- a\n- %%\n')
+      expect(result.diagnostics.map(entry => entry.code)).toEqual(['import-destination-denied'])
+    }
+    expect(source(': t\n\n  ![](data:x)\n', 'djot')).toBe(':: t\n: %%\n')
+    expect(source('-\n', 'gfm')).toBe('- %%\n')
+    expect(source('- a\n-\n- b\n', 'djot')).toBe('- a\n- %%\n- b\n')
+  })
 })
 
 describe('micromark 4.0.3 workarounds', () => {

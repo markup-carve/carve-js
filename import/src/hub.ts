@@ -467,6 +467,26 @@ export function djotHtml(input: string, sink: Sink): string {
   } })
 }
 
+/**
+ * C2-A-186, C2-W-057: a parsed item or description is never empty; the empty spelling is a marker plus a comment. The
+ * library renders an empty source item as `<li></li>`, so the item gets the comment a parse of `- %%` gives.
+ */
+const EMPTY_BODIES: ReadonlySet<unknown> = new Set(['list_item', 'definition_description'])
+
+function commentEmptyItems(nodes: readonly object[]): void {
+  const pending: unknown[] = [...nodes]
+  while (pending.length > 0) {
+    const node = pending.pop()
+    if (node === null || typeof node !== 'object') continue
+    const children: unknown = Reflect.get(node, 'children')
+    if (!Array.isArray(children)) continue
+    if (children.length === 0 && EMPTY_BODIES.has(Reflect.get(node, 'type'))) {
+      children.push({ type: 'comment', form: 'line', value: '' })
+    }
+    pending.push(...(children as unknown[]))
+  }
+}
+
 /** Imports through the hub: library HTML, then the 0.2 HTML importer with raw HTML kept, then the frontmatter. */
 export function importThroughHtml(input: string, format: HubFormat, constructs = false): ImportResult {
   const sink: Sink = { raw: [], ...(constructs ? { constructs: [] } : {}) }
@@ -485,7 +505,10 @@ export function importThroughHtml(input: string, format: HubFormat, constructs =
     dropNoteLabelPointers(nodes)
     githubAlerts(nodes)
   },
-    finish: children => [...lead, ...(sink.raw.length > 0 ? restoreRaw(children, sink.raw) : children)] })
+    finish: children => {
+      commentEmptyItems(children)
+      return [...lead, ...(sink.raw.length > 0 ? restoreRaw(children, sink.raw) : children)]
+    } })
   // The libraries' own line breaks around tags are no whitespace of the input.
   const diagnostics = withoutHtmlRanges(result.diagnostics)
   if (sink.constructs === undefined) return { ...result, diagnostics }

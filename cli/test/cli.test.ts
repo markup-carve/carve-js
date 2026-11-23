@@ -74,9 +74,9 @@ describe('carve process', () => {
   })
 
   it('C2-W-134: importing a writer refusal exits with a named category', () => {
-    // C2-W-134: an empty item between items has no spelling. Djot reaches the writer through the HTML hub, whose
-    // parser normalizes a CR in code, so the C2-W-016 example no longer applies.
-    const result = cli(['import', '--from=djot'], '- a\n-\n- b\n')
+    // C2-W-134: a supplied empty item between items has no spelling (C2-W-057). HTML keeps it as it stands (C2-M-074);
+    // the C2-W-016 example no longer applies, since the HTML parser normalizes a CR in code.
+    const result = cli(['import', '--from=html'], '<ul><li>a</li><li></li><li>b</li></ul>\n')
     expect(result.status).toBe(1)
     expect(result.stderr).toMatch(/^carve\[writer-refused\]:/)
     expect(result.stderr).toMatch(/structure-unspellable/)
