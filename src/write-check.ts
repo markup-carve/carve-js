@@ -16,6 +16,7 @@ import {
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
+import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
 export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys,
@@ -100,13 +101,15 @@ export interface Check {
   cut: boolean
   /** The trials among `trials` that escape a backtick a probe found opening a code span. */
   codeTrials: Set<[TextNode, number]>
+  /** Escapes of a closer that ended a node early (C2-W-125, case five); in a probe round they give no kind (C2-W-088). */
+  closers: Set<[TextNode, number]>
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
-    cut: false, codeTrials: new Set(),
+    cut: false, codeTrials: new Set(), closers: new Set(),
   }
 }
 
@@ -317,7 +320,7 @@ function escapeInContent(c: Check, e: Node): boolean {
   const mark = CLOSING_MARKS.get(e.type)
   if (mark === undefined || !('children' in e)) return false
   if (mark === ']' && escapeLoneClosers(c, e)) return true
-  return escapeMark(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
+  return escapeCloser(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
 }
 
 function escapeLoneClosers(c: Check, e: Node): boolean {
@@ -380,7 +383,7 @@ function joinsNext(es: readonly Node[], i: number): boolean {
 function escapeOwnerMark(c: Check, e: Node): boolean {
   const mark = c.owner === null ? undefined : CLOSING_MARKS.get(c.owner.type)
   if (mark === undefined || !('children' in e)) return false
-  return escapeMark(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
+  return escapeCloser(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
 }
 
 /** Asks for the escape that keeps the text before `es[i]` from reading on into its opening markup. */
@@ -647,6 +650,14 @@ function probeRound(c: Check, w: Writer, e: Node, expected: readonly Node[], fla
   probe.flags = flags
   probe.source = source
   compareInlines(probe, expected, block.children, e)
+  // C2-W-088: a probe round escapes every opener of each kind its parse reports in the probed leaf block, as a round
+  // of the group does; where that loses a node, the group runs again without kinds (CC-1633), and so do its probes.
+  // A closer that ended a node early is no reported construct: its backslash is C2-W-125's and gives no kind (CC-1568).
+  if (w.kindRounds) {
+    const leaf: Node[] = [{ type: 'paragraph', children: expected } as ParagraphNode]
+    escapeKinds(probe, leaf, probe.closers)
+    escapePartnerClosers(probe, leaf)
+  }
   extendChains(probe)
   const taken = probe.escapes.filter(([node, at]) => takes(node, at) && escapeAt(c, node, at))
   return taken.length === 0 && probe.losses.length > 0 ? null : taken
@@ -683,7 +694,7 @@ function standIn(w: Writer, anchor: Node, role: string, value: string): TextNode
 function probeKey(c: Check, e: Node, expected: readonly Node[], flags: number, site: ProbeSite): string {
   const w = c.w
   // The comparison reads the form of `e` itself where its content ends early (`closedEarly`).
-  const parts: unknown[] = [site, flags, nodeIdOf(w, e), nodeState(c, e)]
+  const parts: unknown[] = [site, flags, w.kindRounds, nodeIdOf(w, e), nodeState(c, e)]
   for (const node of expected) parts.push(nodeIdOf(w, node))
   const pending = [...expected]
   for (;;) {
@@ -1068,6 +1079,13 @@ function isPaired(node: Node): node is EmphasisNode | StrongNode {
   return node.type === 'emphasis' || node.type === 'strong'
 }
 
+/** `escapeMark` for the closing mark of a node that ended early; the escape is kept as one of `c.closers`. */
+function escapeCloser(c: Check, nodes: readonly Node[], start: number, from: number, mark: string): boolean {
+  if (!escapeMark(c, nodes, start, from, mark)) return false
+  c.closers.add(c.escapes[c.escapes.length - 1]!)
+  return true
+}
+
 /** Asks for a backslash before the first bare `mark` in the text below `nodes`, from the offset `from` of the first node on. */
 function escapeMark(c: Check, nodes: readonly Node[], start: number, from: number, mark: string): boolean {
   for (let at = start; at < nodes.length; at++) {
@@ -1090,7 +1108,7 @@ function escapeMark(c: Check, nodes: readonly Node[], start: number, from: numbe
 function closedEarly(c: Check, es: readonly Node[], i: number, vi: number, owner: Node): void {
   const mark = CLOSING_MARKS.get(owner.type)
   if (isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
-  else if (mark !== undefined && escapeMark(c, es, i, vi, mark)) c.cut = true
+  else if (mark !== undefined && escapeCloser(c, es, i, vi, mark)) c.cut = true
   else c.losses.push([owner, null])
 }
 
