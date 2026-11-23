@@ -379,6 +379,11 @@ function escapeLeadingCaret(w: Writer, children: readonly Inline[], flags: numbe
   }
 }
 
+/** C2-I-079: a collapsed or shortcut reference whose key, its content, starts with a caret. */
+export function keyIsContent(node: LinkNode): boolean {
+  return (node.refForm === 'collapsed' || node.refForm === 'shortcut') && node.key?.startsWith('^') === true
+}
+
 type BracketPlace = { node: TextNode, at: number }
 
 /**
@@ -513,7 +518,8 @@ function escapeLoneLinkBrackets(w: Writer, link: LinkNode): void {
 function linkNode(w: Writer, node: LinkNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
-  escapeLeadingCaret(w, node.children, flags)
+  // A backslash before the caret would change the key; the check places it only where the link needs it.
+  if (!keyIsContent(node)) escapeLeadingCaret(w, node.children, flags)
   escapeLoneLinkBrackets(w, node)
   if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
   const content = writeInlines(w, node.children, flags | IN_BRACKET)

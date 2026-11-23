@@ -12,7 +12,8 @@ import { AST_RESULTS } from './ast-tables.ts'
 import { sourceCoreEquivalent } from './write-extension-source.ts'
 import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
 import {
-  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
+  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode, keyIsContent, spelledEnd,
+  writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
@@ -578,7 +579,18 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   (c, es, i) => escapeInContent(c, es[i]!),
   escapeLoneBracket,
   escapeTextNote,
+  (c, es, i) => escapeKeyCaret(c, es[i]!),
 ]
+
+/**
+ * C2-W-125, case five: the leading caret of a reference whose key is its content is written bare (write-inline.ts), and
+ * takes the backslash only where the bare caret keeps the link from forming.
+ */
+function escapeKeyCaret(c: Check, e: Node): boolean {
+  if (e.type !== 'link' || (c.flags & IN_NOTE) !== 0 || !keyIsContent(e)) return false
+  const first = e.children[0]
+  return first?.type === 'text' && first.value.startsWith('^') && !isEscaped(c, first, 0) && escapeAt(c, first, 0)
+}
 
 /**
  * C2-I-089, C2-W-125: a `^[` of text before `es[i]` that reads as a note closing only through a caret pair in it is

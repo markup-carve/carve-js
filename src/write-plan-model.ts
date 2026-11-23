@@ -4,8 +4,8 @@
 import { type CommentNode, forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
 import { braceBlock } from './write-attributes.ts'
 import {
-  BARE_BREAKS, edgeComment, escapeOffsets, IN_BRACKET, lineStartBreak, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow,
-  rawReference, target, writeInline,
+  BARE_BREAKS, edgeComment, escapeOffsets, IN_BRACKET, lineStartBreak, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode,
+  keyIsContent, kindsBelow, rawReference, target, writeInline,
 } from './write-inline.ts'
 import { type Writer } from './write-state.ts'
 import { append } from './append.ts'
@@ -210,6 +210,8 @@ function coverSource(w: Writer, node: Node): void {
 
 function linkUnits(w: Writer, leaf: Leaf, node: LinkNode, flags: number): boolean {
   const raw = rawReference(w, node, flags)
+  // C2-W-125, case five: whether a bare leading caret of link text lets the link form is the repair's to find.
+  if ((flags & IN_NOTE) === 0 && (raw === null ? keyIsContent(node) : raw.startsWith('[^'))) undecide(leaf, 'link caret')
   if (raw !== null) {
     pushString(leaf, raw, ATOM, node)
     coverSource(w, node)
