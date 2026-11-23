@@ -11,7 +11,7 @@ import {
   addText, commentValue, contentNodes, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, noteLeaf, place,
   setAttributes, type TreeContext,
 } from './ast-inline.ts'
-import { includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
+import { includeNode, linkDefinitionFields, linkDefinitionTail, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
 import { BRACE_OPEN, DIGIT_0, DIGIT_9, LF, PERCENT, SPACE, STAR } from './chars.ts'
 import { scanBlocks } from './blocks.ts'
@@ -245,14 +245,21 @@ function abbreviationNode(ctx: TreeContext, node: BlockNode): DocumentChild {
 function abbreviationParts(src: string, node: BlockNode): [string, string] {
   const [start, end] = definitionLabel(src, node.start)
   const from = end + 3
-  return [src.slice(start, end), src.slice(from, trimEnd(src, from, node.spans![1]!))]
+  const spans = node.spans!
+  let expansion = src.slice(from, trimEnd(src, from, spans[1]!))
+  // C2-B-084: each line below, indented past column 0, is joined on with one space; the block pass skipped its indent.
+  for (let at = 2; at < spans.length; at += 2) expansion += ` ${src.slice(spans[at]!, trimEnd(src, spans[at]!, spans[at + 1]!))}`
+  return [src.slice(start, end), expansion]
 }
 
 function linkDefinitionNode(ctx: TreeContext, node: BlockNode, _flow: number, attributes: Attributes | null): LinkReferenceDefinitionNode {
   const [start, end] = definitionLabel(ctx.src, node.start)
   // The caller applies `attributes` after the build; a definition without attribute lines applies its own block here.
   const merged = attributes ?? emptyAttributes()
-  const out = linkDefinitionFields(ctx.src, end + 2, node.spans![1]!, foldLabel(ctx.src.slice(start, end)), merged)
+  const spans = node.spans!
+  const out = linkDefinitionFields(ctx.src, end + 2, spans[1]!, foldLabel(ctx.src.slice(start, end)), merged)
+  // C2-B-083, C2-B-106: the tail line below completes the tail; its block is the block at the end of the line.
+  if (spans.length > 2) linkDefinitionTail(ctx.src, spans[2]!, spans[3]!, out, merged)
   if (attributes === null) setAttributes(out, merged)
   return out
 }

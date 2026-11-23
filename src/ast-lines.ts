@@ -28,6 +28,20 @@ export function linkDefinitionFields(
   return out
 }
 
+/** C2-B-083: the tail line `[pos, end)` below a link definition: a title, an attribute block, or both. */
+export function linkDefinitionTail(
+  src: string, pos: number, end: number, out: LinkReferenceDefinitionNode, attributes: Attributes,
+): void {
+  const quote = src.charCodeAt(pos)
+  let block = pos
+  if (quote === QUOTE_MARK || quote === APOSTROPHE) {
+    const after = quotedEnd(src, pos, end, quote)
+    out.tooltip = unescape(src, pos + 1, after - 1)
+    block = definitionTailEnd(src, after, end)
+  }
+  if (block < end) readGluedBlocks(src, block, end, attributes)
+}
+
 /** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash. */
 function destination(src: string, start: number, end: number): string {
   let out = ''

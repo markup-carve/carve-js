@@ -24,7 +24,8 @@ import {
 import {
   attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, cellMarksLength, continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
-  isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
+  definitionTailLeft, isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDefinitionTailLine, isDescriptionListMark,
+  isDisplayMathOnly, isFenceLine,
   isFrontmatterCloser, isFrontmatterOpener, isLineComment, isTypedFrontmatterOpener,
   isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isThematicBreak, orderedDelimiter,
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
@@ -210,7 +211,7 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
   const cursor = state.cursor
   let matched = matchContainers(state, lineStart, end)
   const blank = cursor.pos >= end
-  if (lineOfComment(state, matched, end)) return
+  if (definitionLine(state, lineStart, end) || lineOfComment(state, matched, end)) return
   if (leaf.kind !== NO_LEAF && !isTextLeaf(leaf.kind)) {
     if (bodyLine(state, matched, lineStart, end, blank)) return
     matched = closeBodyLeaf(state, matched, end, blank)
@@ -1081,14 +1082,46 @@ function openInclude(state: BlockState, end: number): boolean {
   return true
 }
 
-/** C2-B-081: a link or abbreviation definition stands at column 0 outside every container. */
+/**
+ * C2-B-081: a link or abbreviation definition stands at column 0 outside every container. It stays open while
+ * lines below it may continue it (C2-B-083, C2-B-084).
+ */
 function openDefinitionLine(state: BlockState, kind: number, lineStart: number, end: number): boolean {
   const cursor = state.cursor
+  const src = state.src
   if (cursor.pos !== lineStart || state.containers.depth !== 1) return false
   const pos = cursor.pos
-  const matches = kind === LINK_DEFINITION ? isLinkDefinition(state.src, pos, end) : isAbbreviation(state.src, pos, end)
+  const matches = kind === LINK_DEFINITION ? isLinkDefinition(src, pos, end) : isAbbreviation(src, pos, end)
   if (!matches) return false
-  writeLeafLine(state, enterTag(state, kind, 0), kind, end)
+  const tail = kind === LINK_DEFINITION ? definitionTailLeft(src, pos, end) : 0
+  if (kind === LINK_DEFINITION && tail === 0) {
+    writeLeafLine(state, enterTag(state, kind, 0), kind, end)
+    return true
+  }
+  writeEvent(state, enterTag(state, kind, 0), pos, 0)
+  writeEvent(state, SPAN_TAG, pos, end)
+  state.leaf.kind = kind
+  state.leaf.definitionTail = tail
+  return true
+}
+
+/**
+ * C2-B-083, C2-B-084: a line indented past column 0 directly below an open definition continues it: the missing tail
+ * of a link definition, once, or any line of an abbreviation expansion. Any other line closes the definition first.
+ */
+function definitionLine(state: BlockState, lineStart: number, end: number): boolean {
+  const leaf = state.leaf
+  if (leaf.kind !== LINK_DEFINITION && leaf.kind !== ABBREVIATION) return false
+  const pos = state.cursor.pos
+  const continues = pos > lineStart && pos < end && !isLineComment(state.src, pos, end) &&
+    (leaf.kind === ABBREVIATION || isDefinitionTailLine(state.src, pos, end, leaf.definitionTail))
+  if (!continues) {
+    closeLeaf(state)
+    return false
+  }
+  writeEvent(state, SPAN_TAG, pos, end)
+  state.contentEnd = end
+  if (leaf.kind === LINK_DEFINITION) closeLeaf(state)
   return true
 }
 

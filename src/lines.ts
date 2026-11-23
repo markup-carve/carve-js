@@ -445,6 +445,36 @@ export function definitionTailEnd(src: string, p: number, end: number): number {
   return block >= 0 && skipSpaces(src, block, end) === end ? p + 1 : -1
 }
 
+// C2-B-083: the parts of the tail of a link definition that its first line may leave out.
+export const TAIL_TITLE = 1
+export const TAIL_BLOCK = 2
+
+/** C2-B-083: the parts of its tail that a link definition line at `pos` leaves out, as TAIL_TITLE | TAIL_BLOCK. */
+export function definitionTailLeft(src: string, pos: number, end: number): number {
+  const start = skipSpaceRun(src, labelEnd(src, pos, end, 1, true) + 1, end)
+  const p = definitionDestinationEnd(src, start, end)
+  const quote = p + 1 < end && src.charCodeAt(p) === SPACE ? src.charCodeAt(p + 1) : 0
+  const after = quote === QUOTE_MARK || quote === APOSTROPHE ? quotedEnd(src, p + 1, end, quote) : -1
+  const title = after >= 0 && definitionTailEnd(src, after, end) >= 0
+  if (definitionTailEnd(src, title ? after : p, end) < end) return 0
+  return title ? TAIL_BLOCK : TAIL_TITLE | TAIL_BLOCK
+}
+
+/**
+ * C2-B-083: the content of a line below a link definition, from `pos` on, is exactly the part of the tail in `left`:
+ * a title, an attribute block, or a title, one space and an attribute block, then only spaces and tabs.
+ */
+export function isDefinitionTailLine(src: string, pos: number, end: number, left: number): boolean {
+  const quote = src.charCodeAt(pos)
+  if ((left & TAIL_TITLE) !== 0 && (quote === QUOTE_MARK || quote === APOSTROPHE)) {
+    const after = quotedEnd(src, pos, end, quote)
+    return after >= 0 && definitionTailEnd(src, after, end) >= 0
+  }
+  if (quote !== BRACE_OPEN) return false
+  const block = readAttributeBlock(src, pos, end, emptyMemo(), null)
+  return block >= 0 && skipSpaces(src, block, end) === end
+}
+
 export function isLinkDefinition(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) === CARET) return false
   const marker = labelEnd(src, pos, end, 1, true)
