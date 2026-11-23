@@ -30,6 +30,7 @@
     "micromark-extension-gfm-table": "2.1.2",
     "micromark-extension-gfm-task-list-item": "2.1.0",
     "micromark-extension-math": "3.1.0",
+    "micromark-util-edit-map": "1.0.0",
     "parse5": "7.3.0"
   },
   "devDependencies": {
