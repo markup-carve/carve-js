@@ -139,7 +139,7 @@ function closeBodyLeaf(state: BlockState, matched: number, end: number, blank: b
 
 /**
  * C2-B-137, C2-B-138: a comment-only line that ends an opaque body closes the body's container, the innermost one that
- * does not own the line, and nothing more, whatever its indent. A list holds no comment, so the item's list closes too.
+ * does not own the line, and nothing more, whatever its indent. Its list closes with an item or a description (C2-W-123).
  */
 function endsBodyAsComment(state: BlockState, matched: number, end: number): boolean {
   const src = state.src
@@ -148,7 +148,8 @@ function endsBodyAsComment(state: BlockState, matched: number, end: number): boo
   const containers = state.containers
   let index = containers.depth - 1
   while (index > matched && !isIndentContainer(containers.kind[index]!) && containers.kind[index] !== QUOTE) index--
-  closeTo(state, isList(containers.kind[index - 1]!) ? index - 1 : index)
+  const wrapper = containers.kind[index - 1]!
+  closeTo(state, isList(wrapper) || wrapper === DESCRIPTION_LIST ? index - 1 : index)
   commentLine(state, end)
   return true
 }

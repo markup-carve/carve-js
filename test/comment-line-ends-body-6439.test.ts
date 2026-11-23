@@ -32,6 +32,11 @@ describe('C2-B-137: a comment-only line that ends an opaque body closes only the
     )
   })
 
+  it('ends a description list with the description, so the comment is the list\'s sibling (C2-W-123)', () => {
+    expect(parse(':: t\n: ```\n%% c\n').children.map((child) => child.type)).toEqual(['definition_list', 'comment'])
+    expect(parse(':: t\n: ```\n%% c\n: d\n').children.map((child) => child.type)).toEqual(['definition_list', 'comment', 'paragraph'])
+  })
+
   it('still closes every unowned container at a region marker line', () => {
     expect(render('- x\n  - ```\n%% #region a\n  y\n')).toBe(
       '<ul>\n  <li>x\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>y</p>',
