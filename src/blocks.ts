@@ -288,9 +288,7 @@ function matchContainers(state: BlockState, lineStart: number, end: number): num
 function lazyStanzaLine(state: BlockState, matched: number, lineStart: number, end: number): boolean {
   const src = state.src
   const pos = state.cursor.pos
-  const leaf = state.leaf
-  // A line inside an open comment block goes on to the checks below.
-  if (state.above.heldBlankLine !== NO_LINE || (!leaf.stanzaOpen && leaf.commentRun === 0)) return false
+  if (state.above.heldBlankLine !== NO_LINE || !state.leaf.stanzaOpen) return false
   if (isRegionMarkerLine(src, pos, end) || interruptsLeaf(state, matched, lineStart, end)) return false
   if (isLineComment(src, pos, end)) {
     writeEvent(state, eventTag(SPAN, COMMENT, 0), pos, end)
@@ -391,10 +389,14 @@ function noteStanza(state: BlockState, start: number, end: number): void {
   if (leaf.commentRun === 0) leaf.stanzaOpen = pos < end
 }
 
-/** C2-B-109: a bare `%` run of at least the opener's length after spaces and tabs, with no quote mark before it. */
+/**
+ * C2-B-109: a bare `%` run of at least the opener's length after spaces and tabs, with no quote mark before it.
+ * C2-B-123: the same holds for a comment block open in a line block body.
+ */
 function isCommentCloserLine(state: BlockState, _lineStart: number, end: number): boolean {
   const leaf = state.leaf
-  return leaf.kind === COMMENT_BLOCK && isBareRun(state.src, state.cursor.pos, end, PERCENT, leaf.fenceLength)
+  const run = leaf.kind === COMMENT_BLOCK ? leaf.fenceLength : leaf.kind === LINE_BLOCK ? leaf.commentRun : 0
+  return run > 0 && isBareRun(state.src, state.cursor.pos, end, PERCENT, run)
 }
 
 function isCloser(state: BlockState, lineStart: number, end: number): boolean {

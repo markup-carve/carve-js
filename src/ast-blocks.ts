@@ -172,15 +172,13 @@ function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
   const lines: (LineNode | CommentNode)[] = []
   const lazyComments = node.lazyComments ?? []
   let lazyAt = 0
+  // C2-B-123: a comment block ends no stanza, so a lazy comment below one goes to the line above it.
+  let lastLine: LineNode | undefined
   for (let at = 0; at < spans.length; at += 2) {
-    const previous = lines[lines.length - 1]
     const lazy = lazyComments[lazyAt] === at
     if (lazy) lazyAt++
-    if (lazy && previous?.type === 'line') {
-      // C2-B-024: a lazy comment-only line is an inline child at the end of the line above.
-      const value = commentValue(ctx.src.slice(spans[at]! + 2, spans[at + 1]), false)
-      previous.children.push(place(ctx, { type: 'comment', form: 'line', value } satisfies CommentNode, spans[at]!, spans[at + 1]!))
-      if (previous.pos !== undefined) previous.pos.endOffset = spans[at + 1]!
+    if (lazy && lastLine !== undefined) {
+      lazyLineComment(ctx, lastLine, spans[at]!, spans[at + 1]!)
       continue
     }
     const comment = lineBlockComment(ctx, spans, at)
@@ -193,11 +191,19 @@ function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
     if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
     const line: LineNode = noteLeaf(ctx, { type: 'line', children })
     // C2-A-158: a line with no children has no source character and omits `pos`.
-    lines.push(children.length === 0 ? line : place(ctx, line, spans[at]!, spans[at + 1]!))
+    lastLine = children.length === 0 ? line : place(ctx, line, spans[at]!, spans[at + 1]!)
+    lines.push(lastLine)
   }
   const out: LineBlockNode = { type: 'line_block', children: lines }
   noteSigilWords(ctx, node, out)
   return out
+}
+
+/** C2-B-024: a lazy comment-only line is an inline child at the end of the line above. */
+function lazyLineComment(ctx: TreeContext, line: LineNode, start: number, end: number): void {
+  const value = commentValue(ctx.src.slice(start + 2, end), false)
+  line.children.push(place(ctx, { type: 'comment', form: 'line', value } satisfies CommentNode, start, end))
+  if (line.pos !== undefined) line.pos.endOffset = end
 }
 
 /**
