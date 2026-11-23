@@ -9,6 +9,8 @@ const cases: [string, string][] = [
   ['^[/*[]\\[*/]\n', '^[/*\\[\\]\\[*/]\n'],
   // The link reports the kind `[`, so the `[` behind the note takes its backslash too.
   ['x ^[*\\[*][]] y\n', 'x ^[*\\[*]\\[]] y\n'],
+  // Inside a note a leading caret of link text reads as text, so it takes no backslash.
+  ['^[/*[^x](u)[]\\[*/]/]\n', '^[/*[^x](u)\\[\\]\\[*/]/]\n'],
 ]
 
 describe('C2-W-088, C2-W-125: a bracket text that reads as a link across the closers around it (#5448)', () => {

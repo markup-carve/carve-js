@@ -12,7 +12,7 @@ import { AST_RESULTS } from './ast-tables.ts'
 import { sourceCoreEquivalent } from './write-extension-source.ts'
 import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
 import {
-  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
+  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode, spelledEnd, writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
@@ -606,8 +606,10 @@ function contentFlags(c: Check, e: Node): number {
   return c.flags | contentFlag(e.type)
 }
 
+// The content of a note is written with IN_NOTE (write-inline.ts); a spelling without it escapes a leading caret of a link.
 function contentFlag(type: string): number {
-  return type === 'emphasis' ? IN_EMPHASIS : type === 'strong' ? IN_STRONG : type === 'link' ? IN_BRACKET : 0
+  return type === 'emphasis' ? IN_EMPHASIS : type === 'strong' ? IN_STRONG : type === 'link' ? IN_BRACKET :
+    type === 'inline_footnote' ? IN_NOTE : 0
 }
 
 // The rounds of one probe: past it, the step runs again in the next round of the writer.
@@ -1925,9 +1927,7 @@ function compareInline(c: Check, e: Node, a: Node): void {
   compareFields(c, e, a)
   if (!('children' in e)) return
   const outer = c.flags
-  if (e.type === 'emphasis') c.flags |= IN_EMPHASIS
-  else if (e.type === 'strong') c.flags |= IN_STRONG
-  else if (e.type === 'link') c.flags |= IN_BRACKET
+  c.flags |= contentFlag(e.type)
   compareInlines(c, e.children, childNodes(a), e)
   c.flags = outer
 }
