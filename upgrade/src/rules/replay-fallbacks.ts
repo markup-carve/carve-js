@@ -1,6 +1,7 @@
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { lineEnd, lineOf, lineStart, lineText } from '../source.ts'
+import { isGap, removeLine } from './lines.ts'
 
 /** A quote-shaped line that 0.1 read as paragraph text stays visible below attributes. */
 export function literalQuoteAfterAttributes(ctx: Context): void {
@@ -930,6 +931,77 @@ export function duplicateItemDefinitions(ctx: Context): void {
   for (const { from, to } of ranges) masked.fill(1, from, to + 1)
   ctx.findings = [...ctx.findings.slice(0, prior).filter(({ edit }) => edit === null || masked[edit.start] !== 1),
     ...ctx.findings.slice(prior)]
+}
+
+const ITEM_NOTE = /^((?:[-+*]|[0-9]+[.)])[ \t]+)\[\^([^\]\n]+)\]:[ \t]/u
+const LIFTED_NOTE = 'note definition on an item line moved above the document'
+const DROPPED_ITEM_NOTE = 'a later definition of the note key on an item line, which 0.1 dropped, leaves its item empty'
+
+type NotePositions = Record<string, { endLine: number; startOffset: number }>
+
+function itemNote(ctx: Context, node: Node01, keys: object): { line: number; body: number; key: string } | null {
+  if (node.type !== 'list_item' || node.pos === undefined || (node.children?.length ?? 0) !== 0) return null
+  const line = node.pos.startLine
+  const match = ITEM_NOTE.exec(ctx.src.slice(node.pos.startOffset, lineEnd(ctx.lines, line)))
+  if (match === null || !(match[2]! in keys)) return null
+  return { line, body: node.pos.startOffset + match[1]!.length, key: match[2]! }
+}
+
+/** The emptied item would take a following line as lazy text, where 0.1 had ended the list. */
+function endListAfter(ctx: Context, list: Visit | null, last: number): void {
+  if (list?.node.pos?.endLine !== last || last >= ctx.lines.count || lineText(ctx.lines, last + 1).trim() === '') return
+  const at = lineStart(ctx.lines, last + 1)
+  change(ctx, 'U-213', at, at, '\n', 'blank line put after the list the moved note definition left')
+}
+
+/** The last line of an empty item: 0.1 gave the lines up to the next item to the definition it consumed. */
+function itemEnd(ctx: Context, visit: Visit, line: number): number {
+  const next = visit.siblings[visit.index + 1]?.pos?.startLine
+  let end = Math.max(line, (next === undefined ? visit.parent?.node.pos?.endLine : next - 1) ?? line)
+  while (next === undefined && end < ctx.lines.count && isGap(ctx, end + 1) && lineText(ctx.lines, end + 1).trim() !== '') end++
+  return end
+}
+
+interface EmptiedItem { from: number; to: number; first: string; lifted: string | null }
+
+/** Empties one item whose marker line holds a note definition, with the lines that definition took. */
+function emptyNoteItem(ctx: Context, visit: Visit, keys: object, kept: NotePositions): EmptiedItem | null {
+  const note = itemNote(ctx, visit.node, keys)
+  if (note === null) return null
+  const { line, body } = note
+  const own = kept[note.key]?.startOffset === body ? kept[note.key] : undefined
+  const last = own === undefined ? itemEnd(ctx, visit, line) : own.endLine
+  if (own === undefined) change(ctx, 'U-042', body, lineEnd(ctx.lines, line), '{% %}', DROPPED_ITEM_NOTE)
+  else change(ctx, 'U-213', body, lineEnd(ctx.lines, line), '{% %}', LIFTED_NOTE)
+  for (let at = line + 1; at <= last; at++) {
+    removeLine(ctx, own === undefined ? 'U-042' : 'U-213', at, own === undefined ? DROPPED_ITEM_NOTE : LIFTED_NOTE)
+  }
+  endListAfter(ctx, visit.parent, last)
+  const to = lineEnd(ctx.lines, last)
+  return { from: lineStart(ctx.lines, line), to, first: ctx.src.slice(body, lineEnd(ctx.lines, line)),
+    lifted: own === undefined ? null : ctx.src.slice(body, to) }
+}
+
+/**
+ * U-213: a note definition on the marker line of a list item left that item empty in 0.1 and kept the
+ * body lines it took, while 0.2 reads it as item text. The kept definition goes above the document; a later
+ * one of the same key, which 0.1 dropped (U-042), leaves its item empty too. Earlier edits that remove or
+ * place these definitions give way.
+ */
+export function itemNoteDefinitions(ctx: Context): void {
+  const keys = ctx.doc.footnoteDefs
+  const kept = ctx.doc.footnoteDefPos as NotePositions | undefined
+  if (typeof keys !== 'object' || keys === null || kept === undefined) return
+  const prior = ctx.findings.length
+  const items = ctx.visits.map((visit) => emptyNoteItem(ctx, visit, keys, kept)).filter((item) => item !== null)
+  if (items.length === 0) return
+  const lifted = items.flatMap((item) => item.lifted === null ? [] : [item.lifted])
+  if (lifted.length > 0) change(ctx, 'U-213', 0, 0, `${lifted.join('\n\n')}\n\n`, LIFTED_NOTE)
+  const masked = new Uint8Array(ctx.src.length + 1)
+  for (const { from, to } of items) masked.fill(1, from, to + 1)
+  const placed = (text: string): boolean => items.some((item) => text.includes(item.first))
+  ctx.findings = [...ctx.findings.slice(0, prior).filter(({ edit }) => edit === null
+    || (masked[edit.start] !== 1 && !placed(edit.text))), ...ctx.findings.slice(prior)]
 }
 
 function escapeLiteralLinkText(ctx: Context, visit: Visit): void {
