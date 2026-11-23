@@ -146,8 +146,11 @@ function best(work: () => unknown, runs: number): number {
 }
 
 // Growth is judged per byte: some families grow quadratically in bytes with n (a staircase indents every line one
-// step further), and an engine linear in bytes is linear there. A time ratio more than twice the byte ratio over
-// three doublings, that a second measurement repeats, at a time large enough to measure, is superlinear.
+// step further), and an engine linear in bytes is linear there. A time ratio more than twice the byte ratio, that a
+// second measurement repeats, at a time large enough to measure, is superlinear. The slack is not scaled down when
+// the byte budget stops a family after one or two doublings: such a family quadruples its bytes per doubling and
+// changes its mix past the depth caps (nested fences turn into paragraph text past MAX_DEPTH), so a linear engine
+// moves its cost per byte by more than a scaled slack allows, while a quadratic one still exceeds twice the ratio.
 const SLACK = 2
 const FLOOR_MS = 8
 const STEP_BUDGET_MS = 4000
@@ -169,7 +172,7 @@ function measure(operation: Operation, build: (n: number) => string, base: numbe
   if (doublings < 1 || last < FLOOR_MS) return null
   const sizeRatio = (sizes[doublings] ?? 1) / Math.max(1, sizes[0] ?? 1)
   const first = Math.max(times[0] ?? 0, 0.5)
-  if (last / first <= sizeRatio * Math.pow(SLACK, doublings / 3)) return null
+  if (last / first <= sizeRatio * SLACK) return null
   return `${operation[0]} n=${base}: ${times.map((ms) => ms.toFixed(1)).join(', ')} ms at ` +
     `${sizes.join(', ')} chars`
 }

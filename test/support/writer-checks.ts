@@ -417,6 +417,43 @@ function roundEscapes(text: string, toBare: readonly number[], parsed: Node, sou
 }
 
 /**
+ * Whether `at` starts a line of its block: what stands before it on the line is spaces, tabs and the prefix of the
+ * containers, none of it text of the block.
+ */
+function lineStart(source: BareText, at: number): boolean {
+  const block = source.blocks.find((ranges) => ranges.some(([start, end]) => at >= start && at < end))
+  for (let k = at - 1; k >= 0 && source.bare[k] !== '\n'; k--) {
+    if (source.bare[k] === ' ' || source.bare[k] === '\t') continue
+    if (block?.some(([start, end]) => k >= start && k < end) === true) return false
+  }
+  return true
+}
+
+/**
+ * C2-W-088: an escape that gives a line kind or no kind: at a line start, the delimiter of an ordered marker there,
+ * or a block opener behind the marker of another block on the same line.
+ */
+function lineOpener(source: BareText, at: number): boolean {
+  const bare = source.bare
+  const digits = ordinalStart(bare, at)
+  if (digits < at) return lineStart(source, digits)
+  if (lineStart(source, at)) return true
+  let gap = at
+  while (gap > 0 && (bare[gap - 1] === ' ' || bare[gap - 1] === '\t')) gap--
+  if (gap === at || gap === 0) return false
+  const marker = '-*+>:'.includes(bare[gap - 1]!) ? gap - 1 : ordinalStart(bare, gap - 1)
+  return marker < gap - 1 || '-*+>:'.includes(bare[marker]!) ? lineStart(source, marker) : false
+}
+
+/** The start of the digits or letters before the delimiter `.` or `)` at `at` of an ordered marker, else `at`. */
+function ordinalStart(bare: string, at: number): number {
+  if (!'.)'.includes(bare[at] ?? ' ')) return at
+  let k = at
+  while (k > 0 && /[0-9A-Za-z]/.test(bare[k - 1]!)) k--
+  return k
+}
+
+/**
  * C2-W-088: the other openers of the kind of the escape at `at` in its block: the first character of each run of
  * that character in the text of the block. Only the kinds of one character outside a line start are modeled; a
  * brace, a slash, a star, a hyphen, a backtick and a line kind are left to `kindExplained`. A backslash of C2-W-125
@@ -425,12 +462,12 @@ function roundEscapes(text: string, toBare: readonly number[], parsed: Node, sou
 function kindTargets(source: BareText, added: readonly number[], at: number, targets: number[]): void {
   const bare = source.bare
   const ch = bare[at]!
-  if ('{/*-`'.includes(ch) || at === 0 || bare[at - 1] === '\n') return
+  if ('{/*-`'.includes(ch) || lineOpener(source, at)) return
   const block = source.blocks.find((ranges) => ranges.some(([start, end]) => at >= start && at < end))
   if (block === undefined) return
   for (const [start, end] of block) {
     for (let k = start; k < end; k++) {
-      if (bare[k] !== ch || (k > start && bare[k - 1] === ch) || k === 0 || bare[k - 1] === '\n') continue
+      if (bare[k] !== ch || (k > start && bare[k - 1] === ch) || lineStart(source, k)) continue
       if (!added.includes(k) && !targets.includes(k)) targets.push(k)
     }
   }
