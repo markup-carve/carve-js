@@ -117,6 +117,8 @@ function openBare(state: InlineState, token: number, entryClass: number): void {
   }
   push(state, entryClass, token)
   state.depthLive++
+  // An open delimiter takes depth the own readings of swallowed notes do not count.
+  state.ownReads.drop()
 }
 
 /** C2-I-024: the token of the innermost braced opener open above the innermost open bracket, or NONE. */
@@ -128,6 +130,7 @@ export function innermostBracedOpener(state: InlineState): number {
 export function countBracedOpen(state: InlineState, token: number): void {
   push(state, state.tokens[token + TOKEN_A]!, token)
   state.depthLive++
+  state.ownReads.drop()
 }
 
 /** C2-I-057, C2-I-061: a braced closer `token`. With no opener of its mark it is read as a bare delimiter. */

@@ -19,17 +19,39 @@ import { isBoundarySpace, isWhitespace } from './unicode.ts'
 
 
 /** Pushes a bracket opener that spans `[start, end)`. C2-I-118: past the cap it is text, and the scan goes on behind it. */
+/**
+ * Counts an opener at `start` in the own readings of the swallowed notes, and returns whether it is the `[` of a note
+ * whose `^[` an open note that closes swallowed (C2-I-089).
+ */
+function readOwn(state: InlineState, start: number, form: number, open: number): boolean {
+  const probes = form === OPEN_PLAIN && state.closedNotesOpen > 0 && state.text.charCodeAt(start - 1) === CARET &&
+    state.closedNotes?.has(start - 1) === true
+  const own = state.ownReads
+  if (!own.on) return probes
+  own.open()
+  // Only swallowed notes stand between it and the demoting note, so read on its own it opens where that note did.
+  if (probes && open === own.base + 1 + state.probesOpen && own.ceiling() > 0) own.add(start)
+  return probes
+}
+
 export function openBracket(state: InlineState, start: number, end: number, form: number): number {
+  const open = state.bracketDepth + state.depthLive
+  const probes = readOwn(state, start, form, open)
   if (atDepthCap(state)) return end
   if (state.bracketDepth === state.brackets.length) {
     const larger = new Int32Array(state.brackets.length * 2)
     larger.set(state.brackets)
     state.brackets = larger
+    const flags = new Uint8Array(larger.length)
+    flags.set(state.bracketProbes)
+    state.bracketProbes = flags
   }
+  state.bracketProbes[state.bracketDepth] = probes ? 1 : 0
+  if (probes) state.probesOpen++
   state.brackets[state.bracketDepth++] = pushToken(state, TOKEN_OPEN, start, end, form, NONE, 0, NONE)
   if (form === OPEN_FOOTNOTE) {
     state.notesOpen++
-    if (state.closedNotes?.has(start) === true) state.closedNotesOpen++
+    if (state.closedNotes?.has(start) === true && state.closedNotesOpen++ === 0) state.ownReads.start(open)
   }
   enterBracket(state)
   return end
@@ -309,9 +331,14 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   if (state.bracketDepth === 0) return pos + 1
   const open = state.brackets[--state.bracketDepth]!
   const form = state.tokens[open + TOKEN_A]!
+  if (state.ownReads.on) state.ownReads.close()
+  state.probesOpen -= state.bracketProbes[state.bracketDepth]!
   if (form === OPEN_FOOTNOTE) {
     state.notesOpen--
-    if (state.closedNotes?.has(state.tokens[open + TOKEN_START]!) === true) state.closedNotesOpen--
+    // Its swallowed notes would read on with caret pairs that open.
+    if (state.closedNotes?.has(state.tokens[open + TOKEN_START]!) === true && --state.closedNotesOpen === 0) {
+      state.ownReads.stop()
+    }
   }
   if (form >= OPEN_FOOTNOTE) {
     closePair(state, open, pos, form === OPEN_FOOTNOTE ? INLINE_FOOTNOTE : INLINE_EXTENSION)
