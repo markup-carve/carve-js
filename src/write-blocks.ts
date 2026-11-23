@@ -202,7 +202,7 @@ function textLeaf(
 /**
  * C2-W-154: a top-level paragraph whose first line would read as a typed opener, as the smart punctuation of
  * `---yaml` does, takes no escape (C2-W-152); one space of indent leaves that line text (C2-B-232). Below a list,
- * footnote or description list that indented line would join it, unless an attribute line closes the list.
+ * footnote or description list that indented line would join it, unless an attribute line closes the container.
  */
 function indentTypedOpener(w: Writer, node: ParagraphNode, first: number, attributed: boolean): void {
   const line = w.lines[first]
@@ -213,14 +213,14 @@ function indentTypedOpener(w: Writer, node: ParagraphNode, first: number, attrib
     w.lines[first] = ` ${line}`
     return
   }
-  // C2-B-026: directly below a list that ends in a block without lazy lines, the opener closes it and stays text.
-  const direct = first > 0 && w.lines[first - 1] !== '' && before!.type === 'list' && !takesLazyLine(w, before!)
+  // C2-B-026: directly below a container that ends in a block without lazy lines, the opener closes it and stays text.
+  const direct = first > 0 && w.lines[first - 1] !== '' && !takesLazyLine(w, before!)
   if (!direct) lose(w, node, null)
 }
 
-/** C2-W-154: whether the paragraph `node` is written on the line directly below the list `before`. */
-export function followsListDirectly(w: Writer, before: Node, node: Node): boolean {
-  if (before.type !== 'list' || node.type !== 'paragraph' || !w.topBlocks.has(node) || node.attrs !== undefined) return false
+/** C2-W-154: whether the paragraph `node` is written on the line directly below the list, footnote or description list `before`. */
+export function followsContainerDirectly(w: Writer, before: Node, node: Node): boolean {
+  if (!INDENT_TAKERS.has(before.type) || node.type !== 'paragraph' || !w.topBlocks.has(node) || node.attrs !== undefined) return false
   const [lead, next, after] = node.children
   if (lead?.type !== 'smart_punctuation' || lead.source !== '---') return false
   if (after !== undefined && after.type !== 'soft_break') return false
@@ -230,7 +230,9 @@ export function followsListDirectly(w: Writer, before: Node, node: Node): boolea
 
 const INDENT_TAKERS: ReadonlySet<string> = new Set(['list', 'footnote', 'definition_list'])
 const LAZY_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'definition_term'])
-const LAZY_ENDS: ReadonlySet<string> = new Set(['list', 'list_item', 'block_quote', 'definition_list', 'definition_description'])
+const LAZY_ENDS: ReadonlySet<string> = new Set([
+  'list', 'list_item', 'footnote', 'block_quote', 'definition_list', 'definition_description',
+])
 
 /** Whether a column-0 line directly below `node` would be a lazy line of the block it ends in (C2-B-024). */
 function takesLazyLine(w: Writer, node: Node): boolean {
@@ -764,7 +766,7 @@ const ENTRIES = 2
 /** C2-W-017, C2-W-018, C2-W-028, C2-W-059: the blank lines between `before` and the block `node` below it. */
 export function blankLinesBetween(w: Writer, before: Node, list: Node | null, node: Node, nested: boolean): number {
   if (node.type === 'comment') return blankLinesBeforeComment(w, before, node)
-  if (followsListDirectly(w, before, node)) return 0
+  if (followsContainerDirectly(w, before, node)) return 0
   if (list !== null && sameListKind(w, list, node)) return LIST_BOUNDARY_BLANKS
   if (list?.type === 'list' && node.type === 'list' && list.marker.kind === 'ordered' &&
     node.marker.kind === 'ordered' && list.marker.style !== node.marker.style &&

@@ -37,8 +37,30 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
     expect(result.diagnostics.map((entry) => entry.code)).toEqual(['structure-unspellable'])
   })
 
+  it('C2-W-154: writes the paragraph directly below a footnote or description that ends in a closed block (carve#6397)', () => {
+    const containers = ['a[^n]\n\n[^n]: x\n\n  ```\n  y\n  ```', '[^n]: ::: d\n  y\n  :::', 'a[^n]\n\n[^n]: x\n\n  - = H',
+      ':: t\n: ```\n  y\n  ```', ':: t\n: u\n:: v\n: | a | b |', ':: t\n: > ```\n  > y\n  > ```', ':: t\n: %% c']
+    for (const container of containers) {
+      const source = `${container}\n---yaml\nk: v\n---\n`
+      expect(format(source)).toBe(source)
+    }
+  })
+
+  it('C2-W-154: refuses the paragraph below a footnote or description that ends in a block with lazy lines', () => {
+    const tree = parse('a[^n]\n\n[^n]: x\n\n{.c}\n ---yaml\nk: v\n---\n')
+    const [reference, footnote, attributed] = tree.children
+    const { attrs, ...paragraph } = attributed!
+    expect(attrs).toBeDefined()
+    const description = parse(':: t\n: > q\n').children[0]!
+    for (const before of [footnote!, description]) {
+      const result = writeWithDiagnostics({ ...tree, children: [reference!, before, paragraph] })
+      expect(result.diagnostics.map((entry) => entry.code)).toEqual(['structure-unspellable'])
+    }
+  })
+
   it('C2-W-154: indents the first line of a top-level paragraph that would read as a typed opener', () => {
-    for (const source of ['a\n\n ---yaml\nk: v\n---\n', ' ---yaml\nk: v\n---\n', '- a\n\n{.c}\n ---yaml\nk: v\n---\n']) {
+    for (const source of ['a\n\n ---yaml\nk: v\n---\n', ' ---yaml\nk: v\n---\n', '- a\n\n{.c}\n ---yaml\nk: v\n---\n',
+      'a[^n]\n\n[^n]: x\n\n{.c}\n ---yaml\nk: v\n---\n']) {
       const result = writeWithDiagnostics(parse(source))
       expect(result.source).toBe(source)
       expect(result.diagnostics).toEqual([])

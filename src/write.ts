@@ -7,7 +7,7 @@ import {
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
-import { blankLinesBetween, commentLinesEnd, followingAttributes, followsListDirectly, writeBlocks } from './write-blocks.ts'
+import { blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, writeBlocks } from './write-blocks.ts'
 import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
@@ -327,7 +327,7 @@ function refuseLeafLines(w: Writer, node: Node, depth: number): void {
 /** Whether `node` is written into one group with the block `before` above it. */
 function joinsGroup(w: Writer, before: Node, node: Node): boolean {
   // C2-B-016: a description mark reads differently below a description list, also behind a blank line.
-  if (node.type === 'paragraph') return before.type === 'definition_list' || followsListDirectly(w, before, node)
+  if (node.type === 'paragraph') return before.type === 'definition_list' || followsContainerDirectly(w, before, node)
   return node.type === 'comment' && blankLinesBetween(w, before, null, node, false) === 0
 }
 
