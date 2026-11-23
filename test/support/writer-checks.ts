@@ -40,7 +40,7 @@ export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]
   })
 }
 
-/** C2-W-154: below a list, footnote or description list this paragraph has no spelling yet (carve#6394). */
+/** C2-W-154: below a list that ends in a lazy-line block, or a footnote or description list, this paragraph has no spelling. */
 function typedDashParagraph(tree: DocumentNode, entry: Diagnostic): boolean {
   if (entry.code !== 'structure-unspellable' || !/^\/children\/\d+$/.test(entry.path ?? '')) return false
   const paragraph = nodeAt(tree, entry.path!)

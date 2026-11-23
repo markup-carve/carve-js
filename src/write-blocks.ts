@@ -188,29 +188,61 @@ function textLeaf(
   w: Writer, node: ParagraphNode | HeadingNode | DefinitionTermNode, prefix: string, flags: number, mark: string, indent: string,
 ): void {
   if (node.children.length === 0) return lose(w, node, null)
+  const above = w.lines.length
   attributeLine(w, node, prefix)
+  const attributed = w.lines.length > above
   if (node.type === 'paragraph') notePlace(w, node, prefix)
   w.lead = (w.lead ?? prefix) + mark
   const start = node.type === 'paragraph' ? LINE_START : AFTER_MARK
   const first = w.lines.length
   emitLines(w, prefix, indent, planLeaf(w, node.children, flags, writeContent(w, node.children, flags), AS_CONTENT, start))
-  if (node.type === 'paragraph' && w.topBlocks.has(node)) indentTypedOpener(w, node, first)
+  if (node.type === 'paragraph' && w.topBlocks.has(node)) indentTypedOpener(w, node, first, attributed)
 }
 
 /**
  * C2-W-154: a top-level paragraph whose first line would read as a typed opener, as the smart punctuation of
  * `---yaml` does, takes no escape (C2-W-152); one space of indent leaves that line text (C2-B-232). Below a list,
- * footnote or description list that indented line would join it, and no spelling is ruled there yet (carve#6394).
+ * footnote or description list that indented line would join it, unless an attribute line closes the list.
  */
-function indentTypedOpener(w: Writer, node: ParagraphNode, first: number): void {
+function indentTypedOpener(w: Writer, node: ParagraphNode, first: number, attributed: boolean): void {
   const line = w.lines[first]
   if (line === undefined || node.children[0]?.type === 'text' || !line.startsWith('---')) return
   if (!isTypedFrontmatterOpener(line, 0, line.length)) return
-  if (INDENT_TAKERS.has(w.topBlocks.get(node)?.type ?? '')) return lose(w, node, null)
-  w.lines[first] = ` ${line}`
+  const before = w.topBlocks.get(node)
+  if (attributed || !INDENT_TAKERS.has(before?.type ?? '')) {
+    w.lines[first] = ` ${line}`
+    return
+  }
+  // C2-B-026: directly below a list that ends in a block without lazy lines, the opener closes it and stays text.
+  const direct = first > 0 && w.lines[first - 1] !== '' && before!.type === 'list' && !takesLazyLine(w, before!)
+  if (!direct) lose(w, node, null)
+}
+
+/** C2-W-154: whether the paragraph `node` is written on the line directly below the list `before`. */
+export function followsListDirectly(w: Writer, before: Node, node: Node): boolean {
+  if (before.type !== 'list' || node.type !== 'paragraph' || !w.topBlocks.has(node) || node.attrs !== undefined) return false
+  const [lead, next, after] = node.children
+  if (lead?.type !== 'smart_punctuation' || lead.source !== '---') return false
+  if (after !== undefined && after.type !== 'soft_break') return false
+  const line = `---${next?.type === 'text' ? next.value : ''}`
+  return isTypedFrontmatterOpener(line, 0, line.length) && !takesLazyLine(w, before)
 }
 
 const INDENT_TAKERS: ReadonlySet<string> = new Set(['list', 'footnote', 'definition_list'])
+const LAZY_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'definition_term'])
+const LAZY_ENDS: ReadonlySet<string> = new Set(['list', 'list_item', 'block_quote', 'definition_list', 'definition_description'])
+
+/** Whether a column-0 line directly below `node` would be a lazy line of the block it ends in (C2-B-024). */
+function takesLazyLine(w: Writer, node: Node): boolean {
+  let at = node
+  while (LAZY_ENDS.has(at.type) && !hasColonRun(w, at)) {
+    // C2-B-137: a comment line opens and closes nothing, so the block above it decides.
+    const children = childNodes(at).filter((child) => !isCommentLine(child))
+    if (children.length === 0) return at.type === 'list'
+    at = children[children.length - 1]!
+  }
+  return LAZY_LEAVES.has(at.type) || captionOf(at) !== undefined || isLeftOpen(w, at)
+}
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
 function heading(w: Writer, node: HeadingNode, prefix: string, flags: number): void {
@@ -732,6 +764,7 @@ const ENTRIES = 2
 /** C2-W-017, C2-W-018, C2-W-028, C2-W-059: the blank lines between `before` and the block `node` below it. */
 export function blankLinesBetween(w: Writer, before: Node, list: Node | null, node: Node, nested: boolean): number {
   if (node.type === 'comment') return blankLinesBeforeComment(w, before, node)
+  if (followsListDirectly(w, before, node)) return 0
   if (list !== null && sameListKind(w, list, node)) return LIST_BOUNDARY_BLANKS
   if (list?.type === 'list' && node.type === 'list' && list.marker.kind === 'ordered' &&
     node.marker.kind === 'ordered' && list.marker.style !== node.marker.style &&
