@@ -305,17 +305,8 @@ export interface Comparison {
 
 const CONTEXT = 3
 
-function excerpt(tokens: Token[], at: number): string {
-  let out = ''
-  for (let index = Math.max(0, at - 1); index < Math.min(tokens.length, at + CONTEXT); index++) out += tokens[index]!.text
-  return out
-}
-
-/**
- * Compares the HTML of 0.1 for the input with the HTML of 0.2 for the output. With
- * `singleItems` a list of one item compares equal whether its paragraphs are bare or not.
- */
-export function compareHtml(html01: string, html02: string, singleItems = false): Comparison {
+function reducedPair(html01: string, html02: string, singleItems: boolean):
+  { a: Token[]; b: Token[]; at: number; gainedParagraphs: number } {
   const oldTokens = tokenize(html01)
   const nextTokens = tokenize(html02)
   const none = new Set<number>()
@@ -327,6 +318,35 @@ export function compareHtml(html01: string, html02: string, singleItems = false)
   const length = Math.min(a.length, b.length)
   let at = 0
   while (at < length && a[at]!.text === b[at]!.text) at++
+  return { a, b, at, gainedParagraphs }
+}
+
+const isEndnotes = (token: Token): boolean => token.kind === OPEN && token.name === 'section'
+  && token.text.includes('doc-endnotes')
+
+/**
+ * The 0.2 source line of the first difference `compareHtml` finds, or 0 when it is not placed in a
+ * block of the body: no difference, a side that ends first, or a difference in the endnotes.
+ */
+export function firstDifferenceLine(html01: string, html02: string): number {
+  const { a, b, at } = reducedPair(html01, html02, false)
+  if (at >= a.length || at >= b.length) return 0
+  if (a.slice(0, at + 1).some(isEndnotes) || b.slice(0, at + 1).some(isEndnotes)) return 0
+  return b[at]!.line
+}
+
+function excerpt(tokens: Token[], at: number): string {
+  let out = ''
+  for (let index = Math.max(0, at - 1); index < Math.min(tokens.length, at + CONTEXT); index++) out += tokens[index]!.text
+  return out
+}
+
+/**
+ * Compares the HTML of 0.1 for the input with the HTML of 0.2 for the output. With
+ * `singleItems` a list of one item compares equal whether its paragraphs are bare or not.
+ */
+export function compareHtml(html01: string, html02: string, singleItems = false): Comparison {
+  const { a, b, at, gainedParagraphs } = reducedPair(html01, html02, singleItems)
   if (at === a.length && at === b.length) return { equal: true, difference: null, gainedParagraphs }
   const line = at < b.length ? b[at]!.line : b.length > 0 ? b[b.length - 1]!.line : 0
   return { equal: false, difference: { line, expected: excerpt(a, at), actual: excerpt(b, at) }, gainedParagraphs }

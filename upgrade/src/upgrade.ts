@@ -21,6 +21,7 @@ import { removeListMarkerTab } from './html-list-tab.ts'
 import { removeTrailingLineBlockSpaces } from './html-line-block.ts'
 import { rescueMinor } from './minor-rescues.ts'
 import { rescueTargeted } from './targeted-rescues.ts'
+import { rescueSite, type Site } from './rescue-site.ts'
 import { rescueBacktick } from './backtick-rescue.ts'
 import { rescueDirectiveSocial } from './directive-social-rescue.ts'
 import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
@@ -499,8 +500,12 @@ function rescueMismatch(input: string, output: string, mismatch: ReportRecord, r
   const onLine = records.filter((record) => record.line === mismatch.line || record.line === 0)
   const reported = onLine.some((record) => record.class === 'report' || record.class === 'unverified explanation')
     && !onLine.some((record) => record.class === 'rewrite' || record.class === 'escape')
+  let site: Site | undefined
+  const near = (): Site => site ??= rescueSite(input, output, edits)
+  const targeted = (i: string, o: string, m: ReportRecord) => rescueTargeted(i, o, m, near())
+  const minor = (i: string, o: string, m: ReportRecord) => rescueMinor(i, o, m, near())
   const rescues = [rescueFence, rescuePlus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
-    rescueCombinedInline, rescueHeadingBraceTag, rescueTargeted, rescueMinor, rescueBacktick, rescueDirectiveSocial, rescueBraceOpenerTags,
+    rescueCombinedInline, rescueHeadingBraceTag, targeted, minor, rescueBacktick, rescueDirectiveSocial, rescueBraceOpenerTags,
     rescueBracedBoldItalic, ...(reported ? [] : [rescueEscape, rescueDashRun])]
   for (const rescue of rescues) {
     const rescued = rescue(input, output, mismatch)

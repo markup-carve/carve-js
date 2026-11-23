@@ -1,6 +1,7 @@
 import { compareHtml } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
+import { type Gate, OPEN_SITE, type Site } from './rescue-site.ts'
 import { lineStart, lineText, readLines } from './source.ts'
 
 interface Candidate {
@@ -30,11 +31,11 @@ function trailingFence(output: string): Candidate[] {
   return found
 }
 
-function indentedFenceRunAsContent(output: string): Candidate[] {
+function indentedFenceRunAsContent(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length; at++) {
-    if ((lines[at] ?? '').trim() !== '```' || (lines[at] ?? '') !== '```') continue
+    if ((lines[at] ?? '').trim() !== '```' || (lines[at] ?? '') !== '```' || !gate.lines(at + 1)) continue
     if (!lines.slice(at + 1).some((line) => line.startsWith('  ```'))) continue
     const changed = [...lines]
     changed[at] = '````'
@@ -43,7 +44,7 @@ function indentedFenceRunAsContent(output: string): Candidate[] {
   return found
 }
 
-function blockAttributeAcrossFootnote(output: string): Candidate[] {
+function blockAttributeAcrossFootnote(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 3; at++) {
@@ -51,6 +52,7 @@ function blockAttributeAcrossFootnote(output: string): Candidate[] {
     const definition = lines[at + 1] ?? ''
     if (!attribute.startsWith('{') || !attribute.endsWith('}') || !definition.startsWith('[^')) continue
     if (!definition.includes(']:') || lines[at + 2] !== '' || (lines[at + 3] ?? '') === '') continue
+    if (!gate.lines(at + 1, at + 4)) continue
     const changed = [...lines]
     changed.splice(at, 1)
     changed.splice(at + 2, 0, attribute)
@@ -59,12 +61,12 @@ function blockAttributeAcrossFootnote(output: string): Candidate[] {
   return found
 }
 
-function quotedItemFenceBlank(output: string): Candidate[] {
+function quotedItemFenceBlank(output: string, gate: Gate): Candidate[] {
   if (!output.includes('> 1. ```')) return []
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 1; at++) {
-    if (lines[at] !== '>' || !(lines[at + 1] ?? '').startsWith('> ')) continue
+    if (lines[at] !== '>' || !(lines[at + 1] ?? '').startsWith('> ') || !gate.lines(at + 1, at + 2)) continue
     const changed = [...lines]
     changed.splice(at + 1, 0, '>    ```')
     found.push(candidate('U-245', changed.join('\n'), 'the quoted list fence was explicitly closed after its blank code line'))
@@ -88,13 +90,13 @@ function unresolvedFootnoteHeadingId(output: string): Candidate[] {
   return [candidate('U-246', rewritten, 'the unresolved attribute was escaped and the heading id moved above its text')]
 }
 
-function tableAfterOrderedItem(output: string): Candidate[] {
+function tableAfterOrderedItem(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 1; at < lines.length; at++) {
     const value = lines[at] ?? ''
     const previous = lines[at - 1] ?? ''
-    if (!value.startsWith('   |') || !previous.includes('. ')) continue
+    if (!value.startsWith('   |') || !previous.includes('. ') || !gate.lines(at, at + 1)) continue
     const changed = [...lines]
     changed[at] = value.trimStart()
     found.push(candidate('U-247', changed.join('\n'), 'the table row was moved outside the preceding ordered item'))
@@ -102,14 +104,14 @@ function tableAfterOrderedItem(output: string): Candidate[] {
   return found
 }
 
-function nestedFootnoteFence(output: string): Candidate[] {
+function nestedFootnoteFence(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 2; at++) {
     const marker = lines[at] ?? ''
     const code = lines[at + 1] ?? ''
     if (!marker.startsWith('- [^') || !marker.endsWith(']: ```')) continue
-    if (!code.startsWith('    ') || lines[at + 2] !== '') continue
+    if (!code.startsWith('    ') || lines[at + 2] !== '' || !gate.lines(at + 1, at + 3)) continue
     const definition = marker.slice(2)
     const changed = [...lines]
     changed.splice(at, 3, '- {% %}', '', definition, '      ' + code.trimStart(), '', '      ```')
@@ -118,12 +120,12 @@ function nestedFootnoteFence(output: string): Candidate[] {
   return found
 }
 
-function closeDivBeforeFootnote(output: string): Candidate[] {
+function closeDivBeforeFootnote(output: string, gate: Gate): Candidate[] {
   if (!output.includes(':::') || !output.includes('[^')) return []
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 1; at < lines.length; at++) {
-    if (!(lines[at] ?? '').startsWith('[^') || !(lines[at] ?? '').includes(']:')) continue
+    if (!(lines[at] ?? '').startsWith('[^') || !(lines[at] ?? '').includes(']:') || !gate.lines(at, at + 1)) continue
     const changed = [...lines]
     changed.splice(at, 0, ':::', '')
     found.push(candidate('U-253', changed.join('\n'), 'the open div was closed before the footnote definition'))
@@ -131,11 +133,11 @@ function closeDivBeforeFootnote(output: string): Candidate[] {
   return found
 }
 
-function inlineComment(output: string): Candidate[] {
+function inlineComment(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('{%')
   while (at >= 0) {
-    found.push(
+    if (gate.at(at)) found.push(
       candidate('U-136', output.slice(0, at) + '\\' + output.slice(at), 'the literal brace comment opener was escaped')
     )
     at = output.indexOf('{%', at + 2)
@@ -143,7 +145,7 @@ function inlineComment(output: string): Candidate[] {
   return found
 }
 
-function emptyItemAttribute(output: string): Candidate[] {
+function emptyItemAttribute(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   for (let line = 1; line <= lines.count; line++) {
@@ -151,7 +153,7 @@ function emptyItemAttribute(output: string): Candidate[] {
     while (text.startsWith('> ')) text = text.slice(2).trimStart()
     const item = text.startsWith('- {') || text.startsWith('* {') || text.startsWith('. {')
     const description = text.startsWith(': {')
-    if (!item && !description) continue
+    if (!item && !description || !gate.lines(line, line + 1)) continue
     const open = output.indexOf('{', lineStart(lines, line))
     const close = output.indexOf('}', open + 1)
     if (close < 0 || close >= lineStart(lines, line + 1)) continue
@@ -182,7 +184,7 @@ function emptyDescriptionSentinels(output: string): Candidate[] {
   return changed ? [candidate('U-142', rewritten, 'all empty description sentinels became empty comments')] : []
 }
 
-function quotedAttribute(output: string): Candidate[] {
+function quotedAttribute(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   for (let line = 1; line <= lines.count; line++) {
@@ -190,7 +192,7 @@ function quotedAttribute(output: string): Candidate[] {
     const open = value.indexOf('{')
     const close = value.indexOf('}', open + 1)
     if (open < 0 || close < 0 || value.slice(close + 1).trim() !== '') continue
-    if (!value.slice(0, open).trimEnd().endsWith('>')) continue
+    if (!value.slice(0, open).trimEnd().endsWith('>') || !gate.lines(line)) continue
     const cut = open > 0 && value[open - 1] === ' ' ? open - 1 : open
     const start = lineStart(lines, line) + cut
     found.push(
@@ -204,13 +206,14 @@ function quotedAttribute(output: string): Candidate[] {
   return found
 }
 
-function multilineQuotedAttribute(output: string): Candidate[] {
+function multilineQuotedAttribute(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 1; at++) {
     const head = lines[at] ?? ''
     const tail = lines[at + 1] ?? ''
     if (!head.startsWith('- > {') || !tail.startsWith('  > ') || !tail.trimEnd().endsWith('}')) continue
+    if (!gate.lines(at + 1, at + 2)) continue
     const changed = [...lines]
     changed.splice(at, 2, '- >')
     found.push(candidate('U-141', changed.join('\n'), 'the multiline attribute consumed by the quote was removed'))
@@ -219,6 +222,7 @@ function multilineQuotedAttribute(output: string): Candidate[] {
     const head = lines[at] ?? ''
     const tail = lines[at + 1] ?? ''
     if (!head.startsWith('> > - {') || !tail.startsWith('> >    ') || !tail.trimEnd().endsWith('}')) continue
+    if (!gate.lines(at + 1, at + 3)) continue
     const changed = [...lines]
     changed.splice(at, 2, '> > - {% %}', '')
     found.push(candidate('U-141', changed.join('\n'),
@@ -227,13 +231,13 @@ function multilineQuotedAttribute(output: string): Candidate[] {
   return found
 }
 
-function conflictingListStart(output: string): Candidate[] {
+function conflictingListStart(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 1; at++) {
     const value = lines[at] ?? ''
     const next = lines[at + 1] ?? ''
-    if (!value.startsWith('{start=') || !value.endsWith('}') || !next.includes('. ')) continue
+    if (!value.startsWith('{start=') || !value.endsWith('}') || !next.includes('. ') || !gate.lines(at + 1, at + 2)) continue
     const changed = [...lines]
     changed.splice(at, 1)
     found.push(candidate('U-230', changed.join('\n'), 'the conflicting list start attribute was removed'))
@@ -241,7 +245,7 @@ function conflictingListStart(output: string): Candidate[] {
   return found
 }
 
-function consumedListAttribute(output: string): Candidate[] {
+function consumedListAttribute(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   for (let line = 2; line < lines.count; line++) {
@@ -249,6 +253,7 @@ function consumedListAttribute(output: string): Candidate[] {
     if (!value.startsWith('{') || !value.endsWith('}')) continue
     const next = lineText(lines, line + 1).trimStart()
     if (!next.startsWith('# ') && !next.startsWith(':::') && !next.startsWith('```')) continue
+    if (!gate.lines(line - 1, line + 1)) continue
     const start = lineStart(lines, line)
     const after = lineStart(lines, line + 1)
     const blank = lineText(lines, line - 1).trim() === '' ? '' : '\n'
@@ -263,13 +268,13 @@ function consumedListAttribute(output: string): Candidate[] {
   return found
 }
 
-function captionBoundary(output: string, mismatchLine: number): Candidate[] {
+function captionBoundary(output: string, mismatchLine: number, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   const last = mismatchLine > 0 ? Math.min(lines.count, mismatchLine + 12) : lines.count
   for (let line = 2; line <= last; line++) {
     if (!lineText(lines, line).trimStart().startsWith('^ ')) continue
-    if (lineText(lines, line - 1).trim() === '') continue
+    if (lineText(lines, line - 1).trim() === '' || !gate.lines(line - 1, line)) continue
     const at = lineStart(lines, line)
     found.push(
       candidate(
@@ -282,12 +287,12 @@ function captionBoundary(output: string, mismatchLine: number): Candidate[] {
   return found
 }
 
-function emptyFootnote(output: string): Candidate[] {
+function emptyFootnote(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('^[')
   while (at >= 0) {
     const close = output.indexOf(']', at + 2)
-    if (close >= 0 && output.slice(at + 2, close).trim() === '') {
+    if (close >= 0 && output.slice(at + 2, close).trim() === '' && gate.at(at, close)) {
       found.push(
         candidate(
           'U-139',
@@ -301,13 +306,13 @@ function emptyFootnote(output: string): Candidate[] {
   return found
 }
 
-function emptyFootnoteBody(output: string): Candidate[] {
+function emptyFootnoteBody(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   for (let line = 1; line <= lines.count; line++) {
     const value = lineText(lines, line)
     const marker = value.indexOf(']: {empty}')
-    if (!value.trimStart().startsWith('[^') || marker < 2) continue
+    if (!value.trimStart().startsWith('[^') || marker < 2 || !gate.lines(line)) continue
     const open = lineStart(lines, line) + marker + 3
     found.push(candidate('U-218', output.slice(0, open) + '{% %}' + output.slice(open + 7),
       'the empty footnote body sentinel was written as an empty brace comment'))
@@ -326,11 +331,12 @@ function trailingImageComment(lines: string[], at: number): Candidate | null {
   return candidate('U-216', shifted.join('\n'), 'the invisible comment after the block image was removed')
 }
 
-function invisibleCommentCandidates(input: string): Candidate[] {
+function invisibleCommentCandidates(input: string, gate: Gate): Candidate[] {
   const lines = input.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length; at++) {
     const value = lines[at] ?? ''
+    if (!gate.lines(at, at + 2)) continue
     const trailing = trailingImageComment(lines, at)
     if (trailing !== null) found.push(trailing)
     if (!value.startsWith('{%%}![')) continue
@@ -353,12 +359,13 @@ function invisibleCommentCandidates(input: string): Candidate[] {
   return found
 }
 
-function commentedCaptionCaret(output: string): Candidate[] {
+function commentedCaptionCaret(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   for (let line = 2; line <= lines.count; line++) {
     const caret = lineText(lines, line).trimStart()
     if (!caret.startsWith('^ %%') || !lineText(lines, line - 1).trimStart().startsWith('![')) continue
+    if (!gate.lines(line - 1, line)) continue
     const at = lineStart(lines, line) + lineText(lines, line).indexOf('^')
     found.push(candidate('U-225', output.slice(0, at) + '\\' + output.slice(at),
       'the caption caret with an empty comment was written literally'))
@@ -366,12 +373,13 @@ function commentedCaptionCaret(output: string): Candidate[] {
   return found
 }
 
-function displayMathCaption(output: string): Candidate[] {
+function displayMathCaption(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 1; at++) {
     const value = lines[at] ?? ''
     if (!value.startsWith('$$`') || value.startsWith('$$``') || !(lines[at + 1] ?? '').startsWith('^ ')) continue
+    if (!gate.lines(at + 1, at + 2)) continue
     const close = value.indexOf('`', 3)
     const comment = value.indexOf(' %%', close + 1)
     const changed = [...lines]
@@ -383,14 +391,14 @@ function displayMathCaption(output: string): Candidate[] {
   return found
 }
 
-function percentRunInsideBraceComment(output: string): Candidate[] {
+function percentRunInsideBraceComment(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   let open = false
   for (let at = 0; at < lines.length; at++) {
     const value = lines[at] ?? ''
     if (value.includes('{%')) open = true
-    if (open && value.trimStart().startsWith('%%%')) {
+    if (open && value.trimStart().startsWith('%%%') && gate.lines(at + 1)) {
       const changed = [...lines]
       changed[at] = value.replace('%%%', '\\%%%')
       found.push(candidate('U-227', changed.join('\n'), 'the percent run inside the brace comment was escaped'))
@@ -400,7 +408,7 @@ function percentRunInsideBraceComment(output: string): Candidate[] {
   return found
 }
 
-function backtickRunInsideBraceComment(output: string): Candidate[] {
+function backtickRunInsideBraceComment(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   let open = false
@@ -408,7 +416,7 @@ function backtickRunInsideBraceComment(output: string): Candidate[] {
     const value = lines[at] ?? ''
     if (value.includes('{%')) open = true
     const start = value.length - value.trimStart().length
-    if (open && value.slice(start).startsWith('```')) {
+    if (open && value.slice(start).startsWith('```') && gate.lines(at + 1)) {
       const changed = [...lines]
       changed[at] = value.slice(0, start) + '\\' + value.slice(start)
       found.push(candidate('U-243', changed.join('\n'), 'the backtick run inside the brace comment was escaped'))
@@ -418,7 +426,7 @@ function backtickRunInsideBraceComment(output: string): Candidate[] {
   return found
 }
 
-function noteItemFollower(output: string): Candidate[] {
+function noteItemFollower(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 1; at < lines.length; at++) {
@@ -426,6 +434,7 @@ function noteItemFollower(output: string): Candidate[] {
     const follower = lines[at] ?? ''
     if (!head.startsWith('[^') || !head.includes(']: - ') || !follower.startsWith('       ')) continue
     if (!follower.trimStart().startsWith(':::::') && !follower.trimStart().startsWith('^ ')) continue
+    if (!gate.lines(at, at + 1)) continue
     const changed = [...lines]
     changed[at] = '      ' + follower.trimStart()
     found.push(candidate('U-229', changed.join('\n'), 'the line after the note item was moved to the note content column'))
@@ -433,7 +442,7 @@ function noteItemFollower(output: string): Candidate[] {
   return found
 }
 
-function divBoundary(output: string): Candidate[] {
+function divBoundary(output: string, gate: Gate): Candidate[] {
   const lines = readLines(output)
   const found: Candidate[] = []
   for (let line = 2; line <= lines.count; line++) {
@@ -442,7 +451,7 @@ function divBoundary(output: string): Candidate[] {
     const previous = lineText(lines, line - 1).trimStart()
     const opener = previous.startsWith('- ') && value.trimStart().startsWith(':::')
     const follower = previous === ':::' && value.trim() !== ''
-    if (!opener && !follower) continue
+    if (!opener && !follower || !gate.lines(line - 1, line)) continue
     const start = lineStart(lines, line)
     found.push(candidate('U-222', output.slice(0, start) + value.trimStart() + output.slice(start + value.length),
       'the div boundary was moved to the 0.2 owning column'))
@@ -488,27 +497,27 @@ function smartQuoteCandidates(output: string, expected: string): Candidate[] {
     candidate('U-233', form, 'the smart quote direction was written with a literal curly quote'))
 }
 
-function unresolvedReferenceBackslashes(output: string): Candidate[] {
+function unresolvedReferenceBackslashes(output: string, gate: Gate): Candidate[] {
   if (!output.includes('][')) return []
   const found: Candidate[] = []
   for (let at = 0; at < output.length; at++) {
     if (output[at] !== '\\' || output[at - 1] === '\\') continue
     let end = at
     while (output[end] === '\\') end++
-    if (end - at > 8 || output[end] !== '^' && output[end] !== '\n') continue
+    if (end - at > 8 || output[end] !== '^' && output[end] !== '\n' || !gate.at(at, end)) continue
     found.push(candidate('U-234', output.slice(0, at) + '\\\\' + output.slice(at),
       'the unresolved reference keeps the 0.1 literal backslash run'))
   }
   return found
 }
 
-function nestedDefinitionBoundary(output: string): Candidate[] {
+function nestedDefinitionBoundary(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 2; at++) {
     const head = lines[at] ?? ''
     const marker = head.indexOf(' [')
-    if (!head.startsWith('* * ') || marker < 0 || !head.includes(']:', marker)) continue
+    if (!head.startsWith('* * ') || marker < 0 || !head.includes(']:', marker) || !gate.lines(at + 1, at + 3)) continue
     const changed = [...lines]
     changed[at] = head.slice(0, marker + 1) + '{% %}'
     const next = lines[at + 1] ?? ''
@@ -521,7 +530,7 @@ function nestedDefinitionBoundary(output: string): Candidate[] {
   return found
 }
 
-function nestedItemFollower(output: string): Candidate[] {
+function nestedItemFollower(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 1; at < lines.length; at++) {
@@ -529,7 +538,7 @@ function nestedItemFollower(output: string): Candidate[] {
     if (!previous.startsWith('  - ') && !previous.startsWith('  * ')
       && !previous.startsWith('  1. ')) continue
     const current = lines[at] ?? ''
-    if (!current.startsWith('   ') || current.trim() === '') continue
+    if (!current.startsWith('   ') || current.trim() === '' || !gate.lines(at, at + 1)) continue
     for (const indent of [2, 1]) {
       const changed = [...lines]
       changed[at] = ' '.repeat(indent) + current.trimStart()
@@ -540,12 +549,12 @@ function nestedItemFollower(output: string): Candidate[] {
   return found
 }
 
-function listFenceContinuation(output: string): Candidate[] {
+function listFenceContinuation(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 4; at++) {
     if (!(lines[at] ?? '').startsWith('- ```') || (lines[at + 2] ?? '') !== ''
-      || (lines[at + 3] ?? '') !== '+' || (lines[at + 4] ?? '').trim() === '') continue
+      || (lines[at + 3] ?? '') !== '+' || (lines[at + 4] ?? '').trim() === '' || !gate.lines(at + 1, at + 5)) continue
     const changed = [...lines]
     changed[at + 3] = '  ```'
     changed[at + 4] = '  ' + (lines[at + 4] ?? '').trimStart()
@@ -555,12 +564,13 @@ function listFenceContinuation(output: string): Candidate[] {
   return found
 }
 
-function descriptionFenceDedent(output: string): Candidate[] {
+function descriptionFenceDedent(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 3; at++) {
     if (!(lines[at] ?? '').startsWith(':: ') || !(lines[at + 1] ?? '').startsWith(': ')) continue
     if (!(lines[at + 2] ?? '').startsWith('\t```') || !(lines[at + 3] ?? '').startsWith(' ```')) continue
+    if (!gate.lines(at + 1, at + 4)) continue
     const changed = [...lines]
     changed[at + 3] = (lines[at + 3] ?? '').trimStart()
     found.push(candidate('U-239', changed.join('\n'),
@@ -573,41 +583,43 @@ function descriptionFenceDedent(output: string): Candidate[] {
 export function rescueMinor(
   input: string,
   output: string,
-  mismatch: ReportRecord
+  mismatch: ReportRecord,
+  site: Site = OPEN_SITE
 ): { output: string; record: ReportRecord } | null {
   const expected = html01(input)
+  const near = site.output
   const candidates = [
     ...trailingFence(output),
-    ...indentedFenceRunAsContent(output),
-    ...blockAttributeAcrossFootnote(output),
-    ...quotedItemFenceBlank(output),
+    ...indentedFenceRunAsContent(output, near),
+    ...blockAttributeAcrossFootnote(output, near),
+    ...quotedItemFenceBlank(output, near),
     ...unresolvedFootnoteHeadingId(output),
-    ...tableAfterOrderedItem(output),
-    ...nestedFootnoteFence(output),
-    ...closeDivBeforeFootnote(output),
-    ...inlineComment(output),
-    ...emptyItemAttribute(output),
+    ...tableAfterOrderedItem(output, near),
+    ...nestedFootnoteFence(output, near),
+    ...closeDivBeforeFootnote(output, near),
+    ...inlineComment(output, near),
+    ...emptyItemAttribute(output, near),
     ...emptyDescriptionSentinels(output),
-    ...quotedAttribute(output),
-    ...multilineQuotedAttribute(output),
-    ...conflictingListStart(output),
-    ...consumedListAttribute(output),
-    ...captionBoundary(output, mismatch.line),
-    ...emptyFootnote(output),
-    ...emptyFootnoteBody(output),
-    ...invisibleCommentCandidates(input),
-    ...commentedCaptionCaret(output),
-    ...displayMathCaption(output),
-    ...percentRunInsideBraceComment(output),
-    ...backtickRunInsideBraceComment(output),
-    ...noteItemFollower(output),
-    ...divBoundary(output),
+    ...quotedAttribute(output, near),
+    ...multilineQuotedAttribute(output, near),
+    ...conflictingListStart(output, near),
+    ...consumedListAttribute(output, near),
+    ...captionBoundary(output, mismatch.line, near),
+    ...emptyFootnote(output, near),
+    ...emptyFootnoteBody(output, near),
+    ...invisibleCommentCandidates(input, site.input),
+    ...commentedCaptionCaret(output, near),
+    ...displayMathCaption(output, near),
+    ...percentRunInsideBraceComment(output, near),
+    ...backtickRunInsideBraceComment(output, near),
+    ...noteItemFollower(output, near),
+    ...divBoundary(output, near),
     ...smartQuoteCandidates(output, expected),
-    ...unresolvedReferenceBackslashes(output),
-    ...nestedDefinitionBoundary(output),
-    ...nestedItemFollower(output),
-    ...listFenceContinuation(output),
-    ...descriptionFenceDedent(output)
+    ...unresolvedReferenceBackslashes(output, near),
+    ...nestedDefinitionBoundary(output, near),
+    ...nestedItemFollower(output, near),
+    ...listFenceContinuation(output, near),
+    ...descriptionFenceDedent(output, near)
   ]
   for (const item of candidates) {
     try {
