@@ -80,6 +80,8 @@ it.each([
   ['x(/u)\\/}/}', 'x({/u)\\/}/}}\n'],
   ['x(/u)\\/}/}a}', 'x({/u)\\/}/}}a}\n'],
   ['x(*u)\\*}*}', 'x({*u)\\*}*}}\n'],
+  // The parse can open a construct on the closing mark of the tree there, which asks for no escape either.
+  ['x(/u)\\/}/}a/', 'x({/u)\\/}/}}a/\n'],
 ])('C2-W-125: no escape behind a content that ended early %j', (input, expected) => {
   expect(bothPaths(input)).toEqual([expected, expected])
 })

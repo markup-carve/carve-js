@@ -1191,6 +1191,8 @@ function stepOver(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor
 
 /** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
 function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor): boolean {
+  // C2-W-125: behind a content that ended early, the parse can open a construct on the markup of the tree.
+  if (c.cut) return false
   if (comparisonBehindQuote(es[at.i - 2], es[at.i - 1], e, at.vi, a)) escapeAt(c, e, at.vi + 1)
   else escapeOpener(c, es, at.i, at.vi, a)
   const pos = a.pos
