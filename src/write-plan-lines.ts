@@ -77,10 +77,16 @@ function restIsBlank(leaf: Leaf, at: number): boolean {
 }
 
 function lineEndsWith(leaf: Leaf, at: number, value: number): boolean {
+  const last = lastOfLine(leaf, at)
+  return last > at && code(leaf, last) === value
+}
+
+/** The offset of the last character of the line at `at` that is no blank. */
+function lastOfLine(leaf: Leaf, at: number): number {
   let end = at
   while (end < leaf.codes.length && leaf.codes[end] !== LF) end++
   while (end > at && isBlank(code(leaf, end - 1))) end--
-  return end - 1 > at && code(leaf, end - 1) === value
+  return end - 1
 }
 
 /** C2-B-151, C2-B-152: one to six `=` or `#` and a blank start a heading. */
@@ -184,7 +190,7 @@ function hyphenLine(leaf: Leaf, at: number, place: LeafPlace): number {
  * follow. A last pipe that a node writes is left to the repair.
  */
 function pipeLine(leaf: Leaf, at: number): number {
-  if (lineEndsWith(leaf, at, 124)) return at
+  if (lineEndsWith(leaf, at, 124)) return leaf.kinds[lastOfLine(leaf, at)] === TEXT ? at : UNDECIDED
   let last = at
   for (let unit = at + 1; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) if (leaf.codes[unit] === 124) last = unit
   if (last === at) return NO_ESCAPE

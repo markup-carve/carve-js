@@ -533,6 +533,17 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
 
 type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) => boolean
 
+/** The other spelling of `es[i]`, without the escapes the steps before asked for. */
+function otherForm(c: Check, es: readonly Node[], i: number, attempt: Attempt): boolean {
+  for (const escape of attempt.escapes) {
+    c.retracted.push(escape)
+    mark(c, escape[0], escape[1], false)
+  }
+  attempt.escapes = []
+  changeForm(c, es[i]!)
+  return true
+}
+
 /** Whether the escape a step asked for is a C2-W-125 trial, which the round tests on its own and which gives no kind. */
 function isTrial(c: Check, step: RespellStep, escape: [TextNode, number]): boolean {
   return step !== escapeLoneBracket && step !== escapeOwnerBrackets && step !== escapeContentOpener && !c.reported.has(escape)
@@ -553,6 +564,7 @@ const contentConstruct: RespellStep = (c, es, i) => escapeContentConstruct(c, es
 // escaped before the end of the content and the text behind the node.
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
+  (c, es, i, attempt) => markAtContentEdge(c, es[i]!) && otherForm(c, es, i, attempt),
   (c, es, i) => escapeContentStart(c, es[i]!),
   (c, es, i) => escapeFootnoteBrace(c, es[i]!),
   contentConstruct,
@@ -564,16 +576,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   (c, es, i) => escapeContentLine(c, es[i]!),
   escapeOwnerBrackets,
   (c, es, i) => escapeOwnerMark(c, es[i]!),
-  (c, es, i, attempt) => {
-    if (!hasOtherForm(c, es[i]!)) return false
-    for (const escape of attempt.escapes) {
-      c.retracted.push(escape)
-      mark(c, escape[0], escape[1], false)
-    }
-    attempt.escapes = []
-    changeForm(c, es[i]!)
-    return true
-  },
+  (c, es, i, attempt) => hasOtherForm(c, es[i]!) && otherForm(c, es, i, attempt),
   escapeBefore,
   escapeInside,
   (c, es, i) => escapeInContent(c, es[i]!),
@@ -1363,6 +1366,19 @@ function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node)
   return false
 }
 
+/**
+ * C2-W-069: a bare emphasis or strong whose content starts or ends with its own mark, unescaped. Glued to the opener
+ * or the closer, that mark could pair, so the node takes its braced form (carve#6469).
+ */
+function markAtContentEdge(c: Check, owner: Node): boolean {
+  if (!isPaired(owner) || !hasOtherForm(c, owner)) return false
+  const mark = CLOSING_MARKS.get(owner.type)!
+  const first = owner.children[0]
+  if (first?.type === 'text' && first.value.startsWith(mark) && !isEscaped(c, first, 0)) return true
+  const last = lastText(owner)
+  return last !== null && last.value.endsWith(mark) && !isEscaped(c, last, last.value.length - 1)
+}
+
 /** Whether `next` is text that starts with the closing mark of `node`. */
 function startsWithCloser(node: Node, next: Node | undefined): boolean {
   const mark = CLOSING_MARKS.get(node.type)
@@ -1386,6 +1402,12 @@ function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: C
 
 /** The content of `owner` read on past its end: its closing mark did not close there. */
 function readOnPastEnd(c: Check, owner: Node): void {
+  // C2-W-069: a content mark glued to the closer could close the node, so the braced form holds it, whatever stands
+  // behind the node (carve#6469).
+  if (markAtContentEdge(c, owner)) {
+    changeForm(c, owner)
+    return
+  }
   // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark. Case one, that brace,
   // is tried before case five, the closer. What the content took from behind its end is read again next round.
   if (escapeOpeningBrace(c, owner) || escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
@@ -2067,22 +2089,28 @@ interface Starts {
   containers: Map<number, number>
 }
 
+/** Records the start of `block`, in a container that starts on the line `container`. */
+function readStart(block: Node, offset: number, container: number, starts: Starts): void {
+  const pos = block.pos
+  if (pos === undefined) return
+  const line = pos.startLine - offset
+  if (block.type === 'paragraph') {
+    starts.containers.set(line, container)
+    starts.paragraphs.add(line * PLACE_COLUMNS + pos.startColumn - 1)
+    return
+  }
+  const columns = starts.columns.get(line) ?? new Set<number>()
+  columns.add(pos.startColumn - 1)
+  starts.columns.set(line, columns)
+}
+
 /** The starts of the blocks below the parse `node`. */
 function readStarts(node: Node, offset: number, starts: Starts): void {
-  const { paragraphs, columns } = starts
   const container = node.pos === undefined ? -1 : node.pos.startLine - offset
   for (const block of childNodes(node)) {
-    const pos = block.pos
-    if (pos !== undefined) {
-      const line = pos.startLine - offset
-      if (block.type === 'paragraph') starts.containers.set(line, container)
-      else {
-        const starts = columns.get(line) ?? new Set<number>()
-        starts.add(pos.startColumn - 1)
-        columns.set(line, starts)
-      }
-      if (block.type === 'paragraph') paragraphs.add((pos.startLine - offset) * PLACE_COLUMNS + pos.startColumn - 1)
-    }
+    // C2-W-088: a row has the line kind `|`; its cells open nothing at the start of a line.
+    if (block.type === 'table_cell') continue
+    readStart(block, offset, container, starts)
     if (!isInlineParent(block)) readStarts(block, offset, starts)
     const caption = captionOf(block)
     if (caption !== undefined) readStarts(caption, offset, starts)

@@ -17,8 +17,8 @@ describe('C2-W-088, C2-W-125: a nested span takes only the escapes the procedure
     ['> {,{,,{\\,,},,},}\n', '> {,{,,\\{,,},,},}\n'],
     ['{,{,,{\\,,},,},}\n', '{,{,,\\{,,},,},}\n'],
     ['{^{^^{\\^^}^^}^}\n', '{^{^^\\{^^}^^}^}\n'],
-    // The brace of case one reads as an opener; a brace behind a space opens nothing, so the closer takes the backslash.
-    ['{*{ **} x*}\n', '*{ \\** x*}\n'],
+    // C2-W-069 (carve#6469 ruling): the content star glued to the closer could pair, so the strong keeps its braced form.
+    ['{*{ **} x*}\n', '{*{ **} x*}\n'],
   ])('writes %j as %j', expectWritten)
 })
 

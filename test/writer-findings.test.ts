@@ -119,14 +119,14 @@ describe('the four-token gate', () => {
   it('C2-W-088, C2-W-125: where one backslash gives the tree alone, case six adds none behind it', () => {
     const slash = String.fromCharCode(92)
     const tick = String.fromCharCode(96)
-    // C2-W-088 (carve#6411, CC-1568 ruling): the slash escape in `x(/u)\\//}/}` repairs an early closer (C2-W-125) and
-    // gives no kind, so the last slash stays bare.
-    expect(format(`x(/u)${slash}//}/}`)).toBe(`x(/u)${slash}//}/}\n`)
-    const inputs = [`x(/u)${slash}//}/`, `x(/u)${slash}//}/}`, `x${slash}${tick}${tick}a${tick}{.c}}`]
-    for (const source of inputs) {
-      expect(checkWriter(source), source).toBeNull()
-      expect(format(source)).toBe(`${source}\n`)
-    }
+    // C2-W-069 (carve#6469 ruling): the content slash glued to the closer could pair, so the emphasis is braced,
+    // whatever stands behind it; the last slash stays bare.
+    expect(format(`x(/u)${slash}//}/}`)).toBe('x({/u)//}}/}\n')
+    expect(format(`x(/u)${slash}//}/`)).toBe('x({/u)//}}/\n')
+    for (const source of [`x(/u)${slash}//}/`, `x(/u)${slash}//}/}`]) expect(checkWriter(source), source).toBeNull()
+    const source = `x${slash}${tick}${tick}a${tick}{.c}}`
+    expect(checkWriter(source), source).toBeNull()
+    expect(format(source)).toBe(`${source}\n`)
   })
 })
 

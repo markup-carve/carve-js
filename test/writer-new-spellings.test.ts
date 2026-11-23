@@ -33,8 +33,9 @@ describe('new writer and parser spellings', () => {
   })
 
   it('C2-W-088: an escape before a brace is removed when it changes no tree fact', () => {
+    // C2-W-069 (carve#6469 ruling): the content slash glued to the closer gives the emphasis its braced form.
     const source = String.raw`x(/u)\//\{/` + '\n'
-    expect(format(source)).toBe(String.raw`x(/u)\//{/` + '\n')
+    expect(format(source)).toBe(String.raw`x({/u)//}{/` + '\n')
   })
 
   it('C2-W-125: a comparison sign takes its escape on equals only where the first sign would flip a quote', () => {
@@ -45,8 +46,9 @@ describe('new writer and parser spellings', () => {
   })
 
   it('C2-W-125, case five: the first closer inside emphasis takes the escape', () => {
+    // C2-W-069 (carve#6469 ruling): the content slash glued to the closer gives the emphasis its braced form.
     const source = String.raw`x(/u){\//}`
-    const form = String.raw`x(/u){\//}` + '\n'
+    const form = String.raw`x({/u)\{//}}` + '\n'
     expect(format(source)).toBe(form)
     expect(referenceForm(form, parse(source))).toEqual({ form })
   })
