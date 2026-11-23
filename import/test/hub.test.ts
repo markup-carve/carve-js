@@ -130,3 +130,19 @@ describe('a denied block image', () => {
     }
   })
 })
+
+describe('micromark 4.0.3 workarounds', () => {
+  it('keeps the line endings of code after a definition or a tight paragraph (carve-js#5402)', () => {
+    expect(source('[r]: /u\n\n    a\n    b\n', 'gfm')).toBe('```\na\nb\n```\n')
+    expect(source('[r]: /u\n```\n\na\nb\n```\n', 'markdown')).toBe('```\n\na\nb\n```\n')
+    expect(source('- a\n  ```\n  b\n  c\n  ```\n', 'gfm')).toBe('- a\n\n  ```\n  b\n  c\n  ```\n')
+    expect(source('- a\n  $$\n  b\n  c\n  $$\n', 'gfm')).toBe('- a\n\n  $$`b\n  c`\n')
+  })
+
+  it('starts a list at any number below indented code, which it does not interrupt (carve-js#5403)', () => {
+    expect(source('    x\n10) y\n', 'gfm')).toBe('```\nx\n```\n\n{start=10}\n. y\n')
+    expect(source('- a\n\n      x\n  10) y\n', 'markdown')).toBe('- a\n\n  ```\n  x\n  ```\n\n  {start=10}\n  . y\n')
+    expect(source('    x\n> 10) y\n', 'gfm')).toBe('```\nx\n```\n\n> {start=10}\n> . y\n')
+    expect(source('a\n10) y\n', 'gfm')).toBe('a\n10) y\n')
+  })
+})
