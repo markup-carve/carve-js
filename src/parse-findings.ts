@@ -82,7 +82,7 @@ function unclosedMessage(src: string, note: ParseNote): [string, string] {
     return ['unclosed-comment-fence', `${message}Add a closing ${run} where the comment should stop.`]
   }
   if (block.kind === FRONTMATTER) {
-    return ['unclosed-frontmatter', 'The frontmatter opened on line 1 has no closing line, so the whole document is frontmatter.']
+    return ['unclosed-frontmatter', 'This frontmatter block has no closing line, so it runs to the end of the document.']
   }
   if (block.kind === LINE_BLOCK) return ['unclosed-container-fence', containerMessage(run.length, 'line block')]
   // A bare colon run names no kind.
