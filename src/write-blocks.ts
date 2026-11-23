@@ -349,7 +349,7 @@ function listItem(w: Writer, node: ListItemNode, prefix: string, flags: number, 
   // C2-W-046: the task box holds the character of `task.mark`.
   const task = node.task
   const box = task === undefined ? '' : `[${task.mark}] `
-  w.bareDotLead = marker === '.'
+  w.bareDotLead = marker === '.' && box === '' ? head + gap : null
   body(w, node, prefix, flags, head + gap + box, marker.length + gap.length, tight)
 }
 

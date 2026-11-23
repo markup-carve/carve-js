@@ -1,4 +1,4 @@
-// carve#6392 and carve-js#5386 (C2-W-044, C2-B-043, C2-B-229), carve#6391 (C2-W-088) and carve#6357 (catalog deprecated-continuation-marker).
+// carve#6392, carve-js#5386 (C2-W-044, C2-B-043, C2-B-229), carve#6391 (C2-W-088), carve#6357 (deprecated-continuation-marker).
 import { describe, expect, it } from 'vitest'
 import { type DocumentNode, type Inline, format, lint, parse, treesEqual, writeWithDiagnostics } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
@@ -30,6 +30,13 @@ describe('carve#6392: a bare dot behind a task box or quote mark', () => {
     task.children = (parse('. a\n').children as unknown[])
     delete (task as { task?: unknown }).task
     expect(written(tree)).toBe('. 1. a\n')
+  })
+
+  it('writes digits behind an attributed bare dot, but not behind its task box or quote mark', () => {
+    const tree = (source: string) => JSON.parse(JSON.stringify(parse(source))) as DocumentNode
+    expect(written(tree('.{#x} 1. a\n'))).toBe('.{#x} 1. a\n')
+    expect(written(tree('.{#x} [ ] 1. a\n'))).toBe('.{#x} [ ] . a\n')
+    expect(written(tree('.{#x} > 1. a\n'))).toBe('.{#x} > . a\n')
   })
 
   it('writes the bare dot for a tree without sidecar facts', () => {

@@ -74,7 +74,7 @@ function decimalMarkers(w: Writer, node: ListNode, delimiter: string, authored: 
   // C2-L-031: a bare `)` is no marker. C2-L-030: with no fact a list with the period takes the bare dot.
   // C2-W-044, C2-B-229: only a dot directly behind the bare dot reads as text; a task box or quote
   // mark between them leaves it a marker.
-  const behindBareDot = w.bareDotLead && (w.lead?.endsWith('. ') ?? false)
+  const behindBareDot = w.bareDotLead !== null && (w.lead?.endsWith(w.bareDotLead) ?? false)
   const bare = delimiter === '.' && !behindBareDot && !node.children.some(opensWithDot) &&
     (w.facts?.get(node)?.bare ?? true)
   if (!bare) return numberedMarkers(delimiter, start, count)

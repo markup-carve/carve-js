@@ -569,7 +569,7 @@ function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistor
 function resetLines(w: Writer): void {
   w.lines = []
   w.lead = null
-  w.bareDotLead = false
+  w.bareDotLead = null
   w.prewrittenAttributes = null
   w.starts.clear()
 }
