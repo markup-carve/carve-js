@@ -2,10 +2,10 @@
 // (C2-B-081) and the first definition of a key wins (C2-B-085).
 import { ancestor } from '../blocks.ts'
 import { change, type Context } from '../context.ts'
-import { type Node01 } from '../engines.ts'
+import { type Node01, type Pos } from '../engines.ts'
 import { indentOf, isBlank, lineStart, lineText } from '../source.ts'
 import { emptyQuoteChain, quotePrefix } from './blank-lines.ts'
-import { insideQuotes, isBlankInQuotes, isGap, quoteDepth, removeLine } from './lines.ts'
+import { insideQuotes, isBlankInQuotes, isGap, lastLine, quoteDepth, removeLine } from './lines.ts'
 
 interface Span {
   first: number
@@ -53,8 +53,8 @@ function definitionSpans(ctx: Context): Span[] {
   }
   const notes = ctx.doc.footnoteDefPos
   if (typeof notes === 'object' && notes !== null) {
-    for (const pos of Object.values(notes as Record<string, { startLine: number, endLine: number, startColumn: number }>)) {
-      spans.push({ first: pos.startLine, last: pos.endLine, column: pos.startColumn - 1 })
+    for (const pos of Object.values(notes as Record<string, Pos>)) {
+      spans.push({ first: pos.startLine, last: lastLine(pos), column: pos.startColumn - 1 })
     }
   }
   // The old parser sometimes retains a definition's positioned body but omits
@@ -179,6 +179,20 @@ function moveToTop(ctx: Context, id: string, span: Span, cut: number, message: s
   ctx.findings = ctx.findings.filter(({ edit }) => edit === null || edit.start <= at || edit.start >= end || edit.end > end)
   change(ctx, id, at, end, kept, message)
   change(ctx, id, 0, 0, withoutPrefix(ctx, span, cut) + '\n', message)
+  if (lineText(ctx.lines, span.first).slice(cut).startsWith('[^')) firstBlockOutOfNote(ctx, id, span, message)
+}
+
+/** Under a note moved above it, an indented first block of the document would join the note's body (C2-B-025). */
+function firstBlockOutOfNote(ctx: Context, id: string, span: Span, message: string): void {
+  if (span.first === 1) return
+  const leaf = ctx.blocks.leaf[1]
+  const pos = leaf?.node.pos
+  if (leaf === null || leaf === undefined || pos === undefined || pos.startLine !== 1 || leaf.parent?.node !== ctx.doc) return
+  const last = leaf.node.type === 'paragraph' ? 1 : Math.min(pos.endLine, span.first - 1)
+  for (let line = 1; line <= last; line++) {
+    const indent = indentOf(lineText(ctx.lines, line))
+    if (indent > 0) change(ctx, id, lineStart(ctx.lines, line), lineStart(ctx.lines, line) + indent, '', message)
+  }
 }
 
 /** Cuts the definition of `span` and writes it at column 0 after the line `end`, set off by blank lines. */
