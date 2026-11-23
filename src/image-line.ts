@@ -90,8 +90,12 @@ function footnoteReferenceEnd(line: ImageLine, p: number): number {
   return close === NONE || isBlank(line.src, p + 2, close) ? p + 1 : close + 1
 }
 
-/** C2-I-066 to C2-I-072: the offset behind what is glued to the closing bracket at `p` of a nested pair. */
-function nestedTailEnd(line: ImageLine, p: number): number {
+/**
+ * C2-I-066 to C2-I-072, C2-I-078, C2-I-079: the offset behind what is glued to the closing bracket at `p` of a nested
+ * pair whose text starts at `text`. A label the inline scan rejects leaves the pair text, and the scan goes on behind
+ * the `]` (C2-I-006).
+ */
+function nestedTailEnd(line: ImageLine, text: number, p: number): number {
   const src = line.src
   const code = src.charCodeAt(p + 1)
   if (code === PAREN_OPEN) {
@@ -99,9 +103,12 @@ function nestedTailEnd(line: ImageLine, p: number): number {
     return tail < 0 ? p + 1 : tail
   }
   if (code === BRACE_OPEN) return attributeBlocksEnd(src, p + 1, line.end)
-  if (code !== BRACKET_OPEN || src.charCodeAt(p + 2) === CARET) return p + 1
+  if (code !== BRACKET_OPEN) return p + 1
+  const first = src.charCodeAt(p + 2)
+  if (first === BRACKET_CLOSE) return isBlank(src, text, p) ? p + 1 : p + 3
+  if (first === AT_SIGN || first === CARET) return p + 1
   const close = labelClose(line, p + 1)
-  return close === NONE ? NONE : close + 1
+  return close === NONE || isBlank(src, p + 2, close) ? p + 1 : close + 1
 }
 
 /**
@@ -110,6 +117,8 @@ function nestedTailEnd(line: ImageLine, p: number): number {
  */
 interface Pairs {
   open: number[]
+  /** Per open plain bracket, the offset its text starts at. */
+  starts: number[]
   closing: Set<number>
   demote: Set<number> | null
   caret: boolean
@@ -134,14 +143,17 @@ function openAt(line: ImageLine, pairs: Pairs, p: number): number {
     return p + 2
   }
   const reference = line.src.charCodeAt(p + 1) === CARET && !demoted(pairs) ? footnoteReferenceEnd(line, p) : p
-  if (reference === p) pairs.open.push(-1)
+  if (reference === p) {
+    pairs.open.push(-1)
+    pairs.starts.push(p + 1)
+  }
   return Math.max(reference, p + 1)
 }
 
 /** Closes the nearest open bracket at `p`; a note takes no tail or label. Returns the offset the scan goes on from. */
 function closeAt(line: ImageLine, pairs: Pairs, p: number): number {
   const note = pairs.open.pop()!
-  if (note < 0) return nestedTailEnd(line, p)
+  if (note < 0) return nestedTailEnd(line, pairs.starts.pop()!, p)
   pairs.notes--
   if (pairs.demote?.has(note) === true) pairs.demoted--
   pairs.closing.add(note)
@@ -180,7 +192,7 @@ const MAX_NOTE_PASSES = 8
 function bracketClose(line: ImageLine, pos: number): number {
   let demote: Set<number> | null = null
   for (let pass = 0; ; pass++) {
-    const pairs: Pairs = { open: [-1], closing: new Set(), demote, caret: false, notes: 0, demoted: 0 }
+    const pairs: Pairs = { open: [-1], starts: [pos + 1], closing: new Set(), demote, caret: false, notes: 0, demoted: 0 }
     const close = bracketPass(line, pos, pairs)
     if (!pairs.caret || pass >= MAX_NOTE_PASSES) return close
     // C2-I-074: the alt of an image that forms is source text, so a note in it is no note that closed.
