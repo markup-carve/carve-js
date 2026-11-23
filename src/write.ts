@@ -422,6 +422,12 @@ function keepCodeTrial(check: Check): void {
   if (check.trials.length === 1 && trial !== undefined && check.codeTrials.has(trial) && check.escapes.includes(trial)) check.trials = []
 }
 
+/** C2-W-088 (CC-1568): every opener of each reported kind; a backslash of a C2-W-125 closer repair gives no kind. */
+function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): void {
+  escapeKinds(check, group, w.closerKinds ? undefined : check.closers)
+  escapePartnerClosers(check, group)
+}
+
 /**
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
  * false when the group reads back as its blocks. C2-W-088 places all escapes reported by the same read-back parse.
@@ -441,10 +447,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
   keepCodeTrial(check)
   dropLineDuplicates(check)
-  if (w.kindRounds) {
-    escapeKinds(check, group)
-    escapePartnerClosers(check, group)
-  }
+  if (w.kindRounds) escapeReportedKinds(w, check, group)
   extendChains(check)
   extendForms(w, check, group)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
@@ -1050,8 +1053,18 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
   const end = repairOnce(w, document, from, first, reported)
   if (saved === null || w.losses.entries.length === reported) return end
-  // C2-W-088: where the rounds by kind lose a node, the rounds of the reported openers only give the form.
   restoreGroup(w, saved)
+  const before = saveGroup(w, saved.end)
+  // C2-W-005: where that loses a node, the closer repairs give their kind too, the smallest departure that keeps it.
+  w.closerKinds = true
+  try {
+    const kinds = repairOnce(w, document, from, first, reported)
+    if (w.losses.entries.length === reported) return kinds
+  } finally {
+    w.closerKinds = false
+  }
+  // C2-W-088: where the rounds by kind lose a node, the rounds of the reported openers only give the form.
+  restoreGroup(w, before)
   w.kindRounds = false
   try {
     return repairOnce(w, document, from, first, reported)

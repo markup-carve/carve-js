@@ -120,9 +120,10 @@ describe('the four-token gate', () => {
   it('C2-W-088, C2-W-125: where one backslash gives the tree alone, case six adds none behind it', () => {
     const slash = String.fromCharCode(92)
     const tick = String.fromCharCode(96)
-    // C2-W-088 (carve-js#5283, option B): in `x(/u)\\//}/}` the reported slash kind escapes the last slash too.
-    expect(format(`x(/u)${slash}//}/}`)).toBe(`x(/u)${slash}//}${slash}/}\n`)
-    const inputs = [`x(/u)${slash}//}/`, `x(/u)${slash}//}${slash}/}`, `x${slash}${tick}${tick}a${tick}{.c}}`]
+    // C2-W-088 (carve#6411, CC-1568 ruling): the slash escape in `x(/u)\\//}/}` repairs an early closer (C2-W-125) and
+    // gives no kind, so the last slash stays bare.
+    expect(format(`x(/u)${slash}//}/}`)).toBe(`x(/u)${slash}//}/}\n`)
+    const inputs = [`x(/u)${slash}//}/`, `x(/u)${slash}//}/}`, `x${slash}${tick}${tick}a${tick}{.c}}`]
     for (const source of inputs) {
       expect(checkWriter(source), source).toBeNull()
       expect(format(source)).toBe(`${source}\n`)
