@@ -26,6 +26,23 @@ interface MarkdownState {
   singleLine: number
 }
 
+function isLineSpace(code: number): boolean {
+  return code === 32 || code === 9 || code === 10
+}
+
+// Only ASCII spaces, tabs and line feeds are trimmed: a no-break space or other Unicode space is content (carve#6438).
+function trimEndLine(text: string): string {
+  let end = text.length
+  while (end > 0 && isLineSpace(text.charCodeAt(end - 1))) end--
+  return text.slice(0, end)
+}
+
+function trimLine(text: string): string {
+  let start = 0
+  while (start < text.length && isLineSpace(text.charCodeAt(start))) start++
+  return trimEndLine(text.slice(start))
+}
+
 /** Drops what the target cannot carry: CR, DEL and the C1 range. The other C0 controls are content. */
 function clean(text: string): string {
   return text.replace(/[\r\u007f-\u009f]/gu, '')
@@ -500,7 +517,7 @@ const BLOCKS: NodeHandlers<string, MarkdownState> = {
 
 /** `text` on a line of its own in bold, or nothing where it is empty. */
 function strongLine(text: string): string {
-  const run = delimited(text.replace(/\n/gu, ' '), '**', 'strong').trim()
+  const run = trimLine(delimited(text.replace(/\n/gu, ' '), '**', 'strong'))
   return run === '' ? '' : `${run}\n\n`
 }
 
@@ -511,15 +528,15 @@ function titleLines(m: MarkdownState, title: readonly Inline[] | undefined, grou
 }
 
 function captionText(m: MarkdownState, caption: CaptionNode): string {
-  return singleLine(m, () => caption.children.map((child) =>
-    child.type === 'paragraph' ? inlines(m, child.children) : blocks(m, [child]).trim()).join(' ').trim())
+  return singleLine(m, () => trimLine(caption.children.map((child) =>
+    child.type === 'paragraph' ? inlines(m, child.children) : trimLine(blocks(m, [child]))).join(' ')))
 }
 
 /** A host with its caption after it, as a paragraph of its own; Markdown has no caption, so this is reported. */
 function captioned(m: MarkdownState, host: Node, written: string, caption: CaptionNode | undefined, separator: string): string {
   if (caption === undefined) return written
   loss(m.x, host, 'markdown-caption-flattened', 'Flattened a caption in Markdown')
-  return `${written.trimEnd()}${separator}${captionText(m, caption)}\n\n`
+  return `${trimEndLine(written)}${separator}${captionText(m, caption)}\n\n`
 }
 
 /** A panel of a figure group: the host, then its caption emphasized, subordinate to the group's bold one. */
@@ -527,12 +544,12 @@ function panel(m: MarkdownState, node: Block): string {
   const caption = node.type === 'paragraph' || node.type === 'code_block' || node.type === 'block_quote' ? node.caption : undefined
   if (caption === undefined) return block(m, node)
   loss(m.x, node, 'markdown-caption-flattened', 'Flattened a caption in Markdown')
-  const text = delimited(captionText(m, caption), '*', 'em').trim()
+  const text = trimLine(delimited(captionText(m, caption), '*', 'em'))
   return `${withoutCaption(node, () => block(m, node))}${text === '' ? '' : `${text}\n\n`}`
 }
 
 function heading(m: MarkdownState, node: HeadingNode): string {
-  let text = singleLine(m, () => inlines(m, node.children)).replace(/[ \t\n]+/gu, ' ').trim()
+  let text = trimLine(singleLine(m, () => inlines(m, node.children)).replace(/[ \t\n]+/gu, ' '))
   // A closing run of `#` would be read as the optional closing sequence.
   text = text.replace(/(^|[ \t])(#+)$/u, '$1\\$2')
   return `${'#'.repeat(Math.min(node.level, 6))}${text === '' ? '' : ` ${text}`}\n\n`
@@ -574,7 +591,7 @@ function quote(inner: string): string {
 function withMarker(marker: string, content: string, pad: number): string {
   const lines = content.replace(/\n+$/u, '').split('\n')
   const indent = ' '.repeat(pad)
-  return `${lines.map((line, at) => (at === 0 ? `${marker}${line}`.trimEnd() : line === '' ? '' : `${indent}${line}`)).join('\n')}\n`
+  return `${lines.map((line, at) => (at === 0 ? trimEndLine(`${marker}${line}`) : line === '' ? '' : `${indent}${line}`)).join('\n')}\n`
 }
 
 function list(m: MarkdownState, node: ListNode, mark: string): string {
@@ -605,7 +622,7 @@ const DELIMITER_ROW = /^\|(?:[ \t]*:?-+:?[ \t]*\|)+$/u
 const TABLE_MAY_FOLLOW: ReadonlySet<string> = new Set(['paragraph', 'heading', 'code_block', 'thematic_break'])
 
 function lastLine(text: string): string {
-  return text.split('\n').filter((line) => line.trim() !== '').at(-1) ?? ''
+  return text.split('\n').filter((line) => trimLine(line) !== '').at(-1) ?? ''
 }
 
 /** Whether a tight item may write `written` right under the block above, with no blank line that makes it loose. */
@@ -636,8 +653,8 @@ function itemContent(m: MarkdownState, children: readonly Block[], tight: boolea
 
 function cellText(m: MarkdownState, cell: TableCellNode): string {
   const text = singleLine(m, () => cell.children.map((child) =>
-    child.type === 'cell_paragraph' ? inlines(m, child.children) : blocks(m, [child]).trim().replace(/\n+/gu, ' ')).join(' '))
-  return escapePipes(text.replace(/[\r\n]/gu, ' ').trim())
+    child.type === 'cell_paragraph' ? inlines(m, child.children) : trimLine(blocks(m, [child])).replace(/\n+/gu, ' ')).join(' '))
+  return escapePipes(trimLine(text.replace(/[\r\n]/gu, ' ')))
 }
 
 /** GFM splits a row on every `|` that no backslash escapes, code spans included. */
@@ -797,7 +814,7 @@ export function exportMarkdown(x: Exporter): string {
   const keys = collectKeys(x.document)
   const m: MarkdownState = { x, slugs: headingSlugs(x, x.document), abbrDepth: 0, inlineLevel: 0, open: [], singleLine: 0, ...keys }
   const written = `${blocks(m, x.document.children)}${footnoteSection(m, x.document)}`
-  const body = written.replace(/\n{3,}/gu, '\n\n').replace(/^\n+/u, '').trimEnd()
+  const body = trimEndLine(written.replace(/\n{3,}/gu, '\n\n').replace(/^\n+/u, ''))
   const head = frontmatter(x.document)
   if (body === '') return head === '' ? '' : `${head.trimEnd()}\n`
   return stripBidi(`${head}${body}\n`)

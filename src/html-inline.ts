@@ -211,12 +211,13 @@ export function isEmptyDroppedLink(r: Render, node: LinkNode): boolean {
 }
 
 function link(node: LinkNode, r: Render): string {
-  // C2-H-081: a link inside link text writes its content and no element.
-  if (r.linkDepth > 0) return children(r, node)
   const key = node.key
   const href = node.href
   const definition = definitionFor(r, node, key)
+  // C2-H-081, C2-H-085: an unresolved reference writes its ordinary text, inside link text too.
   if (key !== undefined && isUnresolvedLink(r, href, definition)) return `[${children(r, node)}]${unresolvedLabel(node, key)}`
+  // C2-H-081: a link inside link text writes its content and no element.
+  if (r.linkDepth > 0) return children(r, node)
   if (isDroppedLink(r, href ?? '', node)) return escapeText(inlinesText(node.children, r.resolution.xrefText))
   const title = node.tooltip ?? definition?.tooltip
   const structural: Pair[] = [['href', destination(r, href ?? '', node)]]
