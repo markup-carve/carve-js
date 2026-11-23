@@ -13,12 +13,17 @@ export interface Attributes {
   keyIndex?: Map<string, number>
 }
 
+// Native substring scans are an order of magnitude faster than a regex test on long labels.
+function hasFoldSpace(source: string): boolean {
+  return source.includes(' ') || source.includes('\t') || source.includes('\n')
+}
+
 /**
  * C2-I-079: every run of spaces, tabs and line breaks is one space, and the ends are trimmed of
  * those. A no-break space and every other character are kept as they stand.
  */
 export function foldLabel(source: string): string {
-  if (!/[ \t\n]/u.test(source)) return source
+  if (!hasFoldSpace(source)) return source
   let out = ''
   let gap = false
   let start = 0
