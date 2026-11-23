@@ -194,17 +194,23 @@ function textLeaf(
   const start = node.type === 'paragraph' ? LINE_START : AFTER_MARK
   const first = w.lines.length
   emitLines(w, prefix, indent, planLeaf(w, node.children, flags, writeContent(w, node.children, flags), AS_CONTENT, start))
-  if (node.type === 'paragraph' && w.topBlocks.has(node)) refuseTypedOpener(w, node, w.lines[first])
+  if (node.type === 'paragraph' && w.topBlocks.has(node)) indentTypedOpener(w, node, first)
 }
 
 /**
- * C2-B-232: a top-level paragraph whose first line is a typed opener reads as a metadata block. Where that line does
- * not start with text, as with the smart punctuation of `---yaml`, no backslash makes it text.
+ * C2-W-154: a top-level paragraph whose first line would read as a typed opener, as the smart punctuation of
+ * `---yaml` does, takes no escape (C2-W-152); one space of indent leaves that line text (C2-B-232). Below a list,
+ * footnote or description list that indented line would join it, and no spelling is ruled there yet (carve#6394).
  */
-function refuseTypedOpener(w: Writer, node: ParagraphNode, line: string | undefined): void {
+function indentTypedOpener(w: Writer, node: ParagraphNode, first: number): void {
+  const line = w.lines[first]
   if (line === undefined || node.children[0]?.type === 'text' || !line.startsWith('---')) return
-  if (isTypedFrontmatterOpener(line, 0, line.length)) lose(w, node, null)
+  if (!isTypedFrontmatterOpener(line, 0, line.length)) return
+  if (INDENT_TAKERS.has(w.topBlocks.get(node)?.type ?? '')) return lose(w, node, null)
+  w.lines[first] = ` ${line}`
 }
+
+const INDENT_TAKERS: ReadonlySet<string> = new Set(['list', 'footnote', 'definition_list'])
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
 function heading(w: Writer, node: HeadingNode, prefix: string, flags: number): void {

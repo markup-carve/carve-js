@@ -1565,7 +1565,7 @@ function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteO
   readAbbreviations(w, document)
   const lead = document.children[0]
   w.leadingFrontmatter = lead?.type === 'frontmatter' && lead.attrs === undefined ? lead : null
-  w.topBlocks = new Set(document.children)
+  w.topBlocks = new Map(document.children.map((node, index) => [node, document.children[index - 1]]))
 }
 
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
