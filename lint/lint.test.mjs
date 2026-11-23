@@ -51,7 +51,7 @@ it('C2-B-030: the right aligned ordered marker is reported at that marker', () =
 })
 
 it('C2-B-154: an indented heading continuation is reported', () => {
-  const entries = lint('# a\n b\n').filter((entry) => entry.code === 'deprecated-indented-line-under-heading')
+  const entries = lint('# a\n b\n', { upgrade: true }).filter((entry) => entry.code === 'deprecated-indented-line-under-heading')
   expect(entries).toHaveLength(1)
   expect(entries[0].range.startOffset).toBe(4)
 })

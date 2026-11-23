@@ -54,6 +54,8 @@ export interface Writer {
   forms: Map<Node, number>
   /** C2-W-069: the nodes braced only because their bare mark glued to the same mark before them in the last write. */
   glued: Set<Node>
+  /** C2-W-123: the colon containers written without their closer, which a comment line ends with their last fence. */
+  openColons: Set<Node>
   /** Where each paragraph of the group being written starts: its line in `lines` and its column, as one number. */
   starts: Map<ParagraphNode, number>
   /** What the reparse has tried for a node that did not form: the step it is at, and the escapes of that step. */
@@ -146,7 +148,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
   extensions: readonly ExtensionDefinition[] = []): Writer {
   return {
     extensions,
-    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), forms: new Map(), glued: new Set(), starts: new Map(),
+    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), forms: new Map(), glued: new Set(),
+    openColons: new Set(), starts: new Map(),
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(), readComments: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),

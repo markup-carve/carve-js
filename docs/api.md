@@ -28,7 +28,7 @@ HTML importer uses.
 | `formatWithDiagnostics` | as `format` | `{ source, diagnostics }` | `CarveOptionError` |
 | `write` | a tree, `{ layout, alignTables, extensions, check }` | canonical source | `CarveOptionError`, `CarveTreeError`, `CarveWriteError` |
 | `writeWithDiagnostics` | as `write` | `{ source, diagnostics }` | `CarveOptionError`, `CarveTreeError` |
-| `lint` | source, `{ rules, platforms, includes, extensions, headingIds }` | diagnostics | `CarveOptionError` |
+| `lint` | source, `{ rules, platforms, upgrade, includes, extensions, headingIds }` | diagnostics | `CarveOptionError` |
 | `fix` | source, `{ rules, platforms, extensions }` | `{ output, applied }`, as `carve lint --fix` writes it ([Lint fixes](#lint-fixes)) | `CarveOptionError` |
 | `fixEdits` | source, a diagnostic of `lint` | the edits that fix that finding, or null | `CarveOptionError` |
 | `importDocument` | HTML, `{ from: 'html', rawHtml, labels, adapter, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
@@ -96,6 +96,14 @@ break (`br`), for output such as chat that shows no source line break (C2-H-203)
 codes the host accepts: they are left out of the diagnostics and never fail a `strictLosses` render (C2-H-204).
 `maxLosses` keeps the first losses, 100 by default, and counts the rest in `suppressedDiagnostics` (C2-H-205).
 `importDocument` reads `allowLosses`, `maxLosses` and `labels` too. Supply the same `labels` map used to render HTML so generated accessible names are recognized during import. `lint` reads `headingIds` so fragment checks use the ids the renderer generates; the CLI flag is `carve lint --heading-ids lower`.
+
+### Migration notices
+
+Five lint rules report valid 0.2 text only because 0.1 read it differently: `deprecated-indented-line-under-heading`,
+`comment-fence-closer-with-text`, `sigil-after-letter`, `blank-reference-label` and `tight-list-item-with-blank-line`.
+They are off for a 0.2 document. They turn on when the line-1 frontmatter declares Carve 0.1 (`carve: 0.1` or
+`carve-version: 0.1.13`), or when `lint` gets `{ upgrade: true }` (`carve lint --upgrade`). A setting in `rules` wins over
+both (C2-W-156).
 
 ### Heading shift
 

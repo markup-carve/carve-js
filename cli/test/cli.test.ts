@@ -272,6 +272,16 @@ describe('new command line reports', () => {
     expect(cli(['lint', '--rule', 'x'], 'x').stderr).toMatch(/^carve\[usage\]:/)
   })
 
+  it('C2-W-156: lint --upgrade turns on the migration notices, as a 0.1 declaration does', () => {
+    const heading = '== A long heading that\n   continues here\n'
+    expect(cli(['lint'], heading)).toMatchObject({ status: 0, stdout: '' })
+    const upgraded = cli(['lint', '--upgrade'], heading)
+    expect(upgraded.status).toBe(1)
+    expect(upgraded.stdout).toContain('<stdin>:2:1: warning deprecated-indented-line-under-heading')
+    expect(cli(['lint'], `---\ncarve: 0.1\n---\n${heading}`).stdout).toContain('<stdin>:5:1: warning deprecated-indented-line-under-heading')
+    expect(cli(['lint', '--upgrade', '--rules={"deprecated-indented-line-under-heading":"off"}'], heading).status).toBe(0)
+  })
+
   it('C2-M-065: import raw HTML is preserved when requested', () => {
     const result = cli(['import', '--from=html', '--raw-html'], '<script>hi</script>')
     expect(result.status).toBe(0)

@@ -27,6 +27,7 @@ export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
   ["sourceLines", "render"],
   ["strictLosses", "render"],
   ["symbols", "render"],
+  ["upgrade", "lint"],
   ["urlPolicy", "render"],
 ])
 
@@ -57,6 +58,7 @@ export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
   ["sourceLines", "boolean"],
   ["strictLosses", "boolean"],
   ["symbols", "map"],
+  ["upgrade", "boolean"],
   ["urlPolicy", "structure"],
 ])
 
@@ -88,6 +90,7 @@ export const BOOLEAN_DEFAULTS: ReadonlyMap<string, boolean> = new Map([
   ["smartTypography", true],
   ["sourceLines", false],
   ["strictLosses", false],
+  ["upgrade", false],
 ])
 
 export const COUNT_DEFAULTS: ReadonlyMap<string, number> = new Map([

@@ -562,7 +562,7 @@ function fenced(w: Writer, node: Node, prefix: string, opener: string, blankWhen
   const mark = w.lines.length
   write()
   if (w.lines.length === mark && blankWhenEmpty) emit(w, prefix, '')
-  emit(w, prefix, run)
+  if (!w.openColons.has(node)) emit(w, prefix, run)
 }
 
 /** C2-W-031, C2-W-082: a quote with `>` lines, or as a quote fence where the sidecar records that form. */
@@ -884,16 +884,34 @@ function isOpenContainer(w: Writer, node: Node): boolean {
   return OPEN_CONTAINERS.includes(node.type) && !isFenced(w, node)
 }
 
-/** The fence that ends the open container `node`, or null. */
-function lastFence(w: Writer, node: Node): Node | null {
+/** C2-B-137: a colon container whose last fence a comment line ends closes with that fence, so its closer is left out. */
+const OPEN_COLONS: readonly string[] = ['div', 'admonition', 'line_block']
+
+/**
+ * The fence that ends the open container `node`, or null, with the colon containers between them in `colons`. A colon
+ * container counts only below an open container, whose unowned comment line ends its fence (C2-W-123).
+ */
+function lastFence(w: Writer, node: Node, colons: Node[] = []): Node | null {
   let at = node
-  while (isOpenContainer(w, at)) {
+  while (isOpenContainer(w, at) || (at !== node && isOpenColon(w, at))) {
+    if (!isOpenContainer(w, at)) colons.push(at)
     const children = childNodes(at)
     const last = children[children.length - 1]
     if (last === undefined) return null
     at = last
   }
+  // A caption line stands below the closer, so the fence is not the last line.
+  if (hasCaption(at)) return null
   return OPAQUE.includes(at.type) || (at.type === 'comment' && at.form === 'block') ? at : null
+}
+
+function hasCaption(node: Node): boolean {
+  return 'caption' in node && node.caption !== undefined
+}
+
+function isOpenColon(w: Writer, node: Node): boolean {
+  if (hasCaption(node)) return false
+  return OPEN_COLONS.includes(node.type) || (node.type === 'block_quote' && isFenced(w, node))
 }
 
 function isCommentLine(node: Node | undefined): boolean {
@@ -999,8 +1017,11 @@ function isNestedList(w: Writer, before: Node, node: Node, at: number): boolean 
 /** C2-B-138: the fence an open container ends with takes its other spelling where a comment line follows the container. */
 function markFenceBeforeComment(w: Writer, node: Node, next: Node | undefined): void {
   if (!isCommentLine(next) || !isOpenContainer(w, node)) return
-  const fence = lastFence(w, node)
-  if (fence !== null) w.forms.set(fence, 1)
+  const colons: Node[] = []
+  const fence = lastFence(w, node, colons)
+  if (fence === null) return
+  w.forms.set(fence, 1)
+  for (const colon of colons) w.openColons.add(colon)
 }
 
 // `following` is the block behind the comment lines after `at`.

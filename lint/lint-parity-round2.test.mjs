@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 
-const codes = (source) => lint(source).map((entry) => entry.code)
+const codes = (source, options = {}) => lint(source, options).map((entry) => entry.code)
 
 describe('0.2 lint leaf ownership and visual columns', () => {
   it('C2-B-154: a heading continuation is not paragraph text for the list marker rule', () => {
-    expect(codes('# H\n - - -\n')).toEqual([
+    expect(codes('# H\n - - -\n', { upgrade: true })).toEqual([
       'deprecated-indented-line-under-heading',
       'deprecated-spaced-thematic-break',
     ])
@@ -18,18 +18,18 @@ describe('0.2 lint leaf ownership and visual columns', () => {
   })
 
   it('C2-B-004 and C2-B-154: a tab past the marker continues the heading', () => {
-    expect(codes('# H\n\t---\n')).toEqual([
+    expect(codes('# H\n\t---\n', { upgrade: true })).toEqual([
       'deprecated-indented-line-under-heading',
       'thematic-break-spelling',
     ])
     for (const marker of ['#', '##', '=']) {
       for (const indent of ['\t', ' \t', '  \t', '   \t']) {
-        expect(codes(`${marker} H\n${indent}more\n`)).toContain('deprecated-indented-line-under-heading')
+        expect(codes(`${marker} H\n${indent}more\n`, { upgrade: true })).toContain('deprecated-indented-line-under-heading')
       }
     }
-    expect(codes('> # H\n> \tmore\n')).toContain('deprecated-indented-line-under-heading')
-    expect(codes('# *H\n  more*\n')).toContain('deprecated-indented-line-under-heading')
-    expect(codes('# [H\n  more](/x)\n')).toContain('deprecated-indented-line-under-heading')
+    expect(codes('> # H\n> \tmore\n', { upgrade: true })).toContain('deprecated-indented-line-under-heading')
+    expect(codes('# *H\n  more*\n', { upgrade: true })).toContain('deprecated-indented-line-under-heading')
+    expect(codes('# [H\n  more](/x)\n', { upgrade: true })).toContain('deprecated-indented-line-under-heading')
   })
 
   it('C2-B-025 and C2-B-027: a block past list content uses visual columns', () => {

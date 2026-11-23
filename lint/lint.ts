@@ -35,18 +35,19 @@ function validateRuleSettings(rules: unknown): void {
   }
 }
 
+const LINT_OPTIONS: ReadonlySet<string> = new Set(['rules', 'platforms', 'upgrade', 'includes', 'extensions', 'headingIds'])
+
 function validateOptions(options: unknown): asserts options is LintOptions {
   if (!plainRecord(options)) throw new CarveOptionError('lint', 'not an object')
   for (const name of Object.keys(options)) {
-    if (name !== 'rules' && name !== 'platforms' && name !== 'includes' && name !== 'extensions' && name !== 'headingIds') {
-      throw new CarveOptionError(name, 'unknown option')
-    }
+    if (!LINT_OPTIONS.has(name)) throw new CarveOptionError(name, 'unknown option')
   }
   const platforms = options['platforms']
   if (platforms !== undefined && (!Array.isArray(platforms) || !platforms.every((item) => item === 'github'))) {
     throw new CarveOptionError('platforms', 'not a list of supported platform names')
   }
   validateRuleSettings(options['rules'])
+  if (options['upgrade'] !== undefined && typeof options['upgrade'] !== 'boolean') throw new CarveOptionError('upgrade', 'not a boolean')
   if (options['headingIds'] !== undefined && !['off', 'keep-case', 'lower', 'ascii', 'ascii-lower', 'ascii-strict', 'ascii-strict-lower'].includes(String(options['headingIds']))) {
     throw new CarveOptionError('headingIds', 'unknown value')
   }
@@ -56,8 +57,24 @@ function active(id: RuleId, options: LintOptions): boolean {
   if ('status' in CATALOG[id] && CATALOG[id].status === 'void') return false
   if (id.startsWith('platform-')) return options.platforms?.includes('github') === true && options.rules?.[id] !== 'off'
   const setting = options.rules?.[id] ?? CATALOG[id].default
-  if (setting !== 'on') return false
-  return true
+  if (setting === 'upgrade') return options.upgrade === true
+  return setting === 'on'
+}
+
+const VERSION_KEY = /^[ \t]*(?:carve|carve-version):[ \t]*(\S+)[ \t]*$/
+
+/** C2-W-156, C2-B-231: the line-1 frontmatter declares a Carve version below 0.2, such as `0.1` or `0.1.13`. */
+function declaresBelow02(document: Node): boolean {
+  const first = document.type === 'document' ? document.children[0] : undefined
+  if (first?.type !== 'frontmatter' || first.pos?.startLine !== 1) return false
+  for (const line of first.value.split('\n')) {
+    const version = VERSION_KEY.exec(line)?.[1]
+    if (version === undefined) continue
+    if (!/^\d+(?:\.\d+)*$/.test(version)) return false
+    const [major, minor = '0'] = version.split('.')
+    return /^0+$/.test(major ?? '') && /^0*1?$/.test(minor)
+  }
+  return false
 }
 
 function message(id: RuleId, values: Record<string, string>, index: number): string {
@@ -555,11 +572,12 @@ function lintSource(source: string, options: LintOptions, facts?: SourceFacts): 
   const parsed = parseWithLayoutForLint(source, { ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
     ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
   if (facts !== undefined) facts.includes = parsed.includes
+  if (options.upgrade !== true && declaresBelow02(parsed.document)) options = { ...options, upgrade: true }
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   context.resolved = parsed.resolved
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
   // The default rule set is the same on every call, so its compiled rule lists are kept.
-  const defaults = options.rules === undefined && options.platforms === undefined
+  const defaults = options.rules === undefined && options.platforms === undefined && options.upgrade !== true
   const walk = startDataWalk(parsed.document, context, (id) => active(id, options), defaults)
   if (walk !== undefined) context.dataWalk = walk
   visit(parsed.document, '', context, controls)
