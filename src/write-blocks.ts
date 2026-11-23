@@ -210,16 +210,18 @@ function indentTypedOpener(w: Writer, node: ParagraphNode, first: number, attrib
   if (line === undefined || node.children[0]?.type === 'text' || !line.startsWith('---')) return
   if (!isTypedFrontmatterOpener(line, 0, line.length)) return
   const before = w.topBlocks.get(node)
-  const departure = openerDeparture(w, node)
-  // C2-W-155: where no departure keeps the tree, the line stays at column 0 and the paragraph is reported.
-  if (departure === REFUSED) return lose(w, node, null)
-  if (attributed || !INDENT_TAKERS.has(before?.type ?? '') || departure !== null) {
-    w.lines[first] = ` ${line}`
-    return
-  }
+  const keep = attributed || !INDENT_TAKERS.has(before?.type ?? '') || keptByDeparture(w, node)
   // C2-B-026: directly below a container that ends in a block without lazy lines, the opener closes it and stays text.
-  const direct = first > 0 && w.lines[first - 1] !== '' && !takesLazyLine(w, before!)
-  if (!direct) lose(w, node, null)
+  if (!keep && first > 0 && w.lines[first - 1] !== '' && !takesLazyLine(w, before!)) return
+  w.lines[first] = ` ${line}`
+  // C2-W-155, C2-W-117: where no departure keeps the tree, the indented line is still the nearest form (a paragraph,
+  // not a metadata block), and the paragraph is reported.
+  if (!keep) lose(w, node, null)
+}
+
+function keptByDeparture(w: Writer, node: Node): boolean {
+  const departure = openerDeparture(w, node)
+  return departure !== null && departure !== REFUSED
 }
 
 /** C2-W-154: whether the paragraph `node` is written on the line directly below the list, footnote or description list `before`. */

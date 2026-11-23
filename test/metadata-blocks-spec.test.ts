@@ -107,6 +107,24 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
     }
   })
 
+  it('C2-W-155: writes the refused paragraph one space in so it reads back as no metadata block (carve#6441)', () => {
+    const paragraph = parse('a\n\n ---yaml\nk: v\n---\n').children[1]!
+    const cases = [
+      ['a[^n]\n\n[^n]: x\n\n- b\n', 'a[^n]\n\n[^n]: x\n\n- b\n\n ---yaml\nk: v\n---\n'],
+      ['a[^n]\n\n[^n]: x\n\n:: u\n: e\n', 'a[^n]\n\n[^n]: x\n\n:: u\n: e\n\n ---yaml\nk: v\n---\n'],
+      ['a[^n]\n\n[^n]: x\n\n:: t\n: d\n\n- b\n', 'a[^n]\n\n[^n]: x\n\n:: t\n: d\n\n- b\n\n ---yaml\nk: v\n---\n'],
+      ['a[^n]\n\n[^n]: x\n', 'a[^n]\n\n[^n]: x\n\n ---yaml\nk: v\n---\n'],
+    ]
+    for (const [above, expected] of cases) {
+      const tree = parse(above!)
+      const result = writeWithDiagnostics({ ...tree, children: [...tree.children, paragraph] })
+      expect(result.source, above).toBe(expected)
+      expect(result.diagnostics.map((entry) => [entry.code, entry.path]), above)
+        .toEqual([['structure-unspellable', `/children/${tree.children.length}`]])
+      expect(parse(result.source).children.map((node) => node.type), above).not.toContain('frontmatter')
+    }
+  })
+
   it('C2-W-155: walks a long run of lists below a footnote in linear time (carve#6418)', () => {
     const paragraph = parse('a\n\n ---yaml\nk: v\n---\n').children[1]!
     const tree = (lists: number): DocumentNode => {
