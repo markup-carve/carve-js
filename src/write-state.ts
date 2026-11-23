@@ -86,6 +86,8 @@ export interface Writer {
   bareAlts: boolean
   /** C2-W-088: false while a group is written again by rounds of the reported openers only. */
   kindRounds: boolean
+  /** C2-W-088, C2-W-005: true while a group whose closer repairs gave no kind lost a node is written again with them. */
+  closerKinds: boolean
   /** The blocks of the document root, each with the one before it: only there does a typed opener open a metadata block (C2-B-232). */
   topBlocks: ReadonlyMap<Node, Node | undefined>
   /** C2-W-155: the departures of every run of top-level lists, built once on first use (write-blocks.ts). */
@@ -137,7 +139,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
-    prewrittenAttributes: null, bareAlts: false, kindRounds: true, topBlocks: new Map(),
+    prewrittenAttributes: null, bareAlts: false, kindRounds: true, closerKinds: false, topBlocks: new Map(),
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
     parses: 0, parseCache: { trees: new Map(), treeChars: 0 },
     extensionSources: new Map(), verifiedSourceBytes: undefined,
