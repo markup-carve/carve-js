@@ -125,6 +125,20 @@ describe('long lines without a rescan per position', () => {
       }
       return fastest
     }
+    // A flagged unit is measured again at 16 KB against 64 KB, both sides alternating, so a stall on one 1 ms
+    // sample cannot fail it.
+    const confirmed = (work: () => unknown, large: () => unknown): [number, number] => {
+      const samples: number[][] = [[], []]
+      const calls = [work, large]
+      for (let run = 0; run < 5; run++) {
+        for (const index of run % 2 === 0 ? [0, 1] : [1, 0]) {
+          const started = performance.now()
+          calls[index]!()
+          samples[index]!.push(performance.now() - started)
+        }
+      }
+      return samples.map((times) => times.sort((a, b) => a - b)[2]!) as [number, number]
+    }
     const slow: string[] = []
     for (const [name, work] of [['parse', parse], ['render', render], ['lint', lint]] as const) {
       for (const unit of units) {
@@ -132,8 +146,8 @@ describe('long lines without a rescan per position', () => {
           const line = (size: number): string => `${unit.repeat(Math.ceil(size / unit.length))}${suffix}\n`
           const small = best(() => work(line(1024)), 2)
           if (best(() => work(line(4096)), 2) <= 10 * Math.max(small, 1)) continue
-          const again = best(() => work(line(4096)), 3)
-          if (again > 10 * Math.max(small, 1)) slow.push(`${name} ${JSON.stringify(unit)}${JSON.stringify(suffix)}: ${small.toFixed(1)} to ${again.toFixed(1)} ms`)
+          const [before, after] = confirmed(() => work(line(16 * 1024)), () => work(line(64 * 1024)))
+          if (after > 10 * Math.max(before, 1)) slow.push(`${name} ${JSON.stringify(unit)}${JSON.stringify(suffix)}: ${before.toFixed(1)} to ${after.toFixed(1)} ms`)
         }
       }
     }
