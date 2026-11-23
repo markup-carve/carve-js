@@ -221,8 +221,9 @@ function indentTypedOpener(w: Writer, node: ParagraphNode, first: number, attrib
 /** C2-W-154: whether the paragraph `node` is written on the line directly below the list `before`. */
 export function followsListDirectly(w: Writer, before: Node, node: Node): boolean {
   if (before.type !== 'list' || node.type !== 'paragraph' || !w.topBlocks.has(node) || node.attrs !== undefined) return false
-  const [lead, next] = node.children
+  const [lead, next, after] = node.children
   if (lead?.type !== 'smart_punctuation' || lead.source !== '---') return false
+  if (after !== undefined && after.type !== 'soft_break') return false
   const line = `---${next?.type === 'text' ? next.value : ''}`
   return isTypedFrontmatterOpener(line, 0, line.length) && !takesLazyLine(w, before)
 }
@@ -239,6 +240,7 @@ function takesLazyLine(w: Writer, node: Node): boolean {
     at = children[children.length - 1]!
   }
   if (captionOf(at) !== undefined || isLeftOpen(w, at)) return true
+  if (at.type === 'comment' && at.form === 'block') return false
   return !hasColonRun(w, at) && !NO_LAZY_LINE.has(at.type)
 }
 
