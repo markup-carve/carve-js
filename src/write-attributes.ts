@@ -48,11 +48,13 @@ function keyPart(key: string, value: string, pipes: boolean): string {
 export interface BlockParts {
   /** What stands before the id: the alignment mark of a cell (C2-W-062). */
   mark?: string
-  /** Keys that the tree holds in other fields, written before the keys of `attrs`. */
+  /** Keys that introduce the block before the keys of `attrs`. */
   keys?: readonly (readonly [string, string])[]
+  /** Keys made from fields after the retained keys of `attrs` (C2-W-136). */
+  keysAfterAttrs?: readonly (readonly [string, string])[]
   /** Classes that the opener of the block stands for and that are not written (C2-W-039, C2-W-081). */
   skipClasses?: readonly number[]
-  /** Keys of `attrs` that `keys` writes from other fields instead (C2-W-136). */
+  /** Keys of `attrs` written from another field instead (C2-W-136). */
   skipKeys?: readonly string[]
   /** C2-B-166, C2-B-169: the block stands in a table row, where a bare pipe would close the row or split a cell. */
   pipes?: boolean
@@ -75,6 +77,7 @@ function keyParts(keyValues: readonly [string, string][], parts: string[], extra
   for (const [key, value] of extra?.keys ?? NONE) parts.push(keyPart(key, value, pipes))
   const skip = extra?.skipKeys ?? NONE
   for (const [key, value] of keyValues) if (isKey(key) && !skip.includes(key)) parts.push(keyPart(key, value, pipes))
+  for (const [key, value] of extra?.keysAfterAttrs ?? NONE) parts.push(keyPart(key, value, pipes))
 }
 
 function idPart(id: string | undefined, parts: string[], pipes: boolean): void {
