@@ -16,6 +16,7 @@ import {
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
+import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
 export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys,
@@ -647,6 +648,13 @@ function probeRound(c: Check, w: Writer, e: Node, expected: readonly Node[], fla
   probe.flags = flags
   probe.source = source
   compareInlines(probe, expected, block.children, e)
+  // C2-W-088: a probe round escapes every opener of each kind its parse reports in the probed leaf block, as a round
+  // of the group does; where that loses a node, the group runs again without kinds (CC-1633), and so do its probes.
+  if (w.kindRounds) {
+    const leaf: Node[] = [{ type: 'paragraph', children: expected } as ParagraphNode]
+    escapeKinds(probe, leaf)
+    escapePartnerClosers(probe, leaf)
+  }
   extendChains(probe)
   const taken = probe.escapes.filter(([node, at]) => takes(node, at) && escapeAt(c, node, at))
   return taken.length === 0 && probe.losses.length > 0 ? null : taken
@@ -683,7 +691,7 @@ function standIn(w: Writer, anchor: Node, role: string, value: string): TextNode
 function probeKey(c: Check, e: Node, expected: readonly Node[], flags: number, site: ProbeSite): string {
   const w = c.w
   // The comparison reads the form of `e` itself where its content ends early (`closedEarly`).
-  const parts: unknown[] = [site, flags, nodeIdOf(w, e), nodeState(c, e)]
+  const parts: unknown[] = [site, flags, w.kindRounds, nodeIdOf(w, e), nodeState(c, e)]
   for (const node of expected) parts.push(nodeIdOf(w, node))
   const pending = [...expected]
   for (;;) {
