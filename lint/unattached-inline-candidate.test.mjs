@@ -38,8 +38,9 @@ describe('unattached-inline-attribute leaves a line-opening run alone', () => {
     ['- {.a}{.b} x\n', []],
     ['{.a} {.b} x\n', [[5, 9]]],
     ['{_x {.c} y\n', [[4, 8]]],
-    ['# {k="{.d}"} x\n', []],
-    ['# {.a}{.b} x\n', [[6, 10]]],
+    // CC-1746: a heading content is an inline content, so a run at its start is glued to no host.
+    ['# {k="{.d}"} x\n', [[2, 12]]],
+    ['# {.a}{.b} x\n', [[2, 10]]],
   ]) {
     it(`reports ${JSON.stringify(expected)} in ${JSON.stringify(source)}`, () => {
       expect(ranges(source)).toEqual(expected)
