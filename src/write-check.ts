@@ -18,6 +18,7 @@ import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './wri
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
+import { BRACED_MARKS } from './inline-tables.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
 export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys,
@@ -442,6 +443,8 @@ function isExtensionNameChar(code: number): boolean {
  * that mark, as `{-` and a hyphen read as a dash, so the first character of the content takes the backslash.
  */
 function escapeContentStart(c: Check, e: Node): boolean {
+  // The opener of a span that has only a braced form is no run: `{,,` is the opener and a comma of the content.
+  if (e.type === 'subscript' || e.type === 'superscript') return false
   const mark = CLOSING_MARKS.get(e.type)
   const first = 'children' in e ? e.children[0] : undefined
   return mark !== undefined && mark !== ']' && first?.type === 'text' && first.value.startsWith(mark) && escapeAt(c, first, 0)
@@ -1364,13 +1367,34 @@ function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: C
   // The parse has more text here: the node after the text did not form. At the end of the content
   // the closing mark did not close, as a mark of the content glued to it makes a longer run (C2-W-093).
   if (es[at.i] === undefined) {
-    // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark.
-    if (!escapeInContent(c, owner) && !escapeEnd(c, lastText(owner), true)) c.losses.push([owner, null])
+    // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark. Case one, that brace,
+    // is tried before case five, the closer. What the content took from behind its end is read again next round.
+    if (escapeOpeningBrace(c, owner) || escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
+      c.cut = true
+      return false
+    }
+    // C2-W-069: a closing mark that cannot close where it stands, as behind a space, closes in the braced form.
+    if (!c.w.kindRounds && isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
+    else c.losses.push([owner, null])
   }
   else if (at.j + 1 >= as.length && isPaired(owner) && !joinsNext(es, at.i) && !holdsSpelling(c, es[at.i]!, as[at.j]!, at.aj)) {
     closedEarly(c, es, at.i, 0, owner)
   }
   else return respell(c, es, at.i) && stepOver(c, es, as, at)
+  return false
+}
+
+/** C2-W-125, case one: the last brace of the content of `owner` that reads as a braced opener, with its mark behind it. */
+function escapeOpeningBrace(c: Check, owner: Node): boolean {
+  const text = lastText(owner)
+  if (text === null) return false
+  const value = text.value
+  const closer = CLOSING_MARKS.get(owner.type) ?? ''
+  for (let at = value.lastIndexOf('{'); at >= 0; at = value.lastIndexOf('{', at - 1)) {
+    const next = at + 1 < value.length ? value[at + 1]! : closer
+    if (next !== '' && BRACED_MARKS.includes(next) && !isEscaped(c, text, at)) return escapeAt(c, text, at)
+    if (at === 0) break
+  }
   return false
 }
 
