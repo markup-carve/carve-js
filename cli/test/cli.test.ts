@@ -145,12 +145,16 @@ describe('carve process', () => {
     expect(result.stdout).toContain('<p data-source-line="1">')
   })
 
-  it('C2-T-010: extensions and renderers are options of the library calls only, with no flag', () => {
-    for (const flag of ['--extensions=[]', '--renderers={}']) {
-      const result = cli(['render', flag], 'x')
-      expect(result.status, flag).toBe(2)
-      expect(result.stderr).toMatch(/^carve\[usage\]:/)
-    }
+  it('C2-T-010: renderers are an option of the library calls only, with no flag', () => {
+    const result = cli(['render', '--renderers={}'], 'x')
+    expect(result.status).toBe(2)
+    expect(result.stderr).toMatch(/^carve\[usage\]:/)
+  })
+
+  it('C2-T-010 (CC-533): an empty --extensions list renders the core output', () => {
+    const result = cli(['render', '--extensions=[]'], 'x')
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('<p>x</p>\n')
   })
 
   it('C2-A-012 and C2-W-102: AST JSON round trips through render and fmt', () => {

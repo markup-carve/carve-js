@@ -9,6 +9,7 @@ import { emailEnd, urlEnd } from './inline-atoms.ts'
 import { attributeBlocksEnd, BacktickRuns, quotedEnd, runLength, skipSpaces } from './lines.ts'
 import { isBoundarySpace, isWhitespace } from './unicode.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
+import { TextNotes } from './text-notes.ts'
 
 const NONE = -1
 
@@ -113,14 +114,16 @@ function nestedTailEnd(line: ImageLine, text: number, p: number): number {
 
 /**
  * The open brackets of the alt scan: per bracket, the offset of the inline footnote it opened, or -1 (C2-I-089).
- * `closing` holds the notes that closed in this pass, `demote` the notes in which a caret pair opens nothing.
+ * `closing` holds the notes that closed in this pass with the offset of their `]`, `demote` the notes in which a caret
+ * pair opens nothing, and `text` the notes that are text.
  */
 interface Pairs {
   open: number[]
   /** Per open plain bracket, the offset its text starts at. */
   starts: number[]
-  closing: Set<number>
-  demote: Set<number> | null
+  closing: Map<number, number>
+  demote: Map<number, number> | null
+  text: TextNotes | null
   caret: boolean
   /** The open notes, and those of them in `demote`, counted as the stack changes so that no opener scans it. */
   notes: number
@@ -128,21 +131,22 @@ interface Pairs {
 }
 
 /** C2-I-089: whether a note in which a caret pair opens nothing is open; the first pass demotes in none. */
-function demoted(pairs: Pairs): boolean {
+function demoted(pairs: Pairs, p: number): boolean {
   if (pairs.notes > 0) pairs.caret = true
-  return pairs.demoted > 0
+  return pairs.demoted > 0 || pairs.text?.covers(p) === true
 }
 
 /** C2-I-087, C2-I-089: pushes the bracket at `p`, a footnote reference or a note opener; returns the offset behind it. */
 function openAt(line: ImageLine, pairs: Pairs, p: number): number {
   if (line.src.charCodeAt(p) === CARET) {
-    if (demoted(pairs)) return p + 1
+    if (demoted(pairs, p)) return p + 1
+    if (pairs.text?.has(p) === true) return p + 2
     pairs.open.push(p)
     pairs.notes++
     if (pairs.demote?.has(p) === true) pairs.demoted++
     return p + 2
   }
-  const reference = line.src.charCodeAt(p + 1) === CARET && !demoted(pairs) ? footnoteReferenceEnd(line, p) : p
+  const reference = line.src.charCodeAt(p + 1) === CARET && !demoted(pairs, p) ? footnoteReferenceEnd(line, p) : p
   if (reference === p) {
     pairs.open.push(-1)
     pairs.starts.push(p + 1)
@@ -156,7 +160,7 @@ function closeAt(line: ImageLine, pairs: Pairs, p: number): number {
   if (note < 0) return nestedTailEnd(line, pairs.starts.pop()!, p)
   pairs.notes--
   if (pairs.demote?.has(note) === true) pairs.demoted--
-  pairs.closing.add(note)
+  pairs.closing.set(note, p)
   return p + 1
 }
 
@@ -190,27 +194,32 @@ const MAX_NOTE_PASSES = 8
  * every caret pair read are taken first, and each later pass keeps those that closed again.
  */
 function bracketClose(line: ImageLine, pos: number): number {
-  let demote: Set<number> | null = null
+  let demote: Map<number, number> | null = null
+  let text: TextNotes | null = null
   for (let pass = 0; ; pass++) {
-    const pairs: Pairs = { open: [-1], starts: [pos + 1], closing: new Set(), demote, caret: false, notes: 0, demoted: 0 }
+    const pairs: Pairs = { open: [-1], starts: [pos + 1], closing: new Map(), demote, text, caret: false, notes: 0, demoted: 0 }
     const close = bracketPass(line, pos, pairs)
     if (!pairs.caret || pass >= MAX_NOTE_PASSES) return close
     // C2-I-074: the alt of an image that forms is source text, so a note in it is no note that closed.
-    const closing = close === NONE ? pairs.closing : new Set<number>()
-    if (demote !== null && !narrows(demote, closing)) return close
-    demote ??= closing
+    const closing = close === NONE ? pairs.closing : new Map<number, number>()
+    if (demote === null) {
+      demote = closing
+      continue
+    }
+    const before = text?.size ?? 0
+    text = narrows(demote, closing, text)
+    if ((text?.size ?? 0) === before) return close
   }
 }
 
-/** Keeps the notes of `demote` that closed again in `closing`, and returns whether that changed the set. */
-function narrows(demote: Set<number>, closing: Set<number>): boolean {
-  let changed = false
-  for (const start of demote) {
+/** Keeps the notes of `demote` that closed again in `closing`; one that did not is text from now on (C2-I-089). */
+function narrows(demote: Map<number, number>, closing: Map<number, number>, text: TextNotes | null): TextNotes | null {
+  for (const [start, end] of demote) {
     if (closing.has(start)) continue
     demote.delete(start)
-    changed = true
+    ;(text ??= new TextNotes()).add(start, end)
   }
-  return changed
+  return text
 }
 
 function bracedMarkEnd(line: ImageLine, at: number): number {

@@ -1,6 +1,7 @@
 // The state of one inline pass over one content. Like the block state it is reused: its arrays
 // are kept across contents, and a pass started inside another one takes its own state from the pool.
 import { EVENT_WIDTH } from './events.ts'
+import type { TextNotes } from './text-notes.ts'
 import { NO_CHARACTER } from './unicode.ts'
 
 // A token is seven ints: kind, start, end and four fields whose meaning depends on the kind.
@@ -84,10 +85,13 @@ export interface InlineState {
   brackets: Int32Array
   bracketDepth: number
   /**
-   * C2-I-089: the starts of the inline footnotes that closed in the first pass, inside which a caret pair opens
-   * nothing; null in the first pass, which reads every caret pair and only notes whether one stood inside a note.
+   * C2-I-089: the starts of the inline footnotes that closed in the first pass and in each pass since, with the offset
+   * of their `]`, inside which a caret pair opens nothing; null in the first pass, which reads every caret pair and
+   * only notes whether one stood inside a note.
    */
-  closedNotes: Set<number> | null
+  closedNotes: Map<number, number> | null
+  /** C2-I-089: the notes that closed only while a caret pair in them opened, which are text. */
+  textNotes: TextNotes | null
   /** Whether the first pass read a caret pair inside an open note. */
   caretInNote: boolean
   /**
@@ -177,6 +181,7 @@ function createState(): InlineState {
     bidi: false,
     definitions: null,
     closedNotes: null,
+    textNotes: null,
     caretInNote: false,
     formedImages: null,
     percentInImage: false,

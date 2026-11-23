@@ -1325,7 +1325,7 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   const next = source[at + 1]
   if (next === '*') return prunableStar(w, source, at, scan)
   if (next === '[') {
-    if (source.startsWith('^]', at + 2)) return true
+    if (source.startsWith('^]', at + 2)) return !behindNoteOpener(source, at)
     if (!source.startsWith('----', at + 2)) return false
     if (source[at - 1] !== '^') return true
     const close = nextIndex(scan, source, ']', at + 2)
@@ -1338,6 +1338,16 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   const close = nextIndex(scan, source, '}', at + 3)
   const escapedDash = nextIndex(scan, source, '\\-', at + 3)
   return close >= 0 && (escapedDash < 0 || escapedDash > close)
+}
+
+/**
+ * C2-I-089, C2-W-091: behind a `^[` of the line, even an escaped `[`, a `[^` can be an ordinary bracket of a note that
+ * reads as text, so its backslash is one the procedure placed for a reported bracket and stays.
+ */
+function behindNoteOpener(source: string, at: number): boolean {
+  const lineStart = source.lastIndexOf('\n', at) + 1
+  const line = source.slice(lineStart, at)
+  return line.includes('^[') || line.includes('^\\[')
 }
 
 /** Whether `parsed` reads back as the blocks of `group`. */
