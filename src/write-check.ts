@@ -1527,7 +1527,7 @@ function readOnPastEnd(c: Check, owner: Node): void {
     return
   }
   // C2-W-069: a closing mark that cannot close where it stands, as behind a space, closes in the braced form.
-  if (!c.w.kindRounds && isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
+  if (isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
   else c.losses.push([owner, null])
 }
 
@@ -2102,9 +2102,9 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
     // lists align again; the procedure runs again from the backslash that round placed.
   }
   if (at.j >= as.length) return
-  // C2-W-005: the content read on past its end, as its closer paired later. The kind rounds leave it unread (CC-1633);
-  // the rounds of the reported openers take the braced form rather than lose the node.
-  if (!c.w.kindRounds && isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
+  // C2-W-005, C2-W-069: the content read on past its end, as its closer paired later, so the node takes the braced form
+  // in every round, the kind rounds included (carve#6482).
+  if (isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
   else if (!escapeUnclosedBrackets(c, owner)) c.losses.push([owner, null])
 }
 
