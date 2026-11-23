@@ -398,6 +398,8 @@ function constructTarget(text: string, toBare: readonly number[], construct: Con
   const neighbor = neighborBackslash(construct.type, toBare[construct.start]!, source.bare, source.held)
   if (neighbor === UNFORMED) return null
   if (neighbor >= 0) return [sigilTarget(source, added, neighbor), false]
+  const closer = earlyNoteCloser(text, toBare, construct, source)
+  if (closer >= 0) return [closer, false]
   const opener = openerAt(text, construct.start, construct.end, (at) => source.startsHeld.has(toBare[at]!))
   if (opener < 0) return null
   const target = toBare[opener]!
@@ -405,12 +407,30 @@ function constructTarget(text: string, toBare: readonly number[], construct: Con
   return [adjusted, adjusted === target]
 }
 
+/**
+ * C2-W-125, case eight: a note read at a text `^[` before a caret pair `[^` that the tree holds as a link or span
+ * ends at the bare `]` that closed it early; that `]` takes the backslash, which gives no kind. Returns -1 otherwise.
+ */
+function earlyNoteCloser(text: string, toBare: readonly number[], construct: Construct, source: BareText): number {
+  if (construct.type !== 'inline_footnote' || !text.startsWith('^[', construct.start) || text[construct.end - 1] !== ']') return -1
+  const start = toBare[construct.start]!
+  const caretPair = [...source.held.keys()].some((key) => {
+    const at = Number(key.slice(key.lastIndexOf('@') + 1))
+    return /^(?:link|span)@/.test(key) && at > start && source.bare.startsWith('[^', at)
+  })
+  return caretPair ? toBare[construct.end - 1]! : -1
+}
+
 /** The bare offsets this read-back parse asks to escape, one per unexpected construct. */
 function roundEscapes(text: string, toBare: readonly number[], parsed: Node, source: BareText, added: readonly number[]):
   { targets: number[], best: Construct | null } {
   const unheld = unheldConstructs(parsed, text, toBare, source.held)
   const targets: number[] = []
+  // C2-W-125, case eight: a construct behind the early closer read a note that closed early, so it takes none this round.
+  let earlyCloser = Infinity
   for (const construct of unheld) {
+    if (toBare[construct.start]! > earlyCloser) continue
+    if (earlyNoteCloser(text, toBare, construct, source) >= 0) earlyCloser = toBare[construct.end - 1]!
     const found = constructTarget(text, toBare, construct, source, added)
     if (found === null || found[0] < 0) continue
     const [target, kind] = found

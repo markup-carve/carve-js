@@ -113,13 +113,15 @@ export interface Check {
   reported: Set<[TextNode, number]>
   /** C2-I-118: the capped openers this round escaped, each with its text and the end of its construct there. */
   capped: [TextNode, number, number][]
+  /** C2-W-125, case eight: a text `^[` kept bare while its early closer took the backslash in this round. */
+  earlyCloser: boolean
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
-    cut: false, codeTrials: new Set(), closers: new Set(), around: [], reported: new Set(), capped: [],
+    cut: false, codeTrials: new Set(), closers: new Set(), around: [], reported: new Set(), capped: [], earlyCloser: false,
   }
 }
 
@@ -1070,6 +1072,7 @@ function escapeOpener(c: Check, es: readonly Node[], i: number, at: number, a: N
   let start = at
   // C2-I-023: a line comment takes the spaces before it.
   while (start < value.length && (value[start] === ' ' || value[start] === '\t')) start++
+  if (a.type === 'inline_footnote' && escapeEarlyNoteCloser(c, es, i, start)) return
   // C2-W-099: the shifted character is one of the source run, which may go on in the text nodes behind `e`.
   let holder = e
   let shifted = start + openerShift(a)
@@ -1081,6 +1084,47 @@ function escapeOpener(c: Check, es: readonly Node[], i: number, at: number, a: N
     const opener = holder.value[shifted]
     if ((opener === '[' && isChainOpener(a)) || (opener === '`' && SPAN_TYPES.includes(a.type))) c.chains.push([holder, shifted, a])
   } else if (!escapeAt(c, e, start)) c.losses.push([e, 'value'])
+}
+
+/**
+ * C2-W-125, case eight: a text `^[` whose span keeps a caret pair of the tree ordinary (C2-I-089) stays bare, and the
+ * bare `]` that closed it early takes the backslash. Each round reaches the next such `]` in turn.
+ */
+function escapeEarlyNoteCloser(c: Check, es: readonly Node[], i: number, start: number): boolean {
+  const e = es[i] as TextNode
+  if (!e.value.startsWith('^[', start) || !es.slice(i + 1).some(holdsCaretPair)) return false
+  const closer = earlyNoteCloser(c, es, i, start + 2)
+  if (closer === null || !escapeAt(c, closer[0], closer[1])) return false
+  c.closers.add(c.escapes[c.escapes.length - 1]!)
+  c.earlyCloser = true
+  return true
+}
+
+/** The bare `]` of the text from `es[i]` at `from` on that no bare `[` there pairs with, or null. */
+function earlyNoteCloser(c: Check, es: readonly Node[], i: number, from: number): [TextNode, number] | null {
+  const open = { depth: 0 }
+  // A node of the note content between, as a strong or a code span, holds no bracket of the note.
+  for (let k = i; k < es.length && !BRACKETED.has(es[k]!.type); k++) {
+    const text = es[k]!
+    const at = text.type === 'text' ? unpairedCloser(c, text, k === i ? from : 0, open) : -1
+    if (at >= 0) return [text as TextNode, at]
+  }
+  return null
+}
+
+function unpairedCloser(c: Check, text: TextNode, from: number, open: { depth: number }): number {
+  for (let at = from; at < text.value.length; at++) {
+    const char = text.value[at]
+    if ((char !== '[' && char !== ']') || isEscaped(c, text, at)) continue
+    if (char === '[') open.depth++
+    else if (open.depth-- === 0) return at
+  }
+  return -1
+}
+
+/** Whether `node` or a node below it is link or span text starting with a caret, the bracket of which forms `[^`. */
+function holdsCaretPair(node: Node): boolean {
+  return leadingCaret(node) || childNodes(node).some(holdsCaretPair)
 }
 
 /**
