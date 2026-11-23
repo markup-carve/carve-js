@@ -40,10 +40,12 @@ export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]
   })
 }
 
-/** C2-W-154: below a list, footnote or description list that ends in a lazy-line block this paragraph has no spelling. */
+/** C2-W-154: below a footnote that ends in a lazy-line block this paragraph has no spelling. */
 function typedDashParagraph(tree: DocumentNode, entry: Diagnostic): boolean {
-  if (entry.code !== 'structure-unspellable' || !/^\/children\/\d+$/.test(entry.path ?? '')) return false
+  const index = /^\/children\/(\d+)$/.exec(entry.path ?? '')
+  if (entry.code !== 'structure-unspellable' || index === null) return false
   const paragraph = nodeAt(tree, entry.path!)
+  if (tree.children[Number(index[1]) - 1]?.type !== 'footnote') return false
   return isNode(paragraph) && paragraph.type === 'paragraph' && childNodes(paragraph)[0]?.type === 'smart_punctuation'
 }
 

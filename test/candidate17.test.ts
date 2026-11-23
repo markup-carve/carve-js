@@ -53,7 +53,7 @@ describe('candidate 17 clause outputs', () => {
         expect(result.diagnostics.some((actual) => actual.code === code)).toBe(true)
         if (code === 'extension-fallback-rendered') {
           expect(result.diagnostics.find((actual) => actual.code === code)?.message)
-            .toMatch(/^Rendered the fallback of the unknown extension "/)
+            .toMatch(/^Rendered the fallback of the extension ".*", which has no matching renderer$/)
         }
       }
       for (const code of entry.expected.notReported ?? []) {

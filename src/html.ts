@@ -541,7 +541,7 @@ function include(r: Render, node: IncludeNode, level: number): void {
 function blockExtension(r: Render, node: BlockExtensionNode, level: number): void {
   const rendered = r.renderExtension(node, level)
   if (rendered !== null) { line(r, level, rendered); return }
-  loss(r, node, 'extension-fallback-rendered', `Rendered the fallback of the unknown extension "${node.name}"`)
+  loss(r, node, 'extension-fallback-rendered', `Rendered the fallback of the extension "${node.name}", which has no matching renderer`)
   // C2-X-035: the attributes of the node go on a div around its fallback.
   const tag = attributes(r, node, {})
   if (tag === '') return writeBlocks(r, node.fallback, level)

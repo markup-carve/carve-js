@@ -28,13 +28,14 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
     expect(format('- = H\n---yaml *x*\n')).toBe('- = H\n\n---yaml *x*\n')
   })
 
-  it('C2-W-154: refuses the paragraph below a list that ends in a block with lazy lines', () => {
+  it('C2-W-155: indents a list that ends in a block with lazy lines by one space (carve#6398)', () => {
     const tree = parse('- ```\n  x\n  ```\n---yaml\nk: v\n---\n')
     const [list, paragraph] = tree.children
     const quoted = parse('- > q\n').children[0]!
     const result = writeWithDiagnostics({ ...tree, children: [quoted, paragraph!] })
     expect(list?.type).toBe('list')
-    expect(result.diagnostics.map((entry) => entry.code)).toEqual(['structure-unspellable'])
+    expect(result.source).toBe(' - > q\n\n ---yaml\nk: v\n---\n')
+    expect(result.diagnostics).toEqual([])
   })
 
   it('C2-W-154: writes the paragraph directly below a footnote or description that ends in a closed block (carve#6397)', () => {
@@ -46,16 +47,23 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
     }
   })
 
-  it('C2-W-154: refuses the paragraph below a footnote or description that ends in a block with lazy lines', () => {
+  it('C2-W-154: refuses the paragraph below a footnote that ends in a block with lazy lines', () => {
     const tree = parse('a[^n]\n\n[^n]: x\n\n{.c}\n ---yaml\nk: v\n---\n')
     const [reference, footnote, attributed] = tree.children
     const { attrs, ...paragraph } = attributed!
     expect(attrs).toBeDefined()
+    const result = writeWithDiagnostics({ ...tree, children: [reference!, footnote!, paragraph] })
+    expect(result.diagnostics.map((entry) => entry.code)).toEqual(['structure-unspellable'])
+  })
+
+  it('C2-W-155: indents a description list that ends in a block with lazy lines by one space (carve#6409)', () => {
+    const tree = parse('a\n\n{.c}\n ---yaml\nk: v\n---\n')
+    const { attrs, ...paragraph } = tree.children[1]!
+    expect(attrs).toBeDefined()
     const description = parse(':: t\n: > q\n').children[0]!
-    for (const before of [footnote!, description]) {
-      const result = writeWithDiagnostics({ ...tree, children: [reference!, before, paragraph] })
-      expect(result.diagnostics.map((entry) => entry.code)).toEqual(['structure-unspellable'])
-    }
+    const result = writeWithDiagnostics({ ...tree, children: [description, paragraph] })
+    expect(result.source).toBe(' :: t\n : > q\n\n ---yaml\nk: v\n---\n')
+    expect(result.diagnostics).toEqual([])
   })
 
   it('C2-W-154: indents the first line of a top-level paragraph that would read as a typed opener', () => {
