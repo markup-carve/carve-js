@@ -29,18 +29,19 @@ export function cellLabelSource(source: string, image: boolean): string {
       at += 2
       continue
     }
-    if (char !== '`') {
-      out += char
-      at++
-      continue
-    }
-    let run = at
-    while (source[run] === '`') run++
-    const close = closingBackticks(source, run, run - at)
-    out += source.slice(at, close < 0 ? run : close)
-    at = close < 0 ? run : close
+    const end = char === '`' ? codeSpanEnd(source, at) : at + 1
+    out += source.slice(at, end)
+    at = end
   }
   return out
+}
+
+/** The offset behind the code span whose backtick run starts at `at`, or behind the run where no span closes. */
+function codeSpanEnd(source: string, at: number): number {
+  let run = at
+  while (source[run] === '`') run++
+  const close = closingBackticks(source, run, run - at)
+  return close < 0 ? run : close
 }
 
 /** C2-I-015: the offset behind the backtick run of `size` that closes a code span from `from` on, or -1. */
