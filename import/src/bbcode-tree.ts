@@ -9,7 +9,7 @@ import { flattenCellBreaks } from './html.ts'
 import { collapseBreaks, trimEdges } from './html-inline.ts'
 import { resolveAlignments } from './html-table-align.ts'
 import {
-  classNames, coalesce, complete, finding, paragraph, safeUrl, softText, withDestination, type Context, type ImportResult,
+  classNames, coalesce, complete, finding, imageParagraph, paragraph, safeUrl, softText, withDestination, type Context, type ImportResult,
 } from './kit.ts'
 
 /** Below this nesting the HTML of the items stays well inside the depth limit parse5 trees are checked against. */
@@ -170,7 +170,7 @@ function flowOf(nodes: Node[], context: Context): Block[] {
   const solid = nodes.filter(node => typeof node !== 'string' || node.trim() !== '')
   if (solid.length === 0) return []
   if (solid.every(node => typeof node !== 'string' && node.el === 'img')) {
-    return solid.map(node => ({ type: 'paragraph', role: 'image', children: image(node as Extract<Node, { el: 'img' }>, context) }))
+    return solid.flatMap(node => imageParagraph(image(node as Extract<Node, { el: 'img' }>, context)))
   }
   const children = edgeInline(nodes, context)
   return children.length > 0 ? [paragraph(children)] : []
