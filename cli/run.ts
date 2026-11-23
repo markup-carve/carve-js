@@ -350,7 +350,7 @@ function hasRawHtml(document: DocumentNode): boolean {
   return false
 }
 
-const RAW_HTML_FORMAT = new TextEncoder().encode('=html')
+const RAW_HTML_FORMAT = Buffer.from('=html')
 
 // A raw format is the name right behind `=` (C2-I-021, C2-B-116), so bytes without `=html` hold no raw HTML.
 function mayHoldRawHtml(bytes: Uint8Array): boolean {

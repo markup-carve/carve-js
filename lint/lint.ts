@@ -498,11 +498,14 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
  */
 export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
   validateOptions(options)
-  const own = lintSource(source, options)
+  const facts: SourceFacts = { includes: true }
+  const own = lintSource(source, options, facts)
   if (options.includes === undefined) return own
   const rest: LintOptions = { ...options }
+  // With extensions the expansion, which parses without them, may read another tree.
+  const expands = facts.includes || options.extensions !== undefined
   const all = lintIncludes(source, options.includes, own, (text) => lintSource(text, rest),
-    (text, node, path) => lintPayload(text, node, path, rest))
+    (text, node, path) => lintPayload(text, node, path, rest), expands)
   const seen = new Set<string>()
   return all.filter((entry) => {
     const key = `${entry.file ?? ''}\0${entry.code}\0${entry.range?.startOffset ?? ''}\0${entry.range?.endOffset ?? ''}`
@@ -548,9 +551,12 @@ export function lintPayload(text: string, node: Node, path: string, options: Lin
   return context.diagnostics
 }
 
-function lintSource(source: string, options: LintOptions): Diagnostic[] {
+interface SourceFacts { includes: boolean }
+
+function lintSource(source: string, options: LintOptions, facts?: SourceFacts): Diagnostic[] {
   const parsed = parseWithLayoutForLint(source, { ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
     ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
+  if (facts !== undefined) facts.includes = parsed.includes
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   context.resolved = parsed.resolved
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
