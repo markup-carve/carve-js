@@ -677,6 +677,8 @@ export class DataWalk {
   private readonly raws: Node[] = []
   private idCache: ModelId[] | undefined = undefined
   private holder: { path: string, type: string, inline: boolean } | undefined = undefined
+  // C2-B-120: the title of a block is inline content of one line; the walk visits it before the other slots.
+  private title: { path: string, type: string } | undefined = undefined
   // The blocks the walk is inside, with the quotes that hold each: it visits a parent before its children.
   private readonly openBlocks: Node[] = []
   private readonly openQuotes: number[] = []
@@ -768,12 +770,12 @@ export class DataWalk {
   }
 
   /** C2-W-140: a text or soft break child of an inline parent joins the run of its previous sibling, or starts one. */
-  private run(node: Node, parent: Node, parentPath: string, index: number, leaf: string): void {
+  private run(node: Node, parent: Node, parentPath: string, index: number, leaf: string, titled = false): void {
     if (node.type !== 'text' && node.type !== 'soft_break') {
       this.open = undefined
       return
     }
-    if (!INLINE_PARENT_TYPES.has(parent.type)) return
+    if (!titled && !INLINE_PARENT_TYPES.has(parent.type)) return
     const open = this.open
     const joins = open !== undefined && open.next === index && open.path === parentPath
     if (node.pos === undefined) {
@@ -793,11 +795,11 @@ export class DataWalk {
   }
 
   // C2-B-227: a table may have consumed every key it took.
-  private attribute(node: Node, path: string, parent: Node): void {
+  private attribute(node: Node, path: string, parent: Node, titled: boolean): void {
     if (node.attrs === undefined && node.type !== 'table') return
     this.attributed.nodes.push(node)
     this.attributed.paths.push(path)
-    this.attributed.inline.push(INLINE_PARENT_TYPES.has(parent.type))
+    this.attributed.inline.push(titled || INLINE_PARENT_TYPES.has(parent.type))
   }
 
   // A table's rows and cells follow it in the walk, and a cell holds no table.
@@ -806,11 +808,12 @@ export class DataWalk {
     return node.type === 'table_row' || node.type === 'table_cell' ? this.tableFormat : undefined
   }
 
-  private inlineChild(node: Node, path: string, parent: Node, parentPath: string, index: number, leaf: string): void {
+  private inlineChild(node: Node, path: string, parent: Node, parentPath: string, index: number, leaf: string,
+    titled = false): void {
     if ((this.types.has(node.type) || this.types.has('*')) && node.pos !== undefined) {
       this.inline.push(new InlineRecord(node, path, leaf, parent.type, this.context))
     }
-    if (this.textRuns) this.run(node, parent, parentPath, index, leaf)
+    if (this.textRuns) this.run(node, parent, parentPath, index, leaf, titled)
   }
 
   private quotesOf(node: Node, parent: Node): number {
@@ -824,10 +827,25 @@ export class DataWalk {
     return quotes
   }
 
+  /** The block whose title holds the node, with whether the node stands directly in it; a node outside a title starts the next. */
+  private titleOf(node: Node, path: string, parentPath: string): { type: string, direct: boolean } | undefined {
+    const title = this.title
+    if (title !== undefined && path.charCodeAt(title.path.length) === 47 && path.startsWith(title.path)) {
+      return { type: title.type, direct: parentPath.length + 6 === title.path.length }
+    }
+    this.title = Array.isArray((node as { title?: unknown }).title) ? { path: `${path}/title`, type: node.type } : undefined
+    return undefined
+  }
+
   child(node: Node, path: string, parent: Node, parentPath: string, index: number): void {
-    if (this.attributes) this.attribute(node, path, parent)
+    const title = this.titleOf(node, path, parentPath)
+    if (this.attributes) this.attribute(node, path, parent, title?.direct === true)
     if (!this.model) return
     this.idsOf(node)
+    if (title !== undefined) {
+      this.inlineChild(node, path, parent, parentPath, index, title.type, title.direct)
+      return
+    }
     const holder = this.holder
     // Inline content holds no block and no line of its own; the caption of an image paragraph is a block (C2-W-140).
     if (holder !== undefined && node.type !== 'caption' && path.charCodeAt(holder.path.length) === 47 && path.startsWith(holder.path)) {
