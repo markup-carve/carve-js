@@ -263,11 +263,13 @@ export function nestedColonRuns(ctx: Context): void {
     if (fence.bare && above !== undefined && above.shortest <= fence.run) roots.add(above.root)
   }
   const heights = fenceHeights(fences)
+  // Another repair may already have widened a tree (nestedDivInsideAdmonition, outerAdmonitionAroundDiv).
+  const edited = new Set(ctx.findings.flatMap(({ edit }) => edit === null ? [] : [edit.start]))
   for (const root of roots) {
     const opener = root.node.pos!.startOffset
-    // Another repair already widened this tree (nestedDivInsideAdmonition, outerAdmonitionAroundDiv).
-    if (ctx.findings.some(({ edit }) => edit !== null && edit.start >= opener && edit.start <= opener + root.run)) continue
-    relengthFences(ctx, root, heights)
+    let widened = false
+    for (let at = opener; at <= opener + root.run; at++) widened ||= edited.has(at)
+    if (!widened) relengthFences(ctx, root, heights)
   }
 }
 
