@@ -144,7 +144,20 @@ function fenceInfo(w: Writer, node: CodeBlockNode | RawBlockNode): string {
 
 /** How far the lead of the current line reaches past `prefix`: a task box, a label or attributes on a marker line. */
 function leadIndent(w: Writer, prefix: string): number {
-  return w.lead === null ? 0 : Math.max(0, w.lead.length - w.leadSkip - prefix.length)
+  return w.lead === null ? 0 : Math.max(0, columns(w.lead) - w.leadSkip - prefix.length)
+}
+
+/** C2-B-003: columns count code points, so a surrogate pair in a footnote key is one column. */
+function columns(text: string): number {
+  let count = text.length
+  for (let at = 1; at < text.length; at++) {
+    const code = text.charCodeAt(at)
+    if (code >= 0xdc00 && code <= 0xdfff) {
+      const high = text.charCodeAt(at - 1)
+      if (high >= 0xd800 && high <= 0xdbff) count--
+    }
+  }
+  return count
 }
 
 /**
@@ -565,7 +578,7 @@ function blockQuote(w: Writer, node: BlockQuoteNode, prefix: string, flags: numb
     return caption(w, node.caption, prefix, flags)
   }
   w.lead = `${w.lead ?? prefix}> `
-  w.leadSkip = w.lead.length - prefix.length - 2
+  w.leadSkip = columns(w.lead) - prefix.length - 2
   writeBlocks(w, children, `${prefix}> `, flags, false)
   if (w.lead !== null) emit(w, prefix, '')
   caption(w, node.caption, prefix, flags)

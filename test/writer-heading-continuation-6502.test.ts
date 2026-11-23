@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { format, parse, treesEqual } from '../src/index.ts'
 
 // carve#6502, C2-B-154: a heading continuation stands past the heading's marker, also where the heading sits on the
-// marker line of a body whose content column is left of that marker.
+// marker line of a body whose content column is left of that marker. Columns count code points (C2-B-003).
 const UNCHANGED: string[] = [
   'Text.[^1]\n\n[^1]: = Head\n        cont\n',
   'Text.[^abcde]\n\n[^abcde]: === Head\n              cont\n              more\n',
   'Text.[^1]\n\n[^1]: Para.\n\n  == Head\n     cont\n',
   'Text.[^ab]\n\n[^ab]: == Head\\\n          cont\n',
   'Text.[^ab]\n\n[^ab]: == Head\n          cont\n          more\n',
+  'Text.[^😀]\n\n[^😀]: = Head\n        cont\n',
+  'Text.[^😀]\n\n[^😀]: ```\n        x\n      ```\n',
+  'Text.[^😀]\n\n[^😀]: - a\n\n        b\n',
   '- = Head\n    cont\n',
   ':: T\n: = Head\n    cont\n',
   '> = Head\n>   cont\n',
