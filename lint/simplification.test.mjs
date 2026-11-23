@@ -2,11 +2,11 @@
 import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 
-const findings = (source, code) => lint(source).filter((entry) => entry.code === code)
+const findings = (source, code, options = {}) => lint(source, options).filter((entry) => entry.code === code)
 
 describe('C2-B-137, C2-B-154: deprecated-indented-line-under-heading across comment-only lines', () => {
   it('C2-B-137: names the indented line below a comment-only line, Example 248', () => {
-    const found = findings('= Title\n%% note\n  continues\n', 'deprecated-indented-line-under-heading')
+    const found = findings('= Title\n%% note\n  continues\n', 'deprecated-indented-line-under-heading', { upgrade: true })
     expect(found.map((entry) => entry.range)).toEqual([{ startOffset: 16, endOffset: 27 }])
   })
 

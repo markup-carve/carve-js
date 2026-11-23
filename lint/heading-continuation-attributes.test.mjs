@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 
-const found = (source) => lint(source)
+const found = (source) => lint(source, { upgrade: true })
   .filter((entry) => entry.code === 'deprecated-indented-line-under-heading')
   .map((entry) => `${entry.path} ${entry.range.startOffset}-${entry.range.endOffset}`)
 

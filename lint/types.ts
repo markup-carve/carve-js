@@ -10,6 +10,8 @@ import { type ResolvedTree } from '../src/api.ts'
 export interface LintOptions {
   rules?: Partial<Record<RuleId, 'on' | 'off'>>
   platforms?: readonly 'github'[]
+  /** C2-W-156: turns on the migration notices, the rules whose default is `upgrade`. */
+  upgrade?: boolean
   /** C2-N-085: a resolver, or the `includes` option of a parse, through which the included files are linted too. */
   includes?: unknown
   extensions?: readonly ExtensionDefinition[]

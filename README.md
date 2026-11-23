@@ -52,6 +52,7 @@ npx carve README.crv > README.html
 npx carve fmt --check README.crv
 npx carve lint README.crv
 npx carve lint --heading-ids lower README.crv
+npx carve lint --upgrade legacy.crv
 npx carve import --from html page.html
 npx carve import --from markdown README.md
 npx carve upgrade --check legacy.crv

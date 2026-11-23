@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 
-const findings = (source, code) => lint(source).filter((entry) => entry.code === code)
+const findings = (source, code, options = {}) => lint(source, options).filter((entry) => entry.code === code)
   .map(({ range, message }) => ({ range: [range.startOffset, range.endOffset], message }))
-const ranges = (source, code) => findings(source, code).map((entry) => entry.range)
+const ranges = (source, code, options = {}) => findings(source, code, options).map((entry) => entry.range)
 
 describe('0.2 lint reads source spelling within parsed text and containers', () => {
   it('recognizes a bare quote and an abbreviation definition as later paragraph openers', () => {
@@ -51,7 +51,7 @@ describe('0.2 lint reads source spelling within parsed text and containers', () 
     expect(ranges('| w | w |\n^ w\n[^w]: %%', 'definition-in-container')).toEqual([])
   })
   it('finds a quoted comment closer with trailing text', () => {
-    expect(ranges('> %%%%\n> %%%% x', 'comment-fence-closer-with-text')).toEqual([[7, 15]])
+    expect(ranges('> %%%%\n> %%%% x', 'comment-fence-closer-with-text', { upgrade: true })).toEqual([[7, 15]])
   })
   it('uses the blank line after an attribute run for its message', () => {
     const entries = findings('{#id .c k=v}\n{#id .c k=v}\n\n', 'unattached-block-attribute')

@@ -71,4 +71,5 @@ Without `--write`, the fixed source goes to standard output, and `FILE: fixed RU
 
 - `-o FILE`, `--output FILE` on `render`, `fmt` and `import`: the product of the run goes to `FILE` instead of standard output. What the files before a failure of status 2 produced is written too. `fmt` refuses it with `--write`, `--check` or `--diff`, and every command refuses it when a report names the same path.
 - `--strict` on `render` and `lint`: a file that wrote any entry ends with status 1, a hint included. `render --strict` still writes the HTML; `--strict-losses` is the flag that withholds it.
+- `--upgrade` on `lint`: turns on the migration notices, the rules that report 0.2 text which 0.1 read differently. A document whose line-1 frontmatter declares `carve: 0.1` gets them without the flag (C2-W-156).
 - `--ignore FILE-ID` on `lint`, repeatable: the entries of that file are dropped. An included file is named by its id, its path from the include root; the entry file by its name as given.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 
-const count = (source, rule) => lint(source).filter((entry) => entry.code === rule).length
+const count = (source, rule, options = {}) => lint(source, options).filter((entry) => entry.code === rule).length
 
 describe('0.2 lint parity, lintsat1 round', () => {
   it("C2-B-046: a task box is no label", () => {
@@ -11,10 +11,10 @@ describe('0.2 lint parity, lintsat1 round', () => {
     expect(count("a [ ]\n", 'blank-reference-label')).toBe(0)
   })
   it("C2-I-079: a blank full reference label", () => {
-    expect(count("x [a][ ]\n", 'blank-reference-label')).toBe(1)
+    expect(count("x [a][ ]\n", 'blank-reference-label', { upgrade: true })).toBe(1)
   })
   it("C2-I-079: a blank definition label", () => {
-    expect(count("[ ]: u\n", 'blank-reference-label')).toBe(1)
+    expect(count("[ ]: u\n", 'blank-reference-label', { upgrade: true })).toBe(1)
   })
   it("C2-I-079: an image with no alt text holds no label", () => {
     expect(count("![](i.png)\n", 'blank-reference-label')).toBe(0)

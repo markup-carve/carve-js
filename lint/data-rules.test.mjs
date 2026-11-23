@@ -2,10 +2,10 @@ import { afterEach, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 import { DATA_RULE_IDS } from './data-rules.ts'
 
-function findings(source, mode) {
+function findings(source, mode, options = {}) {
   if (mode === 'data') process.env.CARVE_LINT_RULES = 'data'
   else delete process.env.CARVE_LINT_RULES
-  return lint(source).filter((entry) => DATA_RULE_IDS.has(entry.code))
+  return lint(source, options).filter((entry) => DATA_RULE_IDS.has(entry.code))
     .map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset}`)
 }
 
@@ -56,8 +56,8 @@ it('C2-B-109: fence-closer-indented reports no unclosed fence and reads the sour
 })
 
 it('C2-B-110: comment-fence-closer-with-text reads a quoted line behind its quote mark only', () => {
-  expect(findings('> %%%%\n> %%%% x\n', 'data')).toEqual(['comment-fence-closer-with-text@7-15'])
-  expect(findings('>   %%%%\n> >   %%%% x\n', 'data')).toEqual([])
+  expect(findings('> %%%%\n> %%%% x\n', 'data', { upgrade: true })).toEqual(['comment-fence-closer-with-text@7-15'])
+  expect(findings('>   %%%%\n> >   %%%% x\n', 'data', { upgrade: true })).toEqual([])
 })
 
 it('C2-B-069: description-term-multi-line starts behind the prefixes of the line', () => {

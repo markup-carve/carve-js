@@ -45,7 +45,7 @@ const cases = [
 describe('0.2 lint parity ticket inputs', () => {
   for (const [ticket, rule, source, expected] of cases) {
     it(`#${ticket} ${rule}: ${JSON.stringify(source)}`, () => {
-      const actual = lint(source).filter((finding) => finding.code === rule)
+      const actual = lint(source, { upgrade: true }).filter((finding) => finding.code === rule)
         .map((finding) => [finding.range.startOffset, finding.range.endOffset])
       expect(actual).toEqual(expected)
     })
