@@ -141,7 +141,7 @@ const MAX_NOTE_PASSES = 8
  * Keeps the notes of the last pass that closed again, and returns whether that changed the set. One that opened and no
  * longer closes closed only because a caret pair in it opened, so it is text from now on (C2-I-089). One whose `^[` an
  * enclosing note swallowed was not read on its own, so it keeps its place until a pass opens it, unless `settle` holds
- * and `settlesSwallowed` decides it already.
+ * and `settlesSwallowed` decides it already. One that first closes in the last pass joins them.
  */
 function narrowsNotes(state: InlineState, closed: Map<number, number>, opened: Set<number>, settle: boolean): boolean {
   const before = state.closedNotes
@@ -154,6 +154,12 @@ function narrowsNotes(state: InlineState, closed: Map<number, number>, opened: S
     if (closed.has(start) || !opened.has(start)) continue
     before.delete(start)
     ;(state.textNotes ??= new TextNotes()).add(start, end)
+    changed = true
+  }
+  // A note that first closes in this pass closes too: a caret pair inside it opens nothing in the next.
+  for (const [start, end] of closed) {
+    if (before.has(start)) continue
+    before.set(start, end)
     changed = true
   }
   const settled = settle && settlesSwallowed(state, before)
