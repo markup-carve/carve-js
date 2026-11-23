@@ -3,6 +3,7 @@ import { expect, it } from 'vitest'
 import { format, parse, treesEqual } from '../src/index.ts'
 import { parseWithLayout } from '../src/api.ts'
 import { writeTreeWithStats } from '../src/write.ts'
+import { checkWriter } from './support/writer-checks.ts'
 
 function bothPaths(input: string): [string, string] {
   const parsed = parseWithLayout(input)
@@ -71,4 +72,26 @@ it.each([
   ['x<<\\="', 'x\\<\\<="\n'],
 ])('C2-W-125: the neighbors of a quote behind a changing text %j', (input, expected) => {
   expect(format(input)).toBe(expected)
+})
+
+// C2-W-125 case five: the backslash before the `/` of an inner `/}` gives no kind, and the text behind the content
+// that ended early opens nothing, so no `}` takes one.
+it.each([
+  ['x(/u)\\/}/}', 'x({/u)\\/}/}}\n'],
+  ['x(/u)\\/}/}a}', 'x({/u)\\/}/}}a}\n'],
+  ['x(*u)\\*}*}', 'x({*u)\\*}*}}\n'],
+])('C2-W-125: no escape behind a content that ended early %j', (input, expected) => {
+  expect(bothPaths(input)).toEqual([expected, expected])
+})
+
+// The four-token inputs the gate reference read differently: a quote of the tree read the other way is no opener of
+// its own (C2-W-125 case two), and a kind round escapes every bracket run (C2-W-088).
+it.each([
+  ['x(/u)\\/}/}', 'x({/u)\\/}/}}\n'],
+  ['x\\<a:b>\\="', 'x\\<a:b\\>="\n'],
+  ["x\\<a:b>\\='", "x\\<a:b\\>='\n"],
+  ['x[^:n[\\]', 'x\\[^:n\\[]\n'],
+])('C2-W-088: the gates and the reference agree on %j', (input, expected) => {
+  expect(bothPaths(input)).toEqual([expected, expected])
+  expect(checkWriter(input)).toBeNull()
 })

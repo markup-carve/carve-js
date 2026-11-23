@@ -81,12 +81,15 @@ export interface Check {
   lineEscapes: Map<TextNode, Set<number>>
   /** C2-W-088: block openers inside a line, which take their own escape and no kind. */
   ownEscapes: Map<TextNode, Set<number>>
+  /** A delimiter inside the content under comparison took a backslash because it closed the content early. */
+  cut: boolean
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
+    cut: false,
   }
 }
 
@@ -1057,7 +1060,8 @@ function escapeMark(c: Check, nodes: readonly Node[], start: number, from: numbe
 function closedEarly(c: Check, es: readonly Node[], i: number, vi: number, owner: Node): void {
   const mark = CLOSING_MARKS.get(owner.type)
   if (isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
-  else if (mark === undefined || !escapeMark(c, es, i, vi, mark)) c.losses.push([owner, null])
+  else if (mark !== undefined && escapeMark(c, es, i, vi, mark)) c.cut = true
+  else c.losses.push([owner, null])
 }
 
 /**
@@ -1099,6 +1103,8 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolea
   const length = Math.min(value.length - at.vi, other.length - at.aj)
   for (let k = 0; k < length; k++) {
     if (value.charCodeAt(at.vi + k) === other.charCodeAt(at.aj + k)) continue
+    // C2-W-125: behind a content that ended early the parse holds the rest of that content as text, which opens nothing.
+    if (c.cut) return false
     // The parse read a character of the text as markup, such as a backslash before punctuation (C2-W-097).
     if (!escapeAt(c, e, at.vi + k)) c.losses.push([e, 'value'])
     return false
@@ -1341,7 +1347,10 @@ function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], 
   }
   if (readsNeighbor(c, e, es, at.i, a)) return false
   repairCommentCloser(c, es, at.i, e, a)
+  const outer = c.cut
+  c.cut = false
   compareInline(c, e, a)
+  c.cut ||= outer
   at.i++
   at.j++
   return VERBATIM.has(e.type) && differingField(c, e, a) !== null ? stepOverAbsorbed(c, e, es, as, a, at) : true
@@ -1625,6 +1634,8 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
     const more = e.type === 'text' ? matchText(c, e, es, as, at, owner) : matchNode(c, e, es, as, at, owner)
     if (!more && !resync(c, es, as, at) && !stepOverLostText(c, es, as, at) &&
       !resyncNextConstructLine(c, es, as, at)) return
+    // The lists are aligned again behind a content that ended early.
+    if (!more) c.cut = false
   }
   if (at.j >= as.length) return
   // C2-W-005: the content read on past its end, as its closer paired later. The kind rounds leave it unread (CC-1633);
