@@ -75,6 +75,28 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
     }
   })
 
+  it('C2-W-155: below a list, description list or footnote, departs in order or refuses (carve#6418)', () => {
+    const paragraph = parse('a\n\n ---yaml\nk: v\n---\n').children[1]!
+    const spelled = [
+      ['a[^n]\n\n[^n]: x\n\n{.c}\n- b\n', 'a[^n]\n\n[^n]: x\n\n{.c}\n - b\n\n ---yaml\nk: v\n---\n'],
+      [':: t\n: d\n\n- b\n', ' :: t\n : d\n\n - b\n\n ---yaml\nk: v\n---\n'],
+      [':: t\n: d\n\n{start=3}\n3. b\n', ':: t\n: d\n\n{start=3}\n . b\n\n ---yaml\nk: v\n---\n'],
+      ['1. x\n\n:: t\n: d\n\n- b\n  c\n', ' . x\n\n :: t\n : d\n\n - b\n   c\n\n ---yaml\nk: v\n---\n'],
+    ]
+    for (const [above, expected] of spelled) {
+      const tree = parse(above!)
+      const result = writeWithDiagnostics({ ...tree, children: [...tree.children, paragraph] })
+      expect(result.source, above).toBe(expected)
+      expect(result.diagnostics).toEqual([])
+    }
+    for (const above of ['a[^n]\n\n[^n]: x\n\n- b\n', 'a[^n]\n\n[^n]: x\n\n:: t\n: d\n\n- b\n']) {
+      const tree = parse(above)
+      const result = writeWithDiagnostics({ ...tree, children: [...tree.children, paragraph] })
+      expect(result.diagnostics.map((entry) => [entry.code, entry.path]), above)
+        .toEqual([['structure-unspellable', `/children/${tree.children.length}`]])
+    }
+  })
+
   it('takes a top-level key after a list and keeps the block outside that list', () => {
     const children = parse('- a\n\n{#m}\n---yaml\nk: v\n---\n').children
     expect(children.map((node) => node.type)).toEqual(['list', 'frontmatter'])
