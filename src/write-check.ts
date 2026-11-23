@@ -384,6 +384,11 @@ function escapeOwnerMark(c: Check, e: Node): boolean {
   const mark = c.owner === null ? undefined : CLOSING_MARKS.get(c.owner.type)
   if (mark === undefined || !('children' in e)) return false
   if (mark === ']' && BRACKETED.has(c.owner!.type)) return false
+  // C2-W-069, C2-W-093: a paired owner whose delimiter pairs in the content takes the braced form, as in `closedEarly`.
+  if (isPaired(c.owner!) && hasOtherForm(c, c.owner!) && textsBelow(e).some((text) => text.value.includes(mark))) {
+    changeForm(c, c.owner!)
+    return true
+  }
   return escapeCloser(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
 }
 
