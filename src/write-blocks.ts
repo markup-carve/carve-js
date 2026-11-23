@@ -1012,13 +1012,21 @@ function writeTopBlock(w: Writer, node: Node, prefix: string, flags: number, dep
   writeBlock(w, node, departures.indented.has(node) ? `${prefix} ` : prefix, flags)
 }
 
+/** The last top-level block above `node` that is no comment, or null. */
+function blockAbove(w: Writer, node: Node): Node | null {
+  let above = w.topBlocks.get(node)
+  while (above?.type === 'comment') above = w.topBlocks.get(above)
+  return above ?? null
+}
+
 function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags: number, layout: number): void {
   let before: Node | null = null
-  // The last block that is no comment: comments do not keep two lists apart (C2-B-053).
-  let list: Node | null = null
+  const departures = w.topBlocks.has(nodes[0]!) ? openerDepartures(w, nodes) : null
+  // The last block that is no comment: comments do not keep two lists apart (C2-B-053), also where a top-level group
+  // starts at a comment (C2-W-122).
+  let list: Node | null = departures === null ? null : blockAbove(w, nodes[0]!)
   // Kept across a run of comment lines, which is walked once rather than once per comment.
   let after = -1
-  const departures = w.topBlocks.has(nodes[0]!) ? openerDepartures(w, nodes) : null
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     const start = w.lines.length
