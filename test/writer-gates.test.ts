@@ -12,8 +12,6 @@ describe('the gates of the writer', () => {
     // C2-W-133: a clause case that expects `writer-refused` (CC-1493) is checked by the corpus test.
     const refusing = new Set(CLAUSE_CASES.filter((entry) => (entry.expected as { diagnostics?: { code: string }[] })
       .diagnostics?.some((found) => found.code === 'writer-refused') === true).map((entry) => entry.id))
-    // carve#6394: no spelling is ruled yet for a paragraph like that of CC-1655, below a list that takes no lazy line.
-    refusing.add('CC-1655')
     const failures = CARVE_SOURCES.filter((example) => !refusing.has(example.id))
       .map((example) => [example.id, checkWriter(example.input)]).filter((entry) => entry[1] !== null)
     expect(failures).toEqual([])

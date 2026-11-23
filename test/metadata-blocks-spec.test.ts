@@ -14,8 +14,27 @@ describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
     expect(render(source)).toBe('<ul>\n  <li>a\n—yaml\nk: v\n—</li>\n</ul>')
   })
 
+  it('C2-W-154: writes the paragraph directly below a list that ends in a block without lazy lines (carve#6394)', () => {
+    const lists = ['- ```\n  x\n  ```', '- :::\n  x\n  :::', '- | a | b |', '- = H', '- a\n  - ```\n    x\n    ```', '- ***']
+    for (const list of lists) {
+      const source = `${list}\n---yaml\nk: v\n---\n`
+      const result = writeWithDiagnostics(parse(source))
+      expect(result.source).toBe(source)
+      expect(result.diagnostics).toEqual([])
+    }
+  })
+
+  it('C2-W-154: refuses the paragraph below a list that ends in a block with lazy lines', () => {
+    const tree = parse('- ```\n  x\n  ```\n---yaml\nk: v\n---\n')
+    const [list, paragraph] = tree.children
+    const quoted = parse('- > q\n').children[0]!
+    const result = writeWithDiagnostics({ ...tree, children: [quoted, paragraph!] })
+    expect(list?.type).toBe('list')
+    expect(result.diagnostics.map((entry) => entry.code)).toEqual(['structure-unspellable'])
+  })
+
   it('C2-W-154: indents the first line of a top-level paragraph that would read as a typed opener', () => {
-    for (const source of ['a\n\n ---yaml\nk: v\n---\n', ' ---yaml\nk: v\n---\n']) {
+    for (const source of ['a\n\n ---yaml\nk: v\n---\n', ' ---yaml\nk: v\n---\n', '- a\n\n{.c}\n ---yaml\nk: v\n---\n']) {
       const result = writeWithDiagnostics(parse(source))
       expect(result.source).toBe(source)
       expect(result.diagnostics).toEqual([])
