@@ -583,7 +583,23 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeLoneBracket,
   escapeTextNote,
   (c, es, i) => escapeKeyCaret(c, es[i]!),
+  inContentAlone,
 ]
+
+/**
+ * C2-W-125: the backslash of a closer in the content is taken back on its own, without the earlier trials for the
+ * same node, which can be the ones that keep it from forming (a trailing caret of the span text `][^`).
+ */
+function inContentAlone(c: Check, es: readonly Node[], i: number, attempt: Attempt): boolean {
+  if (attempt.escapes.length < 2) return false
+  for (const escape of attempt.escapes) {
+    c.retracted.push(escape)
+    mark(c, escape[0], escape[1], false)
+  }
+  attempt.escapes = []
+  escapeInContent(c, es[i]!)
+  return true
+}
 
 /**
  * C2-W-125, case five: the leading caret of a reference whose key is its content is written bare (write-inline.ts), and
