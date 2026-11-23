@@ -1,5 +1,6 @@
+import { parse as parseDjot, renderHTML as renderDjot } from '@djot/djot'
 import { describe, expect, it } from 'vitest'
-import { format } from '../../src/index.ts'
+import { format, render } from '../../src/index.ts'
 import { lint } from '../../lint/lint.ts'
 import { writerHasLoss } from '../../src/write.ts'
 import { BBCODE_MAX_INPUT_LENGTH, BbcodeInputTooLargeError, importDocument, ImportInputError, type Format } from '../src/index.ts'
@@ -48,6 +49,18 @@ describe('Markdown and Djot through the HTML hub', () => {
   it('keeps a zero start and raw content of Djot', () => {
     expect(source('0. a\n1. b\n', 'djot')).toBe('{start=0}\n. a\n. b\n')
     expect(source('`<a>`{=html} and\n\n``` =latex\n\\x\n```\n', 'djot')).toBe('`<a>`{=html} and\n\n```=latex\n\\x\n```\n')
+  })
+
+  it('links a Djot autolink where djot.js 0.3.2 does, `mailto:` before any address with an at sign (carve-js#5438)', () => {
+    expect(source('a <mailto:a@b> b\n', 'djot')).toBe('a [mailto:a@b](mailto:mailto:a@b) b\n')
+    const hrefs = (html: string): string[] => [...html.matchAll(/href="([^"]*)"/g)].map(m => m[1] ?? '').filter(h => !h.startsWith('#'))
+    const contexts = [(s: string) => `a ${s} b\n`, (s: string) => `[x ${s} y](https://z.example)\n`, (s: string) => `| ${s} |\n`, (s: string) => `t[^n]\n\n[^n]: ${s}\n`]
+    for (const scheme of ['mailto:', 'MAILTO:', 'tel:', 'https://', 'foo:', ''])
+      for (const rest of ['a@b', 'a@b.c', 'u:p@h', 'a.b/c'])
+        for (const context of contexts) {
+          const input = context(`<${scheme}${rest}>`)
+          expect(hrefs(render(source(input, 'djot'))), input).toEqual(hrefs(renderDjot(parseDjot(input))))
+        }
   })
 
   it('keeps the Djot text before an image on its line', () => {
