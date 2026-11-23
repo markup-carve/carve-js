@@ -16,7 +16,8 @@ import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { escapeKinds, escapePartnerClosers, leavesKindBare } from './write-kinds.ts'
 import {
-  type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk, parseWritten,
+  type Check, compareBlocks, createCheck, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk,
+  parseWritten,
 } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -451,6 +452,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   if (w.kindRounds) escapeReportedKinds(w, check, group)
   extendChains(check)
   extendForms(w, check, group)
+  escapeCappedRun(check)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
     // C2-W-005: what only line 1 reads differently is written below one blank line, and the
@@ -1084,6 +1086,7 @@ function repairOnce(w: Writer, document: DocumentNode, from: number, first: bool
 
 function repairRounds(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
   const nodes = document.children
+  w.cappedRuns = []
   const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0, budget: 0 }
   for (;;) {
     const end = groupEnd(w, nodes, from)
@@ -1094,11 +1097,75 @@ function repairRounds(w: Writer, document: DocumentNode, from: number, first: bo
     if (refuseDeepGroup(w, group)) return end
     if (repeatedRepair(w, group, history)) return end
     if (!settle(w, document, group, first && !w.blankFirst) && !exhausted(w)) {
-      if (w.losses.entries.length === reported) reportUnread(w, group)
-      pruneGroupEscapes(w, group, first && !w.blankFirst)
+      finishRounds(w, group, first && !w.blankFirst, reported)
       return end
     }
   }
+}
+
+/** The group reads back or asks for no more change: the escapes the rounds placed are cut to those it needs. */
+function finishRounds(w: Writer, group: readonly Node[], first: boolean, reported: number): void {
+  trimCappedRuns(w, group, first)
+  if (w.losses.entries.length === reported) reportUnread(w, group)
+  pruneGroupEscapes(w, group, first)
+}
+
+/**
+ * C2-I-118: the rounds would place the escapes behind a capped opener one per round and stop at the first round that
+ * reads back. Those placed at once are kept up to the shortest run, in their order, with which the group reads back.
+ */
+function trimCappedRuns(w: Writer, group: readonly Node[], first: boolean): void {
+  const placed = placedCappedRuns(w)
+  w.cappedRuns = []
+  if (placed.length === 0 || w.parsed === null || !matchesGroup(w.parsed.children, group)) return
+  const written = (keep: number): DocumentNode => {
+    dropEscapes(w, placed.slice(keep))
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    return parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
+  }
+  let parsed = w.parsed
+  const readsBack = (keep: number): boolean => {
+    const trial = written(keep)
+    addEscapes(w, placed.slice(keep))
+    if (!matchesGroup(trial.children, group)) return false
+    parsed = trial
+    return true
+  }
+  // The rounds stop a few escapes short of the end of the construct at most, so the search starts there and widens.
+  let low = 0
+  let high = placed.length
+  for (let step = 1; low < high && !exhausted(w); step *= 2) {
+    const keep = Math.max(low, high - step)
+    if (!readsBack(keep)) {
+      low = keep + 1
+      break
+    }
+    high = keep
+  }
+  while (low < high && !exhausted(w)) {
+    const middle = (low + high) >> 1
+    if (readsBack(middle)) high = middle
+    else low = middle + 1
+  }
+  written(high)
+  w.parsed = parsed
+}
+
+/** The escapes of `w.cappedRuns` the group still holds: a change of form clears the escapes of the group. */
+function placedCappedRuns(w: Writer): [TextNode, number][] {
+  const present = new Map<TextNode, Set<number>>()
+  return w.cappedRuns.filter(([node, at]) => {
+    let offsets = present.get(node)
+    if (offsets === undefined) present.set(node, offsets = new Set(w.escapes.get(node)))
+    return offsets.has(at)
+  })
+}
+
+function dropEscapes(w: Writer, dropped: readonly [TextNode, number][]): void {
+  const byNode = new Map<TextNode, Set<number>>()
+  for (const [node, at] of dropped) byNode.set(node, (byNode.get(node) ?? new Set()).add(at))
+  for (const [node, offsets] of byNode) w.escapes.set(node, (w.escapes.get(node) ?? []).filter((at) => !offsets.has(at)))
 }
 
 /** C2-W-011: a group beyond the parser's nesting limit has no spelling. */
