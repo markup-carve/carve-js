@@ -1,0 +1,24 @@
+import { expect, it } from 'vitest'
+import { format, parse, render, writeWithDiagnostics } from '../src/index.ts'
+
+// carve#6444 (ruled option b): C2-B-224 makes `\|` a literal pipe in a cell before inline parsing, so a shortcut's
+// key there holds `|` (C2-I-072), while a definition label keeps its backslash (C2-I-079).
+it('C2-B-224, C2-I-072: a shortcut in a cell is keyed after the pipe escape is resolved', () => {
+  expect(render('| [r\\|s] |\n\n[r|s]: /u\n')).toContain('<td><a href="/u">r|s</a></td>')
+  expect(render('| ![r\\|s] |\n\n[r|s]: /u\n')).toContain('<td><img src="/u" alt="r|s"></td>')
+  expect(render('| [a [r\\|s]] |\n\n[r|s]: /u\n')).toContain('<td>[a <a href="/u">r|s</a>]</td>')
+})
+
+it('C2-I-079: a definition label keeps its backslash, so the shortcut in a cell does not find it', () => {
+  const source = '| [r\\|s] |\n\n[r\\|s]: /u\n'
+  expect(render(source)).toContain('<td>[r|s]</td>')
+  expect(JSON.stringify(parse(source))).not.toContain('"type":"link"')
+})
+
+it('C2-W-088: text that would read as such a shortcut keeps its escape', () => {
+  const source = '| \\[r\\|s] |\n\n[r|s]: /u\n'
+  expect(format(source)).toBe(source)
+  const written = writeWithDiagnostics(parse(source))
+  expect(written.diagnostics).toEqual([])
+  expect(render(written.source)).toContain('<td>[r|s]</td>')
+})

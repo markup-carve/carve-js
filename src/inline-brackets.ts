@@ -276,7 +276,9 @@ function closeShortcut(state: InlineState, open: number, pos: number): number {
   const image = state.tokens[open + TOKEN_A] === OPEN_IMAGE
   // C2-I-101: a citation-shaped pair keeps its core reading as text and a mention.
   if (!image && state.text.charCodeAt(start) === AT_SIGN) return NONE
-  const key = foldLabel(state.text.slice(start, pos))
+  // C2-B-224: in a cell an escaped pipe is a literal pipe before inline parsing, so the shortcut's key holds `|`.
+  const source = state.text.slice(start, pos)
+  const key = foldLabel(state.cell ? source.replaceAll('\\|', '|') : source)
   if (key === '' || !definitions.has(key)) return NONE
   closePair(state, open, pos, image ? IMAGE : LINK)
   pushToken(state, LABEL, pos + 1, pos + 1, start, pos, FLAG_SHORTCUT, NONE)
