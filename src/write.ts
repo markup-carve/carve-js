@@ -1575,7 +1575,7 @@ function noteSpans(source: string, lineStart: number): Set<number> {
       const note = isNoteBracket(source, at)
       open.push(note)
       if (note) notes++
-    } else if (source[at] === ']' && open.pop() === true) {
+    } else if (source[at] === ']' && source[at - 1] !== '\\' && open.pop() === true) {
       notes--
     }
   }

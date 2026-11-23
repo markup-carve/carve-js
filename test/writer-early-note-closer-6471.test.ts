@@ -14,6 +14,7 @@ describe('C2-W-125, case eight: a text ^[ stays bare and the ] that closed it ea
     ['^\\[ ] ^[x [^[b]\\]][]]'],
     ['^[a \\] ^[n [^[b]\\]][]\\]'],
     ['^[a \\] ^[ \\] [^a[b]][] ^[n [^[b]\\]][]\\]'],
+    ['^[a \\] [^[x] y](/u)'],
   ])('writes the tree of %j back as it was written', (source) => {
     const canonical = `${source}\n`
     const tree = parse(source)
