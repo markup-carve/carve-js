@@ -439,6 +439,8 @@ function logTrials(w: Writer, trials: readonly [TextNode, number][]): void {
   const log = w.trialLog
   if (log === null) return
   for (const [node, at] of trials) {
+    // Past the cap the pass is not retested, so the log stops growing and stays short.
+    if (log.length > MAX_RETESTED_TRIALS) return
     if (!log.some((entry) => entry[0] === node && entry[1] === at)) log.push([node, at])
   }
 }
