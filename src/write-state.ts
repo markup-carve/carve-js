@@ -86,6 +86,8 @@ export interface Writer {
   prewrittenAttributes: Node | null
   /** C2-I-118: images write the brackets of their alt text bare, for a group past the depth cap where they are text. */
   bareAlts: boolean
+  /** C2-I-118: the escapes the comparison placed at once behind capped openers, in the order the rounds would place them. */
+  cappedRuns: [TextNode, number][]
   /** C2-W-088: false while a group is written again by rounds of the reported openers only. */
   kindRounds: boolean
   /** C2-W-088, C2-W-005: true while a group whose closer repairs gave no kind lost a node is written again with them. */
@@ -141,7 +143,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(), readComments: new Set(),
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
-    prewrittenAttributes: null, bareAlts: false, kindRounds: true, closerKinds: false, topBlocks: new Map(),
+    prewrittenAttributes: null, bareAlts: false, cappedRuns: [], kindRounds: true, closerKinds: false, topBlocks: new Map(),
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
     parses: 0, parseCache: { trees: new Map(), treeChars: 0 },
     extensionSources: new Map(), verifiedSourceBytes: undefined,

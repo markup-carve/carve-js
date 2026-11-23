@@ -110,13 +110,15 @@ export interface Check {
   around: [readonly Node[], number, number][]
   /** Escapes of a construct a probe found running over the closers around its node: reported, so no trial (C2-W-088). */
   reported: Set<[TextNode, number]>
+  /** C2-I-118: the capped openers this round escaped, each with its text and the end of its construct there. */
+  capped: [TextNode, number, number][]
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
-    cut: false, codeTrials: new Set(), closers: new Set(), around: [], reported: new Set(),
+    cut: false, codeTrials: new Set(), closers: new Set(), around: [], reported: new Set(), capped: [],
   }
 }
 
@@ -1506,15 +1508,50 @@ function constructStart(e: TextNode, es: readonly Node[], at: Cursor, a: Node, o
   return start
 }
 
+/**
+ * C2-I-118: in a group past the depth cap, a bracket construct the parse read over text of the tree opens on the last
+ * bracket the reader pushed, and the bare brackets of the text behind it are text only because the stack was full.
+ * Its escape frees one entry, so the next round reads the same construct on the next bracket. Records the opener
+ * and the end of the construct in the text for `escapeCappedRun`.
+ */
+function recordCappedRun(c: Check, e: TextNode, from: number, end: number, shift: number): void {
+  if (c.w.planWhy !== 'depth cap') return
+  const value = e.value
+  const stop = end < 0 ? value.length : end
+  let at = from
+  while (at < stop && (value[at] === ' ' || value[at] === '\t')) at++
+  at += shift
+  if (value[at] === '[' && c.marks.get(e)?.get(at) === true) c.capped.push([e, at, stop])
+}
+
+/**
+ * C2-I-118: where the escape of one capped opener is all a round asks, the rounds after it would escape each bare
+ * bracket behind it in turn, one per round. Those escapes are placed in this round; `trimCappedRuns` keeps as many
+ * of them as the rounds would have placed.
+ */
+export function escapeCappedRun(c: Check): void {
+  const capped = c.capped[0]
+  c.capped.length = 0
+  if (capped === undefined || c.escapes.length !== 1 || c.retracted.length + c.forms.length > 0) return
+  const [e, opener, stop] = capped
+  if (c.escapes[0]![0] !== e || c.escapes[0]![1] !== opener) return
+  const value = e.value
+  for (let at = value.indexOf('[', opener + 1); at >= 0 && at < stop; at = value.indexOf('[', at + 1)) {
+    if (escapeAt(c, e, at)) c.w.cappedRuns.push([e, at])
+  }
+}
+
 /** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
 function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor, owner: Node): boolean {
   // C2-W-125: behind a content that ended early, the parse can open a construct on the markup of the tree.
   if (c.cut) return false
-  if (comparisonBehindQuote(es[at.i - 2], es[at.i - 1], e, at.vi, a)) escapeAt(c, e, at.vi + 1)
+  const quoted = comparisonBehindQuote(es[at.i - 2], es[at.i - 1], e, at.vi, a)
+  if (quoted) escapeAt(c, e, at.vi + 1)
   else escapeOpener(c, es, at.i, at.vi, a)
   const pos = a.pos
   if (pos === undefined) return false
   const end = spelledEnd(c.w, e, constructStart(e, es, at, a, owner), pos.endOffset - pos.startOffset, c.flags)
+  if (!quoted) recordCappedRun(c, e, at.vi, end, openerShift(a))
   if (end < 0) {
     escapeInnerQuotes(c, es, at.i, at.vi, a)
     return false
