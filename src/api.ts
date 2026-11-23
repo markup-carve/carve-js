@@ -443,7 +443,8 @@ export function parseWithLayout(src: string | Uint8Array, options?: ParseOptions
 }
 
 /** The lint caller owns this tree and never exposes or mutates its inert table children. */
-export function parseWithLayoutForLint(src: string | Uint8Array, options?: ParseOptions): LayoutResult & { resolved: ResolvedTree } {
+export function parseWithLayoutForLint(src: string | Uint8Array, options?: ParseOptions):
+  LayoutResult & { resolved: ResolvedTree, includes: boolean } {
   return parseWithLayoutCore(src, options, true)
 }
 
@@ -453,7 +454,7 @@ export function renderForLint(resolved: ResolvedTree): string {
 }
 
 function parseWithLayoutCore(src: string | Uint8Array, options: ParseOptions | undefined, compactTables: boolean):
-  LayoutResult & { resolved: ResolvedTree } {
+  LayoutResult & { resolved: ResolvedTree, includes: boolean } {
   const settings = readOptions(options, 'parse')
   const trace = createLayoutTrace()
   if (compactTables) trace.compactTables = true
@@ -463,7 +464,7 @@ function parseWithLayoutCore(src: string | Uint8Array, options: ParseOptions | u
   const diagnostics = parseDiagnostics(resolved, parsed)
   return { document: resolved.document,
     ...capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100),
-    layout: sourceLayout(source, resolved.document, trace), resolved }
+    layout: sourceLayout(source, resolved.document, trace), resolved, includes: (parsed.facts?.includes.length ?? 0) > 0 }
 }
 
 /** C2-L-056: the layout of bytes that are not well-formed UTF-8 keeps them in base64, and its ranges count them. */

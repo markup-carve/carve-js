@@ -134,6 +134,9 @@ function referenceFindings(document: DocumentNode): ReferenceFindings {
   return found
 }
 
+const RECONCILED: ReadonlySet<string> = new Set(['unresolved-reference-link', 'unresolved-footnote',
+  'unused-link-reference-definition', 'unused-footnote-definition'])
+
 function reconciled(entry: Diagnostic, found: ReferenceFindings, inclusion = ''): boolean {
   const key = diagnosticKey(entry)
   if (entry.code === 'unresolved-reference-link' || entry.code === 'unresolved-footnote') {
@@ -285,9 +288,11 @@ function walk(visit: Visit, node: Node, path: string, file: string | undefined,
 
 /** C2-N-085: the findings in the included files of `source`, after an expansion with the caller's resolver. */
 export function lintIncludes(source: string, value: unknown, own: Diagnostic[], lintFile: (source: string) => Diagnostic[],
-  lintPayload: Visit['lintPayload']): Diagnostic[] {
+  lintPayload: Visit['lintPayload'], expands = true): Diagnostic[] {
   const config = includeSettings(value, (reason) => new CarveOptionError('includes', reason))
   if (config === null) return own
+  // A source without includes expands to its own tree: nothing is added, and only a reference finding can be dropped.
+  if (!expands && !own.some((entry) => RECONCILED.has(entry.code))) return own
   const texts = new Map<string, string>()
   const expanded = parseWithDiagnostics(source, { includes: recording(config, texts) })
   const references = referenceFindings(expanded.document)

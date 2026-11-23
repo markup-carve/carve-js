@@ -13,7 +13,10 @@ const best = (source) => {
 }
 
 describe('colon fence lines in linear time', () => {
-  for (const [name, unit] of [['bare runs', ':::\n'], ['runs in quotes', '> :::\n> x\n'], ['closed divs', '::: d\nx\n:::\n\n']]) {
+  // carve#6491: an empty group searched every layout of the document for a child around its closer.
+  const emptyGroups = ':::\n%% hidden\n:::\n\n::: note\n%% hidden\n:::\n\n::: figure\n%% hidden\n:::\n\n'
+  for (const [name, unit] of [['bare runs', ':::\n'], ['runs in quotes', '> :::\n> x\n'], ['closed divs', '::: d\nx\n:::\n\n'],
+    ['empty groups', emptyGroups]]) {
     it(`lints 8 times the ${name} in at most about 8 times the time`, () => {
       const small = unit.repeat(Math.ceil(4000 / unit.length))
       const large = unit.repeat(Math.ceil(32000 / unit.length))

@@ -902,10 +902,35 @@ function ownerContent(type: string, layout: NodeLayout | undefined, quotes: numb
   return columnOf(context.source, context.chars[layout.startByte] ?? 0, quotes)
 }
 
+interface PathSpan { path: string, from: number, to: number }
+
+const sortedPaths = new WeakMap<LintContext['layouts'], PathSpan[]>()
+
+/** The layouts by path in code-unit order, where the descendants of a path form one run (carve#6491). */
+function sortedPathsOf(context: LintContext): PathSpan[] {
+  let list = sortedPaths.get(context.layouts)
+  if (list !== undefined) return list
+  list = []
+  for (const [path, layout] of context.layouts) {
+    list.push({ path, from: context.chars[layout.startByte] ?? 0, to: context.chars[layout.endByte] ?? 0 })
+  }
+  list.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+  sortedPaths.set(context.layouts, list)
+  return list
+}
+
 function childCovers(path: string, start: number, end: number, context: LintContext): boolean {
-  for (const [childPath, child] of context.layouts) {
-    if (!childPath.startsWith(`${path}/`)) continue
-    if ((context.chars[child.startByte] ?? 0) <= start && (context.chars[child.endByte] ?? 0) >= end) return true
+  const list = sortedPathsOf(context)
+  const prefix = `${path}/`
+  let low = 0
+  let high = list.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (list[middle]!.path < prefix) low = middle + 1
+    else high = middle
+  }
+  for (let index = low; index < list.length && list[index]!.path.startsWith(prefix); index++) {
+    if (list[index]!.from <= start && list[index]!.to >= end) return true
   }
   return false
 }
