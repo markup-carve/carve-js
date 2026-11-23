@@ -41,7 +41,8 @@ describe('C2-I-089: a note that would close only because a caret pair inside it 
     expect(format(out.source)).toBe(out.source)
   })
 
-  it('C2-W-091: prunes the backslash of an empty reference behind a note opener that closed before it', () => {
+  it('C2-W-091: prunes the backslash of an empty reference that no bare parse reports', () => {
     expect(format('^\\[x] \\[^]\n')).toBe('^\\[x] [^]\n')
+    expect(format('^\\[x \\[^]]\n')).toBe('^\\[x [^]]\n')
   })
 })
