@@ -282,7 +282,7 @@ function matchContainers(state: BlockState, lineStart: number, end: number): num
 
 /**
  * C2-B-024: an open stanza takes a line its containers do not own as a lazy line, unless the line interrupts a
- * paragraph with no list marker counted, is a region marker line, or is a heading, a quote, an attribute line or a
+ * paragraph, is a region marker line, or is a heading, a quote, an attribute line or a
  * definition. A lazy comment-only line is no line of the stanza: its comment ends the line above.
  */
 function lazyStanzaLine(state: BlockState, matched: number, lineStart: number, end: number): boolean {
@@ -290,7 +290,7 @@ function lazyStanzaLine(state: BlockState, matched: number, lineStart: number, e
   const pos = state.cursor.pos
   const last = state.eventLength - EVENT_WIDTH
   if (state.above.heldBlankLine !== NO_LINE || last < 0 || eventType(state.events[last]!) !== SPAN) return false
-  if (isRegionMarkerLine(src, pos, end) || interruptsStanza(state, matched, lineStart, end)) return false
+  if (isRegionMarkerLine(src, pos, end) || interruptsLeaf(state, matched, lineStart, end)) return false
   if (isLineComment(src, pos, end)) {
     writeEvent(state, eventTag(SPAN, COMMENT, 0), pos, end)
     state.contentEnd = end
@@ -302,11 +302,6 @@ function lazyStanzaLine(state: BlockState, matched: number, lineStart: number, e
   writeEvent(state, SPAN_TAG, contentStart(state, end, lineBlockStrip(state, matched)), end)
   state.contentEnd = end
   return true
-}
-
-function interruptsStanza(state: BlockState, matched: number, lineStart: number, end: number): boolean {
-  return (shapesAt(state) & MARKER_SHAPES) === 0 || !isListMarker(state.src, state.cursor.pos, end)
-    ? interruptsLeaf(state, matched, lineStart, end) : false
 }
 
 /** Moves the cursor past a quote mark. Columns count from behind it (C2-B-003). */
