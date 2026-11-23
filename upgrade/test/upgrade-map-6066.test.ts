@@ -110,7 +110,7 @@ describe('the pinned replay map rows', () => {
   })
 
   it('reports the source span of a nested definition variant', () => {
-    const source = ':: t\n:  [^f]: note\n     - nested\ntail\n'
+    const source = ':: t\n:  [^f]: note\n     cont\ntail\n'
     const result = upgrade(source)
     const record = result.records.find((item) => item.entry === 'U-378')
     expect(record?.range).toBeDefined()
