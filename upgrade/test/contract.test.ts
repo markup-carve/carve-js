@@ -24,7 +24,7 @@ const UNVERIFIED_REPORTS = new Set([
   'U-059#0', 'U-060#0', 'U-061#0', 'U-130#0', 'U-130#1', 'U-130#2', 'U-130#3',
   'U-132#0', 'U-134#0', 'U-147#0', 'U-154#0', 'U-160#0', 'U-160#1',
   'U-169#0', 'U-195#0', 'U-206#2', 'U-209#0', 'U-209#1', 'U-209#2', 'U-209#3',
-  'U-219#0', 'U-219#1', 'U-219#2', 'U-219#3', 'U-219#4', 'U-221#0', 'U-221#1',
+  'U-219#2', 'U-219#3', 'U-219#4', 'U-221#0', 'U-221#1',
   'U-221#2', 'U-251#0', 'U-252#0',
   'U-248#0',
   'U-262#0', 'U-263#0', 'U-264#0', 'U-271#0', 'U-283#0', 'U-289#0',
@@ -42,8 +42,11 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-206#1': { output: '{#A}\n# A [A A ](#A)\n', entry: 'U-366', check: 'pass' },
   // Left as it is, 0.2 writes the key as `loose=""` on the list, so the tool removes it (U-020) and reports U-021.
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
-  // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.
-  'U-114#4': { entry: 'U-114', check: 'mismatch' },
+  // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there. Runs that shrink
+  // toward the inside keep the 0.1 nesting (U-049), as for U-219#0 and U-219#1 (tests/corpus/68-nested-containers-3.crv).
+  'U-114#4': { output: '::::: note\nbody\n::::\nafter\n:::\n', entry: 'U-049', check: 'pass' },
+  'U-219#0': { output: '::::\n:::\n', entry: 'U-049', check: 'pass' },
+  'U-219#1': { output: '::::\nOuter\n\n:::\nInner\n:::\n::::\n', entry: 'U-049', check: 'pass' },
   // Freeze candidate 6 restores the 0.1 reading of these inputs, so both engines agree and nothing is reported:
   // C2-I-089 makes a reference in an inline note text, and C2-H-058 withholds an authored rowspan.
   'U-154#0': { output: '^[ [^1]]\n\n[^1]: n', entry: 'U-005', check: 'pass' },

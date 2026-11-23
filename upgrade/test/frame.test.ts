@@ -193,14 +193,12 @@ describe('the report', () => {
     ])
   })
 
-  it('U-114: names the div difference with the line of the shorter closer, as a none entry of the map', () => {
+  it('U-114: keeps the second anonymous div of 0.1 with runs that shrink toward the inside', () => {
     // The last line opens a second anonymous div in 0.1 and closes the outer block in 0.2.
     const result = upgrade('ok\n\n:::: note\nbody\n:::\nafter\n::::\n')
-    expect(result.check).toBe('mismatch')
-    expect(result.records.map((entry) => entry.entry)).toContain('upgrade-mismatch')
-    const record = result.records.find((entry) => entry.entry === 'U-114')
-    expect([record?.class, record?.line]).toEqual(['none', 5])
-    expect(record?.message).toContain('0.1 opens another anonymous div')
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('ok\n\n::::: note\nbody\n::::\nafter\n:::\n')
+    expect(result.records.map((entry) => entry.entry)).toContain('U-049')
   })
 
   it('does not let U-021 explain a difference outside the paragraph elements of the one item', () => {
@@ -209,11 +207,11 @@ describe('the report', () => {
       'explained',
       ['U-021', 'upgrade-difference']
     ])
-    // The same list, and after it the block of U-114 that 0.1 and 0.2 read differently.
-    const other = upgrade('- item\n\n  ***\n\n:::: note\nbody\n:::\nafter\n::::\n')
+    // The same list, and after it a block of U-219 that 0.1 and 0.2 read differently.
+    const other = upgrade('- item\n\n  ***\n\n:::\n:::e\n::::\nq\n:::\nafter\n')
     expect([other.check, other.records.map((record) => record.entry)]).toEqual([
       'mismatch',
-      ['U-021', 'U-114', 'upgrade-mismatch']
+      ['U-021', 'U-219', 'upgrade-mismatch']
     ])
   })
 
