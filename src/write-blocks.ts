@@ -228,17 +228,18 @@ export function followsListDirectly(w: Writer, before: Node, node: Node): boolea
 }
 
 const INDENT_TAKERS: ReadonlySet<string> = new Set(['list', 'footnote', 'definition_list'])
-const NO_LAZY_LINE: ReadonlySet<string> = new Set(['code_block', 'raw_block', 'div', 'admonition', 'table', 'heading', 'thematic_break'])
+const NO_LAZY_LINE: ReadonlySet<string> = new Set(['code_block', 'raw_block', 'table', 'heading', 'thematic_break'])
 
 /** Whether a column-0 line directly below `node` would be a lazy line of the block it ends in (C2-B-024). */
 function takesLazyLine(w: Writer, node: Node): boolean {
   let at = node
-  while (at.type === 'list' || at.type === 'list_item' || at.type === 'block_quote') {
+  while ((at.type === 'list' || at.type === 'list_item' || at.type === 'block_quote') && !hasColonRun(w, at)) {
     const children = childNodes(at)
     if (children.length === 0) return at.type === 'list'
     at = children[children.length - 1]!
   }
-  return !NO_LAZY_LINE.has(at.type) || captionOf(at) !== undefined || isLeftOpen(w, at)
+  if (captionOf(at) !== undefined || isLeftOpen(w, at)) return true
+  return !hasColonRun(w, at) && !NO_LAZY_LINE.has(at.type)
 }
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
