@@ -135,6 +135,7 @@ function explicitNode(src: string, child: Node01, out: Planned[]): boolean {
   if (pos === undefined) return false
   if (BREAK.test(child.type)) return true
   if (child.type === 'text') return escapeText(src, child, out)
+  if (bracedSpan(src, child)) return explicitEdits(src, child, out)
   const span = spanOf(src, child)
   if (span === null) return UNTOUCHED.test(child.type)
   out.push({ start: pos.startOffset, end: pos.startOffset + span.width, text: span.open, entry: span.entry })
@@ -145,6 +146,14 @@ function explicitNode(src: string, child: Node01, out: Planned[]): boolean {
 /** The edits that spell the inline tree under `node` explicitly: spans braced, text escaped, UNTOUCHED forms kept. */
 function explicitEdits(src: string, node: Node01, out: Planned[]): boolean {
   return (node.children ?? []).every((child) => explicitNode(src, child, out))
+}
+
+/** A strong, emphasis or underline span 0.1 already read in its braced form, which 0.2 pairs the same way. */
+function bracedSpan(src: string, node: Node01): boolean {
+  const mark = node.type === 'strong' ? '*' : node.type === 'emphasis' ? '/' : node.type === 'underline' ? '_' : null
+  const { startOffset: start, endOffset: end } = node.pos!
+  return mark !== null && node.attrs === undefined && node.boldItalic !== true && end - start >= 4
+    && src.startsWith(`{${mark}`, start) && src.startsWith(`${mark}}`, end - 2)
 }
 
 interface Braced { width: number; open: string; close: string; inner: Node01; entry: string }
