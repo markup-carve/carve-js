@@ -35,3 +35,33 @@ describe('U-061: a delimited table that 0.1 left a code block', () => {
     expect(canWriteUpgrade(result)).toBe(false)
   })
 })
+
+describe('U-440: an empty unclosed literal-text run', () => {
+  it.each([
+    ['x!``\n', 'x\n'],
+    ['- a!``\n', '- a\n'],
+    ['> b!`\n', '> b\n'],
+    ['| x | !`` |\n', '| x |  |\n'],
+  ])('removes the run 0.1 wrote as nothing: %j', (source, output) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(output)
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-440')
+  })
+
+  it.each(['a !``\n', '!``\n', '# !``\n'])('U-439 reports the run where removing it changes the HTML: %j', (source) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(source)
+    expect(result.records.map((record) => record.entry)).toContain('U-439')
+    expect(result.records.map((record) => record.entry)).not.toContain('U-440')
+  })
+})
+
+describe('the explanation of an empty run cites the entry that reported it', () => {
+  it.each([['a `\n', 'U-439'], ['a $`\n', 'U-396']])('%j', (source, entry) => {
+    const result = upgrade(source)
+    expect(result.check).toBe('explained')
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'upgrade-difference',
+      message: `the HTML matches after the declared transformations of ${entry}` }))
+  })
+})

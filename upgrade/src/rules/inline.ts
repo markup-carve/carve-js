@@ -60,8 +60,19 @@ function unclosedRun(ctx: Context, visit: Visit): void {
     if (canCloseRun(visit, ctx.late)) closeRun(ctx, startLine, start, openerEnd, end, mark)
     return
   }
+  // U-440: 0.1 wrote nothing for an empty literal-text run, so a late pass removes one with content before it
+  // or in a cell, which may be empty; the complete HTML check keeps the removal only where it holds.
+  if (ctx.late && node.type === 'literal_inline'
+    && (visit.parent?.node.type === 'table_cell' || visit.siblings.slice(0, visit.index).some(hasContent))) {
+    change(ctx, 'U-440', start, end, '', 'empty 0.1 literal-text run removed')
+    return
+  }
   noteRange(ctx, node.type === 'math' ? 'U-396' : 'U-439', startLine, start, end,
     'the empty 0.1 inline value has no verified 0.2 spelling')
+}
+
+function hasContent(node: Node01): boolean {
+  return node.type !== 'text' || String(node.value).trim() !== ''
 }
 
 function closeRun(ctx: Context, line: number, start: number, openerEnd: number, end: number, mark: string): void {
