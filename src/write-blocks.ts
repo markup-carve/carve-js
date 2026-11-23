@@ -687,13 +687,18 @@ function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number
         comment(w, line, prefix)
         continue
       }
-      const last = line.children[line.children.length - 1]
-      const lazy = last?.type === 'comment' && last.form === 'line' ? last : null
-      const children = lazy === null ? line.children : line.children.slice(0, -1)
+      // C2-B-024: every lazy `%%` line below a stanza line ends that line, so the whole trailing run is lazy.
+      let end = line.children.length
+      while (end > 1 && isLineComment(line.children[end - 1])) end--
+      const children = end === line.children.length ? line.children : line.children.slice(0, end)
       emit(w, prefix, lineContent(w, children, flags | BARE_BREAKS))
-      if (lazy !== null) lazyComment(w, lazy, prefix)
+      for (const lazy of line.children.slice(end)) lazyComment(w, lazy as CommentNode, prefix)
     }
   })
+}
+
+function isLineComment(node: Node | undefined): boolean {
+  return node?.type === 'comment' && node.form === 'line'
 }
 
 /**
