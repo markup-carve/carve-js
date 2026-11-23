@@ -5,6 +5,16 @@ import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { type Plan } from './write-plan.ts'
 
+/**
+ * The sources `parseChunk` has seen since the last clear, with the tree of each short or repeated one. A tree is not held
+ * through the rounds before it is asked again, which cost more in garbage collection (carve#6411); a repeat counts no parse.
+ */
+export interface ParseCache {
+  trees: Map<string, DocumentNode | null>
+  /** The characters of the sources whose trees are kept. */
+  treeChars: number
+}
+
 /** The facts of the sidecar that the writer reads (C2-L-046), by node. */
 export interface WriterFacts {
   bare?: boolean
@@ -80,8 +90,8 @@ export interface Writer {
   plan: Plan | null
   /** The parses the writer made, for the test that the planned path makes none. */
   parses: number
-  /** Parsed short blocks reused when no document-level definitions affect them. */
-  parseCache: Map<string, DocumentNode>
+  /** Parsed short blocks reused when no document-level definitions affect them (write-check.ts `parseChunk`). */
+  parseCache: ParseCache
   /** Source validation is fixed for a node during this write, even when planning rewrites its group. */
   extensionSources: Map<Node, { canonical: boolean; readsBack?: boolean }>
   /** Bytes of source parsed into this tree, supplied only by the formatter. */
@@ -120,7 +130,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
     prewrittenAttributes: null, bareAlts: false, kindRounds: true, topBlocks: new Map(), planKinds: false, planWhy: null, plan: null,
-    parses: 0, parseCache: new Map(),
+    parses: 0, parseCache: { trees: new Map(), treeChars: 0 },
     extensionSources: new Map(), verifiedSourceBytes: undefined,
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
