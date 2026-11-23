@@ -8,6 +8,9 @@ interface Rescue {
   record: ReportRecord
 }
 
+// A line block opener at the end of a line, behind any container markers (C2-B-123).
+const LINE_BLOCK_OPENER = /:{3,}[ \t]*\|[ \t]*$/u
+
 function percentRun(text: string): number {
   const start = text.length - text.trimStart().length
   let at = start
@@ -63,12 +66,13 @@ function percentLineCandidates(
   output: string,
   lines: ReturnType<typeof readLines>,
   line: number
-): { indented: string[]; lengthened: string[] } {
+): { indented: string[]; followed: string[]; lengthened: string[] } {
   const value = lineText(lines, line)
   const run = percentRun(value)
   const indented: string[] = []
+  const followed: string[] = []
   const lengthened: string[] = []
-  if (run < 3) return { indented, lengthened }
+  if (run < 3) return { indented, followed, lengthened }
   const lineAt = lineStart(lines, line)
   const start = lineAt + value.length - value.trimStart().length
   if (value.trim() === '%'.repeat(run)) {
@@ -77,11 +81,33 @@ function percentLineCandidates(
         output.slice(0, lineAt) + ' '.repeat(indent) + value.trimStart() + output.slice(lineAt + value.length)
       )
     }
+    // C2-B-024, C2-B-123: an unclosed comment block in a line block body takes no lazy line in 0.2, so the lines
+    // 0.1 hid in it move to its column with it.
+    const above = line > 1 ? lineText(lines, line - 1) : ''
+    for (let indent = 1; indent <= 8 && LINE_BLOCK_OPENER.test(above); indent++) {
+      const moved = withLazyFollowers(output, lineAt, indent)
+      if (moved !== null) followed.push(moved)
+    }
   }
   for (let length = run + 1; length <= Math.max(8, run + 3); length++) {
     lengthened.push(output.slice(0, start) + '%'.repeat(length) + output.slice(start + run))
   }
-  return { indented, lengthened }
+  return { indented, followed, lengthened }
+}
+
+/** The percent line at `lineAt` and the non-blank lines below it up to a blank, each indented less than `indent`, moved to `indent`. */
+function withLazyFollowers(output: string, lineAt: number, indent: number): string | null {
+  const lines = output.slice(lineAt).split('\n')
+  let moved = false
+  for (let at = 0; at < lines.length; at++) {
+    const line = lines[at]!
+    if (line.trim() === '') break
+    const lead = line.length - line.trimStart().length
+    if (lead >= indent) continue
+    lines[at] = ' '.repeat(indent) + line.trimStart()
+    if (at > 0) moved = true
+  }
+  return moved ? output.slice(0, lineAt) + lines.join('\n') : null
 }
 
 function opaqueSpanCandidates(input: string, near: number): string[] {
@@ -161,5 +187,10 @@ export function rescuePercent(input: string, output: string, mismatch: ReportRec
   const opaque = firstPreserving(expected, opaqueSpanCandidates(input, mismatch.line))
   if (opaque !== null) return { output: opaque, record: recordOf('U-215', mismatch.line,
     'the invisible percent fence span was removed so the surrounding blocks keep their 0.1 ownership') }
+  for (let line = Math.max(1, near - 4); line <= Math.min(lines.count, near + 4); line++) {
+    const followed = firstPreserving(expected, percentLineCandidates(output, lines, line).followed)
+    if (followed !== null) return { output: followed, record: recordOf('U-129', mismatch.line,
+      'the unclosed comment fence and the lines 0.1 hid in it were moved to its owning column') }
+  }
   return null
 }
