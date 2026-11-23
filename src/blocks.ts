@@ -137,6 +137,22 @@ function closeBodyLeaf(state: BlockState, matched: number, end: number, blank: b
   return state.containers.depth
 }
 
+/**
+ * C2-B-137, C2-B-138: a comment-only line that ends an opaque body closes the body's container, the innermost one that
+ * does not own the line, and nothing more, whatever its indent. A list holds no comment, so the item's list closes too.
+ */
+function endsBodyAsComment(state: BlockState, matched: number, end: number): boolean {
+  const src = state.src
+  const pos = state.cursor.pos
+  if (!isLineComment(src, pos, end) || isRegionMarkerLine(src, pos, end)) return false
+  const containers = state.containers
+  let index = containers.depth - 1
+  while (index > matched && !isIndentContainer(containers.kind[index]!) && containers.kind[index] !== QUOTE) index--
+  closeTo(state, isList(containers.kind[index - 1]!) ? index - 1 : index)
+  commentLine(state, end)
+  return true
+}
+
 /** C2-B-032: a blank line without the mark ends a quote. C2-B-009: it ends nothing else. */
 function blankLine(state: BlockState, matched: number): void {
   const above = state.above
@@ -221,7 +237,8 @@ function bodyLine(state: BlockState, matched: number, lineStart: number, end: nu
   }
   if (state.leaf.kind !== TABLE) {
     if (owned) opaqueLine(state, lineStart, end, blank)
-    return owned || (!blank && state.leaf.kind === LINE_BLOCK && lazyStanzaLine(state, matched, lineStart, end))
+    if (owned || blank) return owned
+    return (state.leaf.kind === LINE_BLOCK && lazyStanzaLine(state, matched, lineStart, end)) || endsBodyAsComment(state, matched, end)
   }
   return !blank && owned && tableLine(state, end)
 }
