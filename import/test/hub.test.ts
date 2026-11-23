@@ -118,3 +118,15 @@ describe('BBCode', () => {
     expect(() => importDocument(`${atLimit}x`, { from: 'bbcode' })).toThrow(ImportInputError)
   })
 })
+
+describe('a denied block image', () => {
+  it('leaves its alt text where it stood alone in a list item, instead of an image paragraph without an image', () => {
+    expect(source('- ![a](data:x)\n', 'gfm')).toBe('- a\n')
+    expect(source('<ul><li><img src="data:x" alt="a"></li></ul>', 'html')).toBe('- a\n')
+    expect(source('<img src="javascript:x" alt="a">', 'html')).toBe('a\n')
+    expect(source('[list]\n[*][img=a]javascript:x[/img]\n[/list]\n', 'bbcode')).toBe('- a\n')
+    for (const [input, from] of [['- ![](data:x)\n', 'gfm'], ['[list][*][img]javascript:x[/img][/list]', 'bbcode']] as const) {
+      expect(importDocument(input, { from }).diagnostics.some(entry => entry.code === 'import-destination-denied')).toBe(true)
+    }
+  })
+})

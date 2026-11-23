@@ -16,7 +16,9 @@ import { collectNotes, isFootnoteSection } from './html-notes.ts'
 import { applyAdapter, type Adapter } from './html-adapter.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
 import { resolveAlignments } from './html-table-align.ts'
-import { cell, coalesce, complete, documentOf, ensureForeignDepth, paragraph, row, softText, type ImportResult } from './kit.ts'
+import {
+  cell, coalesce, complete, documentOf, ensureForeignDepth, imageParagraph, paragraph, row, softText, type ImportResult,
+} from './kit.ts'
 import { append } from '../../src/append.ts'
 import { DEFAULT_LABELS } from '../../src/option-tables.ts'
 
@@ -935,7 +937,7 @@ function definitionList(node: Html.Element, context: HtmlContext): Block[] {
 }
 
 function fallbackBlock(node: Html.Element, context: HtmlContext): Block[] {
-  if (node.tagName === 'img') return [{ type: 'paragraph', role: 'image', children: htmlImage(node, context) }]
+  if (node.tagName === 'img') return imageParagraph(htmlImage(node, context))
   const children = trimInlineEdges(inline(node, context), node, context)
   return children.length > 0 ? [paragraph(children)] : []
 }

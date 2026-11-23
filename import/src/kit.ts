@@ -233,6 +233,11 @@ export function softText(value: string): Inline[] {
   return result
 }
 export function paragraph(children: Inline[]): Block { return { type: 'paragraph', children: coalesce(children) } }
+/** A block image (C2-H-020); a denied destination leaves its alt text as a plain paragraph, or nothing. */
+export function imageParagraph(children: Inline[]): Block[] {
+  if (children.length === 1 && children[0]?.type === 'image') return [{ type: 'paragraph', role: 'image', children }]
+  return children.length > 0 ? [paragraph(children)] : []
+}
 export function coalesce(children: Inline[]): Inline[] {
   const result: Inline[] = []
   for (const child of children) {
