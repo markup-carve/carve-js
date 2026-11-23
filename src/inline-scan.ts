@@ -96,6 +96,8 @@ function resetScan(state: InlineState): void {
   state.tokenEnd = 0
   state.bracketDepth = 0
   state.notesOpen = 0
+  state.swallowedNotes.length = 0
+  state.closedNotesOpen = 0
   state.depthLength = 0
   state.depthLive = 0
   state.depthFloor = NONE
@@ -138,9 +140,10 @@ const MAX_NOTE_PASSES = 8
 /**
  * Keeps the notes of the last pass that closed again, and returns whether that changed the set. One that opened and no
  * longer closes closed only because a caret pair in it opened, so it is text from now on (C2-I-089). One whose `^[` an
- * enclosing note swallowed was not read on its own, so it keeps its place until a pass opens it.
+ * enclosing note swallowed was not read on its own, so it keeps its place until a pass opens it, unless `settle` holds
+ * and `settlesSwallowed` decides it already.
  */
-function narrowsNotes(state: InlineState, closed: Map<number, number>, opened: Set<number>): boolean {
+function narrowsNotes(state: InlineState, closed: Map<number, number>, opened: Set<number>, settle: boolean): boolean {
   const before = state.closedNotes
   if (before === null) {
     state.closedNotes = closed
@@ -153,7 +156,32 @@ function narrowsNotes(state: InlineState, closed: Map<number, number>, opened: S
     ;(state.textNotes ??= new TextNotes()).add(start, end)
     changed = true
   }
-  return changed
+  const settled = settle && settlesSwallowed(state, before)
+  return changed || settled
+}
+
+/**
+ * Makes text every swallowed note of `candidates` that stands outside every note that is text and whose bracket stayed
+ * open to the end of the pass, and returns whether there was one. Behind its `^[` every caret pair was read as text, as
+ * it is inside that note, so the note cannot close either. This settles a run of such notes in one pass, not one each.
+ */
+function settlesSwallowed(state: InlineState, candidates: Map<number, number>): boolean {
+  if (state.swallowedNotes.length === 0) return false
+  const unclosed = new Set<number>()
+  for (let at = 0; at < state.bracketDepth; at++) unclosed.add(state.tokens[state.brackets[at]! + TOKEN_START]!)
+  const settled: number[] = []
+  // The swallowed notes come in source order; one inside a note settled before it is covered by that note.
+  let reach = -1
+  for (const start of state.swallowedNotes) {
+    if (start < reach || !unclosed.has(start + 1) || !candidates.has(start) || state.textNotes?.covers(start) === true) continue
+    settled.push(start)
+    reach = candidates.get(start)!
+  }
+  for (const start of settled) {
+    ;(state.textNotes ??= new TextNotes()).add(start, candidates.get(start)!)
+    candidates.delete(start)
+  }
+  return settled.length > 0
 }
 
 /** Keeps the images of the last pass that formed again, and returns whether that changed the set. */
@@ -222,8 +250,9 @@ export function scanInline(
   // C2-I-074: images narrow the same way, so a `%%` stays alt source only inside an image that forms.
   for (let pass = 0; (state.caretInNote || state.percentInImage) && pass < MAX_NOTE_PASSES; pass++) {
     const opened = new Set<number>()
-    const notes = state.caretInNote && narrowsNotes(state, closedNotes(state, opened), opened)
     const images = state.percentInImage && narrowsImages(state, formedImages(state))
+    // A pass whose images narrowed reads differently, so a swallowed note waits for a pass that opens it.
+    const notes = state.caretInNote && narrowsNotes(state, closedNotes(state, opened), opened, !images)
     if (!notes && !images) break
     scanPass(state)
   }

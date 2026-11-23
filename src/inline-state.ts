@@ -94,6 +94,10 @@ export interface InlineState {
   textNotes: TextNotes | null
   /** Whether the first pass read a caret pair inside an open note. */
   caretInNote: boolean
+  /** The starts of the notes of `closedNotes` whose `^[` an enclosing note demoted in this pass. */
+  swallowedNotes: number[]
+  /** How many notes of `closedNotes` are open at the scan. */
+  closedNotesOpen: number
   /**
    * C2-I-074: the starts of the images that formed in the first pass, whose alt keeps a `%%` as source; null in the
    * first pass, which keeps it inside every open image and only notes whether one stood there.
@@ -183,6 +187,8 @@ function createState(): InlineState {
     closedNotes: null,
     textNotes: null,
     caretInNote: false,
+    swallowedNotes: [],
+    closedNotesOpen: 0,
     formedImages: null,
     percentInImage: false,
     notesOpen: 0,
