@@ -172,6 +172,14 @@ describe('--extensions and --extension-options (C2-T-010)', () => {
     expect([spoiler.children[0]?.children[0]?.name, spoiler.children[1]?.name]).toEqual(['carve.spoiler', 'carve.spoilerBlock'])
   })
 
+  it('registers them for render --to markdown as well', () => {
+    const dir = temp({ 'a.crv': tabs })
+    const core = cli(['render', '--to', 'markdown', 'a.crv'], '', dir)
+    expect(core.stderr).toContain('markdown-container-flattened')
+    const registered = cli(['render', '--to', 'markdown', '--extensions', '["carve.tabs"]', 'a.crv'], '', dir)
+    expect([registered.stdout, registered.stderr]).toEqual(['**A**\n\na\n', ''])
+  })
+
   it('refuses with usage what the catalog does not name', () => {
     const dir = temp({ 'a.crv': tabs })
     const refused = [

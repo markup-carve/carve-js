@@ -311,6 +311,11 @@ function options(args: ParsedArgs): Record<string, unknown> {
   return result
 }
 
+/** The `extensions` option of a parse, where `--extensions` registers any. */
+function registered(): { extensions?: Registration['extensions'] } {
+  return standard.extensions.length > 0 ? { extensions: standard.extensions } : {}
+}
+
 function standardExtensions(args: ParsedArgs): Registration {
   if (args.values['extensions'] === undefined && args.values['extension-options'] === undefined) return NO_EXTENSIONS
   const names = args.values['extensions'] === undefined ? [] : extensionNames(args.values['extensions'])
@@ -354,7 +359,7 @@ function includeEntry(display: string, document: DocumentNode): object {
 /** `render --to markdown|plain|ansi`: the export of the file, with the loss gate of `render`. */
 function exportFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs, target: ExportTarget): FileResult {
   const fromAst = args.values['from-ast'] === true
-  const document = fromAst ? tree(strictText(path, bytes)) : parse(bytes, includesOf(path, args))
+  const document = fromAst ? tree(strictText(path, bytes)) : parse(bytes, { ...includesOf(path, args), ...registered() })
   const source = fromAst ? '' : lenientText(bytes)
   const settings: MarkdownExportOptions = {}
   if (args.values['smart-typography'] !== undefined) settings.smartTypography = args.values['smart-typography'] as boolean
@@ -407,8 +412,7 @@ function strictStatus(args: ParsedArgs, written: readonly Diagnostic[]): number 
 }
 
 function astFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
-  const document = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args),
-    ...(standard.extensions.length > 0 ? { extensions: standard.extensions } : {}) })
+  const document = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args), ...registered() })
   emit(`${args.values['envelope'] === true ? encodeEnvelope(document) : encodeTree(document)}\n`)
   return { status: 0, includes: includeEntry(display, document) }
 }
