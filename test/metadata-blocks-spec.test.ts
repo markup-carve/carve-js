@@ -2,16 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { parse, parseWithDiagnostics, render } from '../src/api.ts'
 import { flatten } from '../src/flatten.ts'
 import { format } from '../src/format.ts'
-import { write } from '../src/write.ts'
+import { write, writeWithDiagnostics } from '../src/write.ts'
 import { lint } from '../lint/lint.ts'
 import { corpusResolver } from '../scripts/corpus.ts'
 import { type DocumentNode } from '../src/ast.ts'
 
 describe('typed metadata blocks, C2-B-231 to C2-W-153', () => {
-  it('closes a list before a column-zero typed opener even without a blank line', () => {
+  it('reads a column-zero typed opener after a list without a blank line as a lazy line (carve#6389)', () => {
     const source = '- a\n---yaml\nk: v\n---\n'
-    expect(parse(source).children.map((node) => node.type)).toEqual(['list', 'paragraph'])
-    expect(render(source)).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>—yaml\nk: v\n—</p>')
+    expect(parse(source).children.map((node) => node.type)).toEqual(['list'])
+    expect(render(source)).toBe('<ul>\n  <li>a\n—yaml\nk: v\n—</li>\n</ul>')
+  })
+
+  it('C2-W-154: indents the first line of a top-level paragraph that would read as a typed opener', () => {
+    for (const source of ['a\n\n ---yaml\nk: v\n---\n', ' ---yaml\nk: v\n---\n']) {
+      const result = writeWithDiagnostics(parse(source))
+      expect(result.source).toBe(source)
+      expect(result.diagnostics).toEqual([])
+    }
   })
 
   it('takes a top-level key after a list and keeps the block outside that list', () => {
