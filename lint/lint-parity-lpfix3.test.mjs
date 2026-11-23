@@ -33,6 +33,12 @@ describe('0.2 lint reads source spelling within parsed text and containers', () 
     expect(ranges('| <i> |', 'bare-html-tag')).toEqual([[2, 5]])
     expect(ranges(':: a <b>', 'bare-html-tag')).toEqual([])
   })
+  it('skips caption text of a table and an image (carve#6215)', () => {
+    expect(ranges('| x | y |\n^ <i>', 'bare-html-tag')).toEqual([])
+    expect(ranges('> | x | y |\n> ^ a\n> <i>', 'bare-html-tag')).toEqual([])
+    expect(ranges('![i](u)\n^ <i>', 'bare-html-tag')).toEqual([])
+    expect(ranges('| <i> | y |\n^ <b>', 'bare-html-tag')).toEqual([[2, 5]])
+  })
   it('skips an indented paragraph after a list and a marker in caption text', () => {
     expect(ranges('\t1. w.\n\n    :', 'indented-code-block')).toEqual([])
     expect(ranges('a\n\n    :', 'indented-code-block')).toEqual([[7, 8]])
