@@ -401,7 +401,7 @@ function transformWithRemainderReports(input: string, done: Rewritten, old: stri
 function applyExtraHtml(input: string, done: Rewritten, old: string, next: string):
   ReturnType<typeof applyHtmlTransformations> {
   const cited = applyCitedHtml(old, next, done.records)
-  const empty = done.records.filter((record) => (record.entry === 'U-258' || record.entry === 'U-396')
+  const empty = done.records.filter((record) => (record.entry === 'U-258' || record.entry === 'U-396' || record.entry === 'U-439')
     && record.class === 'report' && record.range !== undefined)
     .map((record) => input.slice(record.range!.startOffset, record.range!.endOffset))
   const runs = explainEmptyRuns(cited.html, empty, next)

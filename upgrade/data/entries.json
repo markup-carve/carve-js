@@ -2156,6 +2156,12 @@
       "name": "nested ordered list starting above 1 directly below the item text",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-439",
+      "name": "empty unclosed code or literal-text run at the end of inline content",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

@@ -1,0 +1,37 @@
+import { describe, expect, it } from 'vitest'
+import { canWriteUpgrade, upgrade } from '../src/index.ts'
+
+describe('U-439: an unclosed 0.1 value that starts with a line break and ends with a backtick', () => {
+  it.each([
+    ['a ``\nb`\n', 2],
+    ['a !``\nb`\n', 2],
+    ['a $``\nb`\n', 2],
+    ['- ```\n+  y\n+   ```\n``\n', 15],
+  ])('C2-W-077 reports the run instead of padding it: %j', (source, startOffset) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(source)
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-439', class: 'report',
+      range: { startOffset, endOffset: source.trimEnd().length } }))
+    expect(result.records.some((record) => record.entry === 'U-258')).toBe(false)
+    expect(canWriteUpgrade(result)).toBe(false)
+  })
+
+  it('still closes a value that starts with a line break and ends with a letter', () => {
+    const result = upgrade('a ``\nb\n')
+    expect(result.output).toBe('a ``\nb``\n')
+    expect(result.check).toBe('pass')
+  })
+})
+
+describe('U-061: a delimited table that 0.1 left a code block', () => {
+  it.each([
+    ['{table}\n```csv\na,"b\nc,d\n```\n', 1, 0],
+    ['{table}\n\n```csv\n- "bad\n  ```\n', 1, 0],
+    ['p\n\n{.c}\n{table}\n```csv\na,"b\n```\n', 3, 3],
+  ])('C2-B-180 reports from the attribute line through the fence: %j', (source, line, startOffset) => {
+    const result = upgrade(source)
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-061', class: 'report', line,
+      range: { startOffset, endOffset: source.trimEnd().length } }))
+    expect(canWriteUpgrade(result)).toBe(false)
+  })
+})

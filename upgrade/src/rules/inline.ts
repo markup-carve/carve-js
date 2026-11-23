@@ -1,9 +1,8 @@
 // Contract 2.11 and 2.13: inline spellings, read off the inline nodes of the 0.1 tree.
 import { isAsciiDigit, isWordCharacter } from '../../../src/unicode.ts'
 import { ancestor, isInside } from '../blocks.ts'
-import { change, type Context, note, type Visit } from '../context.ts'
+import { change, type Context, note, noteRange, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
-import { recordOf } from '../report.ts'
 import { headingTexts, isUnresolved } from './references.ts'
 
 const BRACE = 0x7b
@@ -58,18 +57,24 @@ function unclosedRun(ctx: Context, visit: Visit): void {
     && !(finding.edit.entry === 'U-105' && finding.edit.start === start && finding.edit.end === start))) return
   // An empty run is only reported, so a quote can hold it too.
   if (end > openerEnd) {
-    if (!canCloseRun(visit, ctx.late)) return
-    // C2-I-016: a value that starts or ends with a backtick is padded with one space on each side.
-    const pad = ctx.src[end - 1] === '`'
-    const from = pad ? openerEnd : end
-    change(ctx, 'U-258', from, end, pad ? ` ${ctx.src.slice(openerEnd, end)} ${mark}` : mark,
-      'unclosed 0.1 inline run closed at its content end')
+    if (canCloseRun(visit, ctx.late)) closeRun(ctx, startLine, start, openerEnd, end, mark)
     return
   }
-  const record = { ...recordOf(node.type === 'math' ? 'U-396' : 'U-258', startLine,
-    'the empty 0.1 inline value has no verified 0.2 spelling'),
-    class: 'report' as const, range: { startOffset: start, endOffset: end } }
-  ctx.findings.push({ record, offset: start, edit: null })
+  noteRange(ctx, node.type === 'math' ? 'U-396' : 'U-439', startLine, start, end,
+    'the empty 0.1 inline value has no verified 0.2 spelling')
+}
+
+function closeRun(ctx: Context, line: number, start: number, openerEnd: number, end: number, mark: string): void {
+  // C2-I-016: a value that starts or ends with a backtick is padded with one space on each side.
+  const pad = ctx.src[end - 1] === '`'
+  // C2-W-077: the pad before a leading line break is trailing whitespace, so such a value has no spelling.
+  if (pad && (ctx.src[openerEnd] === '\n' || ctx.src[openerEnd] === '\r')) {
+    noteRange(ctx, 'U-439', line, start, end, 'the 0.1 inline value starts with a line break and ends with a backtick')
+    return
+  }
+  const from = pad ? openerEnd : end
+  change(ctx, 'U-258', from, end, pad ? ` ${ctx.src.slice(openerEnd, end)} ${mark}` : mark,
+    'unclosed 0.1 inline run closed at its content end')
 }
 
 interface Bare {

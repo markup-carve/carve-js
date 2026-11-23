@@ -1,8 +1,10 @@
 // Contract 2.6, 2.9 and 2.10: thematic breaks, tables and captions.
-import { change, type Context, note, type Visit } from '../context.ts'
+import { change, type Context, note, noteRange, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { lineStart, lineText } from '../source.ts'
-import { attributeLinesAbove, insideQuotes, isBlankInQuotes, removeAttribute, removeLine, trimmedEnd } from './lines.ts'
+import {
+  attributeLinesAbove, insideQuotes, isAttributeGap, isBlankInQuotes, isGap, removeAttribute, removeLine, trimmedEnd
+} from './lines.ts'
 
 const STAR = 0x2a
 const ALIGN_MARKS: Record<string, string> = { left: '<', right: '>', center: '~' }
@@ -253,9 +255,15 @@ function captionAfterBlank(ctx: Context, node: Node01): void {
 
 /** U-061: a fence the `table` attribute marks is always a table in 0.2 (C2-B-180). */
 function delimited(ctx: Context, node: Node01): void {
-  if (node.attrs !== undefined && keyValue(node, 'table') !== undefined) {
-    note(ctx, 'U-061', node.pos!.startLine, 'a delimited table that 0.1 left a code block is a table in 0.2')
+  if (node.attrs === undefined || keyValue(node, 'table') === undefined) return
+  // The range starts at the attribute line, which 0.1 also attached across blank lines.
+  let line = node.pos!.startLine
+  for (let at = line - 1; isGap(ctx, at); at--) {
+    if (isAttributeGap(ctx, at)) line = at
+    else if (!isBlankInQuotes(lineText(ctx.lines, at))) break
   }
+  noteRange(ctx, 'U-061', line, lineStart(ctx.lines, line), node.pos!.endOffset,
+    'a delimited table that 0.1 left a code block is a table in 0.2')
 }
 
 function visitNode(ctx: Context, visit: Visit): void {

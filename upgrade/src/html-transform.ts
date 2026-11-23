@@ -262,7 +262,7 @@ function emptyRunMarkup(literal: string): string[] | null {
   return null
 }
 
-/** U-258: the parsed empty run has no adjacent closer spelling, so cite its literal 0.2 reading. */
+/** U-396, U-439: the parsed empty run has no adjacent closer spelling, so cite its literal 0.2 reading. */
 export function explainEmptyRuns(old: string, literals: readonly string[], next = ''): Result {
   const tokens = htmlTokens(old)
   const target = new Set(htmlTokens(next))

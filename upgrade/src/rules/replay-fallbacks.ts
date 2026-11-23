@@ -649,7 +649,7 @@ function verbatimAt(ctx: Context): (at: number) => boolean {
 
 /** A narrow space made these 0.1 link forms literal, including references to such definitions. */
 export function literalNarrowSpaceLinks(ctx: Context): void {
-  if (ctx.findings.some(({ record }) => record.entry === 'U-258')) return
+  if (ctx.findings.some(({ record }) => record.entry === 'U-258' || record.entry === 'U-439')) return
   const verbatim = verbatimAt(ctx)
   const literalRefs = new Set<string>()
   for (const match of ctx.src.matchAll(/(?<!\\)\[([^\]\n]+)\]:[^\n]*\u202f[^\n]*/gu)) {
