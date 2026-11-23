@@ -12,7 +12,7 @@ import {
   SHAPE_INCLUDE, SHAPE_LINK_DEFINITION, SHAPE_ORDERED, SHAPE_QUOTE, SHAPE_TABLE_ROW, SHAPE_TERM,
   SHAPE_THEMATIC_BREAK,
 } from './dispatch.ts'
-import { ENTER, EVENT_WIDTH, eventTag, eventType, EXIT, SPAN } from './events.ts'
+import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import {
   ABBREVIATION, ATTRIBUTES, BULLET_LIST, CAPTION, CELL, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST,
   DIV, DOCUMENT, FLAG_ALPHA, FLAG_ATTRIBUTES, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_CONTINUATION, FLAG_DELIMITED,
@@ -288,8 +288,9 @@ function matchContainers(state: BlockState, lineStart: number, end: number): num
 function lazyStanzaLine(state: BlockState, matched: number, lineStart: number, end: number): boolean {
   const src = state.src
   const pos = state.cursor.pos
-  const last = state.eventLength - EVENT_WIDTH
-  if (state.above.heldBlankLine !== NO_LINE || last < 0 || eventType(state.events[last]!) !== SPAN) return false
+  const leaf = state.leaf
+  // A line inside an open comment block goes on to the checks below.
+  if (state.above.heldBlankLine !== NO_LINE || (!leaf.stanzaOpen && leaf.commentRun === 0)) return false
   if (isRegionMarkerLine(src, pos, end) || interruptsLeaf(state, matched, lineStart, end)) return false
   if (isLineComment(src, pos, end)) {
     writeEvent(state, eventTag(SPAN, COMMENT, 0), pos, end)
@@ -351,7 +352,7 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
     for (let pending = above.heldBlankLine; pending < line; pending++) {
       const pendingEnd = lineEndAt(state.src, state.lineStarts, state.lineCount, pending)
       matchContainers(state, state.lineStarts[pending]!, pendingEnd)
-      writeEvent(state, SPAN_TAG, opaqueContentStart(state, pendingEnd), pendingEnd)
+      writeBodySpan(state, opaqueContentStart(state, pendingEnd), pendingEnd)
     }
     above.heldBlankLine = NO_LINE
     matchContainers(state, lineStart, end)
@@ -366,7 +367,28 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
     above.captionDepth = kind === CODE && !leaf.raw ? state.containers.depth : NO_DEPTH
     return
   }
-  writeEvent(state, SPAN_TAG, opaqueContentStart(state, end), end)
+  writeBodySpan(state, opaqueContentStart(state, end), end)
+}
+
+function writeBodySpan(state: BlockState, start: number, end: number): void {
+  writeEvent(state, SPAN_TAG, start, end)
+  if (state.leaf.kind === LINE_BLOCK) noteStanza(state, start, end)
+}
+
+/**
+ * C2-B-123, C2-B-108: a comment block in a line block body adds no line and ends no stanza, so it keeps an open
+ * stanza and opens none. Pairs its fences as the tree build does.
+ */
+function noteStanza(state: BlockState, start: number, end: number): void {
+  const src = state.src
+  const leaf = state.leaf
+  const pos = skipSpaces(src, start, end)
+  if (leaf.commentRun > 0) {
+    if (isBareRun(src, pos, end, PERCENT, leaf.commentRun)) leaf.commentRun = 0
+    return
+  }
+  leaf.commentRun = fenceRunLength(src, pos, end, PERCENT)
+  if (leaf.commentRun === 0) leaf.stanzaOpen = pos < end
 }
 
 /** C2-B-109: a bare `%` run of at least the opener's length after spaces and tabs, with no quote mark before it. */
@@ -1079,6 +1101,8 @@ function openOpaqueLeaf(state: BlockState, kind: number, fenceChar: number, leng
   leaf.fenceChar = fenceChar
   leaf.fenceLength = length
   leaf.fenceColumn = cursor.column - cursor.origin
+  leaf.stanzaOpen = false
+  leaf.commentRun = 0
   state.above.heldBlankLine = NO_LINE
 }
 
