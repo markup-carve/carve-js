@@ -14,7 +14,7 @@ import { math } from 'micromark-extension-math'
 import { directive, directiveHtml, type Directive } from 'micromark-extension-directive'
 import { parse as parseDjot, parseEvents as parseDjotEvents, renderHTML as renderDjot } from '@djot/djot'
 import type { DocumentNode } from '../../src/index.ts'
-import { ensureForeignDepth, ImportInputError, type ImportResult, withoutHtmlRanges } from './kit.ts'
+import { commentEmptyItems, ensureForeignDepth, ImportInputError, type ImportResult, withoutHtmlRanges } from './kit.ts'
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { ADMONITION_KINDS, importHtml } from './html.ts'
 import { constructRecords, djotConstructs, markdownConstructs } from './hub-constructs.ts'
@@ -485,7 +485,10 @@ export function importThroughHtml(input: string, format: HubFormat, constructs =
     dropNoteLabelPointers(nodes)
     githubAlerts(nodes)
   },
-    finish: children => [...lead, ...(sink.raw.length > 0 ? restoreRaw(children, sink.raw) : children)] })
+    finish: children => {
+      commentEmptyItems(children)
+      return [...lead, ...(sink.raw.length > 0 ? restoreRaw(children, sink.raw) : children)]
+    } })
   // The libraries' own line breaks around tags are no whitespace of the input.
   const diagnostics = withoutHtmlRanges(result.diagnostics)
   if (sink.constructs === undefined) return { ...result, diagnostics }
