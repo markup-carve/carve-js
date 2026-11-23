@@ -1,5 +1,5 @@
-// carve#6411: the parse cache of the writer keeps the trees of short sources only; a repeat of a long source is parsed
-// again but counts no parse for the repair limit, as a repeat whose tree is kept.
+// carve#6411: the parse cache of the writer keeps the trees of short sources and of repeated ones; the first repeat of
+// another source is parsed again but counts no parse for the repair limit, as a repeat whose tree is kept.
 import { describe, expect, it } from 'vitest'
 import { parseChunk } from '../src/write-check.ts'
 import { createWriter } from '../src/write-state.ts'
@@ -24,6 +24,8 @@ describe('writer parse cache (carve#6411)', () => {
     expect(again).toEqual(first)
     expect(w.parses).toBe(3)
     expect(w.work.chars).toBe(chars)
+    // The repeat keeps its tree, so each source is parsed uncounted at most once.
+    expect(parseChunk(w, source!)).toBe(again)
   })
 
   it('keeps no trees past its budget but still knows every source it saw', () => {

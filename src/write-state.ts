@@ -6,8 +6,8 @@ import { type ExtensionDefinition } from './extensions/types.ts'
 import { type Plan } from './write-plan.ts'
 
 /**
- * The sources `parseChunk` has seen since the last clear, with the tree of each short one. A long tree is parsed again
- * rather than held through the rounds, which cost more in garbage collection (carve#6411); a repeat counts no parse either way.
+ * The sources `parseChunk` has seen since the last clear, with the tree of each short or repeated one. A tree is not held
+ * through the rounds before it is asked again, which cost more in garbage collection (carve#6411); a repeat counts no parse.
  */
 export interface ParseCache {
   trees: Map<string, DocumentNode | null>

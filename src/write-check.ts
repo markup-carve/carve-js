@@ -32,19 +32,23 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   const extensions = w.extensions
   const source = buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys)
   const parsed = applyExtensions(source, extensions, linkKeys).document
-  if (cacheable && cached === undefined) remember(cache, src, parsed)
+  if (cacheable) remember(cache, src, parsed, cached === null)
   return parsed
 }
 
-// The characters of the sources whose trees the parse cache keeps; the blocks it reuses are short.
+// The characters of the sources whose trees the parse cache keeps on first sight; the blocks it reuses are short.
 const MAX_TREE_CHARS = 16_384
 
-function remember(cache: ParseCache, src: string, parsed: DocumentNode): void {
-  if (cache.trees.size >= 128) {
+/**
+ * A repeated source keeps its tree from its second parse on, so each source is parsed uncounted at most once, which is
+ * no longer than its counted first parse: the repair limit (C2-W-133) still bounds the work.
+ */
+function remember(cache: ParseCache, src: string, parsed: DocumentNode, repeated: boolean): void {
+  if (!repeated && cache.trees.size >= 128) {
     cache.trees.clear()
     cache.treeChars = 0
   }
-  const kept = cache.treeChars + src.length <= MAX_TREE_CHARS
+  const kept = repeated || cache.treeChars + src.length <= MAX_TREE_CHARS
   if (kept) cache.treeChars += src.length
   cache.trees.set(src, kept ? parsed : null)
 }
