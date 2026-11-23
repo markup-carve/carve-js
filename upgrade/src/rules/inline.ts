@@ -53,7 +53,9 @@ function unclosedRun(ctx: Context, visit: Visit): void {
   const openerEnd = at + width
   const mark = '`'.repeat(width)
   if (hasClosingRun(ctx.src, openerEnd, end, width)) return
-  if (ctx.findings.some((finding) => finding.edit !== null && start <= finding.offset && finding.offset <= end)) return
+  // The U-105 comment before a run that opens its paragraph leaves the run to close.
+  if (ctx.findings.some((finding) => finding.edit !== null && start <= finding.offset && finding.offset <= end
+    && !(finding.edit.entry === 'U-105' && finding.edit.start === start && finding.edit.end === start))) return
   // An empty run is only reported, so a quote can hold it too.
   if (end > openerEnd) {
     if (!canCloseRun(visit, ctx.late)) return
