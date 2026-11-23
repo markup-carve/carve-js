@@ -1286,6 +1286,17 @@ interface PruneScan {
   scanned: number
   byte: number
   stars: boolean | null
+  /** The last match of each search, so that searches from increasing offsets read the source once. */
+  found: Map<string, number>
+}
+
+/** `source.indexOf(needle, from)` for `from` that do not decrease while `source` stays as it is. */
+function nextIndex(scan: PruneScan, source: string, needle: string, from: number): number {
+  const last = scan.found.get(needle)
+  if (last !== undefined && (last < 0 || last >= from)) return last
+  const at = source.indexOf(needle, from)
+  scan.found.set(needle, at)
+  return at
 }
 
 function prunableStar(w: Writer, source: string, at: number, scan: PruneScan): boolean {
@@ -1301,24 +1312,225 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   if (next === '[') {
     if (source.startsWith('^]', at + 2)) return true
     if (!source.startsWith('----', at + 2)) return false
-    const close = source.indexOf(']', at + 2)
-    const lineEnd = source.indexOf('\n', at + 2)
-    return source[at - 1] !== '^' || close < 0 || (lineEnd >= 0 && close > lineEnd)
+    if (source[at - 1] !== '^') return true
+    const close = nextIndex(scan, source, ']', at + 2)
+    const lineEnd = nextIndex(scan, source, '\n', at + 2)
+    return close < 0 || (lineEnd >= 0 && close > lineEnd)
   }
   if (next !== '{') return false
   if (source[at + 2] === '/' || source[at + 2] === '*') return true
   if (source[at + 2] !== '#') return false
-  const close = source.indexOf('}', at + 3)
-  const escapedDash = source.indexOf('\\-', at + 3)
+  const close = nextIndex(scan, source, '}', at + 3)
+  const escapedDash = nextIndex(scan, source, '\\-', at + 3)
   return close >= 0 && (escapedDash < 0 || escapedDash > close)
+}
+
+/** Whether `parsed` reads back as the blocks of `group`. */
+function matchesGroup(parsed: readonly Node[], group: readonly Node[]): boolean {
+  return parsed.length === group.length && parsed.every((node, index) => treesEqual(node, group[index]!))
+}
+
+function adjacentTexts(nodes: readonly Node[]): boolean {
+  for (let at = 1; at < nodes.length; at++) if (nodes[at]!.type === 'text' && nodes[at - 1]!.type === 'text') return true
+  return false
+}
+
+function isLineBreak(node: Node): boolean {
+  return node.type === 'soft_break' || node.type === 'hard_break'
+}
+
+/** The inline nodes of `nodes` split at their line breaks, with the breaks. */
+function inlineLines(nodes: readonly Node[]): { lines: Node[][], breaks: Node[] } {
+  const lines: Node[][] = [[]]
+  const breaks: Node[] = []
+  for (const node of nodes) {
+    if (isLineBreak(node)) {
+      breaks.push(node)
+      lines.push([])
+    } else {
+      lines[lines.length - 1]!.push(node)
+    }
+  }
+  return { lines, breaks }
+}
+
+/** `differingRanges` for inline lists with line breaks: line by line where both have the same lines. */
+function differingLines(actual: readonly Node[], expected: readonly Node[], whole: [number, number], out: [number, number][]): void {
+  const a = inlineLines(actual)
+  const e = inlineLines(expected)
+  if (a.lines.length < 2 || a.lines.length !== e.lines.length ||
+    !a.breaks.every((node, at) => treesEqual(node, e.breaks[at]!))) {
+    out.push(whole)
+    return
+  }
+  for (let at = 0; at < a.lines.length; at++) {
+    const line = a.lines[at]!
+    if (treesEqual({ type: 'paragraph', children: line } as Node, { type: 'paragraph', children: e.lines[at]! } as Node)) continue
+    const start = line[0]?.pos?.startOffset
+    const end = line[line.length - 1]?.pos?.endOffset
+    out.push(start === undefined || end === undefined ? whole : [start, end])
+  }
+}
+
+/** The byte ranges of the topmost nodes of `actual` that differ from `expected`; `whole` is the range of their parent. */
+function differingRanges(actual: readonly Node[], expected: readonly Node[], whole: [number, number], out: [number, number][]): void {
+  // An escape moves the nodes of its line, so inline lines compare as lines.
+  if (actual.some(isLineBreak) || expected.some(isLineBreak)) {
+    differingLines(actual, expected, whole, out)
+    return
+  }
+  // Adjacent texts compare as one (C2-A-040), so their lists do not compare item by item.
+  if (actual.length !== expected.length || adjacentTexts(actual) || adjacentTexts(expected)) {
+    out.push(whole)
+    return
+  }
+  for (let at = 0; at < actual.length; at++) {
+    const a = actual[at]!
+    const e = expected[at]!
+    if (treesEqual(a, e)) continue
+    const range: [number, number] = a.pos === undefined ? whole : [a.pos.startOffset, a.pos.endOffset]
+    const inner = 'children' in a && Array.isArray(a.children) && 'children' in e && Array.isArray(e.children)
+    if (inner && a.type === e.type && treesEqual({ ...a, children: [] } as Node, { ...e, children: [] } as Node)) {
+      differingRanges(childNodes(a), childNodes(e), range, out)
+    } else {
+      out.push(range)
+    }
+  }
+}
+
+// C2-W-010: the batch rounds of the prune; a group they do not settle is pruned one candidate per parse.
+const MAX_PRUNE_ROUNDS = 16
+
+/** The prunable backslashes of `source`, by their offset. */
+function pruneCandidates(w: Writer, source: string): number[] {
+  const found: number[] = []
+  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, found: new Map() }
+  for (let at = source.indexOf('\\'); at >= 0; at = source.indexOf('\\', at + 1)) {
+    // C2-W-125, case two: a backslash directly behind a quote mark is the escape of the neighbor that decides its direction.
+    if (source[at - 1] !== '"' && source[at - 1] !== "'" && prunableOpener(w, source, at, scan)) found.push(at)
+  }
+  return found
+}
+
+/** `source` without the backslashes at `drop` (ascending), and the UTF-8 offset in the result where each one stood. */
+function withoutBackslashes(source: string, drop: readonly number[]): { text: string, bytes: number[] } {
+  const parts: string[] = []
+  const bytes: number[] = []
+  let from = 0
+  let byte = 0
+  for (const at of drop) {
+    parts.push(source.slice(from, at))
+    byte += utf8Length(source.slice(from, at))
+    bytes.push(byte)
+    from = at + 1
+  }
+  parts.push(source.slice(from))
+  return { text: parts.join(''), bytes }
+}
+
+/** The first index of the ascending `values` whose value is at least `least`. */
+function firstAtLeast(values: readonly number[], least: number): number {
+  let low = 0
+  let high = values.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (values[middle]! < least) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
+interface Placed {
+  kept: number[]
+  waiting: number[]
+  decided: Set<number>
+}
+
+/**
+ * The candidates of `pending` (by offset, with their UTF-8 offsets `bytes` in the trial) inside each differing range:
+ * one alone there is kept, and of several the first stays pending while the rest wait. Null where a range holds none.
+ */
+function placeDifferences(ranges: readonly [number, number][], pending: readonly number[], bytes: readonly number[]):
+  Placed | null {
+  const placed: Placed = { kept: [], waiting: [], decided: new Set() }
+  for (const [start, end] of ranges) {
+    const inside: number[] = []
+    for (let k = firstAtLeast(bytes, start); k < bytes.length && bytes[k]! < end; k++) inside.push(pending[k]!)
+    // A node that differs with no removal inside it differs from a removal elsewhere, which the rounds cannot place.
+    if (inside.length === 0) return null
+    if (inside.length === 1) placed.kept.push(inside[0]!)
+    for (const at of inside.length === 1 ? inside : inside.slice(1)) placed.decided.add(at)
+    placed.waiting.push(...inside.slice(1))
+  }
+  return placed
+}
+
+/** `source` without the backslashes at `removed`, and the backslashes at `kept` by their offset there. */
+function prunedSource(source: string, removed: number[], kept: readonly number[]): { source: string, kept: Set<number> } {
+  removed.sort((a, b) => a - b)
+  const shifted = new Set<number>()
+  let before = 0
+  for (const at of [...kept].sort((a, b) => a - b)) {
+    while (before < removed.length && removed[before]! < at) before++
+    shifted.add(at - before)
+  }
+  return { source: withoutBackslashes(source, removed).text, kept: shifted }
+}
+
+/**
+ * C2-W-088, C2-W-010: removes the candidates together, so one parse decides many. A candidate inside a node that
+ * then differs, alone there, keeps its backslash; of several there, the first is tried alone in the next round.
+ * Returns the source with the removals that read back and the backslashes it kept, or null to prune one by one.
+ */
+function pruneInRounds(w: Writer, group: readonly Node[], source: string, candidates: readonly number[]):
+  { source: string, kept: Set<number> } | null {
+  let pending = [...candidates]
+  let waiting: number[] = []
+  const removed: number[] = []
+  const kept: number[] = []
+  for (let round = 0; pending.length > 0; round++) {
+    if (round === MAX_PRUNE_ROUNDS || exhausted(w)) return null
+    const drop = [...removed, ...pending].sort((x, y) => x - y)
+    const trial = withoutBackslashes(source, drop)
+    const parsed = parseChunk(w, trial.text)
+    if (matchesGroup(parsed.children, group)) {
+      removed.push(...pending)
+      pending = waiting
+      waiting = []
+      continue
+    }
+    const ranges: [number, number][] = []
+    differingRanges(parsed.children, group, [0, Infinity], ranges)
+    const byteOf = new Map(drop.map((at, index) => [at, trial.bytes[index]!]))
+    const placed = placeDifferences(ranges, pending, pending.map((at) => byteOf.get(at)!))
+    if (placed === null || placed.decided.size === 0) return null
+    kept.push(...placed.kept)
+    waiting.push(...placed.waiting)
+    pending = pending.filter((at) => !placed.decided.has(at))
+    if (pending.length === 0) {
+      pending = waiting.sort((x, y) => x - y)
+      waiting = []
+    }
+  }
+  return prunedSource(source, removed, kept)
+}
+
+/** The source after the rounds of `pruneInRounds`, with the backslashes they kept; as given where they do not apply. */
+function pruneBatch(w: Writer, group: readonly Node[], source: string): { source: string, kept: Set<number> } {
+  const candidates = pruneCandidates(w, source)
+  if (candidates.length < 2 || !matchesGroup(parseChunk(w, source).children, group)) return { source, kept: new Set() }
+  const batched = pruneInRounds(w, group, source, candidates)
+  if (batched === null) return { source, kept: new Set() }
+  if (batched.source !== source) w.parsed = parseChunk(w, batched.source)
+  return batched
 }
 
 /** C2-W-088 and C2-W-089: test candidate escapes within the group that wrote them. */
 function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): void {
-  let source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
+  let { source, kept } = pruneBatch(w, group, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
   let at = source.indexOf('\\')
   // A pruned backslash at `at` leaves the source before `at` as it was, so the scan goes on from there.
-  const scan: PruneScan = { scanned: 0, byte: 0, stars: null }
+  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, found: new Map() }
   while (at >= 0) {
     // C2-W-133: each candidate is one parse more, so the pruning counts toward the limit of the repair.
     if (exhausted(w)) {
@@ -1327,16 +1539,16 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
       break
     }
     // C2-W-125, case two: a backslash directly behind a quote mark is the escape of the neighbor that decides its direction.
-    if (source[at - 1] !== '"' && source[at - 1] !== "'" && prunableOpener(w, source, at, scan)) {
+    if (!kept.has(at) && source[at - 1] !== '"' && source[at - 1] !== "'" && prunableOpener(w, source, at, scan)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
       const parsed = parseChunk(w, candidate)
-      if (parsed.children.length === group.length && parsed.children.every((node, index) => {
-        const expected = group[index]
-        return expected !== undefined && treesEqual(node, expected)
-      })) {
+      if (matchesGroup(parsed.children, group)) {
         source = candidate
         w.parsed = parsed
         scan.stars = null
+        scan.found.clear()
+        const pruned = at
+        kept = new Set([...kept].map((offset) => (offset > pruned ? offset - 1 : offset)))
         at = source.indexOf('\\', at)
         continue
       }
