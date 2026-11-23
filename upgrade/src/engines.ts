@@ -1,7 +1,7 @@
 // The two engines the tool stands between. The 0.1 engine is the build of `upgrade/engine-0.1/`
 // (`build/engine-0.1/`); the 0.2 engine is `src/`. Nothing here is imported by either.
 import { carveToHtml, LIB_VERSION, parse } from '../../build/engine-0.1/index.js'
-import { render } from '../../src/index.ts'
+import { parse as parse02, render } from '../../src/index.ts'
 
 export interface Pos {
   startLine: number
@@ -71,4 +71,12 @@ export function html02(src: string, rawHtml: boolean): string {
 /** The HTML the 0.2 engine gives for the fragment `src`, for a rule that asks how 0.2 reads a line. */
 export function probe02(src: string): string {
   return render(src)
+}
+
+/** The first and last source line of every top-level block the 0.2 engine reads in `src`. */
+export function blocks02(src: string): [number, number][] {
+  const tree = parse02(src, { positions: true }) as { children: { pos?: { startLine: number; endLine: number } }[] }
+  const out: [number, number][] = []
+  for (const child of tree.children) if (child.pos !== undefined) out.push([child.pos.startLine, child.pos.endLine])
+  return out
 }

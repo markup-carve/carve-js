@@ -2,6 +2,7 @@ import { closedRunCandidates } from './backtick-rescue.ts'
 import { compareHtml } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
+import { type Gate, OPEN_SITE, type Site } from './rescue-site.ts'
 import { insideQuotes } from './rules/lines.ts'
 import { lineEnd, lineStart, lineText, readLines } from './source.ts'
 
@@ -20,12 +21,12 @@ const SIMPLE: readonly [string, string, string][] = [
   ['U-137', '-{} ', '- ']
 ]
 
-function simpleCandidates(output: string): Candidate[] {
+function simpleCandidates(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   for (const [id, from, to] of SIMPLE) {
     let at = output.indexOf(from)
     while (at >= 0) {
-      if (id !== 'X-003' || output[at + from.length] !== '|') {
+      if ((id !== 'X-003' || output[at + from.length] !== '|') && gate.at(at, at + from.length)) {
         found.push({ id, output: output.slice(0, at) + to + output.slice(at + from.length) })
       }
       at = output.indexOf(from, at + from.length)
@@ -37,20 +38,20 @@ function simpleCandidates(output: string): Candidate[] {
   return found
 }
 
-function bracketCandidates(output: string): Candidate[] {
+function bracketCandidates(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf(':::[')
   while (at >= 0) {
     const end = output.indexOf(']', at + 4)
     const label = end < 0 ? '' : output.slice(at + 4, end)
     const id = label.includes('`') || label.includes('+') ? 'U-178' : 'U-186'
-    found.push({ id, output: output.slice(0, at + 3) + ' ' + output.slice(at + 3) })
+    if (gate.at(at)) found.push({ id, output: output.slice(0, at + 3) + ' ' + output.slice(at + 3) })
     at = output.indexOf(':::[', at + 4)
   }
   const openers = '* / + - ~ _ = ^ ,'
   at = output.indexOf('[{')
   while (at >= 0) {
-    if (openers.includes(output[at + 2] ?? '\0')) {
+    if (openers.includes(output[at + 2] ?? '\0') && gate.at(at)) {
       found.push({ id: 'U-182', output: output.slice(0, at + 1) + '\\' + output.slice(at + 1) })
       if (output[at + 2] === '*' || output[at + 2] === '/') {
         found.push({ id: 'U-182', output: output.slice(0, at + 2) + '\\' + output.slice(at + 2) })
@@ -61,7 +62,7 @@ function bracketCandidates(output: string): Candidate[] {
   return found
 }
 
-function smartQuoteCandidates(output: string, expected: string): Candidate[] {
+function smartQuoteCandidates(output: string, expected: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   if (output.includes('{+') || output.includes('{-')) return found
   if (expected.includes('“') && output.split('="').length > 2) {
@@ -72,14 +73,14 @@ function smartQuoteCandidates(output: string, expected: string): Candidate[] {
     const plain = quote === '\u2018' || quote === '\u2019' ? "'" : '"'
     let at = output.indexOf(plain)
     while (at >= 0) {
-      found.push({ id: 'U-190', output: output.slice(0, at) + quote + output.slice(at + 1) })
+      if (gate.at(at)) found.push({ id: 'U-190', output: output.slice(0, at) + quote + output.slice(at + 1) })
       at = output.indexOf(plain, at + 1)
     }
   }
   return found
 }
 
-function languageCandidates(output: string): Candidate[] {
+function languageCandidates(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   let combined = output
   let at = output.indexOf(':')
@@ -95,7 +96,7 @@ function languageCandidates(output: string): Candidate[] {
       output.slice(space + 1, close).startsWith('lang')
     ) {
       const next = output.slice(0, at) + output.slice(space + 1)
-      found.push({ id: 'U-192', output: next })
+      if (gate.at(at, space)) found.push({ id: 'U-192', output: next })
       combined = combined.replace(output.slice(at, space + 1), '')
     }
     at = output.indexOf(':', at + 1)
@@ -110,23 +111,24 @@ function languageCandidates(output: string): Candidate[] {
   return found
 }
 
-function substitutionAttributeCandidates(input: string, output: string): Candidate[] {
+function substitutionAttributeCandidates(input: string, output: string, gate: Gate): Candidate[] {
   if (!input.includes('{~') || !input.includes('~>') || !output.includes('{+')) return []
   const found: Candidate[] = []
   for (const marker of ['}{.', '}{#']) {
     let at = output.indexOf(marker)
     while (at >= 0) {
-      found.push({ id: 'U-200', output: output.slice(0, at + 1) + '\\' + output.slice(at + 1) })
+      if (gate.at(at)) found.push({ id: 'U-200', output: output.slice(0, at + 1) + '\\' + output.slice(at + 1) })
       at = output.indexOf(marker, at + marker.length)
     }
   }
   return found
 }
 
-function floatingAttributeCandidates(output: string): Candidate[] {
+function floatingAttributeCandidates(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   for (let line = 1; line <= lines.count; line++) {
+    if (!gate.lines(line, line + 1)) continue
     const value = lineText(lines, line)
     const trimmed = value.trimStart()
     const start = lineStart(lines, line)
@@ -151,17 +153,17 @@ function floatingAttributeCandidates(output: string): Candidate[] {
   return found
 }
 
-function underlineBoundaryCandidates(output: string): Candidate[] {
+function underlineBoundaryCandidates(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('_}/')
   while (at >= 0) {
-    found.push({ id: 'U-065', output: output.slice(0, at + 2) + '\\' + output.slice(at + 2) })
+    if (gate.at(at)) found.push({ id: 'U-065', output: output.slice(0, at + 2) + '\\' + output.slice(at + 2) })
     at = output.indexOf('_}/', at + 3)
   }
   return found
 }
 
-function unresolvedFootnoteAttributeCandidates(output: string): Candidate[] {
+function unresolvedFootnoteAttributeCandidates(output: string, gate: Gate): Candidate[] {
   if (!output.includes('[^')) return []
   const found: Candidate[] = []
   for (const [marker, offset] of [
@@ -170,7 +172,7 @@ function unresolvedFootnoteAttributeCandidates(output: string): Candidate[] {
   ] as const) {
     let at = output.indexOf(marker)
     while (at >= 0) {
-      found.push({ id: 'U-207', output: output.slice(0, at + offset) + '\\' + output.slice(at + offset) })
+      if (gate.at(at)) found.push({ id: 'U-207', output: output.slice(0, at + offset) + '\\' + output.slice(at + offset) })
       at = output.indexOf(marker, at + marker.length)
     }
   }
@@ -209,12 +211,14 @@ function descriptionLineCandidates(
   return found
 }
 
-function lineCandidates(output: string): Candidate[] {
+function lineCandidates(output: string, gate: Gate): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   let descriptionFence = 0
   for (let line = 1; line <= lines.count; line++) {
     const value = lineText(lines, line)
+    if (value.includes(': ```')) descriptionFence = line
+    if (!gate.lines(line, line + 2)) continue
     const start = lineStart(lines, line)
     if (value.startsWith('[@]:'))
       found.push({ id: 'U-187', output: output.slice(0, start) + ' ' + output.slice(start) })
@@ -232,19 +236,19 @@ function lineCandidates(output: string): Candidate[] {
         found.push({ id: 'U-183', output: escaped.slice(0, nextCaption) + '\n' + escaped.slice(nextCaption) })
       }
     }
-    if (value.includes(': ```')) descriptionFence = line
     found.push(...descriptionLineCandidates(output, lines, line, descriptionFence))
   }
   return found
 }
 
-function multilineAttributeCandidates(output: string): Candidate[] {
+function multilineAttributeCandidates(output: string, gate: Gate): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length - 2; at++) {
     const head = lines[at] ?? ''
     const continuation = (lines[at + 1] ?? '').trimStart()
     if (head.lastIndexOf('{') <= head.lastIndexOf('}') || !continuation.includes('}')) continue
+    if (!gate.lines(at + 1, at + 3)) continue
     const body = continuation.startsWith('>') ? continuation.slice(1).trimStart() : continuation
     const changed = [...lines]
     changed[at] = head.trimEnd() + ' ' + body
@@ -257,25 +261,25 @@ function multilineAttributeCandidates(output: string): Candidate[] {
   return found
 }
 
-function quotedCaretCandidates(input: string): Candidate[] {
+function quotedCaretCandidates(input: string, gate: Gate): Candidate[] {
   const lines = readLines(input)
   const found: Candidate[] = []
   for (let line = 2; line <= lines.count; line++) {
     const value = lineText(lines, line)
     if (!value.trimStart().startsWith('^ ')) continue
-    if (!lineText(lines, line - 1).trimStart().startsWith('> ')) continue
+    if (!lineText(lines, line - 1).trimStart().startsWith('> ') || !gate.lines(line)) continue
     const at = lineStart(lines, line) + value.length - value.trimStart().length
     found.push({ id: 'U-212', output: input.slice(0, at) + '\\' + input.slice(at) })
   }
   return found
 }
 
-function itemDefinitionCandidates(input: string): Candidate[] {
+function itemDefinitionCandidates(input: string, gate: Gate): Candidate[] {
   const lines = input.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length; at++) {
     const match = /^(\s*(?:(?:[-*.]|\d+[.)])\s+)+)(\[[^\]\n]+\]:[^\n]*)$/.exec(lines[at] ?? '')
-    if (match === null || match[1] === undefined || match[2] === undefined) continue
+    if (match === null || match[1] === undefined || match[2] === undefined || !gate.lines(at + 1)) continue
     const changed = [...lines]
     changed[at] = match[1] + '{% %}'
     found.push({ id: 'U-213', output: match[2] + '\n\n' + changed.join('\n') })
@@ -283,12 +287,12 @@ function itemDefinitionCandidates(input: string): Candidate[] {
   return found
 }
 
-function tableCodeSpanCandidates(input: string): Candidate[] {
+function tableCodeSpanCandidates(input: string, gate: Gate): Candidate[] {
   const lines = input.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length; at++) {
     const line = lines[at] ?? ''
-    if (!line.trimStart().startsWith('|') || !line.trimEnd().endsWith('|')) continue
+    if (!line.trimStart().startsWith('|') || !line.trimEnd().endsWith('|') || !gate.lines(at + 1)) continue
     const open = line.indexOf('`')
     if (open < 0) continue
     let end = open
@@ -308,24 +312,26 @@ function tableCodeSpanCandidates(input: string): Candidate[] {
 export function rescueTargeted(
   input: string,
   output: string,
-  mismatch: ReportRecord
+  mismatch: ReportRecord,
+  site: Site = OPEN_SITE
 ): { output: string; record: ReportRecord } | null {
   const expected = html01(input)
+  const near = site.output
   const candidates = [
-    ...simpleCandidates(output),
-    ...bracketCandidates(output),
-    ...lineCandidates(output),
-    ...multilineAttributeCandidates(input),
-    ...quotedCaretCandidates(input),
-    ...itemDefinitionCandidates(input),
-    ...tableCodeSpanCandidates(input),
-    ...smartQuoteCandidates(output, expected),
-    ...smartQuoteCandidates(output, expected).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190')),
-    ...languageCandidates(output),
-    ...substitutionAttributeCandidates(input, output),
-    ...floatingAttributeCandidates(output),
-    ...underlineBoundaryCandidates(output),
-    ...unresolvedFootnoteAttributeCandidates(output)
+    ...simpleCandidates(output, near),
+    ...bracketCandidates(output, near),
+    ...lineCandidates(output, near),
+    ...multilineAttributeCandidates(input, site.input),
+    ...quotedCaretCandidates(input, site.input),
+    ...itemDefinitionCandidates(input, site.input),
+    ...tableCodeSpanCandidates(input, site.input),
+    ...smartQuoteCandidates(output, expected, near),
+    ...smartQuoteCandidates(output, expected, near).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190', near)),
+    ...languageCandidates(output, near),
+    ...substitutionAttributeCandidates(input, output, near),
+    ...floatingAttributeCandidates(output, near),
+    ...underlineBoundaryCandidates(output, near),
+    ...unresolvedFootnoteAttributeCandidates(output, near)
   ]
   for (const candidate of candidates) {
     try {

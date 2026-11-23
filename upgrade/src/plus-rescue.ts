@@ -1,5 +1,6 @@
 import { compareHtml } from './compare.ts'
 import { html01, html02 } from './engines.ts'
+import { type Gate, OPEN_SITE, type Site } from './rescue-site.ts'
 import { recordOf, type ReportRecord } from './report.ts'
 import { lineEnd, lineStart, lineText, readLines, type Lines } from './source.ts'
 
@@ -128,12 +129,12 @@ function quoteBlankCandidates(source: string, lines: Lines, mismatchLine: number
   }
 }
 
-function nestedQuoteCandidates(source: string): string[] {
+function nestedQuoteCandidates(source: string, gate: Gate): string[] {
   const found: string[] = []
   const lines = readLines(source)
   for (let line = 2; line < lines.count; line++) {
     const current = lineText(lines, line)
-    if (current.trim() !== '+' || !lineText(lines, line - 1).includes('- >')) continue
+    if (current.trim() !== '+' || !lineText(lines, line - 1).includes('- >') || !gate.lines(line, line + 1)) continue
     const next = lineText(lines, line + 1)
     const indent = current.slice(0, current.length - current.trimStart().length)
     const moved = replaceLine(source, line + 1, `${indent}> ${next.trimStart()}`)
@@ -142,11 +143,11 @@ function nestedQuoteCandidates(source: string): string[] {
   return found
 }
 
-function nestedMarkedQuoteCandidates(source: string): string[] {
+function nestedMarkedQuoteCandidates(source: string, gate: Gate): string[] {
   const found: string[] = []
   const lines = readLines(source)
   for (let line = 2; line < lines.count; line++) {
-    if (lineText(lines, line).trimStart() !== '> +') continue
+    if (lineText(lines, line).trimStart() !== '> +' || !gate.lines(line, line + 1)) continue
     if (
       !lineText(lines, line - 1)
         .trimStart()
@@ -161,11 +162,11 @@ function nestedMarkedQuoteCandidates(source: string): string[] {
   return found
 }
 
-function listDivCandidates(source: string): string[] {
+function listDivCandidates(source: string, gate: Gate): string[] {
   const found: string[] = []
   const lines = readLines(source)
   for (let line = 2; line < lines.count; line++) {
-    if (lineText(lines, line).trim() !== '+') continue
+    if (lineText(lines, line).trim() !== '+' || !gate.lines(line - 3, line + 1)) continue
     const next = lineText(lines, line + 1).trimStart()
     for (let open = Math.max(1, line - 3); open < line; open++) {
       const value = lineText(lines, open)
@@ -215,25 +216,25 @@ function indentListPlusAt(lines: string[], at: number, column: number): string |
   return moved.join('\n')
 }
 
-function indentListPlus(source: string): string[] {
+function indentListPlus(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 1; at++) {
     const column = listPlusColumn(lines[at] ?? '')
-    if (column < 0) continue
+    if (column < 0 || !gate.lines(at + 1, at + 14)) continue
     const candidate = indentListPlusAt(lines, at, column)
     if (candidate !== null) found.push(candidate)
   }
   return found
 }
 
-function footnoteFencePlus(source: string): string[] {
+function footnoteFencePlus(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 2; at++) {
     const definition = (lines[at] ?? '').trimStart()
     if (!definition.startsWith('[^') || !definition.endsWith(']: +')) continue
-    if ((lines[at + 1] ?? '').trim() !== '```') continue
+    if ((lines[at + 1] ?? '').trim() !== '```' || !gate.lines(at + 1, at + 21)) continue
     const close = lines.findIndex((line, index) => index > at + 1 && line.trim() === '```')
     if (close < 0 || close > at + 20) continue
     const moved = [...lines]
@@ -245,7 +246,7 @@ function footnoteFencePlus(source: string): string[] {
   return found
 }
 
-function listQuotePlus(source: string): string[] {
+function listQuotePlus(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 2; at < lines.length - 1; at++) {
@@ -256,6 +257,7 @@ function listQuotePlus(source: string): string[] {
     if (quote.slice(0, indent) !== marker.slice(0, indent) || !quote.slice(indent).startsWith('> ')) continue
     const item = (lines[at - 2] ?? '').trimStart()
     if (!item.startsWith('- ') && !item.startsWith('* ') && !item.startsWith('. ')) continue
+    if (!gate.lines(at - 1, at + 2)) continue
     const moved = [...lines]
     moved[at] = marker.slice(0, indent) + '>'
     moved[at + 1] = marker.slice(0, indent) + '> ' + (lines[at + 1] ?? '').trimStart()
@@ -296,14 +298,14 @@ function firstBlockCandidate(lines: string[], at: number, column: number, opener
   return moved.join('\n')
 }
 
-function listFirstBlock(source: string): string[] {
+function listFirstBlock(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 2; at++) {
     const column = firstBlockColumn(lines[at] ?? '')
     if (column < 0) continue
     const opener = (lines[at + 1] ?? '').trimStart()
-    if (!isFirstBlockOpener(opener)) continue
+    if (!isFirstBlockOpener(opener) || !gate.lines(at + 1, at + 14)) continue
     for (let count = 1; count <= Math.min(12, lines.length - at - 2); count++) {
       found.push(firstBlockCandidate(lines, at, column, opener, count))
     }
@@ -311,26 +313,31 @@ function listFirstBlock(source: string): string[] {
   return found
 }
 
-function listOutsideFence(source: string): string[] {
+function listOutsideFence(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 2; at++) {
     const column = firstBlockColumn(lines[at] ?? '')
     if (column < 0 || (lines[at + 1] ?? '').trim() !== '```') continue
-    const indent = (lines[at] ?? '').length - (lines[at] ?? '').trimStart().length
-    const openIndent = (lines[at + 1] ?? '').length - (lines[at + 1] ?? '').trimStart().length
-    if (openIndent <= indent) continue
-    const close = nearbyFenceClose(lines, at)
-    if (close < 0) continue
-    const moved = [...lines]
-    moved[at] = (lines[at] ?? '').slice(0, column) + '{% %}'
-    for (let line = at + 1; line <= close; line++) {
-      const value = moved[line] ?? ''
-      moved[line] = value.slice(Math.min(openIndent - indent, value.length - value.trimStart().length))
-    }
-    found.push(moved.join('\n'))
+    const candidate = gate.lines(at + 1, at + 16) ? outsideFenceAt(lines, at, column) : null
+    if (candidate !== null) found.push(candidate)
   }
   return found
+}
+
+function outsideFenceAt(lines: string[], at: number, column: number): string | null {
+  const indent = (lines[at] ?? '').length - (lines[at] ?? '').trimStart().length
+  const openIndent = (lines[at + 1] ?? '').length - (lines[at + 1] ?? '').trimStart().length
+  if (openIndent <= indent) return null
+  const close = nearbyFenceClose(lines, at)
+  if (close < 0) return null
+  const moved = [...lines]
+  moved[at] = (lines[at] ?? '').slice(0, column) + '{% %}'
+  for (let line = at + 1; line <= close; line++) {
+    const value = moved[line] ?? ''
+    moved[line] = value.slice(Math.min(openIndent - indent, value.length - value.trimStart().length))
+  }
+  return moved.join('\n')
 }
 
 function nearbyFenceClose(lines: string[], open: number): number {
@@ -340,7 +347,7 @@ function nearbyFenceClose(lines: string[], open: number): number {
   return -1
 }
 
-function listCommentHeading(source: string): string[] {
+function listCommentHeading(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 2; at++) {
@@ -349,7 +356,7 @@ function listCommentHeading(source: string): string[] {
     const comment = (lines[at + 1] ?? '').trim()
     if (!comment.startsWith('{%') || !comment.endsWith('%}')) continue
     const heading = (lines[at + 2] ?? '').trimStart()
-    if (!heading.startsWith('# ')) continue
+    if (!heading.startsWith('# ') || !gate.lines(at + 1, at + 3)) continue
     const moved = [...lines]
     moved[at] = (lines[at] ?? '').slice(0, column) + '{% %}'
     moved.splice(at + 1, 1)
@@ -359,7 +366,7 @@ function listCommentHeading(source: string): string[] {
   return found
 }
 
-function taskListBoundaryPlus(source: string): string[] {
+function taskListBoundaryPlus(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 1; at < lines.length - 1; at++) {
@@ -368,7 +375,7 @@ function taskListBoundaryPlus(source: string): string[] {
     const before = (lines[at - 1] ?? '').trimStart()
     if (!before.startsWith('- [ ]') && !before.startsWith('- [x]') && !before.startsWith('- [X]')) continue
     const after = (lines[at + 1] ?? '').trimStart()
-    if (!after.startsWith('- ')) continue
+    if (!after.startsWith('- ') || !gate.lines(at, at + 2)) continue
     const moved = [...lines]
     moved[at] = '\n' + value.slice(0, value.indexOf('+')) + '{% %}'
     found.push(moved.join('\n'))
@@ -376,7 +383,7 @@ function taskListBoundaryPlus(source: string): string[] {
   return found
 }
 
-function percentListPlus(source: string): string[] {
+function percentListPlus(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 4; at++) {
@@ -385,7 +392,7 @@ function percentListPlus(source: string): string[] {
     const close = lines.findIndex((line, index) => index > at + 1 && line.trim() === '%%%')
     if (close < 0 || close >= lines.length - 1) continue
     const follower = lines[close + 1] ?? ''
-    if (follower.trim() === '') continue
+    if (follower.trim() === '' || !gate.lines(at + 1, close + 2)) continue
     const moved = [...lines]
     moved[at] = (lines[at] ?? '').slice(0, column) + '{% %}'
     moved[close + 1] = ' '.repeat(column) + follower.trimStart()
@@ -405,13 +412,13 @@ function repeatedQuotePluses(source: string): string[] {
   return removed > 1 ? [moved.join('\n')] : []
 }
 
-function detachedDescriptionPlus(source: string): string[] {
+function detachedDescriptionPlus(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 1; at < lines.length - 1; at++) {
     if ((lines[at] ?? '').trim() !== '+' || !(lines[at - 1] ?? '').trimStart().startsWith(': ')) continue
     const follower = (lines[at + 1] ?? '').trimStart()
-    if (follower === '') continue
+    if (follower === '' || !gate.lines(at, at + 2)) continue
     for (let indent = 0; indent <= 3; indent++) {
       const moved = [...lines]
       moved[at] = ''
@@ -422,13 +429,13 @@ function detachedDescriptionPlus(source: string): string[] {
   return found
 }
 
-function detachedQuotePlus(source: string): string[] {
+function detachedQuotePlus(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 1; at < lines.length - 1; at++) {
     if (lines[at]?.trim() !== '+' || lines[at - 1]?.trim() !== '>') continue
     const next = lines[at + 1]?.trimStart() ?? ''
-    if (next === '' || next.startsWith('>')) continue
+    if (next === '' || next.startsWith('>') || !gate.lines(at, at + 2)) continue
     const moved = [...lines]
     moved[at + 1] = `> ${next}`
     moved.splice(at, 1)
@@ -456,11 +463,11 @@ function splitFenceCandidate(lines: string[], at: number, blank: number, indent:
   return moved.join('\n')
 }
 
-function splitFenceAfterPlus(source: string): string[] {
+function splitFenceAfterPlus(source: string, gate: Gate): string[] {
   const lines = source.split('\n')
   const found: string[] = []
   for (let at = 1; at < lines.length - 4; at++) {
-    if (!fencePlusStart(lines, at)) continue
+    if (!fencePlusStart(lines, at) || !gate.lines(at + 1, at + 25)) continue
     const blank = lines.findIndex((line, index) => index > at + 2 && index < at + 12 && line.trim() === '')
     if (blank < 0 || blank + 1 >= lines.length || (lines[blank + 1] ?? '').trim() === '') continue
     const close = lines.findIndex((line, index) => index > blank + 1 && index < blank + 12 && line.trim() === '```')
@@ -480,26 +487,28 @@ function candidates(source: string, mismatchLine: number): string[] {
   return [...found]
 }
 
-export function rescuePlus(input: string, output: string, mismatch: ReportRecord): Rescue | null {
+export function rescuePlus(input: string, output: string, mismatch: ReportRecord,
+  site: Site = OPEN_SITE): Rescue | null {
   if (!hasStructuralPlus(input)) return null
   const entry = plusEntry(input)
   const expected = html01(input)
+  const near = site.input
   const variants = [
     ...candidates(output, Math.max(1, mismatch.line)),
-    ...nestedQuoteCandidates(input),
-    ...nestedMarkedQuoteCandidates(input),
-    ...listDivCandidates(input),
-    ...indentListPlus(output),
-    ...footnoteFencePlus(input),
-    ...listQuotePlus(input),
-    ...listFirstBlock(input),
-    ...listOutsideFence(input),
-    ...listCommentHeading(input),
-    ...taskListBoundaryPlus(input),
-    ...percentListPlus(input),
+    ...nestedQuoteCandidates(input, near),
+    ...nestedMarkedQuoteCandidates(input, near),
+    ...listDivCandidates(input, near),
+    ...indentListPlus(output, site.output),
+    ...footnoteFencePlus(input, near),
+    ...listQuotePlus(input, near),
+    ...listFirstBlock(input, near),
+    ...listOutsideFence(input, near),
+    ...listCommentHeading(input, near),
+    ...taskListBoundaryPlus(input, near),
+    ...percentListPlus(input, near),
     ...repeatedQuotePluses(input),
-    ...detachedQuotePlus(input),
-    ...detachedDescriptionPlus(input)
+    ...detachedQuotePlus(input, near),
+    ...detachedDescriptionPlus(input, near)
   ]
   for (const candidate of variants) {
     try {
@@ -516,7 +525,7 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
       /* Candidate is not a 0.2 document. */
     }
   }
-  for (const candidate of splitFenceAfterPlus(input)) {
+  for (const candidate of splitFenceAfterPlus(input, near)) {
     try {
       if (!compareHtml(expected, html02(candidate, false)).equal) continue
       return {
