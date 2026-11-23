@@ -142,6 +142,21 @@ function fenceInfo(w: Writer, node: CodeBlockNode | RawBlockNode): string {
   return ''
 }
 
+/** How far the lead of the current line reaches past `prefix`: a task box, a label or attributes on a marker line. */
+function leadIndent(w: Writer, prefix: string): number {
+  return w.lead === null ? 0 : Math.max(0, w.lead.length - w.leadSkip - prefix.length)
+}
+
+/**
+ * C2-B-029: an opener behind a lead strips up to its indent from each line. Where a line starts with whitespace, the
+ * lines and the closer stand at the opener's column (C2-W-033); otherwise at the content column (C2-W-024).
+ */
+function bodyPrefix(w: Writer, prefix: string, lines: readonly string[]): string {
+  const indent = leadIndent(w, prefix)
+  if (indent === 0 || !lines.some((line) => line.startsWith(' ') || line.startsWith('\t'))) return prefix
+  return prefix + ' '.repeat(indent)
+}
+
 /** C2-W-037, C2-W-038, C2-W-040: a code block, and a raw block as the fence with `=` and its format. */
 function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string): void {
   attributeLine(w, node, prefix)
@@ -153,9 +168,10 @@ function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string
     // C2-B-120: the title reads escapes, as a quoted attribute value does.
     info += openerTail(w, node, title, title === null ? '' : quoted(title).slice(1, -1))
   }
+  const inner = bodyPrefix(w, prefix, lines)
   emit(w, prefix, run + info)
-  for (const line of lines) emit(w, prefix, line)
-  if (!isLeftOpen(w, node)) emit(w, prefix, run)
+  for (const line of lines) emit(w, inner, line)
+  if (!isLeftOpen(w, node)) emit(w, inner, run)
 }
 
 /** C2-W-059: a line comment, and a comment block with the shortest percent run its body allows. */
@@ -169,9 +185,10 @@ function comment(w: Writer, node: CommentNode, prefix: string): void {
   }
   const lines = value === '' ? [] : value.split('\n')
   const run = '%'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 37) + 1))
+  const inner = bodyPrefix(w, prefix, lines)
   emit(w, prefix, run)
-  for (const line of lines) emit(w, prefix, line)
-  if (!isLeftOpen(w, node)) emit(w, prefix, run)
+  for (const line of lines) emit(w, inner, line)
+  if (!isLeftOpen(w, node)) emit(w, inner, run)
 }
 
 /** C2-W-052: the bare opener for YAML, and the format name glued to it for every other format. */
@@ -430,7 +447,7 @@ function body(
 ): void {
   // C2-W-033, C2-B-229: a body opened on the marker line of another body, behind its task box or its attributes, has
   // its content column behind its own marker there, so its continuation lines stand at that column.
-  const behind = w.lead === null ? 0 : Math.max(0, w.lead.length - w.leadSkip - prefix.length)
+  const behind = leadIndent(w, prefix)
   w.lead = (w.lead ?? prefix) + mark
   writeBlocks(w, node.children, prefix + ' '.repeat(behind + width), flags, tight)
   if (w.lead === null) return
