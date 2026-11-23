@@ -1489,12 +1489,22 @@ function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], 
   if (readsNeighbor(c, e, es, at.i, a)) return false
   repairCommentCloser(c, es, at.i, e, a)
   const outer = c.cut
+  const asked = changes(c)
   c.cut = false
   compareInline(c, e, a)
+  // C2-W-125: a content that read on or ended early was repaired inside; behind it the parse is read again next round.
+  if (changes(c) > asked && BRACKETED.has(e.type) && extentDiffers(c, e, a)) c.cut = true
   c.cut ||= outer
   at.i++
   at.j++
   return VERBATIM.has(e.type) && differingField(c, e, a) !== null ? stepOverAbsorbed(c, e, es, as, a, at) : true
+}
+
+/** Whether the parse node `a` spans other bytes than the spelling of `e` it was read from, on one line. */
+function extentDiffers(c: Check, e: Node, a: Node): boolean {
+  const pos = a.pos
+  const own = writeInlines(c.w, [e], c.flags)
+  return pos !== undefined && !own.includes('\n') && pos.endOffset - pos.startOffset !== utf8Length(own)
 }
 
 const VERBATIM: ReadonlySet<string> = new Set(['code', 'literal_inline', 'math', 'raw_inline'])
