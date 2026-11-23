@@ -32,9 +32,9 @@ describe('parse-channel messages use the pinned 0.2 diagnostic catalog', () => {
       if (typeof entry.input !== 'string') continue
       const text = entry as Case & { input: string }
       for (const finding of findings(text)) {
-        const patterns = templates.get(finding.code)
-        if (patterns === undefined) continue
+        if (finding.channel !== 'parse') continue
         checked++
+        const patterns = templates.get(finding.code) ?? []
         if (!patterns.some((pattern) => pattern.test(finding.message))) drift.push(`${entry.id} ${finding.code}: ${finding.message}`)
       }
     }
