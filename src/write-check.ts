@@ -1164,9 +1164,7 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor, es: rea
       return matchCharacters(c, e, a, at, es, owner)
     }
     // The parse read a character of the text as markup, such as a backslash before punctuation (C2-W-097).
-    if (escapeAt(c, e, at.vi + k)) return false
-    // C2-I-089: a footnote reference shape in a note reads as its source, its backslashes too, so its bracket takes one.
-    if (other.charCodeAt(at.aj + k) !== BACKSLASH || !escapeNoteReference(c, e, at.vi + k)) c.losses.push([e, 'value'])
+    if (!escapeAt(c, e, at.vi + k)) differingCharacter(c, e, other, at, k)
     return false
   }
   at.vi += length
@@ -1176,6 +1174,11 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor, es: rea
     at.aj = 0
   }
   return true
+}
+
+/** C2-I-089: a footnote reference shape in a note reads as its source, its backslashes too, so its bracket takes one. */
+function differingCharacter(c: Check, e: TextNode, other: string, at: Cursor, k: number): void {
+  if (other.charCodeAt(at.aj + k) !== BACKSLASH || !escapeNoteReference(c, e, at.vi + k)) c.losses.push([e, 'value'])
 }
 
 /**
