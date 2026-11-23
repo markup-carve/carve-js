@@ -996,6 +996,8 @@ function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, f
   if (mark !== null && nodes[end]?.type === 'text' && nodes[end].value.startsWith(mark)) w.forms.set(node, 1)
   const part = writePart(w, nodes, at, end, flags)
   if ((node.type !== 'emphasis' && node.type !== 'strong') || part === '' || part.charCodeAt(0) !== before) return part
+  // The glue depends on the form of the node before, so the next write of the group decides it again (carve#6420).
+  if (!w.forms.has(node)) w.glued.add(node)
   w.forms.set(node, 1)
   // A braced part already opens with `{`; writing it again gives the same bytes and doubles the cost per level.
   return part.charCodeAt(0) === BRACE ? part : writePart(w, nodes, at, end, flags)
