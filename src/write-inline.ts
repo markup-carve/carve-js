@@ -379,6 +379,13 @@ function escapeLeadingCaret(w: Writer, children: readonly Inline[], flags: numbe
   }
 }
 
+/** Link or span text that starts with a text caret, which can read as a footnote reference bare (C2-W-125, case five). */
+export function leadingCaret(node: Node): boolean {
+  if (node.type !== 'link' && node.type !== 'span') return false
+  const first = node.children[0]
+  return first?.type === 'text' && first.value.startsWith('^')
+}
+
 /** C2-I-079: a collapsed or shortcut reference whose key, its content, starts with a caret. */
 export function keyIsContent(node: LinkNode): boolean {
   return (node.refForm === 'collapsed' || node.refForm === 'shortcut') && node.key?.startsWith('^') === true

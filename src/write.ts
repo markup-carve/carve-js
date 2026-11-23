@@ -1322,17 +1322,21 @@ function prunableStar(w: Writer, source: string, at: number, scan: PruneScan): b
   return starAfterBreak(w.parsed.children, scan.byte, null)
 }
 
+function prunableBracket(w: Writer, source: string, at: number, scan: PruneScan): boolean {
+  if (source.startsWith('^]', at + 2)) return !behindNoteOpener(source, at) || !opensInBare(w, source, at + 1)
+  if (!source.startsWith('----', at + 2)) return false
+  if (source[at - 1] !== '^') return true
+  const close = nextIndex(scan, source, ']', at + 2)
+  const lineEnd = nextIndex(scan, source, '\n', at + 2)
+  return close < 0 || (lineEnd >= 0 && close > lineEnd)
+}
+
 function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan): boolean {
   const next = source[at + 1]
   if (next === '*') return prunableStar(w, source, at, scan)
-  if (next === '[') {
-    if (source.startsWith('^]', at + 2)) return !behindNoteOpener(source, at) || !opensInBare(w, source, at + 1)
-    if (!source.startsWith('----', at + 2)) return false
-    if (source[at - 1] !== '^') return true
-    const close = nextIndex(scan, source, ']', at + 2)
-    const lineEnd = nextIndex(scan, source, '\n', at + 2)
-    return close < 0 || (lineEnd >= 0 && close > lineEnd)
-  }
+  // C2-W-125, case five: behind a text `^[` whose caret pairs are ordinary brackets, link text can start with a bare caret.
+  if (next === '^') return source[at - 1] === '[' && !isNoteBracket(source, at - 1) && behindNoteOpener(source, at)
+  if (next === '[') return prunableBracket(w, source, at, scan)
   if (next !== '{') return false
   if (source[at + 2] === '/' || source[at + 2] === '*') return true
   if (source[at + 2] !== '#') return false
