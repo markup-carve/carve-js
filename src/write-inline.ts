@@ -671,10 +671,10 @@ function unpartnered(alt: string, raw: Uint8Array, lone: Set<number>, swap: bool
 function tailEnd(alt: string, at: number): number {
   let level = 0
   let p = at + 1
+  // The writer doubles every backslash before punctuation (C2-W-097), so no backslash of the alt escapes a parenthesis.
   for (; p < alt.length && !isLabelSpace(alt[p]!); p++) {
     if (alt[p] === '(') level++
     else if (alt[p] === ')' && level-- === 0) return p + 1
-    else if (alt[p] === '\\' && '()\\'.includes(alt[p + 1] ?? ' ')) p++
   }
   return level === 0 && alt[p] === ' ' ? titleTailEnd(alt, p + 1) : -1
 }
@@ -684,7 +684,7 @@ function titleTailEnd(alt: string, at: number): number {
   const quote = alt[at]
   if (quote !== '"' && quote !== "'") return -1
   let q = at + 1
-  while (q < alt.length && alt[q] !== quote && alt[q] !== '\n') q += alt[q] === '\\' && alt[q + 1] !== '\n' ? 2 : 1
+  while (q < alt.length && alt[q] !== quote && alt[q] !== '\n') q++
   if (alt[q] !== quote) return -1
   q++
   while (alt[q] === ' ') q++
@@ -785,9 +785,13 @@ function everyBracket(alt: string, raw: Uint8Array, lone: Set<number>): void {
 function imageAlt(node: ImageNode, bare: boolean): string {
   const alt = node.alt ?? ''
   const spelled = altSource(alt, bare)
-  if (bare || node.key !== undefined || !mayMisread(alt) || readsBackAlt(spelled, alt)) return spelled
+  // C2-W-075: a collapsed or shortcut alt is checked against its key by `collapsedAlt`.
+  const keyed = node.refForm === 'collapsed' || node.refForm === 'shortcut'
+  if (bare || keyed || !mayMisread(alt)) return spelled
+  const tail = node.key === undefined ? '()' : '[k]'
+  if (readsBackAlt(spelled, alt, tail)) return spelled
   for (const form of [altSource(alt, true), altSource(alt, false, false), altSource(alt, false, true, true)]) {
-    if (form !== spelled && readsBackAlt(form, alt)) return form
+    if (form !== spelled && readsBackAlt(form, alt, tail)) return form
   }
   return spelled
 }
@@ -801,9 +805,9 @@ function mayMisread(alt: string): boolean {
   return (alt.includes('[') || alt.includes(']')) && /[\^(<`{]|\]\[/u.test(alt)
 }
 
-/** Whether `![spelled]()` reads as one image whose alt is `alt` (C2-I-074). */
-function readsBackAlt(spelled: string, alt: string): boolean {
-  const read = inlineContent(`![${spelled}]()`)
+/** Whether `![spelled]` with `tail` reads as one image whose alt is `alt` (C2-I-074). */
+function readsBackAlt(spelled: string, alt: string, tail: string): boolean {
+  const read = inlineContent(`![${spelled}]${tail}`)
   return read.length === 1 && read[0]!.type === 'image' && read[0]!.alt === alt
 }
 

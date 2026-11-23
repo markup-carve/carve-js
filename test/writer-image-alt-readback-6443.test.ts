@@ -32,3 +32,14 @@ it('C2-W-089: where the clause spelling does not read back, a later form that do
     expect(render(format(source)), source).toBe(render(source))
   }
 })
+
+it('C2-W-097: a backslash of the alt is doubled, so it escapes no parenthesis of a link tail; a full reference is read back too', () => {
+  for (const form of ['[k]', '(u)']) {
+    const tree = parse(`![x]${form}\n\n[k]: /u\n`)
+    const paragraph = tree.children[0] as { children: { alt?: string }[] }
+    paragraph.children[0]!.alt = '[](\\(])'
+    const written = writeWithDiagnostics(tree)
+    expect(written.diagnostics, form).toEqual([])
+    expect(written.source, form).toBe(`![[](\\\\(\\])]${form}\n\n[k]: /u\n`)
+  }
+})
