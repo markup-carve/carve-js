@@ -14,7 +14,7 @@ import { math } from 'micromark-extension-math'
 import { directive, directiveHtml, type Directive } from 'micromark-extension-directive'
 import { parse as parseDjot, parseEvents as parseDjotEvents, renderHTML as renderDjot } from '@djot/djot'
 import type { DocumentNode } from '../../src/index.ts'
-import { ensureForeignDepth, ImportInputError, type ImportResult, withoutHtmlRanges } from './kit.ts'
+import { commentEmptyItems, ensureForeignDepth, ImportInputError, type ImportResult, withoutHtmlRanges } from './kit.ts'
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { ADMONITION_KINDS, importHtml } from './html.ts'
 import { constructRecords, djotConstructs, markdownConstructs } from './hub-constructs.ts'
@@ -465,26 +465,6 @@ export function djotHtml(input: string, sink: Sink): string {
       ...(node.style && !/1/u.test(node.style) ? { type: node.style.replace(/[().]/gu, '') } : {}),
     }),
   } })
-}
-
-/**
- * C2-A-186, C2-W-057: a parsed item or description is never empty; the empty spelling is a marker plus a comment. The
- * library renders an empty source item as `<li></li>`, so the item gets the comment a parse of `- %%` gives.
- */
-const EMPTY_BODIES: ReadonlySet<unknown> = new Set(['list_item', 'definition_description'])
-
-function commentEmptyItems(nodes: readonly object[]): void {
-  const pending: unknown[] = [...nodes]
-  while (pending.length > 0) {
-    const node = pending.pop()
-    if (node === null || typeof node !== 'object') continue
-    const children: unknown = Reflect.get(node, 'children')
-    if (!Array.isArray(children)) continue
-    if (children.length === 0 && EMPTY_BODIES.has(Reflect.get(node, 'type'))) {
-      children.push({ type: 'comment', form: 'line', value: '' })
-    }
-    pending.push(...(children as unknown[]))
-  }
 }
 
 /** Imports through the hub: library HTML, then the 0.2 HTML importer with raw HTML kept, then the frontmatter. */

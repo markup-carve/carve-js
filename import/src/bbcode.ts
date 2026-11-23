@@ -1,6 +1,6 @@
 // BBCode import (JavaScript only), with the tag set of the 0.1 `bbcodeToCarve`. `bbcode-tree.ts` builds the tree of the
 // items; for the inputs only parse5 reads as it does, this module writes the HTML and the 0.2 HTML importer reads it.
-import { ImportInputError, type ImportDiagnostic, type ImportResult, withoutHtmlRanges } from './kit.ts'
+import { commentEmptyItems, ImportInputError, type ImportDiagnostic, type ImportResult, withoutHtmlRanges } from './kit.ts'
 import { importHtml } from './html.ts'
 import { readAttribution } from './bbcode-quote.ts'
 import {
@@ -262,6 +262,8 @@ export function importBbcode(input: string): ImportResult {
   const diagnostics: ImportDiagnostic[] = []
   const items = readItems(input, diagnostics)
   // This HTML is generated here; its byte positions do not locate the BBCode input.
-  const result = needsHtmlRoute(input, items) ? importHtml(blocksHtml(items), false, {}, false) : importBbcodeItems(items)
+  const result = needsHtmlRoute(input, items)
+    ? importHtml(blocksHtml(items), false, { finish: commentEmptyItems }, false)
+    : importBbcodeItems(items)
   return { ...result, diagnostics: [...diagnostics, ...withoutHtmlRanges(result.diagnostics)] }
 }

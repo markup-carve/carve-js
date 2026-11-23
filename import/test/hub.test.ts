@@ -130,7 +130,7 @@ describe('a denied block image', () => {
     }
   })
 
-  it('leaves a Markdown or Djot item it empties holding a comment, the parsed empty item (carve#6428)', () => {
+  it('leaves a Markdown, Djot or BBCode item it empties holding a comment, the parsed empty item (carve#6428)', () => {
     for (const from of ['markdown', 'gfm', 'djot'] as const) {
       expect(source('- ![](data:x)\n', from)).toBe('- %%\n')
       expect(source('> - ![](javascript:x)\n', from)).toBe('> - %%\n')
@@ -142,6 +142,10 @@ describe('a denied block image', () => {
     expect(source(': t\n\n  ![](data:x)\n', 'djot')).toBe(':: t\n: %%\n')
     expect(source('-\n', 'gfm')).toBe('- %%\n')
     expect(source('- a\n-\n- b\n', 'djot')).toBe('- a\n- %%\n- b\n')
+    expect(source('[list][*][img]javascript:x[/img][/list]', 'bbcode')).toBe('- %%\n')
+    expect(source('[list][*]a[*][/list]', 'bbcode')).toBe('- a\n- %%\n')
+    expect(source('[quote][list][*][/list][/quote]', 'bbcode')).toBe('> - %%\n')
+    expect(source('[list][*]a\0[*][/list]', 'bbcode')).toBe('- a\n- %%\n')
   })
 })
 

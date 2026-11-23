@@ -9,7 +9,8 @@ import { flattenCellBreaks } from './html.ts'
 import { collapseBreaks, trimEdges } from './html-inline.ts'
 import { resolveAlignments } from './html-table-align.ts'
 import {
-  classNames, coalesce, complete, finding, imageParagraph, paragraph, safeUrl, softText, withDestination, type Context, type ImportResult,
+  classNames, coalesce, commentEmptyItems, complete, finding, imageParagraph, paragraph, safeUrl, softText, withDestination, type Context,
+  type ImportResult,
 } from './kit.ts'
 
 /** Below this nesting the HTML of the items stays well inside the depth limit parse5 trees are checked against. */
@@ -298,5 +299,5 @@ function table(tag: Tag, context: Context, out: Blocks): void {
 export function importBbcodeItems(items: Item[]): ImportResult {
   // The HTML importer reads these trees, so the source format and the finding codes stay those of HTML.
   const context: Context = { format: 'html', input: '', diagnostics: [] }
-  return complete(context, blocksOf(items, context).blocks)
+  return complete(context, commentEmptyItems(blocksOf(items, context).blocks))
 }

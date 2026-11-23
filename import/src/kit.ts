@@ -262,3 +262,24 @@ export function cell(children: Inline[], header: boolean): TableCellNode {
 export function row(children: TableCellNode[]): TableRowNode { return { type: 'table_row', children } }
 
 export function assertNever(value: never): never { throw new ImportInputError(`Unknown foreign node: ${String(value)}`, 'unknown') }
+
+const EMPTY_BODIES: ReadonlySet<unknown> = new Set(['list_item', 'definition_description'])
+
+/**
+ * C2-A-186, C2-W-057: a parsed item or description is never empty; its empty spelling is a marker plus a comment. An
+ * empty item of a source format (Markdown, Djot, BBCode) gets the comment a parse of `- %%` gives. HTML keeps C2-M-074.
+ */
+export function commentEmptyItems<T extends readonly object[]>(nodes: T): T {
+  const pending: unknown[] = [...nodes]
+  while (pending.length > 0) {
+    const node = pending.pop()
+    if (node === null || typeof node !== 'object') continue
+    const children: unknown = Reflect.get(node, 'children')
+    if (!Array.isArray(children)) continue
+    if (children.length === 0 && EMPTY_BODIES.has(Reflect.get(node, 'type'))) {
+      children.push({ type: 'comment', form: 'line', value: '' })
+    }
+    pending.push(...(children as unknown[]))
+  }
+  return nodes
+}
