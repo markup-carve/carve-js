@@ -900,11 +900,17 @@ function lastFence(w: Writer, node: Node, colons: Node[] = []): Node | null {
     if (last === undefined) return null
     at = last
   }
+  // A caption line stands below the closer, so the fence is not the last line.
+  if (hasCaption(at)) return null
   return OPAQUE.includes(at.type) || (at.type === 'comment' && at.form === 'block') ? at : null
 }
 
+function hasCaption(node: Node): boolean {
+  return 'caption' in node && node.caption !== undefined
+}
+
 function isOpenColon(w: Writer, node: Node): boolean {
-  if ('caption' in node && node.caption !== undefined) return false
+  if (hasCaption(node)) return false
   return OPEN_COLONS.includes(node.type) || (node.type === 'block_quote' && isFenced(w, node))
 }
 

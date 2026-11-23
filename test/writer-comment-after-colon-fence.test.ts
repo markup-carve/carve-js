@@ -19,4 +19,14 @@ describe('C2-W-123, C2-B-137: a comment after an item that ends with a fence ins
     ]
     for (const source of sources) expect(checkWriter(source), source).toBeNull()
   })
+
+  it('closes a captioned fence, whose caption line would read as code', () => {
+    for (const source of ['- ::: box\n  ```\n  x\n  ```\n  ^ cap\n  :::\n', '- ```\n  x\n  ```\n  ^ cap\n']) {
+      const tree = parse(source)
+      tree.children.push(parse('%% c\n').children[0]!)
+      const written = writeWithDiagnostics(tree)
+      expect(written.source, source).toContain('  ```\n  ^ cap\n')
+      expect(written.diagnostics.map((entry) => entry.code), source).toEqual(['structure-unspellable'])
+    }
+  })
 })
