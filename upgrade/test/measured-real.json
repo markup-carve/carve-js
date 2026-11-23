@@ -710,9 +710,9 @@
     "path": "tests/corpus/68-nested-containers-3.crv",
     "line": 1,
     "input": ":::\nOuter\n\n::::\nInner\n::::\n:::\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-219"
+      "U-049"
     ]
   },
   {

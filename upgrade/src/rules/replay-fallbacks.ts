@@ -190,6 +190,91 @@ export function nestedDivInsideAdmonition(ctx: Context): void {
   for (const { node } of ctx.visits) if (node.type === 'admonition') repairNestedAdmonition(ctx, node)
 }
 
+interface ColonFence { node: Node01; run: number; bare: boolean; closer: number | null; parent: ColonFence | null; children: ColonFence[] }
+
+const CLOSER_LINE = /^((?:[ \t]*>)*[ \t]*)(:{3,})[ \t]*$/u
+
+/** The offset of the bare run that closed the div in 0.1, which has the opener's length; null when unclosed. */
+function fenceCloser(ctx: Context, node: Node01, run: number): number | null {
+  const pos = node.pos!
+  const last = CLOSER_LINE.exec(lineText(ctx.lines, pos.endLine))
+  if (pos.endLine === pos.startLine || last === null || last[2]!.length !== run
+    || lineStart(ctx.lines, pos.endLine) + last[0].length > pos.endOffset + 1) return null
+  return lineStart(ctx.lines, pos.endLine) + last[1]!.length
+}
+
+function colonFences(ctx: Context): ColonFence[] {
+  const byNode = new Map<Node01, ColonFence>()
+  const fences: ColonFence[] = []
+  for (const visit of ctx.visits) {
+    const { node } = visit
+    if (node.pos === undefined) continue
+    const opener = /^(:{3,})(.*)$/u.exec(ctx.src.slice(node.pos.startOffset, lineEnd(ctx.lines, node.pos.startLine)))
+    if (opener === null || lineStart(ctx.lines, node.pos.startLine) > node.pos.startOffset) continue
+    let above = visit.parent
+    while (above !== null && !byNode.has(above.node)) above = above.parent
+    const parent = above === null ? null : byNode.get(above.node)!
+    const run = opener[1]!.length
+    const fence: ColonFence = { node, run, bare: opener[2]!.trim() === '', closer: fenceCloser(ctx, node, run), parent, children: [] }
+    parent?.children.push(fence)
+    byNode.set(node, fence)
+    fences.push(fence)
+  }
+  // An unclosed div can end on the line that opens a div inside it, at the same length.
+  const openers = new Set(fences.map((fence) => fence.node.pos!.startOffset))
+  for (const fence of fences) if (fence.closer !== null && openers.has(fence.closer)) fence.closer = null
+  return fences
+}
+
+/** Heights from the leaves up; `fences` lists every parent before its children. */
+function fenceHeights(fences: readonly ColonFence[]): Map<ColonFence, number> {
+  const heights = new Map<ColonFence, number>()
+  for (let index = fences.length - 1; index >= 0; index--) {
+    const fence = fences[index]!
+    heights.set(fence, fence.children.reduce((height, child) => Math.max(height, heights.get(child)! + 1), 0))
+  }
+  return heights
+}
+
+const RELENGTHED = 'div fence runs shortened toward the inside so 0.2 keeps the old nesting'
+
+function relengthFences(ctx: Context, fence: ColonFence, heights: Map<ColonFence, number>): void {
+  const run = ':'.repeat(3 + heights.get(fence)!)
+  const opener = fence.node.pos!.startOffset
+  change(ctx, 'U-049', opener, opener + fence.run, run, RELENGTHED)
+  if (fence.closer !== null) {
+    change(ctx, 'U-049', fence.closer, fence.closer + fence.run, run, RELENGTHED)
+  }
+  for (const child of fence.children) relengthFences(ctx, child, heights)
+}
+
+/**
+ * U-219, U-114: 0.1 closes a div only with a bare colon run of its own length, so a bare run of another
+ * length inside it opened a nested div; 0.2 closes the innermost div the run is long enough for (C2-B-125).
+ * Runs that shrink toward the inside, with each closer as long as its opener, give 0.2 the old nesting.
+ */
+export function nestedColonRuns(ctx: Context): void {
+  const fences = colonFences(ctx)
+  const roots = new Set<ColonFence>()
+  // Parents come first: the outermost fence and the shortest run above each fence, in one pass.
+  const top = new Map<ColonFence, { root: ColonFence; shortest: number }>()
+  for (const fence of fences) {
+    const above = fence.parent === null ? undefined : top.get(fence.parent)!
+    top.set(fence, { root: above?.root ?? fence, shortest: Math.min(above?.shortest ?? Infinity, fence.run) })
+    // 0.2 closes the innermost div the bare run is long enough for (C2-B-125); 0.1 opened a div there.
+    if (fence.bare && above !== undefined && above.shortest <= fence.run) roots.add(above.root)
+  }
+  const heights = fenceHeights(fences)
+  // Another repair may already have widened a tree (nestedDivInsideAdmonition, outerAdmonitionAroundDiv).
+  const edited = new Set(ctx.findings.flatMap(({ edit }) => edit === null ? [] : [edit.start]))
+  for (const root of roots) {
+    const opener = root.node.pos!.startOffset
+    let widened = false
+    for (let at = opener; at <= opener + root.run; at++) widened ||= edited.has(at)
+    if (!widened) relengthFences(ctx, root, heights)
+  }
+}
+
 function moveDefinitionAboveFence(ctx: Context, admonition: Node01, div: Node01): boolean {
   const moved = ctx.findings.find(({ record, edit }) => record.entry === 'U-038' && edit !== null
     && edit.start === ctx.src.length && edit.end === edit.start && /^\n\[\^[^\]]+\]: /u.test(edit.text))
@@ -921,6 +1006,9 @@ export function abbreviationSpaces(ctx: Context): void {
   }
 }
 
+/** 0.2 reads the image line of a figure group as paragraph text too, so the quote below it is lazy there. */
+const TEXT_ABOVE = new Set(['paragraph', 'image'])
+
 /** An attribute-only line can leave an empty 0.1 quote that 0.2 otherwise drops. */
 export function emptyAttributeQuote(ctx: Context): void {
   const lines: number[] = []
@@ -928,7 +1016,7 @@ export function emptyAttributeQuote(ctx: Context): void {
     if (node.type !== 'block_quote' || node.pos === undefined || (node.children?.length ?? 0) !== 0
       || node.pos.startLine !== node.pos.endLine) continue
     const line = node.pos.startLine
-    if (ctx.blocks.leaf[line - 1]?.node.type !== 'paragraph'
+    if (!TEXT_ABOVE.has(ctx.blocks.leaf[line - 1]?.node.type ?? '')
       || !/^[ \t]*>[ \t]*\{[^}\n]*\}[ \t]*$/u.test(lineText(ctx.lines, line))) continue
     lines.push(line)
   }
