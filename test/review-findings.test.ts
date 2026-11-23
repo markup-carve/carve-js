@@ -602,7 +602,8 @@ describe('what the third code review found', () => {
   }
 
   it('C2-W-125: a lone bracket inside an inline footnote takes the backslash, also inside emphasis', () => {
-    expect(faithful(`^[/[${BACKSLASH}]]/]`)).toBe(`^[/[${BACKSLASH}]]/]\n`)
+    // The `]` that closes no `[` of the content on the bracket stack is the lone one (carve#6454).
+    expect(faithful(`^[/[${BACKSLASH}]]/]`)).toBe(`^[/[]${BACKSLASH}]/]\n`)
     faithful(`^[{/[]${BACKSLASH}]/}]`)
   })
 
