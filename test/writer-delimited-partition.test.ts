@@ -28,3 +28,19 @@ describe('a delimited table with a partition stays delimited', () => {
     expect(write(tree)).toBe(table('body-rows=1,1', ['h', 'a', ' b']))
   })
 })
+
+// C2-B-226: an empty last line is no record, so a last row of one empty cell stays quoted whichever group holds it.
+describe('a lone empty last record stays quoted', () => {
+  for (const [keys, rows] of [
+    ['body-rows=0', ['""']],
+    ['body-rows=1,0', ['h', '""']],
+    ['header-rows=2 body-rows=0', ['h', '""']],
+    ['footer-rows=1', ['h', '""']],
+    ['header-rows=0 body-rows=1,0', ['""']],
+  ] as const) {
+    it(keys, () => {
+      const source = table(keys, [...rows])
+      expect(formatWithDiagnostics(source).source).toBe(source)
+    })
+  }
+})
