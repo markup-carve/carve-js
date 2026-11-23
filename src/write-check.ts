@@ -340,9 +340,8 @@ export const BRACKETED: ReadonlySet<string> = new Set(['link', 'span', 'inline_f
  * null. A bracketed node inside has its own content: it is skipped, or pushed to `inner` where that is given.
  */
 export function contentClosers(nodes: readonly Node[], bare: (node: TextNode, at: number) => boolean,
-  inner: Node[] | null): Closer[] {
+  inner: Node[] | null, open: [TextNode, number][] = []): Closer[] {
   const closers: Closer[] = []
-  const open: [TextNode, number][] = []
   const pending = [...nodes].reverse()
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (BRACKETED.has(node.type)) inner?.push(node)
@@ -384,7 +383,27 @@ function joinsNext(es: readonly Node[], i: number): boolean {
 function escapeOwnerMark(c: Check, e: Node): boolean {
   const mark = c.owner === null ? undefined : CLOSING_MARKS.get(c.owner.type)
   if (mark === undefined || !('children' in e)) return false
+  if (mark === ']' && BRACKETED.has(c.owner!.type)) return false
   return escapeCloser(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
+}
+
+/**
+ * C2-W-125, case five: the bare `]` below `e` that close no bare `[` of the content of the bracketed node around `e`,
+ * or else the bare `[` below `e` that no `]` of that content closes. A bracket pair of the content reads as text and
+ * stays bare. Like `escapeLoneBracket` it is no trial: the round behind it can still fail on a bracket it fixes later.
+ */
+function escapeOwnerBrackets(c: Check, es: readonly Node[], i: number): boolean {
+  const owner = c.owner
+  const e = es[i]!
+  if (owner === null || !BRACKETED.has(owner.type) || !('children' in e)) return false
+  const below = new Set(textsBelow(e))
+  const open: [TextNode, number][] = []
+  let asked = false
+  for (const [text, at, partner] of contentClosers(childNodes(owner), (node, offset) => !isEscaped(c, node, offset), null, open)) {
+    if (partner === null && below.has(text)) asked = escapeBracket(c, text, at) || asked
+  }
+  for (const [text, at] of asked ? [] : open) if (below.has(text)) asked = escapeBracket(c, text, at) || asked
+  return asked
 }
 
 /** Asks for the escape that keeps the text before `es[i]` from reading on into its opening markup. */
@@ -489,7 +508,7 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
     if (!step(c, es, i, attempt)) continue
     for (let at = before; at < c.escapes.length; at++) {
       attempt.escapes.push(c.escapes[at]!)
-      if (step === escapeLoneBracket || step === escapeContentOpener) continue
+      if (step === escapeLoneBracket || step === escapeOwnerBrackets || step === escapeContentOpener) continue
       c.trials.push(c.escapes[at]!)
       if (stopsCodeSpan(step, c.escapes[at]!)) c.codeTrials.add(c.escapes[at]!)
     }
@@ -527,6 +546,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeCloserBeforeBrace,
   escapeAfter,
   (c, es, i) => escapeContentLine(c, es[i]!),
+  escapeOwnerBrackets,
   (c, es, i) => escapeOwnerMark(c, es[i]!),
   (c, es, i, attempt) => {
     if (!hasOtherForm(c, es[i]!)) return false
@@ -1203,6 +1223,8 @@ function escapeNoteReference(c: Check, node: TextNode, to: number): boolean {
  */
 /** The parse ended inside the text node `es[at.i]` of `owner`. */
 function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node): boolean {
+  // C2-W-125: the node before read on into this text; once its repair closes it in place, the text reads as written.
+  if (c.cut) return false
   // C2-W-016: a CR that ends a line is read as part of the line ending, and no spelling keeps it,
   // nor the spaces before it, which then end the line.
   if (es[at.i]?.type === 'text' && endsLineWithCr((es[at.i] as TextNode).value, at.vi)) {
@@ -1235,9 +1257,18 @@ function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: C
     // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark.
     if (!escapeInContent(c, owner) && !escapeEnd(c, lastText(owner), true)) c.losses.push([owner, null])
   }
-  else if (at.j + 1 >= as.length && isPaired(owner) && !joinsNext(es, at.i)) closedEarly(c, es, at.i, 0, owner)
+  else if (at.j + 1 >= as.length && isPaired(owner) && !joinsNext(es, at.i) && !holdsSpelling(c, es[at.i]!, as[at.j]!, at.aj)) {
+    closedEarly(c, es, at.i, 0, owner)
+  }
   else return respell(c, es, at.i) && stepOver(c, es, as, at)
   return false
+}
+
+/** Whether the text `a` holds the spelling of `e` from `offset` on: `e` did not form, and the content around it did not end there. */
+function holdsSpelling(c: Check, e: Node, a: Node, offset: number): boolean {
+  if (a.type !== 'text') return false
+  const spelled = writeInlines(c.w, [e], c.flags).replace(/\\([\s\S])/g, '$1')
+  return a.value.startsWith(spelled, offset)
 }
 
 function matchText(c: Check, e: TextNode, es: readonly Node[], as: readonly Node[], at: Cursor, owner: Node): boolean {
@@ -1746,7 +1777,29 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
   // C2-W-005: the content read on past its end, as its closer paired later. The kind rounds leave it unread (CC-1633);
   // the rounds of the reported openers take the braced form rather than lose the node.
   if (!c.w.kindRounds && isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
-  else c.losses.push([owner, null])
+  else if (!escapeUnclosedBrackets(c, owner)) c.losses.push([owner, null])
+}
+
+/** A C2-W-125 bracket repair: its backslash gives no kind (C2-W-088), as that of a closer. */
+function escapeBracket(c: Check, text: TextNode, at: number): boolean {
+  if (!escapeAt(c, text, at)) return false
+  c.closers.add(c.escapes[c.escapes.length - 1]!)
+  return true
+}
+
+/**
+ * C2-W-125, case five: a bare `[` of the content of a bracketed node that no bare `]` of that content closes pairs
+ * with the closer of the node, so the node reads on past its end. Each such `[` takes the backslash.
+ */
+function escapeUnclosedBrackets(c: Check, owner: Node): boolean {
+  if (!BRACKETED.has(owner.type)) return false
+  const open: [TextNode, number][] = []
+  contentClosers(childNodes(owner), (node, offset) => !isEscaped(c, node, offset), null, open)
+  let asked = false
+  for (const [text, at] of open) asked = escapeBracket(c, text, at) || asked
+  // What the node took from behind its end is read again once it closes in place, so nothing behind it asks this round.
+  if (asked) c.cut = true
+  return asked
 }
 
 /** Compares a node that the writer took from the sidecar as it was typed: any difference sends it back to the tree form. */
