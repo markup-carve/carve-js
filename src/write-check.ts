@@ -83,13 +83,15 @@ export interface Check {
   ownEscapes: Map<TextNode, Set<number>>
   /** A delimiter inside the content under comparison took a backslash because it closed the content early. */
   cut: boolean
+  /** The trials among `trials` that escape a backtick a probe found opening a code span. */
+  codeTrials: Set<[TextNode, number]>
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
-    cut: false,
+    cut: false, codeTrials: new Set(),
   }
 }
 
@@ -468,8 +470,9 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
     if (!step(c, es, i, attempt)) continue
     for (let at = before; at < c.escapes.length; at++) {
       attempt.escapes.push(c.escapes[at]!)
-      const report = step === escapeLoneBracket || step === escapeContentOpener || reportsCodeSpan(step, c.escapes[at]!)
-      if (!report) c.trials.push(c.escapes[at]!)
+      if (step === escapeLoneBracket || step === escapeContentOpener) continue
+      c.trials.push(c.escapes[at]!)
+      if (stopsCodeSpan(step, c.escapes[at]!)) c.codeTrials.add(c.escapes[at]!)
     }
     // A deferred escape can leave another opener for the next round.
     if (step === escapeContentOpener) attempt.step--
@@ -482,10 +485,11 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
 type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) => boolean
 
 /**
- * C2-W-088: a backtick that a probe of the content escapes opened a code span the tree does not hold, which the
- * parse reports, so it gives the backtick kind; C2-W-125 covers only a character that opens nothing.
+ * C2-W-088: a backtick that a probe of the content escapes can open a code span the tree does not hold. Where the
+ * trial shows the escape is asked, the parse holds that span, which reports the backtick kind; C2-W-125 covers only
+ * a character that opens nothing.
  */
-function reportsCodeSpan(step: RespellStep, [node, at]: [TextNode, number]): boolean {
+function stopsCodeSpan(step: RespellStep, [node, at]: [TextNode, number]): boolean {
   return (step === escapeAcrossCloser || step === contentConstruct || step === escapeInside) && node.value[at] === '`'
 }
 

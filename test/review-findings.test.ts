@@ -374,11 +374,15 @@ describe('writer output that read back as another tree', () => {
   })
 
   it('C2-W-125, case six: the backtick glued behind a code span takes its backslash before the runs before the span are read', () => {
-    for (const source of [`x${BACKTICK}${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}`,
-      `x{*${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}*`, `x(/u)${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}/`]) {
+    for (const source of [`x{*${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}*`, `x(/u)${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}/`]) {
       expect(format(source), source).toBe(`${source}\n`)
       expect(referenceForm(`${source}\n`, parse(source)), source).toEqual({ form: `${source}\n` })
     }
+    // carve-js#5371, C2-W-088: bare, the run before the span pairs with the lengthened closer into a code span the
+    // tree does not hold, so every text backtick run takes a backslash; the slow reference leaves that kind out.
+    const lengthened = `x${BACKTICK}${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}`
+    expect(format(lengthened)).toBe(`x${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}\n`)
+    expect(referenceForm(`${lengthened}\n`, parse(lengthened))).toEqual({ form: `${lengthened}\n` })
   })
 
   it('C2-W-112: a code span with an attribute block is not joined to the code span behind it', () => {
