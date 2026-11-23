@@ -274,7 +274,8 @@ const ATTRIBUTE_LINE_FIRST = true
  * the block whose attribute line stays at column 0, and the index of the first block behind the run.
  */
 export type OpenerRuns = {
-  blocks: readonly Node[], index: Map<Node, number>, first: Int32Array, columnZero: Int32Array, end: Int32Array
+  blocks: readonly Node[], index: Map<Node, number>, first: Int32Array, columnZero: Int32Array, end: Int32Array,
+  passed: Uint8Array
 }
 
 function isListLike(node: Node | undefined): boolean {
@@ -288,12 +289,13 @@ function isListLike(node: Node | undefined): boolean {
 function openerRuns(w: Writer): OpenerRuns {
   if (w.openerRuns !== null) return w.openerRuns
   const blocks = [...w.topBlocks.keys()]
+  const index = new Map(blocks.map((node, at) => [node, at]))
   const runs: OpenerRuns = {
-    blocks, index: new Map(blocks.map((node, at) => [node, at])), first: new Int32Array(blocks.length).fill(-1),
-    columnZero: new Int32Array(blocks.length).fill(-1), end: new Int32Array(blocks.length),
+    blocks, index, first: new Int32Array(blocks.length).fill(-1), columnZero: new Int32Array(blocks.length).fill(-1),
+    end: new Int32Array(blocks.length), passed: passedComments(w, blocks, index),
   }
   for (let at = 0; at < blocks.length; at++) {
-    const above = blocks[at - 1]
+    const above = w.topBlocks.get(blocks[at]!)
     if (!isListLike(blocks[at])) continue
     if (above === undefined || !INDENT_TAKERS.has(above.type)) { runs.first[at] = at; continue }
     // C2-B-097, C2-B-091: an attribute line at column 0 closes the container above and still applies to the block.
@@ -302,12 +304,32 @@ function openerRuns(w: Writer): OpenerRuns {
       if (attributed) runs.first[at] = runs.columnZero[at] = at
       continue
     }
-    runs.first[at] = runs.first[at - 1]!
-    runs.columnZero[at] = runs.columnZero[at - 1]!
+    const below = index.get(above)!
+    runs.first[at] = runs.first[below]!
+    runs.columnZero[at] = runs.columnZero[below]!
   }
-  for (let at = blocks.length - 1; at >= 0; at--) runs.end[at] = isListLike(blocks[at]) ? runs.end[at + 1] ?? at + 1 : at
+  runEnds(runs)
   w.openerRuns = runs
   return runs
+}
+
+/** The index of the first block behind the run of each list or description list, past the comments it passes. */
+function runEnds(runs: OpenerRuns): void {
+  for (let at = runs.blocks.length - 1; at >= 0; at--) {
+    let next = at + 1
+    while (runs.passed[next] === 1) next++
+    runs.end[at] = isListLike(runs.blocks[at]) ? runs.end[next] ?? next : at
+  }
+}
+
+/** C2-B-137: the line comments a block's predecessor passes over; they stay at column 0 and end no run. */
+function passedComments(w: Writer, blocks: readonly Node[], index: ReadonlyMap<Node, number>): Uint8Array {
+  const passed = new Uint8Array(blocks.length)
+  for (let at = 0; at < blocks.length; at++) {
+    const above = w.topBlocks.get(blocks[at]!)
+    for (let comment = above === undefined ? 0 : index.get(above)! + 1; comment < at; comment++) passed[comment] = 1
+  }
+  return passed
 }
 
 /** C2-W-155: how the list above the typed-opener paragraph `node` stays top-level, REFUSED, or null where it does not apply. */
@@ -330,6 +352,16 @@ export function isIndentedTop(w: Writer, node: Node): boolean {
   return departure !== null && departure !== REFUSED && departure.first <= at
 }
 
+/** C2-W-155: whether the paragraph below the top-level block `node` is written in one group with it. */
+export function joinsIndentedRun(w: Writer, node: Node): boolean {
+  if (isIndentedTop(w, node)) return true
+  if (!isCommentLine(node) || !w.topBlocks.has(node)) return false
+  const runs = openerRuns(w)
+  // C2-B-137: a line comment passed over inside the run belongs to the group of the list above it.
+  const above = w.topBlocks.get(node)
+  return runs.passed[runs.index.get(node)!] === 1 && above !== undefined && isIndentedTop(w, above)
+}
+
 type OpenerDepartures = { readonly indented: ReadonlySet<Node>, readonly columnZero: ReadonlySet<Node> }
 
 /** The top-level blocks of `nodes` that C2-W-155 writes one space in, and those whose attribute line stays at column 0. */
@@ -341,7 +373,7 @@ function openerDepartures(w: Writer, nodes: readonly Node[]): OpenerDepartures {
     const departure = openerDeparture(w, node)
     if (departure === null || departure === REFUSED) continue
     const runs = openerRuns(w)
-    for (let at = departure.first; at <= departure.last; at++) indented.add(runs.blocks[at]!)
+    for (let at = departure.first; at <= departure.last; at++) if (runs.passed[at] !== 1) indented.add(runs.blocks[at]!)
     if (departure.columnZero >= 0) columnZero.add(runs.blocks[departure.columnZero]!)
   }
   return { indented, columnZero }
@@ -868,7 +900,29 @@ function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
     lose(w, node, null)
     return 1
   }
+  if (followsReadComment(w, before, node)) lose(w, node, null)
   return takesLineBelow(w, before) || (w.forms.get(node) ?? 0) > 0 ? 1 : 0
+}
+
+/**
+ * C2-W-155, C2-B-137: per top-level block, the block above it. A line comment below an open container closes nothing,
+ * so it is passed over, unless it is a region marker or ends the fence the container ends with (C2-W-123).
+ */
+export function topPredecessors(w: Writer, nodes: readonly Node[]): Map<Node, Node | undefined> {
+  const above = new Map<Node, Node | undefined>()
+  let last: Node | undefined
+  for (const node of nodes) {
+    above.set(node, last)
+    const passed = isCommentLine(node) && !isRegionMarker(node) && last !== undefined && isOpenContainer(w, last) &&
+      lastFence(w, last) === null
+    if (!passed) last = node
+  }
+  return above
+}
+
+/** C2-B-137: a line comment directly below one that the container above read in is read into it as well. */
+function followsReadComment(w: Writer, before: Node, node: Node): boolean {
+  return isCommentLine(node) && isCommentLine(before) && w.lost.has(before) && !isRegionMarker(node)
 }
 
 /** C2-W-034, C2-B-137: a region marker line ends the leaf and the unowned containers above it, so it keeps its line. */
@@ -947,7 +1001,8 @@ function beforeSibling(w: Writer, nodes: readonly Node[], at: number, before: No
 
 /** C2-W-155: a top-level block, one space in where a typed-opener paragraph below needs it. */
 function writeTopBlock(w: Writer, node: Node, prefix: string, flags: number, departures: OpenerDepartures): void {
-  if (departures.columnZero.has(node)) {
+  // C2-W-122: the attribute line may already stand above a line comment.
+  if (departures.columnZero.has(node) && w.prewrittenAttributes !== node) {
     emit(w, prefix, followingAttributes(w, node))
     w.prewrittenAttributes = node
   }

@@ -1904,15 +1904,23 @@ export function escapeOpeners(c: Check, parsed: DocumentNode, offset: number): v
   }
 }
 
+/** Compares the blocks `es` with their parse `as` in order. Returns false where the blocks behind cannot be compared. */
+function compareInOrder(c: Check, es: readonly Node[], as: readonly Node[], absorbed: boolean): boolean {
+  let read = 0
+  for (let at = 0; at < es.length && read < as.length; at++) {
+    // A lost block that reads as the last block of the one above is reported once, not with every container it joined.
+    const takes = at === es.length - 1 ? absorbed : es.length - at > as.length - read && c.w.lost.has(es[at + 1]!)
+    if (!compareBlock(c, es[at]!, as[read++]!, takes)) return false
+    // Such lost blocks take no block of the parse, so the blocks behind them meet their own parse (C2-B-137).
+    while (takes && es.length - at - 1 > as.length - read && c.w.lost.has(es[at + 1]!)) at++
+  }
+  return true
+}
+
 /** Compares the blocks `es` of `owner`, as they were written, with their parse `as`. */
 export function compareBlocks(c: Check, es: readonly Node[], as: readonly Node[], owner: Node, absorbed = false): void {
   const before = changes(c)
-  const count = Math.min(es.length, as.length)
-  for (let at = 0; at < count; at++) {
-    // A lost block that reads as the last block of the one above is reported once, not with every container it joined.
-    const takes = at === es.length - 1 ? absorbed : es.length > as.length && c.w.lost.has(es[at + 1]!)
-    if (!compareBlock(c, es[at]!, as[at]!, takes)) return
-  }
+  if (!compareInOrder(c, es, as, absorbed)) return
   // What a lost block was written as has its own count of blocks.
   if (es.length === as.length || changes(c) > before || es.some((e) => c.w.lost.has(e))) return
   if (absorbed && es.length < as.length) return
