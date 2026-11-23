@@ -1751,8 +1751,11 @@ function compareSlots(c: Check, e: Node, a: Node): void {
   else if (caption !== parsedCaption) c.losses.push([caption ?? e, caption === undefined ? 'caption' : null])
 }
 
-/** Compares one block with its parse. Returns false where the blocks behind it cannot be compared. */
-function compareBlock(c: Check, e: Node, a: Node): boolean {
+/**
+ * Compares one block with its parse. Returns false where the blocks behind it cannot be compared. `absorbed`: a lost
+ * block written after `e` reads as its last block, so the parse of `e` may end in more blocks than `e` has.
+ */
+function compareBlock(c: Check, e: Node, a: Node, absorbed = false): boolean {
   if (c.w.lost.has(e)) return true
   if (sourceCoreEquivalent(e, a)) return true
   if (e.type !== a.type) {
@@ -1768,7 +1771,7 @@ function compareBlock(c: Check, e: Node, a: Node): boolean {
   c.cut = false
   if (isInlineParent(e)) compareInlines(c, e.children, childNodes(a), e)
   // C2-N-081: the children of an include are a result of its expansion, which the source does not hold.
-  else if (e.type !== 'include') compareBlocks(c, childNodes(e), childNodes(a), e)
+  else if (e.type !== 'include') compareBlocks(c, childNodes(e), childNodes(a), e, absorbed)
   compareSlots(c, e, a)
   c.spanMarks = marks
   c.flags = flags
@@ -1884,12 +1887,17 @@ export function escapeOpeners(c: Check, parsed: DocumentNode, offset: number): v
 }
 
 /** Compares the blocks `es` of `owner`, as they were written, with their parse `as`. */
-export function compareBlocks(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
+export function compareBlocks(c: Check, es: readonly Node[], as: readonly Node[], owner: Node, absorbed = false): void {
   const before = changes(c)
   const count = Math.min(es.length, as.length)
-  for (let at = 0; at < count; at++) if (!compareBlock(c, es[at]!, as[at]!)) return
+  for (let at = 0; at < count; at++) {
+    // A lost block that reads as the last block of the one above is reported once, not with every container it joined.
+    const takes = at === es.length - 1 ? absorbed : es.length > as.length && c.w.lost.has(es[at + 1]!)
+    if (!compareBlock(c, es[at]!, as[at]!, takes)) return
+  }
   // What a lost block was written as has its own count of blocks.
   if (es.length === as.length || changes(c) > before || es.some((e) => c.w.lost.has(e))) return
+  if (absorbed && es.length < as.length) return
   // A line of a line block that reads as its closer ends the block (C2-B-123).
   const missing = es[as.length]
   // The blocks below differ in number, so a line of one of them may have opened a block (C2-W-092).
