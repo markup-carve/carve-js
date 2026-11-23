@@ -428,7 +428,7 @@ function body(
 ): void {
   // C2-W-033, C2-B-229: a body opened on the marker line of another body, behind its task box or its attributes, has
   // its content column behind its own marker there, so its continuation lines stand at that column.
-  const behind = w.lead === null ? 0 : Math.max(0, w.lead.length - prefix.length)
+  const behind = w.lead === null ? 0 : Math.max(0, w.lead.length - w.leadSkip - prefix.length)
   w.lead = (w.lead ?? prefix) + mark
   writeBlocks(w, node.children, prefix + ' '.repeat(behind + width), flags, tight)
   if (w.lead === null) return
@@ -514,6 +514,7 @@ function blockQuote(w: Writer, node: BlockQuoteNode, prefix: string, flags: numb
     return caption(w, node.caption, prefix, flags)
   }
   w.lead = `${w.lead ?? prefix}> `
+  w.leadSkip = w.lead.length - prefix.length - 2
   writeBlocks(w, children, `${prefix}> `, flags, false)
   if (w.lead !== null) emit(w, prefix, '')
   caption(w, node.caption, prefix, flags)
