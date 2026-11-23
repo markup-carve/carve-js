@@ -154,7 +154,9 @@ class Compiler {
   // The index is built once per document, so a key that reads only its item is one function, not one per call.
   lookupKey(expr: Expr | undefined): string {
     if (expr === undefined) return 'undefined'
-    const key = `(item: unknown): unknown => ${this.value(expr)}`
+    const code = this.value(expr)
+    // A key that reads no item, as a split key whose item tests all read the record, puts every item under one value.
+    const key = `(${/\bitem\b/.test(code) ? 'item' : '_item'}: unknown): unknown => ${code}`
     if (readsRecord(key)) throw new Error(`lint-model: a lookup key reads more than its item: ${JSON.stringify(expr)}`)
     return this.hoist(key)
   }
