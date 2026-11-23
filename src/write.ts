@@ -390,7 +390,20 @@ function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: M
   return parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
 }
 
-/** Whether a trial escape changes the tree with earlier escapes in place. */
+/**
+ * C2-W-125: once every other form lost a node, a trial that gives the tree with every placed escape is taken, though
+ * it changes nothing with the text to its right bare, as the caret of `^[a\^[b][[b]\]]` that the closer behind it needs.
+ */
+function givesTree(
+  w: Writer, group: readonly Node[], first: boolean, placed: Map<TextNode, number[]>, node: TextNode, at: number,
+): boolean {
+  const all = new Map(placed)
+  all.set(node, [...(placed.get(node) ?? []), at].sort((a, b) => a - b))
+  const parsed = groupTree(w, group, first, all).children
+  return parsed.length === group.length && parsed.every((block, index) => writerEqual(group[index]!, block))
+}
+
+/** Whether a trial escape changes the tree with earlier escapes in place, or gives it in a form of `wholeTrials`. */
 function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNode, at: number): boolean {
   const placed = w.escapes
   const lines = w.lines
@@ -408,7 +421,7 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
   const escaped = new Map(left)
   escaped.set(node, [...(left.get(node) ?? []), at])
   const without = groupTree(w, group, first, left)
-  const asked = !treesEqual(groupTree(w, group, first, escaped), without)
+  const asked = !treesEqual(groupTree(w, group, first, escaped), without) || (w.wholeTrials && givesTree(w, group, first, placed, node, at))
   w.escapes = placed
   w.lines = lines
   w.lead = lead
@@ -1068,6 +1081,31 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   }
   // C2-W-088: where the rounds by kind lose a node, the rounds of the reported openers only give the form.
   restoreGroup(w, before)
+  // A restored group holds the maps of its snapshot, so each later restore reads a snapshot of its own.
+  const unrepaired = saveGroup(w, saved.end)
+  w.kindRounds = false
+  try {
+    const openers = repairOnce(w, document, from, first, reported)
+    if (w.losses.entries.length === reported) return openers
+  } finally {
+    w.kindRounds = true
+  }
+  // C2-W-125: where every form loses a node, a trial that gives the tree only with a backslash behind it is kept.
+  let last = unrepaired
+  for (const kinds of [true, false]) {
+    restoreGroup(w, last)
+    last = saveGroup(w, saved.end)
+    w.wholeTrials = true
+    w.kindRounds = kinds
+    try {
+      const trials = repairOnce(w, document, from, first, reported)
+      if (w.losses.entries.length === reported) return trials
+    } finally {
+      w.wholeTrials = false
+      w.kindRounds = true
+    }
+  }
+  restoreGroup(w, last)
   w.kindRounds = false
   try {
     return repairOnce(w, document, from, first, reported)
