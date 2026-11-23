@@ -2067,22 +2067,28 @@ interface Starts {
   containers: Map<number, number>
 }
 
+/** Records the start of `block`, in a container that starts on the line `container`. */
+function readStart(block: Node, offset: number, container: number, starts: Starts): void {
+  const pos = block.pos
+  if (pos === undefined) return
+  const line = pos.startLine - offset
+  if (block.type === 'paragraph') {
+    starts.containers.set(line, container)
+    starts.paragraphs.add(line * PLACE_COLUMNS + pos.startColumn - 1)
+    return
+  }
+  const columns = starts.columns.get(line) ?? new Set<number>()
+  columns.add(pos.startColumn - 1)
+  starts.columns.set(line, columns)
+}
+
 /** The starts of the blocks below the parse `node`. */
 function readStarts(node: Node, offset: number, starts: Starts): void {
-  const { paragraphs, columns } = starts
   const container = node.pos === undefined ? -1 : node.pos.startLine - offset
   for (const block of childNodes(node)) {
-    const pos = block.pos
-    if (pos !== undefined) {
-      const line = pos.startLine - offset
-      if (block.type === 'paragraph') starts.containers.set(line, container)
-      else {
-        const starts = columns.get(line) ?? new Set<number>()
-        starts.add(pos.startColumn - 1)
-        columns.set(line, starts)
-      }
-      if (block.type === 'paragraph') paragraphs.add((pos.startLine - offset) * PLACE_COLUMNS + pos.startColumn - 1)
-    }
+    // C2-W-088: a row has the line kind `|`; its cells open nothing at the start of a line.
+    if (block.type === 'table_cell') continue
+    readStart(block, offset, container, starts)
     if (!isInlineParent(block)) readStarts(block, offset, starts)
     const caption = captionOf(block)
     if (caption !== undefined) readStarts(caption, offset, starts)
