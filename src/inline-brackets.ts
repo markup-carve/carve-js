@@ -1,14 +1,14 @@
 // The bracket stack of the inline scan (C2-I-006): openers, the closing bracket and what is
 // glued to it, the link tail, reference labels and footnote references.
 import { emptyBlockEnd, readAttributeBlock } from './attributes.ts'
-import { cellLabelSource, foldLabel } from './ast-attributes.ts'
+import { cellKeySource, foldLabel } from './ast-attributes.ts'
 import {
   APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN,
   PERCENT, QUOTE_MARK, SPACE,
 } from './chars.ts'
 import {
-  ATTRIBUTE_BLOCK, BRACKET_SPAN, ESCAPE, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL,
-  LINK,
+  ATTRIBUTE_BLOCK, BRACKET_SPAN, CODE_SPAN, ESCAPE, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION,
+  INLINE_FOOTNOTE, LABEL, LINK, LITERAL, MATH, RAW_INLINE,
 } from './inline-kinds.ts'
 import { atDepthCap, enterBracket, leaveBracket } from './inline-depth.ts'
 import {
@@ -277,11 +277,28 @@ function closeShortcut(state: InlineState, open: number, pos: number): number {
   // C2-I-101: a citation-shaped pair keeps its core reading as text and a mention.
   if (!image && state.text.charCodeAt(start) === AT_SIGN) return NONE
   const source = state.text.slice(start, pos)
-  const key = foldLabel(state.cell ? cellLabelSource(source, image) : source)
+  const cellKey = state.cell && source.includes('\\|')
+  const key = foldLabel(cellKey ? cellKeySource(state.text, start, pos, image ? null : codeRanges(state, open)) : source)
   if (key === '' || !definitions.has(key)) return NONE
   closePair(state, open, pos, image ? IMAGE : LINK)
   pushToken(state, LABEL, pos + 1, pos + 1, start, pos, FLAG_SHORTCUT, NONE)
   return pos + 1
+}
+
+/**
+ * C2-B-224: the code spans read behind the opener `open`, as pairs of offsets. An image's text is its alt, which is
+ * not parsed (C2-I-074), so an image takes none.
+ */
+function codeRanges(state: InlineState, open: number): number[] {
+  const ranges: number[] = []
+  const tokens = state.tokens
+  for (let at = open + TOKEN_WIDTH; at < state.tokenLength; at += TOKEN_WIDTH) {
+    const kind = tokens[at]
+    if (kind === CODE_SPAN || kind === LITERAL || kind === MATH || kind === RAW_INLINE) {
+      ranges.push(tokens[at + TOKEN_START]!, tokens[at + TOKEN_END]!)
+    }
+  }
+  return ranges
 }
 
 /** C2-I-006: a closing bracket pairs with the nearest open one. With none it is text. */

@@ -14,45 +14,20 @@ export interface Attributes {
 }
 
 /**
- * C2-B-224: the key source of a collapsed or shortcut reference in a cell, with each escaped pipe a literal pipe. In
- * a link's text a code span keeps `\\|` as two characters; an image's text is its alt, which is not parsed (C2-I-074).
+ * C2-B-224: `text[start, end)` with each escaped pipe a literal pipe, as a cell reads it, except inside the ranges
+ * `raw` (pairs of offsets: the code spans, where `\\|` stays two characters).
  */
-export function cellLabelSource(source: string, image: boolean): string {
-  if (!source.includes('\\|')) return source
-  if (image) return source.replaceAll('\\|', '|')
+export function cellKeySource(text: string, start: number, end: number, raw: readonly number[] | null): string {
   let out = ''
-  let at = 0
-  while (at < source.length) {
-    const char = source[at]!
-    if (char === '\\') {
-      out += source[at + 1] === '|' ? '|' : source.slice(at, at + 2)
-      at += 2
-      continue
-    }
-    const end = char === '`' ? codeSpanEnd(source, at) : at + 1
-    out += source.slice(at, end)
-    at = end
+  let from = start
+  for (let at = 0; raw !== null && at < raw.length; at += 2) {
+    const rawStart = Math.max(from, raw[at]!)
+    const rawEnd = Math.min(end, raw[at + 1]!)
+    if (rawStart >= rawEnd) continue
+    out += text.slice(from, rawStart).replaceAll('\\|', '|') + text.slice(rawStart, rawEnd)
+    from = rawEnd
   }
-  return out
-}
-
-/** The offset behind the code span whose backtick run starts at `at`, or behind the run where no span closes. */
-function codeSpanEnd(source: string, at: number): number {
-  let run = at
-  while (source[run] === '`') run++
-  const close = closingBackticks(source, run, run - at)
-  return close < 0 ? run : close
-}
-
-/** C2-I-015: the offset behind the backtick run of `size` that closes a code span from `from` on, or -1. */
-function closingBackticks(source: string, from: number, size: number): number {
-  for (let at = source.indexOf('`', from); at >= 0; at = source.indexOf('`', at)) {
-    let end = at
-    while (source[end] === '`') end++
-    if (end - at === size) return end
-    at = end
-  }
-  return -1
+  return out + text.slice(from, end).replaceAll('\\|', '|')
 }
 
 // Native substring scans are an order of magnitude faster than a regex test on long labels.

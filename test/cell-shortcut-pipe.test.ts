@@ -37,3 +37,9 @@ it('C2-B-224, C2-I-074: an image text in a cell is its alt, so its key holds `|`
   expect(format(source)).toBe(source)
   expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
 })
+
+it('C2-B-224, C2-I-005: backticks in a braced comment are no code span, so its `\\|` is a literal pipe in the key', () => {
+  expect(render('| [a{% `\\|` %}b] |\n\n[a{% `|` %}b]: /u\n')).toContain('<td><a href="/u">ab</a></td>')
+  expect(render('| [a{% `\\|` %}b][] |\n\n[a{% `|` %}b]: /u\n')).toContain('<td><a href="/u">ab</a></td>')
+  expect(render('| [a `\\|` \\| b] |\n\n[a `\\|` | b]: /u\n')).toContain('<td><a href="/u">a <code>\\|</code> | b</a></td>')
+})
