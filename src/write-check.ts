@@ -115,6 +115,8 @@ export interface Check {
   capped: [TextNode, number, number][]
   /** C2-W-125, case eight: a text `^[` kept bare while its early closer took the backslash in this round. */
   earlyCloser: boolean
+  /** C2-W-125, case eight: the text `^[` whose early closer this round already escaped, by text node. */
+  notesDone: Map<TextNode, Set<number>>
 }
 
 export function createCheck(w: Writer): Check {
@@ -122,6 +124,7 @@ export function createCheck(w: Writer): Check {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
     cut: false, codeTrials: new Set(), closers: new Set(), around: [], reported: new Set(), capped: [], earlyCloser: false,
+    notesDone: new Map(),
   }
 }
 
@@ -1091,20 +1094,48 @@ function escapeOpener(c: Check, es: readonly Node[], i: number, at: number, a: N
  * bare `]` that closed it early takes the backslash. Each round reaches the next such `]` in turn.
  */
 function escapeEarlyNoteCloser(c: Check, es: readonly Node[], i: number, start: number): boolean {
-  const e = es[i] as TextNode
-  if (!e.value.startsWith('^[', start) || !es.slice(i + 1).some(holdsCaretPair)) return false
-  const closer = earlyNoteCloser(c, es, i, start + 2)
-  if (closer === null || !escapeAt(c, closer[0], closer[1])) return false
-  c.closers.add(c.escapes[c.escapes.length - 1]!)
+  const value = (es[i] as TextNode).value
+  // The `[` of the opener can start the next text node of a supplied tree.
+  const split = start + 1 === value.length
+  const bracket = split ? es[i + 1]?.type === 'text' && (es[i + 1] as TextNode).value[0] : value[start + 1]
+  if (value[start] !== '^' || bracket !== '[' || !es.slice(i + 1).some(holdsCaretPair)) return false
+  if (c.notesDone.get(es[i] as TextNode)?.has(start) === true) return true
+  const closer = split ? earlyNoteCloser(c, es, i + 1, 1) : earlyNoteCloser(c, es, i, start + 2)
+  if (closer === null || !escapeCloserOf(c, closer)) return false
   c.earlyCloser = true
+  laterNoteClosers(c, es, i, start + 2)
   return true
+}
+
+function escapeCloserOf(c: Check, [text, at]: [TextNode, number]): boolean {
+  if (!escapeAt(c, text, at)) return false
+  c.closers.add(c.escapes[c.escapes.length - 1]!)
+  return true
+}
+
+/**
+ * C2-W-088: the round escapes for every note its parse reports, also those the comparison does not reach behind a
+ * node that did not form. So each later text `^[` before a caret pair takes its early closer in the same round.
+ */
+function laterNoteClosers(c: Check, es: readonly Node[], i: number, from: number): void {
+  for (let k = i; k < es.length; k++) {
+    const text = es[k]!
+    if (text.type !== 'text' || !es.slice(k + 1).some(holdsCaretPair)) continue
+    for (let at = text.value.indexOf('^[', k === i ? from : 0); at >= 0; at = text.value.indexOf('^[', at + 2)) {
+      if (isEscaped(c, text, at) || isEscaped(c, text, at + 1)) continue
+      const closer = earlyNoteCloser(c, es, k, at + 2)
+      if (closer === null || !escapeCloserOf(c, closer)) continue
+      const done = c.notesDone.get(text) ?? new Set<number>()
+      c.notesDone.set(text, done.add(at))
+    }
+  }
 }
 
 /** The bare `]` of the text from `es[i]` at `from` on that no bare `[` there pairs with, or null. */
 function earlyNoteCloser(c: Check, es: readonly Node[], i: number, from: number): [TextNode, number] | null {
   const open = { depth: 0 }
-  // A node of the note content between, as a strong or a code span, holds no bracket of the note.
-  for (let k = i; k < es.length && !BRACKETED.has(es[k]!.type); k++) {
+  // A node of the tree between, as a strong, a code span or a link, holds no bracket of the note.
+  for (let k = i; k < es.length; k++) {
     const text = es[k]!
     const at = text.type === 'text' ? unpairedCloser(c, text, k === i ? from : 0, open) : -1
     if (at >= 0) return [text as TextNode, at]
@@ -1122,9 +1153,12 @@ function unpairedCloser(c: Check, text: TextNode, from: number, open: { depth: n
   return -1
 }
 
-/** Whether `node` or a node below it is link or span text starting with a caret, the bracket of which forms `[^`. */
+/**
+ * Whether `node` or a node below it is link or span text starting with a caret, the bracket of which forms `[^`. One
+ * inside an inline footnote opens nothing there (C2-I-089), so it does not count.
+ */
 function holdsCaretPair(node: Node): boolean {
-  return leadingCaret(node) || childNodes(node).some(holdsCaretPair)
+  return leadingCaret(node) || (node.type !== 'inline_footnote' && childNodes(node).some(holdsCaretPair))
 }
 
 /**
