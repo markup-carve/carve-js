@@ -1,6 +1,7 @@
 // The content of one inline leaf as the reader sees it, built from the tree with the writer's own
 // spellings, with the origin of every code unit: a text node and its offset, a mark of a node, or the
 // body of an atom (C2-W-088). The planner compares it with what the writer wrote for the leaf.
+import { charsText } from './arrays.ts'
 import { type CommentNode, forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
 import { braceBlock } from './write-attributes.ts'
 import {
@@ -346,8 +347,5 @@ export function trimLast(leaf: Leaf): void {
 
 /** The leaf as one string. */
 export function leafText(leaf: Leaf): string {
-  let out = ''
-  const codes = leaf.codes
-  for (let at = 0; at < codes.length; at += 4096) out += String.fromCharCode(...codes.slice(at, at + 4096))
-  return out
+  return charsText(leaf.codes)
 }

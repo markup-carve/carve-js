@@ -1,5 +1,6 @@
 // The Markdown export: CommonMark with the GFM tables, task lists, strikethrough and footnotes. What Markdown cannot
 // spell falls back to inline HTML (escaped where it is author content) or flattens, and the flattening is reported.
+import { maxOf } from '../arrays.ts'
 import { trimSpaceTabEnd } from '../source.ts'
 import {
   type Attrs, type Block, type CaptionNode, type CodeBlockNode, type DocumentNode, type HeadingNode, type ImageNode, type Inline,
@@ -713,7 +714,7 @@ const ALIGN_ROW: Readonly<Record<string, string>> = { left: ':---', center: ':--
 
 function table(m: MarkdownState, node: TableNode): string {
   const { header, rows } = tableRows(m, node)
-  const width = Math.max(node.columns.length, header?.length ?? 0, ...rows.map((row) => row.length))
+  const width = maxOf(rows.map((row) => row.length), Math.max(node.columns.length, header?.length ?? 0))
   const pad = (cells: string[]): string[] => [...cells, ...Array.from({ length: width - cells.length }, () => '')]
   const line = (cells: string[]): string => `| ${pad(cells).join(' | ')} |`
   const align = (at: number): string => {

@@ -1,3 +1,4 @@
+import { spliceAll } from '../../arrays.ts'
 import { type DocumentNode, type HeadingNode, type Inline, type LinkNode, type Node, type XrefNode } from '../../ast.ts'
 import { plainText } from '../../ast-text.ts'
 
@@ -39,7 +40,7 @@ function rewriteList(list: unknown[], rewrite: Rewrite, fallbacks: boolean, into
       rewriteTree(item, rewrite, fallbacks, intoReplacements, ancestors)
       continue
     }
-    list.splice(at, 1, ...replaced)
+    spliceAll(list, at, 1, replaced)
     if (intoReplacements) for (const node of replaced) rewriteTree(node, rewrite, fallbacks, intoReplacements, ancestors)
     at += replaced.length - 1
   }

@@ -1,5 +1,6 @@
 // Tables as Carve source (C2-W-061 to C2-W-068, C2-W-118): a pipe table, with the continuation
 // rows the sidecar records, or a delimited table.
+import { pushAll } from './arrays.ts'
 import { escapeBacktickKind } from './write-backtick-kind.ts'
 import {
   childNodes, type CommentNode, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
@@ -75,7 +76,7 @@ function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly
   if (widths !== null) keys.push(['widths', widths])
   if (first.length > 1) keys.push(first[1]!)
   if (footRows > 0) keys.push(['footer-rows', String(footRows)])
-  keys.push(...bodyKeys(table))
+  pushAll(keys, bodyKeys(table))
   const skipKeys: string[] = []
   table.attrs?.keyValues?.forEach(([key], index) => {
     if (!leadingKeys.some((pair) => pair[0] === key) && !keys.some((pair) => pair[0] === key)) return

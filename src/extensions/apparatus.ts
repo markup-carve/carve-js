@@ -1,5 +1,6 @@
 // Shared parts of the reference apparatus extensions (glossary, index, citations): a matcher node, a document
 // transform that resolves it against the whole view, and a renderer that writes the core content the transform built.
+import { pushAll } from '../arrays.ts'
 import { type Block, type BlockExtensionNode, type DirectiveNode, type DocumentNode, forEachSlot, type Inline,
   type InlineExtensionNode, type Node } from '../ast.ts'
 import { type ExtensionDefinition, type ExtensionRenderer, type ExtensionRenderHost } from './types.ts'
@@ -11,7 +12,7 @@ export function coreInlines(nodes: readonly Inline[]): Inline[] {
   const out: Inline[] = []
   for (const node of nodes) {
     if (node.type === 'inline_extension') {
-      if (node.name.includes('.')) out.push(...structuredClone(node.fallback ?? []))
+      if (node.name.includes('.')) pushAll(out, structuredClone(node.fallback ?? []))
       else out.push({ type: 'span', attrs: { classes: [`ext-${node.name}`] }, children: coreInlines(node.children) })
       continue
     }
@@ -27,11 +28,11 @@ export function coreBlocks<T extends Node>(nodes: readonly T[]): T[] {
   const out: T[] = []
   for (const node of nodes) {
     if (node.type === 'block_extension') {
-      out.push(...structuredClone(node.fallback) as unknown as T[])
+      pushAll(out, structuredClone(node.fallback) as unknown as T[])
       continue
     }
     if (node.type === 'inline_extension') {
-      out.push(...coreInlines([node]) as unknown as T[])
+      pushAll(out, coreInlines([node]) as unknown as T[])
       continue
     }
     const copy = structuredClone(node)

@@ -2,6 +2,7 @@
 // or an interrupter. A rule gives the unit that takes the backslash (C2-W-090), no escape, or no
 // decision. The first line of a paragraph and its later lines have rules of their own, and so do
 // lines inside an item, a description or a footnote body (C2-B-015) and inside a quote.
+import { charsText } from './arrays.ts'
 import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { isImageOnly } from './image-line.ts'
 import { isAbbreviation, isAttributeLine, isDefinition, taskBoxEnd } from './lines.ts'
@@ -233,7 +234,7 @@ function braceBlocksEnd(leaf: Leaf, at: number): number {
     const value = leaf.codes[unit]
     if (leaf.kinds[unit] !== TEXT || value === 34 || value === 39 || value === 92) return UNDECIDED
   }
-  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  const text = charsText(leaf.codes, at, end)
   let block = 0
   while (text.charCodeAt(block) === BRACE_OPEN) {
     const next = readAttributeBlock(text, block, text.length, emptyMemo(), null)
@@ -475,7 +476,7 @@ function taskBoxLine(leaf: Leaf, at: number, item: 'plain' | 'task'): number {
 function isDefinitionLine(leaf: Leaf, at: number): boolean {
   let end = at
   while (end < leaf.codes.length && leaf.codes[end] !== LF) end++
-  const line = String.fromCharCode(...leaf.codes.slice(at, end))
+  const line = charsText(leaf.codes, at, end)
   return isDefinition(line, 0, line.length)
 }
 
@@ -483,7 +484,7 @@ function isDefinitionLine(leaf: Leaf, at: number): boolean {
 function textOfLine(leaf: Leaf, at: number): [string, boolean] {
   let end = at
   while (end < leaf.codes.length && leaf.codes[end] !== LF && (leaf.kinds[end] === TEXT || leaf.kinds[end] === ESCAPE)) end++
-  return [String.fromCharCode(...leaf.codes.slice(at, end)), end === leaf.codes.length || leaf.codes[end] === LF]
+  return [charsText(leaf.codes, at, end), end === leaf.codes.length || leaf.codes[end] === LF]
 }
 
 const ROMAN_LOWER = 'ivxlcdm'
@@ -501,7 +502,7 @@ function letterMarker(leaf: Leaf, at: number): boolean {
   if (end === at || end - at > 9 || (after !== 46 && after !== 41)) return false
   if (!isBlank(code(leaf, end + 1)) && !isLineEnd(code(leaf, end + 1))) return false
   if (end - at === 1) return true
-  const letters = String.fromCharCode(...leaf.codes.slice(at, end))
+  const letters = charsText(leaf.codes, at, end)
   return [...letters].every((char) => ROMAN_LOWER.includes(char)) || [...letters].every((char) => ROMAN_UPPER.includes(char))
 }
 

@@ -1,4 +1,5 @@
 // The plain-text and ANSI exports. They share one walk; the ANSI target adds SGR styling, box tables and a quote bar.
+import { maxOf } from '../arrays.ts'
 import {
   type Block, type CaptionNode, type DocumentNode, type Inline, type ImageNode, type LinkNode, type ListNode, type Node,
   type NodeHandlers, type TableCellNode, type TableNode, type TableRowNode,
@@ -343,7 +344,7 @@ function table(s: TextState, node: TableNode): string {
 
 function boxTable(s: TextState, rows: Cell[][]): string {
   if (rows.length === 0) return ''
-  const columns = Math.max(...rows.map((row) => row.length))
+  const columns = maxOf(rows.map((row) => row.length))
   const widths: number[] = Array.from({ length: columns }, () => 0)
   for (const row of rows) row.forEach((cell, at) => { widths[at] = Math.max(widths[at]!, displayWidth(stripAnsi(cell.text))) })
   const border = (left: string, cross: string, right: string): string =>

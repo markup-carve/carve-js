@@ -1,6 +1,7 @@
 // C2-W-094: the brackets of a planned leaf, paired the way the reader pairs them (C2-I-006). A pair
 // of text brackets is literal where the closing bracket starts no destination, reference, attribute
 // block or definition and its label can name no reference; every other pair is left to the repair.
+import { charsText } from './arrays.ts'
 import { emptyBlockEnd, emptyMemo, readAttributeBlock } from './attributes.ts'
 import { DEPTH_CAP } from './inline-tables.ts'
 import { CLOSE, ESCAPE, inNote, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
@@ -57,7 +58,7 @@ function labelEnd(leaf: Leaf, at: number, full = true): number {
 function braceReading(leaf: Leaf, at: number, escaped: Uint8Array): number {
   let end = at
   while (end < leaf.codes.length && isReadText(leaf, end, escaped)) end++
-  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  const text = charsText(leaf.codes, at, end)
   const forms = readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0 || emptyBlockEnd(text, 0, text.length) >= 0
   if (forms) return ESCAPE_OPENER
   return end === leaf.codes.length ? LITERAL : NO_DECISION

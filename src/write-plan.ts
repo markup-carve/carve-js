@@ -2,6 +2,7 @@
 // looked up by its code in the tables of write-tables.ts, and a unit that can start a construct goes
 // to the resolver of its context. A resolver returns bare, an escape, or no decision; a leaf with no
 // decision is left to the repair of write.ts.
+import { charsText, pushAll } from './arrays.ts'
 import { forEachSlot, type Node, type TextNode } from './ast.ts'
 import { isAsciiPunctuation, isWordCharacter } from './unicode.ts'
 import { IN_CELL } from './write-inline.ts'
@@ -302,7 +303,7 @@ function hostBlock(leaf: Leaf, at: number, escaped: Uint8Array): number {
   const codes = leaf.codes
   while (end < codes.length && end - at < LONGEST_BLOCK && codes[end] !== LF && leaf.kinds[end] === TEXT && escaped[end] === 0) end++
   if (end - at >= LONGEST_BLOCK) return UNDECIDED
-  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  const text = charsText(leaf.codes, at, end)
   if (readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0) return isHost(leaf, at) ? ESCAPED : UNDECIDED
   return end === leaf.codes.length || leaf.codes[end] === LF ? 0 : UNDECIDED
 }
@@ -830,7 +831,7 @@ function openMark(leaf: Leaf, at: number): void {
   if (leaf.codes[at] !== 123 || code(leaf, at + 1) !== 95) return
   let end = at
   while (end < leaf.codes.length && leaf.codes[end] !== LF) end++
-  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  const text = charsText(leaf.codes, at, end)
   undecidedIf(readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0, leaf, 'attribute block')
 }
 
@@ -874,7 +875,7 @@ function attributeBlockEnd(leaf: Leaf, at: number, escaped: Uint8Array): number 
   let closes = false
   for (; end < leaf.codes.length && end - at < LONGEST_BLOCK && leaf.codes[end] !== LF; end++) closes ||= leaf.codes[end] === 125
   if (!closes) return -1
-  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  const text = charsText(leaf.codes, at, end)
   const block = readAttributeBlock(text, 0, text.length, emptyMemo(), null)
   return block < 0 ? -1 : at + block
 }
@@ -1171,9 +1172,9 @@ export function planLeaf(w: Writer, nodes: readonly Node[], flags: number, conte
     plan.detail = `${before} | ${JSON.stringify(text.slice(leaf.where, leaf.where + 16))}`
   } else {
     record(plan, leaf, escaped)
-    plan.lost.push(...leaf.lostValues)
+    pushAll(plan.lost, leaf.lostValues)
   }
-  plan.respell.push(...leaf.respell)
+  pushAll(plan.respell, leaf.respell)
   return content
 }
 
