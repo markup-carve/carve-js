@@ -70,14 +70,25 @@ function tag(r: Render, node: Node | null, parts: TagParts = NO_PARTS): string {
   return attributes(r, node, { ...parts, block: true })
 }
 
-/** C2-H-019: one comment or more and the line breaks between them; breaks alone are no comment. */
+/**
+ * C2-H-019: one comment or more, and only breaks that stand between two of them or that a comment line takes
+ * (C2-H-069); breaks alone are no comment.
+ */
 function onlyComments(nodes: readonly Node[]): boolean {
-  let comment = false
-  for (const child of nodes) {
-    if (child.type === 'comment') comment = true
-    else if (child.type !== 'soft_break' && child.type !== 'hard_break') return false
+  let first = -1
+  let last = -1
+  for (let at = 0; at < nodes.length; at++) {
+    const child = nodes[at]!
+    if (child.type === 'comment') {
+      if (first < 0) first = at
+      last = at
+    } else if (child.type !== 'soft_break' && child.type !== 'hard_break') return false
   }
-  return comment
+  if (first < 0) return false
+  for (let at = 0; at < nodes.length; at++) {
+    if ((at < first || at > last) && !isSkippedBreak(nodes as readonly Inline[], at, false)) return false
+  }
+  return true
 }
 
 /** C2-N-075: the blocks of `nodes` with each expanded include read as its children, recursively. */
