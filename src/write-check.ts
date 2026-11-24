@@ -593,7 +593,8 @@ function escapeCloserBeforeBrace(c: Check, es: readonly Node[], i: number): bool
 function respell(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]!
   // A node that the writer reported as lost when it wrote it reads back as something else, and nothing repairs that.
-  if (c.w.lost.has(e)) return false
+  // Nor does any spelling of a node whose lost break left a blank line in it (C2-W-124).
+  if (c.w.lost.has(e) || holdsLostBreak(c, e)) return false
   // Its escapes would only serve a node around it, and none can form; each level probed its subtree (carve#6543).
   if (noneForms(c, e)) {
     c.losses.push([e, null])
@@ -2874,12 +2875,18 @@ function compareInOrder(c: Check, es: readonly Node[], as: readonly Node[], abso
   return true
 }
 
+/** Whether the inlines of `e` hold a lost soft break: its blank line split the block, which is reported there. */
+function holdsLostBreak(c: Check, e: Node): boolean {
+  if (!isInlineParent(e)) return false
+  return childNodes(e).some((node) => (node.type === 'soft_break' && c.w.lost.has(node)) || holdsLostBreak(c, node))
+}
+
 /** Compares the blocks `es` of `owner`, as they were written, with their parse `as`. */
 export function compareBlocks(c: Check, es: readonly Node[], as: readonly Node[], owner: Node, absorbed = false): void {
   const before = changes(c)
   if (!compareInOrder(c, es, as, absorbed)) return
   // What a lost block was written as has its own count of blocks.
-  if (es.length === as.length || changes(c) > before || es.some((e) => c.w.lost.has(e))) return
+  if (es.length === as.length || changes(c) > before || es.some((e) => c.w.lost.has(e) || holdsLostBreak(c, e))) return
   if (absorbed && es.length < as.length) return
   // A line of a line block that reads as its closer ends the block (C2-B-123).
   const missing = es[as.length]
