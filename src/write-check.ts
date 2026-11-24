@@ -794,6 +794,40 @@ export function earlyLoneNoteBrackets(w: Writer, roots: readonly Node[]): [TextN
   return found
 }
 
+/** C2-W-125 case eight: keep a text note opener bare by escaping its early closer before a later caret link is written. */
+export function earlyTextNoteClosers(roots: readonly Node[]): [TextNode, number][] {
+  const found: [TextNode, number][] = []
+  const pending = [...roots]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    const children = childNodes(node)
+    scanTextNoteClosers(children, found)
+    pending.push(...children)
+  }
+  return found
+}
+
+function scanTextNoteClosers(children: readonly Node[], found: [TextNode, number][]): void {
+  let depth = 0
+  let closer: [TextNode, number] | null = null
+  for (const child of children) {
+    if (child.type === 'text') {
+      const next = scanTextNote(child, depth, closer)
+      depth = next.depth
+      closer = next.closer
+    } else if (child.type === 'link' && closer !== null && leadingCaret(child)) { found.push(closer); closer = null }
+  }
+}
+
+function scanTextNote(text: TextNode, depth: number, closer: [TextNode, number] | null):
+  { depth: number, closer: [TextNode, number] | null } {
+  for (let at = 0; at < text.value.length; at++) {
+    if (depth === 0 && text.value.startsWith('^[', at)) { depth = 1; closer = null; at++ }
+    else if (depth > 0 && text.value[at] === '[') depth++
+    else if (depth > 0 && text.value[at] === ']' && --depth === 0) closer = [text, at]
+  }
+  return { depth, closer }
+}
+
 function priorNoteOpeners(check: Check, children: readonly Node[], found: [TextNode, number][]): void {
   const open: [TextNode, number][] = []
   for (const child of children) {
