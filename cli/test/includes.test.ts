@@ -138,6 +138,15 @@ describe('carve and includes', () => {
     expect(report.files[0]!.diagnostics.find((entry) => entry.file === undefined)!.includedBy).toBeUndefined()
   })
 
+  it('carve-js#5514: lint reports table-column-overlap once per column', () => {
+    const root = tree({ 'main.crv': '{aligns=left,right}\n|={<} a |={>} b |\n' })
+    const json = cli(['lint', '--json', 'main.crv'], root)
+    const report = JSON.parse(json.stdout) as { files: { diagnostics: { code: string, message: string }[] }[] }
+    const overlap = report.files[0]!.diagnostics.filter((entry) => entry.code === 'table-column-overlap')
+    expect(overlap).toHaveLength(2)
+    expect(new Set(overlap.map((entry) => entry.message)).size).toBe(2)
+  })
+
   it('C2-N-004: render expands by default from the directory of the entry file', () => {
     const root = tree({ 'book/main.crv': 'Top.\n\n{{ chapters/one.crv }}\n', 'book/chapters/one.crv': 'One.\n' })
     const result = cli(['render', 'book/main.crv'], root)
