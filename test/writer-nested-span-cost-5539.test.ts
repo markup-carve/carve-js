@@ -81,7 +81,9 @@ describe('nested span import cost (carve-js#5539, carve-js#5532)', () => {
 
   it('keeps readback for attributes that do not retain their field shape', () => {
     for (const attrs of [undefined, { keyValues: [['title', 'ab'], ['title', 'cd']] as [string, string][] },
-      { classes: [] as string[] }]) {
+      { classes: [] as string[] }, { keyValues: [['title', 'a\0b']] as [string, string][] },
+      { keyValues: [['title', '\uD800']] as [string, string][] },
+      { keyValues: [['ID', 'ab']] as [string, string][] }]) {
       const child: Inline = { type: 'span', ...(attrs === undefined ? {} : { attrs }),
         children: [{ type: 'text', value: '[ ' }] }
       const document: DocumentNode = { type: 'document', astVersion: '2.0',

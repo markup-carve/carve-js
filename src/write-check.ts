@@ -1038,14 +1038,22 @@ function forestFieldsCanForm(node: Node): boolean {
 }
 
 /** A simple set of named values cannot be reframed as id, class, or language fields. */
+function forestKeyCanForm(key: string): boolean {
+  return isKey(key) && key === key.toLowerCase() && !['id', 'class', 'lang', 'dir'].includes(key)
+}
+
+function forestValueCanForm(value: string): boolean {
+  return !value.includes('\0') && !/[\uD800-\uDFFF]/u.test(value)
+}
+
 function forestSpanAttrsCanForm(node: Node): boolean {
   if (node.type !== 'span') return false
   const attrs = node.attrs
   const pairs = attrs?.keyValues
   if (attrs?.id !== undefined || attrs?.classes !== undefined || pairs === undefined || pairs.length === 0) return false
   const seen = new Set<string>()
-  for (const [key] of pairs) {
-    if (!isKey(key) || ['id', 'class', 'lang', 'dir'].includes(key) || seen.has(key)) return false
+  for (const [key, value] of pairs) {
+    if (!forestKeyCanForm(key) || !forestValueCanForm(value) || seen.has(key)) return false
     seen.add(key)
   }
   return true
