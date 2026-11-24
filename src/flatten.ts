@@ -1,5 +1,6 @@
 // `flatten` and `carve flatten`: one Carve file with every include expanded in place. An engine feature, outside the
 // specification (C2-T-003); C2-N-005 keeps `fmt` from expanding, so this is the call that does.
+import { pushAll } from './arrays.ts'
 import { render } from './api.ts'
 import { type DocumentNode, type IncludeNode, type Node } from './ast.ts'
 import { write } from './write.ts'
@@ -21,7 +22,7 @@ function includedBody(node: IncludeNode): readonly Node[] {
 function spliced(nodes: readonly Node[]): Node[] {
   const result: Node[] = []
   for (const node of nodes) {
-    if (node.type === 'include' && node.children !== undefined) result.push(...spliced(includedBody(node)))
+    if (node.type === 'include' && node.children !== undefined) pushAll(result, spliced(includedBody(node)))
     else result.push(withSplicedSlots(node))
   }
   return result

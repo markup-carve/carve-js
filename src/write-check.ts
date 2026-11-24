@@ -2,6 +2,7 @@
 // and compared with the tree they were written from. Where the parse reads a construct that the
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
+import { pushAll } from './arrays.ts'
 import {
   captionOf, childNodes, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord,
   type LinkNode, type Node, type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
@@ -812,10 +813,10 @@ export function earlyLoneNoteBrackets(w: Writer, roots: readonly Node[]): [TextN
   const found: [TextNode, number][] = []
   const pending = [...roots]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-    if (node.type === 'inline_footnote') found.push(...earlyNoteOpeners(check, node))
+    if (node.type === 'inline_footnote') pushAll(found, earlyNoteOpeners(check, node))
     const children = childNodes(node)
     priorNoteOpeners(check, children, found)
-    pending.push(...children)
+    pushAll(pending, children)
   }
   return found
 }
@@ -827,7 +828,7 @@ export function earlyTextNoteClosers(roots: readonly Node[]): [TextNode, number]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     const children = childNodes(node)
     scanTextNoteClosers(children, found)
-    pending.push(...children)
+    pushAll(pending, children)
   }
   return found
 }
@@ -863,7 +864,7 @@ function priorNoteOpeners(check: Check, children: readonly Node[], found: [TextN
         else if (child.value[at] === ']' && open.length > 0) open.pop()
       }
     } else if (child.type === 'inline_footnote' && earlyNoteOpeners(check, child).length > 0) {
-      found.push(...open)
+      pushAll(found, open)
     }
   }
 }
@@ -2036,7 +2037,7 @@ function holdsBracketConstruct(node: Node): boolean {
   const pending = [node]
   for (let below = pending.pop(); below !== undefined; below = pending.pop()) {
     if (BRACKET_CONSTRUCTS.has(below.type)) return true
-    pending.push(...childNodes(below))
+    pushAll(pending, childNodes(below))
   }
   return false
 }
@@ -2131,7 +2132,7 @@ function escapeInnerQuotes(c: Check, es: readonly Node[], i: number, from: numbe
   const pending = [...childNodes(a)]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (node.type === 'smart_punctuation' && node.pos !== undefined) quotes.set(node.pos.startOffset, node.kind)
-    pending.push(...childNodes(node))
+    pushAll(pending, childNodes(node))
   }
   if (quotes.size === 0) return
   const e = es[i] as TextNode

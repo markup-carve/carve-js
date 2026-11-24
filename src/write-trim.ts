@@ -2,6 +2,7 @@
 // supplied tree while the writer runs, so neither the write nor its comparison sees them, and put back after it.
 // Nodes keep their identity, so a loss is still located in the tree as supplied. An empty text that coalesces into
 // a nonempty neighbor is taken out the same way (C2-A-040, C2-A-161).
+import { pushAll } from './arrays.ts'
 import { forEachSlot, type Node, type TableNode, type TextNode } from './ast.ts'
 
 /** The block nodes whose inline content ends at a line end. */
@@ -140,8 +141,8 @@ function trimCells(table: TableNode, groups: Node[], run: Trimming, delimited: (
     restore(cells)
     return
   }
-  run.values.push(...cells.values)
-  run.removed.push(...cells.removed)
+  pushAll(run.values, cells.values)
+  pushAll(run.removed, cells.removed)
 }
 
 function restoreLists(removed: readonly [Node[], Node[]][]): void {

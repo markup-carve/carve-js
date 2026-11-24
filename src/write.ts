@@ -1,6 +1,7 @@
 // The canonical writer (spec/0.2/writer.md): a tree, and optionally the sidecar that was returned
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
+import { pushAll, pushReversed } from './arrays.ts'
 import {
   childNodes, type CommentNode, type DocumentNode, forEachSlot, isBreak, isInlineParent, isRecord, type Node, pointerToken, SOURCE_ORDER,
   type TextNode,
@@ -544,7 +545,7 @@ function trialOpensBracedConstruct(
   const pending: Node[] = [...parsed.children]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (node.type === type && node.pos?.startOffset === byte) return true
-    pending.push(...childNodes(node))
+    pushAll(pending, childNodes(node))
   }
   return false
 }
@@ -701,7 +702,7 @@ function readsOnlyText(parsed: DocumentNode | null): boolean {
   const pending: Node[] = [...parsed.children]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (!isInlineParent(node)) {
-      pending.push(...childNodes(node))
+      pushAll(pending, childNodes(node))
       continue
     }
     if (!childNodes(node).every((child) => child.type === 'text' || isBreak(child))) return false
@@ -1909,7 +1910,7 @@ function leafBlocks(nodes: readonly Node[]): Node[] {
   const pending = [...nodes].reverse()
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (isInlineParent(node)) leaves.push(node)
-    else pending.push(...[...childNodes(node)].reverse())
+    else pushReversed(pending, childNodes(node))
   }
   return leaves
 }
@@ -2081,7 +2082,7 @@ function placeDifferences(ranges: readonly [number, number][], pending: readonly
     if (inside.length === 0) return null
     if (inside.length === 1) placed.kept.push(inside[0]!)
     for (const at of inside.length === 1 ? inside : inside.slice(1)) placed.decided.add(at)
-    placed.waiting.push(...inside.slice(1))
+    pushAll(placed.waiting, inside.slice(1))
   }
   return placed
 }
@@ -2115,7 +2116,7 @@ function pruneInRounds(w: Writer, group: readonly Node[], source: string, candid
     const trial = withoutBackslashes(source, drop)
     const parsed = parseChunk(w, trial.text)
     if (matchesGroup(parsed.children, group)) {
-      removed.push(...pending)
+      pushAll(removed, pending)
       pending = waiting
       waiting = []
       continue
@@ -2125,8 +2126,8 @@ function pruneInRounds(w: Writer, group: readonly Node[], source: string, candid
     const byteOf = new Map(drop.map((at, index) => [at, trial.bytes[index]!]))
     const placed = placeDifferences(ranges, pending, pending.map((at) => byteOf.get(at)!))
     if (placed === null || placed.decided.size === 0) return null
-    kept.push(...placed.kept)
-    waiting.push(...placed.waiting)
+    pushAll(kept, placed.kept)
+    pushAll(waiting, placed.waiting)
     pending = pending.filter((at) => !placed.decided.has(at))
     if (pending.length === 0) {
       pending = waiting.sort((x, y) => x - y)

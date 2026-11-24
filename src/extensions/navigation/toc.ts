@@ -1,3 +1,4 @@
+import { pushAll } from '../../arrays.ts'
 import { type Attrs, type Block, type BlockExtensionNode, type DirectiveNode, type DocumentNode, type HeadingNode, type Inline,
   type ListItemNode, type ListNode, type Node } from '../../ast.ts'
 import { type ExtensionDefinition, type ExtensionRenderer, type ExtensionRenderHost } from '../types.ts'
@@ -142,7 +143,7 @@ function placement(directive: DirectiveNode, entries: readonly Entry[]): BlockEx
   if (directive.title !== undefined) {
     fallback.push({ type: 'paragraph', children: [{ type: 'strong', children: structuredClone(directive.title) }] })
   }
-  fallback.push(...structuredClone(body))
+  pushAll(fallback, structuredClone(body))
   if (list !== null) fallback.push(structuredClone(list))
   const slots: Record<string, Node[]> = { body, list: list === null ? [] : [list] }
   if (directive.title !== undefined) slots['title'] = directive.title

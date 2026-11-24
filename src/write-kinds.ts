@@ -1,4 +1,5 @@
 // C2-W-088: a round escapes every potential opener of each kind its parse reports in a leaf block.
+import { pushAll, pushReversed } from './arrays.ts'
 import { childNodes, isBreak, isInlineParent } from './ast.ts'
 import type { Node, TextNode } from './ast-nodes.ts'
 import { BRACKETED, type Check, CLOSING_MARKS, contentClosers, escapeAt, isEscaped } from './write-check.ts'
@@ -272,7 +273,7 @@ export function writtenTextStarts(check: Check, group: readonly Node[], source: 
   for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
     const { node } = entry
     if (node.type !== 'text') {
-      pending.push(...[...childNodes(node)].reverse().map(child => ({ node: child, inCell: entry.inCell || node.type === 'table_cell' })))
+      pushReversed(pending, childNodes(node).map(child => ({ node: child, inCell: entry.inCell || node.type === 'table_cell' })))
       continue
     }
     const escapes = escapeOffsets(check.w, node, entry.inCell ? IN_CELL : 0)
@@ -299,7 +300,7 @@ function inertRanges(nodes: readonly Node[]): [number, number][] {
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if ((node.type === 'code' || node.type === 'literal_inline' || node.type === 'math') && node.pos !== undefined) {
       ranges.push([node.pos.startOffset, node.pos.endOffset])
-    } else pending.push(...childNodes(node))
+    } else pushAll(pending, childNodes(node))
   }
   ranges.sort((a, b) => a[0] - b[0])
   return ranges
@@ -329,7 +330,7 @@ function parsedTextRanges(nodes: readonly Node[], comments: Set<number>): [numbe
     if ((node.type === 'critic_comment' || (node.type === 'comment' && node.form === 'braced')) && node.pos !== undefined) {
       comments.add(node.pos.startOffset)
     }
-    parsedNodes.push(...childNodes(node))
+    pushAll(parsedNodes, childNodes(node))
   }
   ranges.sort((a, b) => a[0] - b[0])
   return ranges

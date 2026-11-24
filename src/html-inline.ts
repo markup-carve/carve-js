@@ -1,4 +1,5 @@
 // The inline elements of C2-H-072 to C2-H-101.
+import { pushAll } from './arrays.ts'
 import {
   type AbbreviationNode, type Attrs, type AutolinkNode, type CaptionNumberNode, type FootnoteRefNode, type ImageNode,
   type Inline, type InlineExtensionNode, type InlineFootnoteNode, type InlineParent, isBreak, type LinkNode,
@@ -223,7 +224,7 @@ function link(node: LinkNode, r: Render): string {
   const structural: Pair[] = [['href', destination(r, href ?? '', node)]]
   if (title !== undefined) structural.push(['title', title])
   const merged = withRel(r, withDefinition(node, definition), structural)
-  structural.push(...referenceCarriers(r, node, key))
+  pushAll(structural, referenceCarriers(r, node, key))
   r.linkDepth++
   const html = children(r, node)
   r.linkDepth--
@@ -242,7 +243,7 @@ function image(node: ImageNode, r: Render): string {
   const title = node.tooltip ?? definition?.tooltip
   const structural: Pair[] = [['src', destination(r, src ?? '', node)], ['alt', alt]]
   if (title !== undefined) structural.push(['title', title])
-  structural.push(...referenceCarriers(r, node, key))
+  pushAll(structural, referenceCarriers(r, node, key))
   return `<img${attributes(r, withDefinition(node, definition), { structural, origin: node })}>`
 }
 

@@ -1,4 +1,5 @@
 /** C2-X-064 to C2-X-065: standard details and spoiler claims with core fallbacks. */
+import { pushAll } from '../../arrays.ts'
 import { type Block, type BlockExtensionNode, type InlineExtensionNode } from '../../ast.ts'
 import { divSource, remainingAttrs } from '../claims.ts'
 import { type ExtensionClaim, type ExtensionDefinition } from '../types.ts'
@@ -9,7 +10,7 @@ function blockClaim(name: string, claim: ExtensionClaim): BlockExtensionNode | n
   if (claim.node.title?.length) {
     fallback.push({ type: 'paragraph', children: [{ type: 'strong', children: structuredClone(claim.node.title) }] })
   }
-  fallback.push(...structuredClone(claim.node.children))
+  pushAll(fallback, structuredClone(claim.node.children))
   const attrs = claim.attrs === undefined ? undefined : remainingAttrs(claim.attrs)
   return { type: 'block_extension', name, version: '1', children: [],
     slots: { title: claim.node.title ?? [], body: claim.node.children }, fallback,
