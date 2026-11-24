@@ -51,6 +51,7 @@ export function openBracket(state: InlineState, start: number, end: number, form
   state.brackets[state.bracketDepth++] = pushToken(state, TOKEN_OPEN, start, end, form, NONE, 0, NONE)
   if (form === OPEN_FOOTNOTE) {
     state.notesOpen++
+    state.passNotes.set(start, NONE)
     if (state.closedNotes?.has(start) === true && state.closedNotesOpen++ === 0) state.ownReads.start(open)
   }
   enterBracket(state)
@@ -335,6 +336,7 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   state.probesOpen -= state.bracketProbes[state.bracketDepth]!
   if (form === OPEN_FOOTNOTE) {
     state.notesOpen--
+    state.passNotes.set(state.tokens[open + TOKEN_START]!, pos)
     // Its swallowed notes would read on with caret pairs that open.
     if (state.closedNotes?.has(state.tokens[open + TOKEN_START]!) === true && --state.closedNotesOpen === 0) {
       state.ownReads.stop()

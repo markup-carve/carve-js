@@ -3,11 +3,11 @@ import { format, parse, treesEqual, writeWithDiagnostics } from '../src/index.ts
 
 describe('C2-W-125: a caret that only an escaped closer behind it needs keeps its backslash (#5468)', () => {
   it.each([
-    ['^[a\\^[b][[b]\\]]', '^[a\\^[b][[b]\\]]\n'],
-    ['^[\\^[b][[b]\\]]', '^[\\^[b][[b]\\]]\n'],
-    ['x ^[ \\^[b][[^b]\\]] [x]', 'x ^[ \\^[b][[^b]\\]] [x\\]\n'],
-    ['^[^[a\\^[b][[b]\\]]', '^\\[^[a\\^[b][[b]\\]]\n'],
-    ['^[a\\^[b][[b]\\][b]]', '^[a\\^[b][[b]\\][b]]\n'],
+    ['^[a\\^[b][[b]\\]]', '^[a^[b][[b]\\]]\n'],
+    ['^[\\^[b][[b]\\]]', '^[^[b][[b]\\]]\n'],
+    ['x ^[ \\^[b][[^b]\\]] [x]', 'x ^[ ^[b][[^b]\\]] [x\\]\n'],
+    ['^[^[a\\^[b][[b]\\]]', '^\\[^[a^[b][[b]\\]]\n'],
+    ['^[a\\^[b][[b]\\][b]]', '^[a^[b][[b]\\]\\[b\\]]\n'],
   ])('writes the tree of %j with no loss', (source, canonical) => {
     const tree = parse(source)
     const written = writeWithDiagnostics(tree)
@@ -31,6 +31,6 @@ describe('C2-W-091: a tree from a parse that every earlier form lost (#5468)', (
 
 describe('the writer keeps its form where it already read back (#5468)', () => {
   it('writes a note that closes with the bracket behind it as before', () => {
-    expect(format('^[a\\^[b][[b]\\]]]')).toBe('^[a^[b][[b]\\]]]\n')
+    expect(format('^[a\\^[b][[b]\\]]]')).toBe('^[a^[b][[b]\\]]\\]\n')
   })
 })

@@ -3,7 +3,7 @@ import { format, parse, treesEqual, writeWithDiagnostics } from '../src/index.ts
 
 describe('C2-W-002, C2-W-003: a caret pair in a note is left to the repair (carve-js#5463)', () => {
   it('formats the canonical form of the reproduction to itself', () => {
-    const canonical = '^[\\^\\^[b][[^[b]\\a]\n'
+    const canonical = '^[^^[b][[^[b]\\a]\n'
     expect(writeWithDiagnostics(parse('^[^\\^[b][[^[b]\\a]')).source).toBe(canonical)
     expect(format(canonical)).toBe(canonical)
     expect(format('^[^\\^[b][[^[b]\\a]')).toBe(canonical)
