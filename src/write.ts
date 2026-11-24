@@ -17,6 +17,7 @@ import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { escapeKinds, escapePartnerClosers, leavesKindBare, writtenTextStarts } from './write-kinds.ts'
+import { BRACED_MARKS, BRACED_NODES } from './inline-tables.ts'
 import {
   type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets,
   simpleSpanForest, earlyLoneNoteBrackets, earlyTextNoteClosers,
@@ -527,7 +528,8 @@ function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): v
 function trialOpensBracedConstruct(
   check: Check, text: TextNode, at: number, starts: ReadonlyMap<TextNode, [number, readonly number[]]>,
 ): boolean {
-  const type = new Map([['*', 'strong'], ['/', 'emphasis'], ['^', 'superscript'], [',', 'subscript']]).get(text.value[at + 1] ?? '')
+  const kind = BRACED_MARKS.indexOf(text.value[at + 1] ?? '')
+  const type = kind < 0 ? undefined : BRACED_NODES[kind]
   const source = check.source
   const parsed = check.w.parsed
   if (text.value[at] !== '{' || type === undefined || source === null || parsed === null) return false

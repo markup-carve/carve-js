@@ -259,6 +259,8 @@ function braceContext(check: Check, group: readonly Node[]): BraceContext | null
 
 export function writtenTextStarts(check: Check, group: readonly Node[], source: string): Map<TextNode, [number, readonly number[]]> {
   const starts = new Map<TextNode, [number, readonly number[]]>()
+  const bytes = byteOffsets(source)
+  const inert = inertRanges(check.w.parsed?.children ?? [])
   const pending = [...group].reverse()
   let cursor = 0
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
@@ -273,14 +275,43 @@ export function writtenTextStarts(check: Check, group: readonly Node[], source: 
       if (escapes[next] === at) { written += '\\'; next++ }
       written += node.value[at]
     }
-    let start = source.indexOf(written, cursor)
+    let start = nextTextPlace(source, written, cursor, bytes, inert)
     let length = written.length
-    if (start < 0) { start = source.indexOf(node.value, cursor); length = node.value.length }
+    if (start < 0) { start = nextTextPlace(source, node.value, cursor, bytes, inert); length = node.value.length }
     if (start < 0) continue
     starts.set(node, [start, escapes])
     cursor = start + length
   }
   return starts
+}
+
+/** Text in a code, literal, or math span cannot be the source of a text leaf. */
+function inertRanges(nodes: readonly Node[]): [number, number][] {
+  const ranges: [number, number][] = []
+  const pending = [...nodes]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if ((node.type === 'code' || node.type === 'literal_inline' || node.type === 'math') && node.pos !== undefined) {
+      ranges.push([node.pos.startOffset, node.pos.endOffset])
+    } else pending.push(...childNodes(node))
+  }
+  ranges.sort((a, b) => a[0] - b[0])
+  return ranges
+}
+
+function nextTextPlace(source: string, value: string, cursor: number, bytes: Uint32Array, inert: readonly [number, number][]): number {
+  if (value === '') return cursor
+  for (let start = source.indexOf(value, cursor); start >= 0; start = source.indexOf(value, start + 1)) {
+    const byte = bytes[start]!
+    let low = 0
+    let high = inert.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (inert[middle]![0] <= byte) low = middle + 1
+      else high = middle
+    }
+    if (low === 0 || byte >= inert[low - 1]![1]) return start
+  }
+  return -1
 }
 
 function parsedTextRanges(nodes: readonly Node[]): [number, number][] {

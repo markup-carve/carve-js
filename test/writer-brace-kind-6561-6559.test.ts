@@ -50,3 +50,13 @@ it('locates the later text leaf when two leaves have the same value', () => {
   expect(starts.get(first)?.[0]).toBe(0)
   expect(starts.get(second)?.[0]).toBe(8)
 })
+
+it('does not locate a text leaf inside an earlier code span', () => {
+  const text: TextNode = { type: 'text', value: '{^a^}' }
+  const source = '`{^a^}`{^a^}\n'
+  const paragraph: ParagraphNode = { type: 'paragraph', children: [{ type: 'code', value: '{^a^}' }, text] }
+  const check = createCheck(createWriter(null, false))
+  check.w.parsed = parse(source)
+  const starts = writtenTextStarts(check, [paragraph], source)
+  expect(starts.get(text)?.[0]).toBe(7)
+})
