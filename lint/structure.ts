@@ -147,8 +147,15 @@ interface OpenerScan {
   /** The paths of the bare strong and emphasis spans of the current leaf block. */
   bare: Set<string>
   memo: AttributeMemo
+  /** The record of the current leaf block, which keeps formed spans before its first text opener too. */
+  pending: OpenerLeaf
+  /** The pending record once it holds a text opener. */
   leaf: OpenerLeaf | null
   leaves: OpenerLeaf[]
+}
+
+function openerLeaf(): OpenerLeaf {
+  return { start: 0, end: 0, openers: [], openerScopes: [], openerPaths: [], formed: [], formedScopes: [], content: [] }
 }
 
 const openerScans = new WeakMap<LintContext, OpenerScan>()
@@ -159,7 +166,7 @@ function openerScan(context: LintContext): OpenerScan {
   let scan = openerScans.get(context)
   if (scan === undefined) {
     openerScans.set(context, scan = { path: null, start: 0, end: 0, scopes: [], stack: [0], bare: new Set(), memo: emptyMemo(),
-      leaf: null, leaves: [] })
+      pending: openerLeaf(), leaf: null, leaves: [] })
   }
   lastScan = [context, scan]
   return scan
@@ -178,6 +185,10 @@ function startLeaf(node: Node, path: string, scan: OpenerScan, context: LintCont
   scan.scopes.length = 1
   scan.stack.length = 1
   scan.bare.clear()
+  if (scan.leaf !== null) scan.pending = openerLeaf()
+  else scan.pending.formed.length = scan.pending.formedScopes.length = scan.pending.content.length = 0
+  scan.pending.start = scan.start
+  scan.pending.end = scan.end
   scan.leaf = null
 }
 
@@ -185,8 +196,8 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
   const scan = openerScan(context)
   if (INLINE_LEAVES.has(node.type)) return startLeaf(node, path, scan, context)
   const opens = node.type === 'strong' || node.type === 'emphasis'
-  // Only a closer after an opener counts, so nothing is kept for a leaf block before its first opener.
-  if (scan.path === null || (scan.leaf === null && !opens && !BRACKETS.has(node.type)
+  // Only a closer after an opener counts, so no text is kept for a leaf block before its first opener.
+  if (scan.path === null || (scan.leaf === null && !opens && !BRACKETS.has(node.type) && !DELIMITED_SPANS.has(node.type)
     && (node.type !== 'text' || scan.bare.size === 0))) return
   if (!path.startsWith(scan.path)) return
   const range = bounds(node, context)
@@ -205,11 +216,12 @@ function collectOpeners(node: Node, path: string, range: [number, number], scan:
   if (node.type === 'text' && scan.bare.has(path.slice(0, path.lastIndexOf('/children/')))) {
     bracedOpeners(path, range, scope, scan, context)
   }
+  // A formed span before the first opener can still remove it when it closes (C2-I-059).
+  if (DELIMITED_SPANS.has(node.type)) return spanMarks(node, range, scope, scan.pending, context)
   const leaf = scan.leaf
   if (leaf === null) return
   if (node.type === 'text') textContent(range, scope, scan, leaf, context.source)
   else if (node.type === 'smart_punctuation') leaf.content.push(range[0], range[1], scope)
-  else if (DELIMITED_SPANS.has(node.type)) spanMarks(node, range, scope, leaf, context)
 }
 
 /** C2-I-043: a valid attribute block left as text is still an atom, so no closer stands in it. */
@@ -230,10 +242,16 @@ function textContent([start, end]: [number, number], scope: number, scan: Opener
 function bracedOpeners(path: string, text: [number, number], scope: number, scan: OpenerScan, context: LintContext): void {
   const source = context.source
   for (let at = text[0]; at + 1 < text[1]; at++) {
-    if (source.charCodeAt(at) !== 0x7b || !BRACED_MARKS.includes(source[at + 1]!) || escaped(source, at)) continue
+    if (source.charCodeAt(at) !== 0x7b || escaped(source, at)) continue
+    // C2-I-043: a valid attribute block at a brace comes before a braced opener.
+    const block = readAttributeBlock(source, at, text[1], scan.memo, null)
+    if (block >= 0) {
+      at = block - 1
+      continue
+    }
+    if (!BRACED_MARKS.includes(source[at + 1]!)) continue
     if (scan.leaf === null) {
-      scan.leaf = { start: scan.start, end: scan.end, openers: [], openerScopes: [], openerPaths: [], formed: [],
-        formedScopes: [], content: [] }
+      scan.leaf = scan.pending
       scan.leaves.push(scan.leaf)
     }
     scan.leaf.openers.push(at)

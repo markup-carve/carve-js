@@ -38,6 +38,15 @@ describe('braced-span-opener-as-text: the closer of its own mark in its own leaf
     expect(findings('*a {/b /x {/c/ d* e /}')).toEqual([[10, 12]])
   })
 
+  it('reads a valid attribute block before a braced opener (C2-I-043)', () => {
+    expect(findings('*a {_key=v} b _}*')).toEqual([])
+  })
+
+  it('drops an opener that an enclosing braced span removes when it closes', () => {
+    expect(findings('{+a *b {/c* d +} e /}')).toEqual([])
+    expect(findings('{+a *b {/c* d /} e +}')).toEqual([[7, 9]])
+  })
+
   it('drops an opener that a closer of another mark removes (C2-I-059)', () => {
     expect(findings('*a {/b {=c* d/} e=}')).toEqual([[3, 5]])
     expect(findings('*a {/b {=c* d=} e/}')).toEqual([[3, 5], [7, 9]])
