@@ -223,7 +223,7 @@ export function escapeKinds(check: Check, group: readonly Node[], noKind: Readon
   for (const [node, at] of reported) {
     const block = owners.get(node)
     if (block === undefined) continue
-    const key = reportedKey(check, block, node, at)
+    const key = reportedKey(check, block, node, at, braces)
     if (key.startsWith('{')) check.w.reportedBraceKinds.add(key)
     const keys = done.get(block) ?? new Set<string>()
     if (keys.has(key)) continue
@@ -235,9 +235,9 @@ export function escapeKinds(check: Check, group: readonly Node[], noKind: Readon
   }
 }
 
-function reportedKey(check: Check, block: KindBlock, node: TextNode, at: number): string {
+function reportedKey(check: Check, block: KindBlock, node: TextNode, at: number, braces: BraceContext | null): string {
   const index = block.places?.get(node) ?? -1
-  const inline = kindKey(block, index, at, false)
+  const inline = commentKind(braces, node, at) ?? kindKey(block, index, at, false)
   const line = check.lineEscapes.get(node)?.has(at) === true ||
     (at === 0 && (block.leaves[index] as { lineStart?: boolean })?.lineStart === true && inline === '{')
   return line ? kindKey(block, index, at, true) : inline
@@ -247,6 +247,8 @@ interface BraceContext {
   bytes: Uint32Array
   ranges: [number, number][]
   starts: Map<TextNode, [number, readonly number[]]>
+  /** The byte offsets where the parse holds a braced comment, `{%` or `{#`. */
+  comments: Set<number>
 }
 
 /** Locate each written text leaf and each parsed text range once for the round. */
@@ -254,7 +256,11 @@ function braceContext(check: Check, group: readonly Node[]): BraceContext | null
   const source = check.source
   const parsed = check.w.parsed
   if (source === null || parsed === null) return null
-  return { bytes: byteOffsets(source), ranges: parsedTextRanges(parsed.children), starts: writtenTextStarts(check, group, source) }
+  const comments = new Set<number>()
+  return {
+    bytes: byteOffsets(source), ranges: parsedTextRanges(parsed.children, comments),
+    starts: writtenTextStarts(check, group, source), comments,
+  }
 }
 
 export function writtenTextStarts(check: Check, group: readonly Node[], source: string): Map<TextNode, [number, readonly number[]]> {
@@ -315,11 +321,14 @@ function nextTextPlace(source: string, value: string, cursor: number, bytes: Uin
   return -1
 }
 
-function parsedTextRanges(nodes: readonly Node[]): [number, number][] {
+function parsedTextRanges(nodes: readonly Node[], comments: Set<number>): [number, number][] {
   const ranges: [number, number][] = []
   const parsedNodes: Node[] = [...nodes]
   for (let node = parsedNodes.pop(); node !== undefined; node = parsedNodes.pop()) {
     if (node.type === 'text' && node.pos !== undefined) ranges.push([node.pos.startOffset, node.pos.endOffset])
+    if ((node.type === 'critic_comment' || (node.type === 'comment' && node.form === 'braced')) && node.pos !== undefined) {
+      comments.add(node.pos.startOffset)
+    }
     parsedNodes.push(...childNodes(node))
   }
   ranges.sort((a, b) => a[0] - b[0])
@@ -340,13 +349,8 @@ function byteOffsets(source: string): Uint32Array {
 
 /** A brace still held by parsed text is a case repair, not a reported construct. */
 function reportedBrace(context: BraceContext | null, text: TextNode, at: number): boolean {
-  if (text.value[at] !== '{' || context === null) return true
-  const located = context.starts.get(text)
-  if (located === undefined) return true
-  const [start, escapes] = located
-  let before = 0
-  while (escapes[before] !== undefined && escapes[before]! < at) before++
-  const byte = context.bytes[start + at + before]!
+  const byte = text.value[at] === '{' ? braceByte(context, text, at) : undefined
+  if (byte === undefined || context === null) return true
   let low = 0
   let high = context.ranges.length
   while (low < high) {
@@ -355,6 +359,27 @@ function reportedBrace(context: BraceContext | null, text: TextNode, at: number)
     else high = middle
   }
   return low === 0 || byte >= context.ranges[low - 1]![1]
+}
+
+/** The byte offset in the parsed source of the text brace at `at`, where the round located its text. */
+function braceByte(context: BraceContext | null, text: TextNode, at: number): number | undefined {
+  const located = context?.starts.get(text)
+  if (located === undefined) return undefined
+  const [start, escapes] = located
+  let before = 0
+  while (escapes[before] !== undefined && escapes[before]! < at) before++
+  return context!.bytes[start + at + before]
+}
+
+/**
+ * C2-W-088: a braced comment that the parse holds reports its opener with the mark behind the brace, `{%` or `{#`.
+ * The same brace before an attribute block reports `{` (carve#6559), so the kind comes from the parse, not the text.
+ */
+function commentKind(context: BraceContext | null, text: TextNode, at: number): string | undefined {
+  const mark = text.value[at + 1]
+  if (text.value[at] !== '{' || (mark !== '%' && mark !== '#')) return undefined
+  const byte = braceByte(context, text, at)
+  return byte !== undefined && context!.comments.has(byte) ? `{${mark}` : undefined
 }
 
 /**
