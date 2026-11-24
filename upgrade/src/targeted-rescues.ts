@@ -308,6 +308,8 @@ function tableCodeSpanCandidates(input: string, gate: Gate): Candidate[] {
   return found
 }
 
+const MAX_TRIALS = 64
+
 /** Exact HTML decides whether a candidate spelling preserves 0.1 rendering. */
 export function rescueTargeted(
   input: string,
@@ -317,31 +319,36 @@ export function rescueTargeted(
 ): { output: string; record: ReportRecord } | null {
   const expected = html01(input)
   const near = site.output
-  const candidates = [
-    ...simpleCandidates(output, near),
-    ...bracketCandidates(output, near),
-    ...lineCandidates(output, near),
-    ...multilineAttributeCandidates(input, site.input),
-    ...quotedCaretCandidates(input, site.input),
-    ...itemDefinitionCandidates(input, site.input),
-    ...tableCodeSpanCandidates(input, site.input),
-    ...smartQuoteCandidates(output, expected, near),
-    ...smartQuoteCandidates(output, expected, near).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190', near)),
-    ...languageCandidates(output, near),
-    ...substitutionAttributeCandidates(input, output, near),
-    ...floatingAttributeCandidates(output, near),
-    ...underlineBoundaryCandidates(output, near),
-    ...unresolvedFootnoteAttributeCandidates(output, near)
+  const sources: (() => Candidate[])[] = [
+    () => simpleCandidates(output, near),
+    () => bracketCandidates(output, near),
+    () => lineCandidates(output, near),
+    () => multilineAttributeCandidates(input, site.input),
+    () => quotedCaretCandidates(input, site.input),
+    () => itemDefinitionCandidates(input, site.input),
+    () => tableCodeSpanCandidates(input, site.input),
+    () => smartQuoteCandidates(output, expected, near),
+    () => smartQuoteCandidates(output, expected, near).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190', near)),
+    () => languageCandidates(output, near),
+    () => substitutionAttributeCandidates(input, output, near),
+    () => floatingAttributeCandidates(output, near),
+    () => underlineBoundaryCandidates(output, near),
+    () => unresolvedFootnoteAttributeCandidates(output, near)
   ]
-  for (const candidate of candidates) {
-    try {
-      if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
-      return {
-        output: candidate.output,
-        record: recordOf(candidate.id, mismatch.line, 'the clause-backed spelling preserves the complete 0.1 HTML')
+  let trials = 0
+  for (const source of sources) {
+    for (const candidate of source()) {
+      // Each trial renders the whole document, so a line with an opener per few bytes made this quadratic.
+      if (trials++ >= MAX_TRIALS) return null
+      try {
+        if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
+        return {
+          output: candidate.output,
+          record: recordOf(candidate.id, mismatch.line, 'the clause-backed spelling preserves the complete 0.1 HTML')
+        }
+      } catch {
+        /* A candidate can fail to parse under the new grammar. */
       }
-    } catch {
-      /* A candidate can fail to parse under the new grammar. */
     }
   }
   return null
