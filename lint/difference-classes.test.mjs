@@ -4,7 +4,7 @@ import { lint } from './lint.ts'
 import { citations } from '../src/extensions/citations.ts'
 import { glossary } from '../src/extensions/glossary.ts'
 
-const codes = (source) => lint(source).map((entry) => entry.code)
+const codes = (source, options) => lint(source, options).map((entry) => entry.code)
 
 describe('lint difference classes', () => {
   it('C2-B-003 and C2-B-025: owner columns exclude quote prefixes and include div opener indentation', () => {
@@ -35,10 +35,11 @@ describe('lint difference classes', () => {
   })
 
   it('C2-W-106: deprecated-bare-highlight reports what 0.1 read as highlight, and no pair with an escaped closer', () => {
-    expect(codes('=\\=')).toEqual([])
-    expect(codes('=﻿=')).toEqual(['deprecated-bare-highlight'])
-    expect(codes('_t__')).toEqual(['deprecated-bare-underline'])
-    expect(codes('_f_W_')).toEqual([])
+    const on = { rules: { 'deprecated-bare-highlight': 'on', 'deprecated-bare-underline': 'on' } }
+    expect(codes('=\\=', on)).toEqual([])
+    expect(codes('=﻿=', on)).toEqual(['deprecated-bare-highlight'])
+    expect(codes('_t__', on)).toEqual(['deprecated-bare-underline'])
+    expect(codes('_f_W_', on)).toEqual([])
   })
 
   it('C2-I-077: a comment that takes no closer of a label is no comment in a reference label', () => {

@@ -28,8 +28,8 @@ function text(cell: TableCellNode | undefined): string {
   return paragraph.children.map((node) => ('value' in node ? node.value : '')).join('')
 }
 
-function codes(src: string): string[] {
-  return lint(src).map((entry) => entry.code)
+function codes(src: string, options: Parameters<typeof lint>[1] = {}): string[] {
+  return lint(src, options).map((entry) => entry.code)
 }
 
 describe('C2-B-182: the vertical marks of a cell prefix', () => {
@@ -179,24 +179,24 @@ describe('lint of vertical alignment', () => {
   })
 
   it('C2-B-171, C2-W-106: `deprecated-cell-alignment` on a header cell and with a vertical mark', () => {
-    for (const src of ['|=< a|', '|=?v a|', '|>^ a|', '|< a|']) expect(codes(src), src).toContain('deprecated-cell-alignment')
-    expect(codes('|{<} a|')).not.toContain('deprecated-cell-alignment')
+    for (const src of ['|=< a|', '|=?v a|', '|>^ a|', '|< a|']) expect(codes(src, { upgrade: true }), src).toContain('deprecated-cell-alignment')
+    expect(codes('|{<} a|', { upgrade: true })).not.toContain('deprecated-cell-alignment')
   })
 
   it('C2-B-171, C2-B-182: `deprecated-cell-alignment` on a run with a glued brace block, and the emphasis finding of its mark', () => {
     // carve#6176: a cell is inline content, so the brace block glued to no host is also unattached.
     // CC-1742: neither catalog row excludes the other, so a mark of `emphasis-marker-before-attributes` is reported too.
     for (const src of ['|=~{.x} Mid |', '| <~{.x} a |']) {
-      expect(codes(src), src).toEqual(['deprecated-cell-alignment', 'emphasis-marker-before-attributes', 'unattached-inline-attribute'])
+      expect(codes(src, { upgrade: true }), src).toEqual(['deprecated-cell-alignment', 'emphasis-marker-before-attributes', 'unattached-inline-attribute'])
     }
-    expect(codes('|=?v{#i} a |')).toEqual(['deprecated-cell-alignment', 'unattached-inline-attribute'])
-    const [entry] = lint('|=~{.x} Mid |')
+    expect(codes('|=?v{#i} a |', { upgrade: true })).toEqual(['deprecated-cell-alignment', 'unattached-inline-attribute'])
+    const [entry] = lint('|=~{.x} Mid |', { upgrade: true })
     expect(entry?.message).toContain('"~{.x}"')
     expect(entry?.message).toContain('write "{~ .x}"')
-    expect(codes('| a ~{.x} b |')).toEqual(['emphasis-marker-before-attributes', 'unattached-inline-attribute'])
-    expect(codes('| ~{.x} a ~{.y} b |')).toEqual(['deprecated-cell-alignment', 'emphasis-marker-before-attributes',
+    expect(codes('| a ~{.x} b |', { upgrade: true })).toEqual(['emphasis-marker-before-attributes', 'unattached-inline-attribute'])
+    expect(codes('| ~{.x} a ~{.y} b |', { upgrade: true })).toEqual(['deprecated-cell-alignment', 'emphasis-marker-before-attributes',
       'unattached-inline-attribute', 'emphasis-marker-before-attributes', 'unattached-inline-attribute'])
-    expect(codes('| ~{.x}{.y} a |')).not.toContain('deprecated-cell-alignment')
+    expect(codes('| ~{.x}{.y} a |', { upgrade: true })).not.toContain('deprecated-cell-alignment')
   })
 })
 

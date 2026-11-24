@@ -57,7 +57,7 @@ describe('table keys', () => {
   })
 
   it('C2-B-227: lint reports a kept invalid value as table-attribute-invalid', () => {
-    const codes = (src: string): string[] => lint(src).map((entry) => entry.code).filter((code) => code.startsWith('table') || code.startsWith('dep'))
+    const codes = (src: string): string[] => lint(src, { upgrade: true }).map((entry) => entry.code).filter((code) => code.startsWith('table') || code.startsWith('dep'))
     expect(codes('{widths=x .t}\n| a |\n')).toEqual(['table-attribute-invalid'])
     expect(lint('{widths=x .t}\n| a |\n')[0]?.message)
       .toBe('The value of widths is not valid, so the table ignores the whole attribute. Correct every entry, or remove the attribute.')

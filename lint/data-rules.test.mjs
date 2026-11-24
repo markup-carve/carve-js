@@ -61,7 +61,7 @@ it('C2-B-110: comment-fence-closer-with-text reads a quoted line behind its quot
 })
 
 it('C2-B-069: description-term-multi-line starts behind the prefixes of the line', () => {
-  expect(findings('> :: w\n> w\n', 'data')).toEqual(['description-term-multi-line@9-10'])
+  expect(findings('> :: w\n> w\n', 'data', { upgrade: true })).toEqual(['description-term-multi-line@9-10'])
 })
 
 it('bare-html-tag reads paragraph, heading and table row lines, not term lines', () => {
@@ -245,11 +245,11 @@ it('C2-W-149: the table fields give what the hand-written table rules report', (
 })
 
 it('C2-W-138, C2-B-210: the hand-written table attribute rules read behind container prefixes', () => {
-  const codes = (source) => lint(source).map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset}`)
+  const codes = (source, options) => lint(source, options).map((entry) => `${entry.code}@${entry.range.startOffset}-${entry.range.endOffset}`)
   expect(codes('> {footer-rows=5}\n> | a |\n')).toContain('table-row-count-clamped@3-16')
   expect(codes('{footer-rows="5"}\n| a |\n')).toContain('table-row-count-clamped@1-16')
   expect(codes('{footer-rows}\n|= a |\n')).toContain('table-row-count-clamped@1-12')
-  expect(codes('> {header-rows=1}\n> | a |\n')).toContain('deprecated-table-attribute@2-25')
+  expect(codes('> {header-rows=1}\n> | a |\n', { upgrade: true })).toContain('deprecated-table-attribute@2-25')
   for (const mode of ['code', 'data']) expect(findings('| a |\n%% c  \n+ b |\n', mode)).toEqual(['comment-splits-table-row@6-10'])
 })
 

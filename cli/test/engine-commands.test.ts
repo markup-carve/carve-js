@@ -62,7 +62,7 @@ describe('carve fix and carve lint --fix', () => {
   })
 
   it('fix is lint --fix: source on standard output, remaining entries and the summary on standard error', () => {
-    const result = cli(['fix'], 'a **b**\n\n# T ##\n\nx ~t~ y\n')
+    const result = cli(['fix', '--upgrade'], 'a **b**\n\n# T ##\n\nx ~t~ y\n')
     expect(result.stdout).toBe('a *b*\n\n# T\n\nx ~t~ y\n')
     expect(result.stderr).toContain('<stdin>: fixed markdown-strong-double-star 1, heading-closing-hashes 1')
     expect(result.stderr).toMatch(/<stdin>:5:3: warning deprecated-bare-strike /)
@@ -131,7 +131,8 @@ describe('--output, --strict, --ignore and upgrade --migrate', () => {
     expect([render.status, render.stdout]).toEqual([1, '<p>{{ e }}</p>\n'])
     expect(cli(['render', '--strict'], 'a\n').status).toBe(0)
     expect(cli(['lint'], 'a\n\n---\n').status).toBe(0)
-    expect(cli(['lint', '--strict'], 'a\n\n---\n').status).toBe(1)
+    expect(cli(['lint', '--strict'], 'a\n\n---\n').status).toBe(0)
+    expect(cli(['lint', '--strict', '--upgrade'], 'a\n\n---\n').status).toBe(1)
   })
 
   it('lint --ignore drops the entries of a file id, repeatable', () => {

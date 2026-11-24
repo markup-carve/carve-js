@@ -275,17 +275,17 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "deprecated-bare-highlight": { severity: "warning", default: "on", messages: [
+  "deprecated-bare-highlight": { severity: "warning", default: "upgrade", messages: [
     "A bare equals pair is text in 0.2. Write the braced highlight.",
   ], conditions: [
     "",
   ] },
-  "deprecated-bare-strike": { severity: "warning", default: "on", messages: [
+  "deprecated-bare-strike": { severity: "warning", default: "upgrade", messages: [
     "A bare tilde pair is text in 0.2. Write the braced strike.",
   ], conditions: [
     "",
   ] },
-  "deprecated-bare-underline": { severity: "warning", default: "on", messages: [
+  "deprecated-bare-underline": { severity: "warning", default: "upgrade", messages: [
     [
       "A bare underscore pair is text in 0.2. Write the braced underline, o",
       "r the slash pair for emphasis.",
@@ -293,7 +293,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "deprecated-cell-alignment": { severity: "warning", default: "on", messages: [
+  "deprecated-cell-alignment": { severity: "warning", default: "upgrade", messages: [
     [
       "The table cell alignment prefix \"${prefix}\" is the deprecated 0.1.13",
       " spelling, removed in 0.2.0. Alignment symbols now lead the cell's a",
@@ -303,7 +303,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "deprecated-continuation-marker": { severity: "warning", default: "on", messages: [
+  "deprecated-continuation-marker": { severity: "warning", default: "upgrade", messages: [
     [
       "The plus continuation marker was removed in 0.2 and is text here. If",
       " a block was intended, write that block after a blank line.",
@@ -336,7 +336,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "deprecated-loose-attribute": { severity: "warning", default: "on", messages: [
+  "deprecated-loose-attribute": { severity: "warning", default: "upgrade", messages: [
     [
       "The loose attribute was removed in 0.2 and is a plain attribute here",
       ". A list is loose when a blank line stands between two of its items.",
@@ -344,7 +344,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "deprecated-separator-row": { severity: "warning", default: "on", messages: [
+  "deprecated-separator-row": { severity: "warning", default: "upgrade", messages: [
     [
       "The separator row was removed in 0.2 and is a row of dashes here. Ma",
       "rk the header cells with the header mark and delete this row.",
@@ -352,7 +352,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "deprecated-spaced-thematic-break": { severity: "warning", default: "on", messages: [
+  "deprecated-spaced-thematic-break": { severity: "warning", default: "upgrade", messages: [
     [
       "A spaced thematic break was removed in 0.2; this line is a list item",
       " (or text). Write the unspaced star form.",
@@ -360,7 +360,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "deprecated-substitution-arrow": { severity: "warning", default: "on", messages: [
+  "deprecated-substitution-arrow": { severity: "warning", default: "upgrade", messages: [
     [
       "The substitution arrow was removed in 0.2; this is a strike span. Wr",
       "ite a deletion directly followed by an insertion.",
@@ -368,7 +368,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "deprecated-table-attribute": { severity: "warning", default: "on", messages: [
+  "deprecated-table-attribute": { severity: "warning", default: "upgrade", messages: [
     [
       "`header-rows` does not apply to a pipe table in 0.2. Mark header cel",
       "ls with the header mark and write alignment on the cells.",
@@ -385,7 +385,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "description-term-multi-line": { severity: "hint", default: "on", messages: [
+  "description-term-multi-line": { severity: "hint", default: "upgrade", messages: [
     [
       "This line continues the term above. Add a blank line after the term ",
       "if it is a paragraph.",
@@ -393,7 +393,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-emphasis-underscore": { severity: "warning", default: "off", messages: [
+  "djot-emphasis-underscore": { severity: "warning", default: "upgrade", messages: [
     [
       "Djot emphasis `_x_` is literal text in Carve. Carve emphasis is `/x/",
       "`.",
@@ -401,7 +401,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-heading-continuation": { severity: "warning", default: "off", messages: [
+  "djot-heading-continuation": { severity: "warning", default: "upgrade", messages: [
     [
       "Djot folds the line(s) below a heading INTO it (a plain line, or one",
       " with the same number of `#`); Carve takes only lines indented past ",
@@ -420,7 +420,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-intraword-underscore": { severity: "warning", default: "off", messages: [
+  "djot-intraword-underscore": { severity: "warning", default: "upgrade", messages: [
     [
       "Djot emphasizes this intraword `_x_`; the migration leaves it litera",
       "l, so the emphasis is lost. Brace it as `{/x/}` if it was meant.",
@@ -428,7 +428,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-plus-bullet": { severity: "warning", default: "off", messages: [
+  "djot-plus-bullet": { severity: "warning", default: "upgrade", messages: [
     [
       "Djot/Markdown `+` bullet is not a Carve bullet, so this line is a pa",
       "ragraph. Write `-` or `*`.",
@@ -436,7 +436,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-subscript-tilde": { severity: "warning", default: "off", messages: [
+  "djot-subscript-tilde": { severity: "warning", default: "upgrade", messages: [
     [
       "Djot subscript `~x~` is literal text in Carve. Carve subscript is th",
       "e braced `{,x,}`.",
@@ -444,12 +444,12 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-subscript-tilde-braced": { severity: "warning", default: "off", messages: [
+  "djot-subscript-tilde-braced": { severity: "warning", default: "upgrade", messages: [
     "Djot subscript `{~x~}` renders as *strikethrough* in Carve.",
   ], conditions: [
     "",
   ] },
-  "djot-superscript-caret": { severity: "warning", default: "off", messages: [
+  "djot-superscript-caret": { severity: "warning", default: "upgrade", messages: [
     [
       "Djot superscript `^x^` is literal text in Carve — Carve superscript ",
       "is the braced `{^x^}` only.",
@@ -996,7 +996,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "thematic-break-spelling": { severity: "hint", default: "on", messages: [
+  "thematic-break-spelling": { severity: "hint", default: "upgrade", messages: [
     [
       "This line of \"${raw}\" is text in Carve 0.2. Write \"***\" for a themat",
       "ic break.",

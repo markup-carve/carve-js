@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 
-const codes = (source) => lint(source).map((item) => `${item.code} ${item.range.startOffset}`)
+const codes = (source, options) => lint(source, options).map((item) => `${item.code} ${item.range.startOffset}`)
 
 // C2-B-120: the quoted title of a div, an admonition or a directive is inline content.
 describe('inline content of a block title', () => {
@@ -23,7 +23,8 @@ describe('inline content of a block title', () => {
   })
 
   it('reads the text runs of a title', () => {
-    expect(codes('::: "_x_"\n:::\n')).toEqual(['deprecated-bare-underline 5'])
-    expect(codes('``` "_x_"\nx\n```\n')).toEqual(['deprecated-bare-underline 5'])
+    const on = { rules: { 'deprecated-bare-underline': 'on' } }
+    expect(codes('::: "_x_"\n:::\n', on)).toEqual(['deprecated-bare-underline 5'])
+    expect(codes('``` "_x_"\nx\n```\n', on)).toEqual(['deprecated-bare-underline 5'])
   })
 })
