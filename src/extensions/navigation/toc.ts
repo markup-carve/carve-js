@@ -166,7 +166,8 @@ export function tocPlacement(): ExtensionDefinition {
       let directives = 0
       visitTree(view, (node, ancestors) => {
         if (node.type === 'directive' && node.kind === 'toc') directives++
-        if (node.type !== 'heading' || ancestors.some((above) => above.type === 'footnote')) return
+        // carve#6531: the placed table lists the top-level headings, as tableOfContents does.
+        if (node.type !== 'heading' || ancestors.length > 1) return
         const found = entry(node)
         if (found !== null) entries.push(found)
       }, false)

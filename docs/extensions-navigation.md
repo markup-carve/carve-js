@@ -26,9 +26,9 @@ if (!html.includes('<a href="#Usage">Section 1.1 - Usage</a>')) throw new Error(
 | Extension | What it does | Options |
 |---|---|---|
 | `tableOfContents()` | Inserts a `carve.toc` node with nested links to the top-level headings, at the top or bottom | `minLevel`, `maxLevel`, `listType` (`ul`, `ol`), `cssClass`, `position` (`top`, `bottom`), `collapsible`, `summary`, `open` |
-| `tocPlacement()` | Writes a table of contents at each `::: toc` directive, from the headings at any depth | `{depth=N}` or `{from=X to=Y}` on the directive |
+| `tocPlacement()` | Writes a table of contents at each `::: toc` directive, from the top-level headings | `{depth=N}` or `{from=X to=Y}` on the directive |
 | `headingPermalinks()` | Appends a link to its own id to each heading | `symbol`, `cssClass`, `ariaLabel`, `levels`, `prepend`, `showOnHover`, `copyToClipboard` |
-| `headingNumbers()` | Numbers the sections in a `<span class="section-number">` and writes `</#id>` as "Section 1.2 - Title" | `minLevel`, `label`, `crossref` (`number`, `number-title`, `title`) |
+| `headingNumbers()` | Numbers the top-level headings in a `<span class="section-number">` by depth, so a skipped level gives no duplicate (`= A`, `=== C`, `== B` is 1, 1.1, 1.2), and writes `</#id>` as "Section 1.2 - Title" | `minLevel`, `label`, `crossref` (`number`, `number-title`, `title`) |
 | `headingReference()` | Gives a class to each reference link that a heading resolves, such as `[Setup][]` | `cssClass` (default `heading-ref`) |
 | `externalLinks()` | Sets `target` and `rel` on links to `http` and `https` URLs | `target` (`''` removes it), `rel`, `nofollow` |
 | `linkPolicy()` | Writes a link, autolink or image whose URL the policy refuses as its text, and adds `rel` to the others | `allowedSchemes`, `deniedSchemes`, `allowedDomains`, `deniedDomains`, `allowExternal`, `allowInternal`, `rel`, `baseHost` |
