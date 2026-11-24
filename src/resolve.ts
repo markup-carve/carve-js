@@ -328,7 +328,9 @@ function visitExtension(node: BlockExtensionNode | InlineExtensionNode, walk: Wa
   const outer = walk.rendered
   walk.extensionDepth++
   forEachSlot(node, (nodes, step) => {
-    if ((step === 'fallback') === rendered) return
+    if (node.type === 'inline_extension' && !node.name.includes('.')) {
+      if (step !== 'children') return
+    } else if ((step === 'fallback') === rendered) return
     walk.rendered = rendered
     for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
     walk.rendered = outer

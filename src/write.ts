@@ -547,6 +547,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   extendForms(w, check, group)
   extendClosers(w, check, group)
   escapeCappedRun(check)
+  dropEscapesAfterConstruct(w, group, first, check)
   retestTrials(w, group, first, check)
   logTrials(w, check.escapes)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
@@ -557,6 +558,28 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     if (w.blankFirst) return true
   }
   return applyChanges(w, check)
+}
+
+/** A reported construct's opener can settle the tree before repairs beside its marks are needed. */
+function dropEscapesAfterConstruct(w: Writer, group: readonly Node[], first: boolean, check: Check): void {
+  if (check.constructs.size === 0 || check.escapes.length <= check.constructs.size || check.forms.length > 0 ||
+    ![...check.constructs].every(([node, at]) => node.value?.slice(at, at + 2) === '{-' || node.value?.slice(at, at + 2) === '{+')) return
+  const kept = check.escapes.filter((escape) => check.constructs.has(escape))
+  if (kept.length === 0) return
+  const savedEscapes = w.escapes
+  const savedLines = w.lines
+  const savedLead = w.lead
+  const savedStarts = new Map(w.starts)
+  const candidates = new Map(savedEscapes)
+  for (const [node, at] of kept) candidates.set(node, [...(candidates.get(node) ?? []), at].sort((a, b) => a - b))
+  const parsed = groupTree(w, group, first, candidates).children
+  const equal = parsed.length === group.length && parsed.every((node, at) => writerEqual(w, group[at]!, node))
+  w.escapes = savedEscapes
+  w.lines = savedLines
+  w.lead = savedLead
+  w.starts.clear()
+  for (const [key, value] of savedStarts) w.starts.set(key, value)
+  if (equal) check.escapes = kept
 }
 
 /**
