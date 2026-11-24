@@ -203,6 +203,21 @@ export function edgeSpace(node: InlineParent): boolean {
   return last?.type === 'text' ? isBoundarySpace(last.value.charCodeAt(last.value.length - 1)) : SPACE_NODES.has(last?.type ?? '')
 }
 
+/**
+ * C2-W-069, C2-I-049: a content text that starts or ends with the node's own mark glues it to the bare opener or
+ * closer, and the run of two reads as text, so the bare mark cannot open or close there. The form is chosen before
+ * the escape procedure runs, whatever stands around the node (carve#6469).
+ */
+function edgeMark(node: InlineParent, mark: number): boolean {
+  const first = node.children[0]
+  const last = node.children[node.children.length - 1]
+  if (first?.type === 'text' && first.value.charCodeAt(0) === mark) return true
+  if (last?.type !== 'text') return false
+  const end = last.value.length - 1
+  // C2-I-055: behind a `{` the mark is a braced opener, one token that makes no run with the closer.
+  return last.value.charCodeAt(end) === mark && last.value.charCodeAt(end - 1) !== BRACE_OPEN
+}
+
 const SPACE_NODES = new Set(['soft_break', 'hard_break', 'non_breaking_space'])
 
 /**
@@ -270,8 +285,9 @@ function paired(mark: string, bit: number, inside: number): InlineWriter {
 }
 
 function bracedPair(w: Writer, node: InlineParent, flags: number, bit: number, inside: number): boolean {
+  const mark = bit === 1 ? SLASH : STAR
   if ((flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || edgeComment(node) || edgeSpace(node) ||
-    pairingMark(node, bit === 1 ? SLASH : STAR)) {
+    pairingMark(node, mark) || edgeMark(node, mark)) {
     w.bracedAnyway.add(node)
     return true
   }
