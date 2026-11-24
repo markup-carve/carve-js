@@ -643,6 +643,12 @@ function stopsCodeSpan(step: RespellStep, [node, at]: [TextNode, number]): boole
 
 const contentConstruct: RespellStep = (c, es, i) => escapeContentConstruct(c, es[i]!)
 const contentStart: RespellStep = (c, es, i) => escapeContentStart(c, es[i]!)
+const braceAtContentEnd: RespellStep = (c, es, i) => {
+  const node = es[i]!
+  // Case one leads only when this parse formed no node of this kind. Otherwise the
+  // construct that did form is reported by the kind round before a trial is made.
+  return c.parsed.every((candidate) => candidate.type === 'text') && escapeOpeningBrace(c, node)
+}
 const contentBraceBeforeStart: RespellStep = (c, es, i) => {
   const node = es[i]!
   const mark = CLOSING_MARKS.get(node.type)
@@ -655,6 +661,7 @@ const contentBraceBeforeStart: RespellStep = (c, es, i) => {
 // C2-W-088: the leftmost construct takes the backslash first, so a construct inside the content is
 // escaped before the end of the content and the text behind the node.
 const RESPELL_STEPS: readonly RespellStep[] = [
+  braceAtContentEnd,
   escapeBefore,
   (c, es, i, attempt) => markAtContentEdge(c, es[i]!) && otherForm(c, es, i, attempt),
   contentBraceBeforeStart,
