@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import { CarveWriteError, type DocumentNode, type ExtensionDefinition, format, formatWithDiagnostics, parse,
   tabsExtensions, write } from '../src/index.ts'
 import { checkGates } from '../test/support/writer-checks.ts'
-import { check } from './check.ts'
+import { check, growth } from './check.ts'
 import { random } from './generate.ts'
 
 function optionRandom(name: string): { int(limit: number): number, bool(): boolean } {
@@ -149,4 +149,20 @@ void test('C2-W-066: a bare CSV cell whose value is a space is valid', () => {
 
 void test('C2-W-080: a hard break keeps text before it in a hard-break block', () => {
   assert.equal(check('format', '::: \\\n: \\\nt', random(1)), null)
+})
+
+/** A cost model in milliseconds by the number of copies of a 1,000-character source. */
+function modeled(cost: (copies: number) => number): (input: string) => number {
+  return (input) => cost(input.length / 1000)
+}
+
+void test('a cost per byte that a depth cap stops rising is linear, not superlinear', () => {
+  const source = 'x'.repeat(1000)
+  assert.equal(growth(source, modeled((copies) => copies * Math.min(copies, 3))), null)
+  assert.equal(growth(source, modeled((copies) => copies)), null)
+})
+
+void test('a quadratic cost stays a finding at four times the size', () => {
+  const found = growth('x'.repeat(1000), modeled((copies) => copies * copies))
+  assert.equal(found, '1.00, 4.00, 16.00 ms; 16.00, 64.00, 256.00 ms')
 })

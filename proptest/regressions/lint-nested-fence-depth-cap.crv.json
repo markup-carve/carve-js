@@ -1,0 +1,11 @@
+{
+  "kind": "lint-superlinear",
+  "detail": "1.39, 3.45, 12.65 ms",
+  "seed": 1151801972,
+  "runSeed": 1794696020,
+  "engineCommit": "c25bccc979240d4300a5edbe9980d1e510c33b39",
+  "originalBytes": 3302,
+  "minimizedBytes": 3302,
+  "clause": "harness",
+  "id": "9fc3ed766c9e082d"
+}
