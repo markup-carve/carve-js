@@ -40,6 +40,16 @@ describe('braced-span-opener-as-text: the closer of its own mark in its own leaf
     expect(findings('*a {/b* $`/}`')).toEqual([])
   })
 
+  it('skips a closer in a link destination or an attribute value', () => {
+    expect(findings('*a {=b* [x](=})')).toEqual([])
+    expect(findings('*a {=b* [x]{title="=}"}')).toEqual([])
+  })
+
+  it('reads a closer made of a span mark or smart punctuation and text', () => {
+    expect(findings('*a {/b* /c/}')).toEqual([[3, 5]])
+    expect(findings('*a {-b* c --}')).toEqual([[3, 5]])
+  })
+
   it('skips an opener that a braced closer removed', () => {
     expect(findings('{*a {/b*} c/}')).toEqual([])
   })

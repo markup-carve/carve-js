@@ -116,65 +116,105 @@ function commentInLabel(node: Node, path: string, context: LintContext): void {
 const BRACED_MARKS = '*/_~=+-^,'
 const INLINE_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'heading', 'definition_term', 'cell_paragraph', 'line',
   'citation_definition'])
-// C2-W-107: lint does not search these for a closer.
-const OPAQUE_INLINES: ReadonlySet<string> = new Set(['autolink', 'code', 'raw_inline', 'literal_inline', 'math', 'comment'])
+const DELIMITED_SPANS: ReadonlySet<string> = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight',
+  'superscript', 'subscript', 'insert', 'delete'])
 
-interface OpenerScan {
-  leaf: { path: string, start: number, end: number, openers: [number, string, string][], opaque: [number, number][] } | null
-  leaves: NonNullable<OpenerScan['leaf']>[]
+interface OpenerLeaf {
+  path: string
+  start: number
+  end: number
+  openers: [number, string, string][]
+  /** Where a closer can stand: text and the marks of formed spans, not atoms such as code or a link tail (C2-W-107). */
+  content: [number, number][]
 }
+
+interface OpenerScan { leaf: OpenerLeaf | null, leaves: OpenerLeaf[] }
 
 const openerScans = new WeakMap<LintContext, OpenerScan>()
 
-function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
-  let scan = openerScans.get(context)
-  if (scan === undefined) openerScans.set(context, scan = { leaf: null, leaves: [] })
-  const range = bounds(node, context)
-  if (range === null) return
-  if (INLINE_LEAVES.has(node.type)) {
-    scan.leaf = { path, start: range[0], end: range[1], openers: [], opaque: [] }
-    return
-  }
-  const leaf = scan.leaf
-  if (leaf !== null && OPAQUE_INLINES.has(node.type) && path.startsWith(`${leaf.path}/`)) leaf.opaque.push(range)
-  // An opener inside a braced span is removed by a braced closer, which the row does not report.
-  if ((node.type !== 'strong' && node.type !== 'emphasis') || context.source[range[0]] === '{' || leaf === null
-    || !path.startsWith(`${leaf.path}/`)) return
+function spanMarks(node: Node, range: [number, number], leaf: OpenerLeaf, context: LintContext): void {
+  if (!('children' in node) || node.children.length === 0) return
+  const width = context.source[range[0]] === '{' ? 2 : 1
+  leaf.content.push([range[0], range[0] + width])
+  const last = bounds(node.children[node.children.length - 1]!, context)
+  if (last !== null) leaf.content.push([last[1], last[1] + width])
+}
+
+function bracedOpeners(node: Node, path: string, leaf: OpenerLeaf, scan: OpenerScan, context: LintContext): void {
+  if (!('children' in node)) return
   node.children.forEach((child, index) => {
     if (child.type !== 'text') return
     const text = bounds(child, context)
     if (text === null) return
-    for (let at = context.source.indexOf('{', text[0]); at >= 0 && at + 1 < text[1]; at = context.source.indexOf('{', at + 1)) {
+    for (let at = text[0]; at + 1 < text[1]; at++) {
       const mark = context.source[at + 1]!
-      if (!BRACED_MARKS.includes(mark) || escaped(context.source, at)) continue
+      if (context.source[at] !== '{' || !BRACED_MARKS.includes(mark) || escaped(context.source, at)) continue
       if (leaf.openers.length === 0) scan.leaves.push(leaf)
       leaf.openers.push([at, mark, `${path}/children/${index}`])
     }
   })
 }
 
-/** The last unescaped braced closer of each mark in the leaf block, outside its opaque inlines. */
-function lastClosers(leaf: NonNullable<OpenerScan['leaf']>, context: LintContext): Map<string, number> {
+let lastScan: [LintContext, OpenerScan] | null = null
+
+function openerScan(context: LintContext): OpenerScan {
+  if (lastScan?.[0] === context) return lastScan[1]
+  let scan = openerScans.get(context)
+  if (scan === undefined) openerScans.set(context, scan = { leaf: null, leaves: [] })
+  lastScan = [context, scan]
+  return scan
+}
+
+function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
+  const scan = openerScan(context)
+  const leaf = scan.leaf
+  const isLeaf = INLINE_LEAVES.has(node.type)
+  const opens = node.type === 'strong' || node.type === 'emphasis'
+  // Only a closer after an opener counts, so nothing is kept for a leaf block before its first opener.
+  if (!isLeaf && !opens && (leaf?.openers.length ?? 0) === 0) return
+  const range = bounds(node, context)
+  if (range === null) return
+  if (isLeaf) scan.leaf = { path, start: range[0], end: range[1], openers: [], content: [] }
+  else if (leaf !== null && path.startsWith(`${leaf.path}/`)) collectOpeners(node, path, range, leaf, context)
+}
+
+function collectOpeners(node: Node, path: string, range: [number, number], leaf: OpenerLeaf, context: LintContext): void {
+  // An opener inside a braced span is removed by a braced closer, which the row does not report.
+  if ((node.type === 'strong' || node.type === 'emphasis') && context.source[range[0]] !== '{') {
+    bracedOpeners(node, path, leaf, openerScan(context), context)
+  }
+  if (leaf.openers.length === 0) return
+  if (node.type === 'text' || node.type === 'smart_punctuation') leaf.content.push(range)
+  else if (DELIMITED_SPANS.has(node.type)) spanMarks(node, range, leaf, context)
+}
+
+/** The last unescaped braced closer of each mark in the content of the leaf block. */
+function lastClosers(leaf: OpenerLeaf, context: LintContext): Map<string, number> {
+  const inside = new Uint8Array(leaf.end - leaf.start + 1)
+  for (const [start, end] of leaf.content) inside.fill(1, start - leaf.start, end - leaf.start)
   const last = new Map<string, number>()
-  let slashes = 0
-  let skip = 0
-  for (let at = leaf.start; at < leaf.end; at++) {
-    const char = context.source[at]!
-    while (skip < leaf.opaque.length && leaf.opaque[skip]![1] <= at) skip++
-    if (skip < leaf.opaque.length && leaf.opaque[skip]![0] <= at) {
-      at = leaf.opaque[skip]![1] - 1
-      slashes = 0
-    } else if (char === '\\') slashes++
-    else {
-      if (slashes % 2 === 0 && context.source[at + 1] === '}' && BRACED_MARKS.includes(char)) last.set(char, at)
-      slashes = 0
-    }
+  const source = context.source
+  for (let at = leaf.start + 1; at < leaf.end; at++) {
+    if (source.charCodeAt(at) !== 0x7d) continue
+    const mark = source[at - 1]!
+    if (inside[at - leaf.start] === 1 && inside[at - 1 - leaf.start] === 1 && BRACED_MARKS.includes(mark)
+      && !escapedInside(at - 1, leaf, inside, source)) last.set(mark, at - 1)
   }
   return last
 }
 
+/** Whether a backslash run of the content, right before `at`, escapes it. */
+function escapedInside(at: number, leaf: OpenerLeaf, inside: Uint8Array, source: string): boolean {
+  let slashes = 0
+  while (at - 1 - slashes >= leaf.start && inside[at - 1 - slashes - leaf.start] === 1 && source[at - 1 - slashes] === '\\') {
+    slashes++
+  }
+  return slashes % 2 === 1
+}
+
 /** C2-I-059: an opener counts when a braced closer of its mark follows it in the same leaf block. */
 function finishBracedOpeners(context: LintContext): void {
+  lastScan = null
   for (const leaf of openerScans.get(context)?.leaves ?? []) {
     const last = lastClosers(leaf, context)
     for (const [at, mark, path] of leaf.openers) {
@@ -219,7 +259,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('platform-issue-reference', ['text'], platformIssue),
   nodeRule('platform-mention-token', ['text', 'mention'], platformMention),
       nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
-    nodeRule('braced-span-opener-as-text', ['strong', 'emphasis', ...INLINE_LEAVES, ...OPAQUE_INLINES] as Node['type'][],
+    nodeRule('braced-span-opener-as-text', ['text', 'smart_punctuation', ...DELIMITED_SPANS, ...INLINE_LEAVES] as Node['type'][],
       bracedSpanAsText),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
       ]
