@@ -526,15 +526,8 @@ function countedBrackets({ closers, openers }: BracketCounts, scan: BracketScan)
 function loneLinkBrackets(w: Writer, nodes: readonly Inline[], scan: BracketScan): void {
   for (const node of nodes) {
     if (node.type === 'text') textBracketPlaces(node, scan)
-    else if (node.type === 'link') {
-      // A nested link is a boundary for bracket pairs in the containing label. Brackets on either side
-      // cannot pair through its own bracketed spelling, even when the whole label happens to read back.
-      for (const place of scan.open) if (typeof place !== 'number') scan.lone.push(place)
-      scan.loneCount += scan.size
-      scan.open = []
-      scan.size = 0
-      countedBrackets(nestedLinkBrackets(w, node), scan)
-    }
+    // A nested link bounds no pairs (carve#6544): text brackets on either side pair through it.
+    else if (node.type === 'link') countedBrackets(nestedLinkBrackets(w, node), scan)
     else if ('children' in node && node.type !== 'citation_group') loneLinkBrackets(w, node.children, scan)
   }
 }
