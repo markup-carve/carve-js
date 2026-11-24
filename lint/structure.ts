@@ -216,7 +216,7 @@ function collectOpeners(node: Node, path: string, range: [number, number], scan:
 function textContent([start, end]: [number, number], scope: number, scan: OpenerScan, leaf: OpenerLeaf, source: string): void {
   let from = start
   for (let at = start; at < end; at++) {
-    if (source.charCodeAt(at) !== 0x7b) continue
+    if (source.charCodeAt(at) !== 0x7b || escaped(source, at)) continue
     const after = readAttributeBlock(source, at, end, scan.memo, null)
     if (after < 0) continue
     if (at > from) leaf.content.push(from, at, scope)
