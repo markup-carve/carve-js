@@ -112,20 +112,68 @@ function commentInLabel(node: Node, path: string, context: LintContext): void {
 
 /** Where the opening mark of a block stands: an attributed block starts at its attribute lines (C2-W-138). */
 
+// C2-I-043: the marks of a braced opener.
+const BRACED_MARKS = '*/_~=+-^,'
+const INLINE_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'heading', 'definition_term', 'cell_paragraph', 'line',
+  'citation_definition'])
+
+interface OpenerScan {
+  leaf: { path: string, start: number, end: number, openers: [number, string, string][] } | null
+  leaves: NonNullable<OpenerScan['leaf']>[]
+}
+
+const openerScans = new WeakMap<LintContext, OpenerScan>()
+
 function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'text') return
-  const split = path.lastIndexOf('/children/')
-  if (split < 0) return
-  const parent = context.nodeTypes.get(path.slice(0, split))
-  if (parent !== 'strong' && parent !== 'emphasis') return
-  const source = raw(node, context)
-  const openers = [source.indexOf('{*'), source.indexOf('{/')].filter((at) => at >= 0)
-  const at = openers.length === 0 ? -1 : Math.min(...openers)
+  let scan = openerScans.get(context)
+  if (scan === undefined) openerScans.set(context, scan = { leaf: null, leaves: [] })
   const range = bounds(node, context)
-  const closer = source[at + 1] === '*' ? '*}' : '/}'
-  const after = range === null ? '' : context.source.slice(range[0] + at + 2)
-  if (at >= 0 && range !== null && after.includes(closer)) context.report('braced-span-opener-as-text', range[0] + at,
-    range[0] + at + 2, path)
+  if (range === null) return
+  if (INLINE_LEAVES.has(node.type)) {
+    scan.leaf = { path, start: range[0], end: range[1], openers: [] }
+    return
+  }
+  // An opener inside a braced span is removed by a braced closer, which the row does not report.
+  const leaf = scan.leaf
+  if ((node.type !== 'strong' && node.type !== 'emphasis') || context.source[range[0]] === '{' || leaf === null
+    || !path.startsWith(`${leaf.path}/`)) return
+  node.children.forEach((child, index) => {
+    if (child.type !== 'text') return
+    const text = bounds(child, context)
+    if (text === null) return
+    for (let at = context.source.indexOf('{', text[0]); at >= 0 && at + 1 < text[1]; at = context.source.indexOf('{', at + 1)) {
+      const mark = context.source[at + 1]!
+      if (!BRACED_MARKS.includes(mark) || escaped(context.source, at)) continue
+      if (leaf.openers.length === 0) scan.leaves.push(leaf)
+      leaf.openers.push([at, mark, `${path}/children/${index}`])
+    }
+  })
+}
+
+/** The last unescaped braced closer of each mark in `[start, end)`, outside opaque leaves. */
+function lastClosers(start: number, end: number, context: LintContext): Map<string, number> {
+  const last = new Map<string, number>()
+  let slashes = 0
+  for (let at = start; at < end; at++) {
+    const char = context.source[at]!
+    if (context.leafMask[at] === 1) slashes = 0
+    else if (char === '\\') slashes++
+    else {
+      if (slashes % 2 === 0 && context.source[at + 1] === '}' && BRACED_MARKS.includes(char)) last.set(char, at)
+      slashes = 0
+    }
+  }
+  return last
+}
+
+/** C2-I-059: an opener counts when a braced closer of its mark follows it in the same leaf block. */
+function finishBracedOpeners(context: LintContext): void {
+  for (const leaf of openerScans.get(context)?.leaves ?? []) {
+    const last = lastClosers(leaf.start, leaf.end, context)
+    for (const [at, mark, path] of leaf.openers) {
+      if ((last.get(mark) ?? -1) >= at + 2) context.report('braced-span-opener-as-text', at, at + 2, path)
+    }
+  }
 }
 
 function nonDescriptiveLink(node: Node, path: string, context: LintContext): void {
@@ -139,6 +187,7 @@ function nonDescriptiveLink(node: Node, path: string, context: LintContext): voi
 }
 
 export function finishStructure(context: LintContext): void {
+  finishBracedOpeners(context)
   for (let at = context.diagnostics.length - 1; at >= 0; at--) {
     const entry = context.diagnostics[at]!
     if (entry.code !== 'platform-issue-reference' && entry.code !== 'platform-mention-token') continue
@@ -163,6 +212,6 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('platform-issue-reference', ['text'], platformIssue),
   nodeRule('platform-mention-token', ['text', 'mention'], platformMention),
       nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
-    nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
+    nodeRule('braced-span-opener-as-text', ['strong', 'emphasis', ...INLINE_LEAVES] as Node['type'][], bracedSpanAsText),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
       ]
