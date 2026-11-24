@@ -25,7 +25,7 @@ it('C2-W-148: the attribute rows report what the hand-written rules reported on 
     ['{aligns=x}\n| a |\n', ['table-attribute-invalid@1-9']],
     ['a [x]{abbr=t} b\n', []],
   ]
-  for (const [source, expected] of cases) expect(findings(source), JSON.stringify(source)).toEqual(expected)
+  for (const [source, expected] of cases) expect(findings(source, { upgrade: true }), JSON.stringify(source)).toEqual(expected)
 })
 
 it('C2-B-102: every attribute line of a table carries its keys', () => {

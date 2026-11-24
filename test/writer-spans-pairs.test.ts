@@ -92,7 +92,7 @@ describe('C2-W-146: canonical output passes the pair rules of lint', () => {
     expect(source).toBe(expected)
     expect(diagnostics).toEqual([])
     expect(treesEqual(parse(source), tree)).toBe(true)
-    expect(lint(source).filter((entry) => PAIR_RULES.includes(entry.code))).toEqual([])
+    expect(lint(source, { upgrade: true }).filter((entry) => PAIR_RULES.includes(entry.code))).toEqual([])
     expect(format(source)).toBe(source)
   })
 

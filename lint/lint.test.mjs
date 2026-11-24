@@ -260,10 +260,10 @@ describe('C2-W-107 spelling rule leaf near misses', () => {
     const line = sample.trigger.split('\n').find((part) => part.includes(sample.fragment)) ?? sample.fragment
     const marker = '`'.repeat(Math.max(1, ...[...line.matchAll(/`+/g)].map((match) => match[0].length + 1)))
     it(`C2-W-107 ${rule.id} ignores its trigger in a code span`, () => {
-      expect(lint(`before ${marker}${line}${marker} after\n`, sample.options).some((entry) => entry.code === rule.id)).toBe(false)
+      expect(lint(`before ${marker}${line}${marker} after\n`, { upgrade: true, ...sample.options }).some((entry) => entry.code === rule.id)).toBe(false)
     })
     it(`C2-W-107 ${rule.id} ignores its trigger in a code block`, () => {
-      expect(lint(`\`\`\`\n${sample.trigger}\n\`\`\`\n`, sample.options).some((entry) => entry.code === rule.id)).toBe(false)
+      expect(lint(`\`\`\`\n${sample.trigger}\n\`\`\`\n`, { upgrade: true, ...sample.options }).some((entry) => entry.code === rule.id)).toBe(false)
     })
   }
 })

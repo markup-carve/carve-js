@@ -24,7 +24,7 @@ describe('C2-W-146: pair escapes in a planned group', () => {
     expect(output.source).toBe(expected)
     expect(output.diagnostics).toEqual([])
     expect(stats.parses).toBe(1)
-    expect(lint(output.source).filter((entry) => PAIR_RULES.includes(entry.code))).toEqual([])
+    expect(lint(output.source, { upgrade: true }).filter((entry) => PAIR_RULES.includes(entry.code))).toEqual([])
   })
 
   it('writes plain paragraphs of pairs with their escapes placed before the write: one readback each, no repair', () => {
