@@ -20,3 +20,16 @@ describe('C2-W-088: a span on the tree\'s own opener reports no kind (carve#6566
     ['> {,\\{,,}\\},}\\,{,', '> {,\\{,,}},},{,\n'],
   ])('writes %j as %j', checkWrites)
 })
+
+// carve#6570, C2-W-125 case nine: the bare form of the underline reads as an attribute block (C2-I-043), so the first
+// character of its content that the block holds takes the backslash.
+describe('C2-W-125, case nine: an underline that reads as an attribute block (carve#6570)', () => {
+  it.each([
+    ['{_=\\._}', '{_\\=._}\n'],
+    ['{_=\\!_}', '{_\\=!_}\n'],
+    ['x{_=\\._}y', 'x{_\\=._}y\n'],
+    ['> a {_=\\._} b', '> a {_\\=._} b\n'],
+    ['- {_=\\._}', '- {_\\=._}\n'],
+    ['| {_=\\._} |', '| {_\\=._} |\n'],
+  ])('writes %j as %j', checkWrites)
+})

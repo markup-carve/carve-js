@@ -23,6 +23,7 @@ import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharact
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
+import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { textQuoteKind } from './write-plan-smart.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
@@ -695,7 +696,21 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   (c, es, i) => escapeKeyCaret(c, es[i]!),
   inContentAlone,
   (c, es, i) => escapeNoteCaret(c, es[i]!),
+  escapeAttributeKey,
 ]
+
+/**
+ * C2-W-125, case nine: the braced opener of `es[i]` reads as the key of a valid attribute block (C2-I-043), so the
+ * first character of its content that the block holds takes the backslash: an underline of `=.` is `{_\=._}`.
+ */
+function escapeAttributeKey(c: Check, es: readonly Node[], i: number): boolean {
+  const first = childNodes(es[i]!)[0]
+  if (first?.type !== 'text') return false
+  const text = writeInlines(c.w, es.slice(i), c.flags)
+  if (text[0] !== '{' || readAttributeBlock(text, 0, text.length, emptyMemo(), null) < 0) return false
+  for (let at = 0; at < first.value.length; at++) if (escapeAt(c, first, at)) return true
+  return false
+}
 
 /**
  * C2-W-125: the backslash of a closer in the content is taken back on its own, without the earlier trials for the
