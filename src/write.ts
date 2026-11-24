@@ -1139,15 +1139,12 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   // A blank line separates groups, so earlier escape and form choices no longer affect readback.
   if (from > 0) clearGroupChoices(w)
   const group = document.children.slice(from, groupEnd(w, document.children, from))
-  const knownEscapes = simpleSpanForest(group)
-  if (run.path === 'plan' && knownEscapes.size > 0) {
-    for (const [node, offsets] of knownEscapes) w.escapes.set(node, offsets)
-    resetLines(w)
-    writeBlocks(w, group, '', 0, false)
-    run.stats.planned++
-    run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), 0])
-    return from + group.length
-  }
+  if (writeSimpleSpanForest(w, run, group)) return from + group.length
+  return writeOrdinaryGroup(w, run, document, from, first, group)
+}
+
+function writeOrdinaryGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,
+  group: readonly Node[]): number {
   const reach = pairReach(group, w.escapes, EARLY)
   // Pair rules depend on text and escapes already chosen, so place their ordinary escapes before
   // the first write. The check below still handles a pair exposed by a later repair choice.
@@ -1173,6 +1170,19 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
     return end
   }
   return repairPairEscapes(w, run, document, from, first, end)
+}
+
+/** A formable forest with only unmatched bracket openers has one source and no structural repair choice. */
+function writeSimpleSpanForest(w: Writer, run: WriterRun, group: readonly Node[]): boolean {
+  if (run.path !== 'plan') return false
+  const knownEscapes = simpleSpanForest(group)
+  if (knownEscapes.size === 0) return false
+  for (const [node, offsets] of knownEscapes) w.escapes.set(node, offsets)
+  resetLines(w)
+  writeBlocks(w, group, '', 0, false)
+  run.stats.planned++
+  run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), 0])
+  return true
 }
 
 /** The choices of the group a pair round can take back; the losses of the document are a mark, not a copy. */

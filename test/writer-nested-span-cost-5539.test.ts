@@ -51,4 +51,19 @@ describe('nested span import cost (carve-js#5539, carve-js#5532)', () => {
       expect(fast.output).toEqual(repaired.output)
     }
   })
+
+  it('keeps readback for empty sibling spans and wrappers', () => {
+    const opener: Inline = { type: 'span', attrs: { keyValues: [['title', 'ab']] },
+      children: [{ type: 'text', value: '[ ' }] }
+    for (const sibling of [
+      { type: 'span', attrs: { keyValues: [['title', 'ab']] }, children: [] },
+      { type: 'emphasis', children: [] },
+    ] as Inline[]) {
+      const document: DocumentNode = { type: 'document', astVersion: '2.0',
+        children: [{ type: 'paragraph', children: [opener, sibling] }] }
+      const planned = writeTreeWithStats(document, undefined, 'plan', false)
+      const repaired = writeTreeWithStats(document, undefined, 'repair', false)
+      expect(planned.output).toEqual(repaired.output)
+    }
+  })
 })

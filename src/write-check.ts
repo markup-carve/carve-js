@@ -1028,13 +1028,27 @@ function forestWrapper(node: Node, inside: boolean): boolean {
   return node.type === 'paragraph' || (!inside && (node.type === 'emphasis' || node.type === 'strong'))
 }
 
+/** Every node the shortcut writes must be supported by a bracket opener in its subtree. */
+function forestNodesCanForm(scanned: readonly Node[], escapes: Map<TextNode, number[]>): boolean {
+  const hasOpener = new Map<Node, boolean>()
+  for (let at = scanned.length - 1; at >= 0; at--) {
+    const node = scanned[at]!
+    const found = node.type === 'text' ? escapes.has(node) : childNodes(node).some((child) => hasOpener.get(child))
+    if (node.type !== 'paragraph' && node.type !== 'text' && !found) return false
+    hasOpener.set(node, found)
+  }
+  return true
+}
+
 /** Independent formable span branches in one paragraph share a bracket kind in the repair. */
 export function simpleSpanForest(nodes: readonly Node[]): Map<TextNode, number[]> {
   const escapes = new Map<TextNode, number[]>()
   if (nodes.length !== 1 || nodes[0]?.type !== 'paragraph') return escapes
   const pending: [Node, boolean][] = [[nodes[0], false]]
+  const scanned: Node[] = []
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
     const [node, inside] = item
+    scanned.push(node)
     if (node.type === 'span') {
       if (unformable(node, 0) || /[\[\]]/u.test(braceBlock(node))) return new Map<TextNode, number[]>()
     } else if (node.type === 'text') {
@@ -1042,7 +1056,7 @@ export function simpleSpanForest(nodes: readonly Node[]): Map<TextNode, number[]
     } else if (!forestWrapper(node, inside)) return new Map<TextNode, number[]>()
     for (const child of childNodes(node)) pending.push([child, inside || node.type === 'span'])
   }
-  return escapes
+  return forestNodesCanForm(scanned, escapes) ? escapes : new Map<TextNode, number[]>()
 }
 
 /** Neither `e` nor a node around it can form, so no escape makes one form. */
