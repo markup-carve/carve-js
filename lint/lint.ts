@@ -144,14 +144,16 @@ function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
   return byType
 }
 
-function visitChildren(node: Node, path: string, context: LintContext, controls: Control[][]): void {
+// `quotes` counts the block quotes whose children hold the node.
+function visitChildren(node: Node, path: string, context: LintContext, controls: Control[][], quotes: number): void {
   forEachSlot(node, (nodes, step, single) => {
+    const inner = node.type === 'block_quote' && step === 'children' ? quotes + 1 : quotes
     if (single) {
       const child = nodes[0]
       if (child === undefined) return
       const childPath = `${path}/${step}`
       context.dataWalk?.child(child, childPath, node, path, 0)
-      visit(child, childPath, context, controls)
+      visit(child, childPath, context, controls, inner)
     } else {
       for (let index = 0; index < nodes.length; index++) {
         const child = nodes[index]
@@ -159,7 +161,7 @@ function visitChildren(node: Node, path: string, context: LintContext, controls:
         if (inertTableNode(node, child, index, nodes.length, context)) continue
         const childPath = `${path}/${step}/${index}`
         context.dataWalk?.child(child, childPath, node, path, index)
-        visit(child, childPath, context, controls)
+        visit(child, childPath, context, controls, inner)
       }
     }
   }, SOURCE_ORDER)
@@ -196,7 +198,7 @@ function collectKeys(node: Node, path: string, context: LintContext): void {
   else if (node.type === 'footnote_ref') context.state.usedFootnotes.add(node.key)
 }
 
-function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
+function visit(node: Node, path: string, context: LintContext, controls: Control[][], quotes: number): void {
   context.nodeTypes.set(path, node.type)
   collectKeys(node, path, context)
   if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
@@ -205,11 +207,11 @@ function visit(node: Node, path: string, context: LintContext, controls: Control
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
     node.type, path, pos.startLine, pos.endLine)
   markContent(node, context)
-  maskLeaf(node, path, context)
+  maskLeaf(node, path, context, quotes)
   const control = controlOf(node, context)
   if (control !== null && pos !== undefined) controls[pos.startLine]!.push(control)
   runNodeRules(node, path, context)
-  visitChildren(node, path, context, controls)
+  visitChildren(node, path, context, controls, quotes)
 }
 
 const CONTENT_TYPES: ReadonlySet<Node['type']> = new Set(['paragraph', 'caption', 'line', 'heading', 'definition_term', 'thematic_break', 'table_row'])
@@ -230,7 +232,7 @@ function markContent(node: Node, context: LintContext): void {
 const OPAQUE_LEAF_TYPES: readonly Node['type'][] = ['autolink', 'code', 'raw_inline', 'literal_inline', 'math', 'comment',
   'code_block', 'raw_block', 'frontmatter', 'include', 'link_reference_definition', 'abbreviation_def']
 
-function maskLeaf(node: Node, path: string, context: LintContext): void {
+function maskLeaf(node: Node, path: string, context: LintContext, quotes: number): void {
   if (!OPAQUE_LEAF_TYPES.includes(node.type)) return
   const layout = context.layouts.get(path)
   const startByte = node.pos?.startOffset ?? layout?.startByte
@@ -239,15 +241,11 @@ function maskLeaf(node: Node, path: string, context: LintContext): void {
   const start = context.chars[startByte] ?? 0
   const end = context.chars[endByte] ?? context.source.length
   context.leafMask.fill(1, start, end)
-  if (!BLOCK_OPAQUE.has(node.type)) unmaskQuotePrefixes(path, start, end, context)
+  if (!BLOCK_OPAQUE.has(node.type)) unmaskQuotePrefixes(quotes, start, end, context)
 }
 
 // C2-B-027: the quote marks that prefix a later line of an inline span in a quote are no characters of the span.
-function unmaskQuotePrefixes(path: string, start: number, end: number, context: LintContext): void {
-  let quotes = 0
-  for (let at = path.lastIndexOf('/children/'); at > 0; at = path.lastIndexOf('/children/', at - 1)) {
-    if (context.nodeTypes.get(path.slice(0, at)) === 'block_quote') quotes++
-  }
+function unmaskQuotePrefixes(quotes: number, start: number, end: number, context: LintContext): void {
   if (quotes === 0) return
   for (let line = context.source.indexOf('\n', start); line >= 0 && line + 1 < end; line = context.source.indexOf('\n', line + 1)) {
     context.leafMask.fill(0, line + 1, Math.min(quotePrefixEnd(context.source, line + 1, quotes), end))
@@ -580,7 +578,7 @@ function lintSource(source: string, options: LintOptions, facts?: SourceFacts): 
   const defaults = options.rules === undefined && options.platforms === undefined && options.upgrade !== true
   const walk = startDataWalk(parsed.document, context, (id) => active(id, options), defaults)
   if (walk !== undefined) context.dataWalk = walk
-  visit(parsed.document, '', context, controls)
+  visit(parsed.document, '', context, controls, 0)
   finishStructure(context)
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
   const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !DATA_RULE_IDS.has(rule.id))
