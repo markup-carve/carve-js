@@ -45,6 +45,14 @@ describe('braced-span-opener-as-text: the closer of its own mark in its own leaf
     expect(findings('*a {=b* [x]{title="=}"}')).toEqual([])
   })
 
+  it('pairs only inside the bracket, as C2-I-007 does', () => {
+    expect(findings('*a {/b* ^[x /}]')).toEqual([])
+    expect(findings('[*a {/b* c](u) d /}')).toEqual([])
+    expect(findings('[*a {/b* c /}](u)')).toEqual([[4, 6]])
+    expect(findings('[*a {/b* c /}]{.k} d')).toEqual([[4, 6]])
+    expect(findings('*a {/b* [x](u) c /}')).toEqual([[3, 5]])
+  })
+
   it('reads a closer made of a span mark or smart punctuation and text', () => {
     expect(findings('*a {/b* /c/}')).toEqual([[3, 5]])
     expect(findings('*a {-b* c --}')).toEqual([[3, 5]])
