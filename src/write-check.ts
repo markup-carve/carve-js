@@ -17,6 +17,7 @@ import {
   writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
+import { braceBlock } from './write-attributes.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
@@ -152,6 +153,8 @@ export interface Check {
   /** The parsed list and the place in it of the node under respelling, for the test of `note`. */
   parsed: readonly Node[]
   parsedAt: number
+  /** In a probe: a node around the probed content, outside `around`, can form (`noneForms`). */
+  formsAround: boolean
 }
 
 export function createCheck(w: Writer): Check {
@@ -160,6 +163,7 @@ export function createCheck(w: Writer): Check {
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
     cut: false, codeTrials: new Set(), leadTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(),
     constructs: new Set(), behind: new Set(), capped: [], earlyCloser: false, notesDone: new Map(), note: null, parsed: [], parsedAt: 0,
+    formsAround: false,
   }
 }
 
@@ -567,6 +571,11 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]!
   // A node that the writer reported as lost when it wrote it reads back as something else, and nothing repairs that.
   if (c.w.lost.has(e)) return false
+  // Its escapes would only serve a node around it, and none can form; each level probed its subtree (carve#6543).
+  if (noneForms(c, e)) {
+    c.losses.push([e, null])
+    return false
+  }
   const attempt = c.w.attempts.get(e) ?? { step: 0, escapes: [] }
   c.w.attempts.set(e, attempt)
   const before = c.escapes.length
@@ -831,6 +840,7 @@ function probeRound(c: Check, w: Writer, e: Node, expected: readonly Node[], fla
   const block = parsed[0]
   if (parsed.length !== 1 || block?.type !== 'paragraph') return null
   const probe = createCheck(w)
+  probe.formsAround = c.formsAround || !unformable(e, c.flags) || c.around.some(([list, at, around]) => !unformable(list[at]!, around))
   probe.flags = flags
   probe.source = source
   if (e.type === 'inline_footnote' && !readsBracketConstruct(c, e)) probe.note = e
@@ -972,6 +982,19 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
     probeEscapes(c, e, [word, ...inlines], flags, 'across', takes) === true
   if (found && outer.length > 0) reportOpeners(c, before)
   return found
+}
+
+/**
+ * A span whose attribute block holds a line break forms in no spelling: the block closes the span (C2-I-040) and is all
+ * on one line (C2-I-028). A table row is written on one line, which takes the break out of the block.
+ */
+function unformable(node: Node, flags: number): boolean {
+  return node.type === 'span' && (flags & IN_CELL) === 0 && /[\r\n]/u.test(braceBlock(node))
+}
+
+/** Neither `e` nor a node around it can form, so no escape makes one form. */
+function noneForms(c: Check, e: Node): boolean {
+  return unformable(e, c.flags) && !c.formsAround && c.around.every(([list, at, flags]) => unformable(list[at]!, flags))
 }
 
 /** Whether a construct can open in the content of `e` and run on over its closer. */
