@@ -846,6 +846,7 @@ export {
   RE_FENCE_CLOSER,
   RE_TILDE_FENCE_CLOSE_3,
   blockQuoteParagraphClaimOpen,
+  clearQuoteAttrRuns,
   blockQuoteParagraphOpen,
   bottomBlockLeavesParagraphOpen,
   classifyQuotedLine,
@@ -891,6 +892,7 @@ export type {
   QuoteDescent,
   QuoteFenceHosts,
   QuoteLazyHint,
+  QuoteLazyVerdict,
   QuotedFenceCloserMemo,
 } from './block/parse-quote-core.js'
 export {

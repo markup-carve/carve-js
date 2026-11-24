@@ -36,6 +36,7 @@ import type {
   PendingAttrCarry,
   QuoteDescent,
   QuoteLazyHint,
+  QuoteLazyVerdict,
   StrippedLineOrigin,
   Table,
   TableBlockHost,
@@ -77,6 +78,7 @@ import {
   ENDS_AT_LAST_PLACED_CHILD,
   unplacedBlocks,
   blockQuoteParagraphClaimOpen,
+  clearQuoteAttrRuns,
   closeBlockQuoteParagraph,
   closerIndex,
   codeContent,
@@ -197,8 +199,12 @@ interface QuoteCollect {
   // it), so tracking waits until then. The tracker descends every nested
   // quote on the line, and a quote that ends at EOF or a blank line would
   // otherwise pay that at every level - quadratic in the nesting depth.
-  untracked: Array<[content: string, lineIndex: number]>
+  // A lazy line taken on an enclosing quote's verdict waits here too, flagged.
+  untracked: Array<[content: string, lineIndex: number, lazy?: true]>
   given: QuoteLazyHint | null
+  // See `QuoteLazyVerdict`: what the enclosing quote read, and what this quote hands its own nested quotes.
+  verdicts: Map<number, QuoteLazyVerdict> | null
+  handVerdicts: Map<number, QuoteLazyVerdict> | null
   descent: QuoteDescent
   payloadMisses?: Map<string, { from: number; maxRun: number }>
   // The state this quote hands its own nested quote; see `QuoteLazyHint`.
@@ -2064,6 +2070,8 @@ export class ParseSession extends InlineParseSession {
       },
       untracked: [],
       given,
+      verdicts: lexer.quoteLazyVerdicts,
+      handVerdicts: null,
       descent: { levels: 0, askedBelowTop: false },
       handDown: null,
       trackedBefore: false,
@@ -2119,17 +2127,22 @@ export class ParseSession extends InlineParseSession {
     if (!descent.preserved && q.handDown && state.mode.kind === 'quote' && state.mode.inner === q.handDown.state) q.handDown = null
   }
 
+  private trackLine(q: QuoteCollect, content: string, lineIndex: number, lazy: true | undefined): void {
+    if (lazy) clearQuoteAttrRuns(q.state)
+    this.trackQuoteLine(q, content, lineIndex)
+  }
+
   private trackUntrackedQuoteLines(q: QuoteCollect): void {
     const { untracked, given, state, descent } = q
     if (q.trackedBefore) {
-      for (const [content, lineIndex] of untracked) this.trackQuoteLine(q, content, lineIndex)
+      for (const [content, lineIndex, lazy] of untracked) this.trackLine(q, content, lineIndex, lazy)
       untracked.length = 0
       return
     }
     q.trackedBefore = true
     const prefix = untracked.length
     let depth: number
-    if (given !== null && given.lines === prefix) {
+    if (given !== null && given.lines === prefix && !untracked.some(([, , lazy]) => lazy)) {
       Object.assign(state, given.state)
       q.paragraphOpen = given.paragraphOpen
       depth = given.depth - 1
@@ -2137,8 +2150,8 @@ export class ParseSession extends InlineParseSession {
       // Each line continues the inner quotes the line before it opened, so
       // the chain is one set of states down to the shallowest line's depth.
       depth = Infinity
-      for (const [content, lineIndex] of untracked) {
-        this.trackQuoteLine(q, content, lineIndex)
+      for (const [content, lineIndex, lazy] of untracked) {
+        this.trackLine(q, content, lineIndex, lazy)
         depth = Math.min(depth, descent.levels)
       }
       if (descent.askedBelowTop) depth = 0
@@ -2344,12 +2357,10 @@ export class ParseSession extends InlineParseSession {
       (!quoteTermContinuation && !lazyFootnote && startsInterruptingBlock(lexer, undefined, false))
   }
 
-  private appendLazyQuoteLine(q: QuoteCollect, ln: string, lineIndex: number, termContinuation: boolean): void {
+  private appendLazyQuoteLine(q: QuoteCollect, ln: string, lineIndex: number, termContinuation: boolean,
+    deferred = false): void {
     const { lexer } = q
-    // A line without the quote prefix cannot close an attribute opened inside it, at any quote depth.
-    for (let level: BlockQuoteLazyState | undefined = q.state; level; level = level.mode.kind === 'quote' ? level.mode.inner : undefined) {
-      level.attrRun = null
-    }
+    if (!deferred) clearQuoteAttrRuns(q.state)
     const lazyLinkDef = this.isLinkDefLine(ln)
     if (lazyLinkDef) {
       lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
@@ -2390,7 +2401,10 @@ export class ParseSession extends InlineParseSession {
       deflistMarkerLine(ln)
       ? LAZY_FRAME + ln.replace(/^[ \t]+/, '') : ln)
     q.innerLineNumbers.push(lexer.lineNumber(lineIndex))
-    if (!lazyLinkDef) this.trackQuoteLine(q, ln, lineIndex)
+    if (deferred) {
+      q.untracked.push([ln, lineIndex, true])
+      q.paragraphOpen = undefined
+    } else if (!lazyLinkDef) this.trackQuoteLine(q, ln, lineIndex)
   }
 
   // An open comment span tests its closer before ownership, so an unmarked closer stays in the quote (PART 0 S1, corpus 888).
@@ -2459,24 +2473,58 @@ export class ParseSession extends InlineParseSession {
     // instead of being swallowed. This is also what ends the quote on a lazy
     // list marker when no open paragraph precedes it.
     const closedRefusedNoteAttribute = this.normalizeRefusedNoteAttributeRuns(q)
+    const lineNumber = lexer.lineNumber(lexer.pos)
+    // An enclosing quote took this line on the paragraph at the bottom of the chain this quote
+    // also tracks, so the answer is known without replaying that chain here (carve-js#5520).
+    const verdict = closedRefusedNoteAttribute || lazyFootnote || this.isLinkDefLine(ln) || !this.flushRecomputesParagraph(q)
+      ? undefined : q.verdicts?.get(lineNumber)
+    if (verdict !== undefined) {
+      if (leadingWhitespace(ln) === 0 && (deflistMarkerLine(ln) || isListMarkerLine(ln)) &&
+          !lexer.quoteLazyLines.has(lineNumber) && verdict.term) return false
+      this.handVerdict(q, lineNumber, verdict.below, verdict.term)
+      const lineIndex = lexer.pos
+      lexer.consume()
+      this.appendLazyQuoteLine(q, ln, lineIndex, q.quoteTermContinuation || verdict.term, true)
+      return true
+    }
     this.trackUntrackedQuoteLines(q)
     if (closedRefusedNoteAttribute) q.paragraphOpen = false
     q.paragraphOpen ??= blockQuoteParagraphClaimOpen(state)
     if (q.handDown && q.handDown.paragraphOpen === undefined) q.handDown.paragraphOpen = q.paragraphOpen
     if (!q.paragraphOpen && !lazyFootnote) return false
     let leaf = state
-    while (leaf.mode.kind === 'quote') leaf = leaf.mode.inner
-    const termContinuation = q.quoteTermContinuation ||
-      leaf.mode.kind === 'paragraph' && (leaf.mode.term === true || leaf.hosts?.terms.at(-1) === true)
+    let below = 0
+    for (; leaf.mode.kind === 'quote'; below++) leaf = leaf.mode.inner
+    const leafTerm = leaf.mode.kind === 'paragraph' && (leaf.mode.term === true || leaf.hosts?.terms.at(-1) === true)
+    const termContinuation = q.quoteTermContinuation || leafTerm
     if (leadingWhitespace(ln) === 0 && (deflistMarkerLine(ln) || isListMarkerLine(ln)) &&
-        !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
+        !lexer.quoteLazyLines.has(lineNumber)) {
       // A marker at the surviving document column ends the open term.
       if (leaf.mode.kind === 'paragraph' && (leaf.mode.term || leaf.hosts?.terms.at(-1))) return false
+    }
+    if (q.paragraphOpen && !closedRefusedNoteAttribute && leaf.mode.kind === 'paragraph') {
+      this.handVerdict(q, lineNumber, below, leafTerm)
     }
     const lineIndex = lexer.pos
     lexer.consume()
     this.appendLazyQuoteLine(q, ln, lineIndex, termContinuation)
     return true
+  }
+
+  // Whether `trackUntrackedQuoteLines` leaves `paragraphOpen` to be read from the chain, which is
+  // what a verdict answers, rather than keeping an earlier answer or the enclosing quote's.
+  // A held hand-down is dropped or kept by tracking each lazy line as it comes, so it keeps that path.
+  private flushRecomputesParagraph(q: QuoteCollect): boolean {
+    const { untracked, given } = q
+    if (q.handDown !== null) return false
+    if (untracked.length === 0) return q.paragraphOpen === undefined
+    if (q.trackedBefore || given === null || given.lines !== untracked.length) return true
+    return given.paragraphOpen === undefined || untracked.some(([, , lazy]) => lazy)
+  }
+
+  // The nested quote one level down sees the paragraph one level nearer.
+  private handVerdict(q: QuoteCollect, lineNumber: number, below: number, term: boolean): void {
+    if (below > 0) (q.handVerdicts ??= new Map()).set(lineNumber, { below: below - 1, term })
   }
 
   private normalizeRefusedNoteAttributeRuns(q: QuoteCollect): boolean {
@@ -2528,6 +2576,7 @@ export class ParseSession extends InlineParseSession {
     this.normalizeRefusedNoteAttributeRuns(q)
     const subLexer = nestedSubLexer(lexer, q.inner, firstLineIndex, q.innerLineNumbers, q.origins)
     subLexer.quoteLazyHint = q.handDown
+    subLexer.quoteLazyVerdicts = q.handVerdicts
     // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
     // stops here. A footnote body absorbs residual indentation because its blocks
     // are REBASED to an authored base; a quote is not rebased, and an indented

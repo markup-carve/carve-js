@@ -71,6 +71,7 @@ export type {
   PendingAttrCarry,
   PrepassScope,
   QuoteLazyHint,
+  QuoteLazyVerdict,
   QuotedFenceCloserMemo,
   RefusedContinuationMarker,
   OverindentedOpenerReport,

@@ -823,6 +823,13 @@ export const openQuoteDepth = (state: BlockQuoteLazyState): number => {
   return depth
 }
 
+/** A line without the quote prefix cannot close an attribute opened inside it, at any quote depth. */
+export const clearQuoteAttrRuns = (state: BlockQuoteLazyState): void => {
+  for (let level: BlockQuoteLazyState | undefined = state; level; level = level.mode.kind === 'quote' ? level.mode.inner : undefined) {
+    level.attrRun = null
+  }
+}
+
 export const closeBlockQuoteParagraph = (state: BlockQuoteLazyState): void => {
   state.mode = { kind: 'closed' }
 }
@@ -959,6 +966,19 @@ export interface QuoteDescent {
  * chain again at every level. Valid for the quote at line 0 of the sub-lexer,
  * over its first `lines` quoted lines, and `depth` levels down.
  */
+/**
+ * An enclosing quote's reading of one of its lazy lines, handed to the quotes nested in it.
+ *
+ * The enclosing quote took the line as lazy text because the paragraph at the bottom of its
+ * chain was open, `below` levels under the receiving quote. The receiving quote tracks the
+ * same lines into the same chain (see `QuoteLazyHint`), so its own paragraph test answers the
+ * same, and it can take the line without replaying the chain below it at every level.
+ */
+export interface QuoteLazyVerdict {
+  below: number
+  term: boolean
+}
+
 export interface QuoteLazyHint {
   state: BlockQuoteLazyState
   lines: number

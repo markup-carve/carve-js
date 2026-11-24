@@ -1,6 +1,6 @@
 import type { Position, BlockNode } from '../ast.js'
 import type { LinkDef } from './inline/inline-resolution.js'
-import type { ParseOptions, UnclosedContainer, StrippedLineOrigin, CloserIndex, QuotedFenceCloserMemo, QuoteLazyHint, AttachedViewScan } from '../parse.js'
+import type { ParseOptions, UnclosedContainer, StrippedLineOrigin, CloserIndex, QuotedFenceCloserMemo, QuoteLazyHint, QuoteLazyVerdict, AttachedViewScan } from '../parse.js'
 import { AttachmentFenceClosers } from './block/attachment-fence-closers.js'
 import { ScopedFenceClosers } from './block/scoped-fence-closers.js'
 import { LiteralCommentClosers } from './block/literal-comment-closers.js'
@@ -381,6 +381,8 @@ export class Lexer {
   literalCommentLineOpeners: Set<string>
   /** See `QuoteLazyHint`. Set by the enclosing quote, taken by the first quote parsed here. */
   quoteLazyHint: QuoteLazyHint | null = null
+  /** See `QuoteLazyVerdict`. Set by the enclosing quote for the quotes parsed directly here; not inherited. */
+  quoteLazyVerdicts: Map<number, QuoteLazyVerdict> | null = null
   /**
    * Definition-shaped lines the pre-pass looked at and DID NOT collect.
    *
