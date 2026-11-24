@@ -1848,9 +1848,10 @@ function readOnPastEnd(c: Check, owner: Node): void {
     changeForm(c, owner)
     return
   }
-  // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark. Case one, that brace,
-  // is tried before case five, the closer. What the content took from behind its end is read again next round.
-  if (escapeOpeningBrace(c, owner) || escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
+  // C2-W-125: repair a bracketed owner's content pairing first. Otherwise a brace before the closing mark can
+  // read as a braced opener and takes the mark before case five tries the closer. Read the content again next round.
+  if ((BRACKETED.has(owner.type) && escapeInContent(c, owner)) || escapeOpeningBrace(c, owner) ||
+    escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
     c.cut = true
     return
   }
