@@ -36,7 +36,7 @@ export interface OpenLeaf {
   start: number
   end: number
   lines: number
-  /** Column of the marker of the open heading (C2-B-154). */
+  /** Column of the marker of the open label (C2-B-234). */
   column: number
   /** C2-B-083: the parts of its tail the open link definition may still take. */
   definitionTail: number

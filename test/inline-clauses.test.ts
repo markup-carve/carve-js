@@ -849,7 +849,7 @@ describe('the fallback rule', () => {
     expect(tree('| `a | b |')).toBe('table[tr[td["`a"] td["b"]]]')
     expect(tree('= *a', '', 'b*')).toBe('h1["*a"] p["b*"]')
     expect(tree(':: [a', ': b](/u)')).toBe('dl[dt["[a"] dd[p["b](/u)"]]]')
-    expect(tree('![a](b)', '^ {*c', 'd*}')).toBe('img[img(b)"a"] cap[strong["c" sb "d"]]')
+    expect(tree('![a](b)', '^ {*c', '  d*}')).toBe('img[img(b)"a"] cap[strong["c" sb "d"]]')
   })
 })
 

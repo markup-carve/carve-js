@@ -41,7 +41,8 @@ describe('the pinned replay map rows', () => {
     expect(record?.range).toBeDefined()
     expect(record!.range!.endOffset).toBeGreaterThan(record!.range!.startOffset)
     expect(row.from.slice(record!.range!.startOffset, record!.range!.endOffset)).not.toBe('')
-    expect(canWriteUpgrade(result)).toBe(row.id === 'U-396' ||
+    // carve#6508: `more` below the comment ends the term in 0.2 too, so U-379 keeps the 0.1 HTML.
+    expect(canWriteUpgrade(result)).toBe(row.id === 'U-396' || row.id === 'U-379' ||
       (Number(row.id.slice(2)) >= 408 && !['U-426', 'U-428'].includes(row.id)))
   })
 

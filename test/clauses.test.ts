@@ -551,8 +551,9 @@ describe('description lists', () => {
     expect(blocks('- : d')).toBe('ul(-)[li[p": d"]]')
   })
 
-  it('C2-B-069, C2-B-075: a term is one leaf with lazy lines and takes no block opener', () => {
-    expect(blocks(':: t', '      more', '= not a heading')).toBe('dl[dt"t|more|= not a heading"]')
+  it('C2-B-069, C2-B-075, C2-B-234: a term is one leaf, continues on lines indented past its mark and takes no block opener', () => {
+    expect(blocks(':: t', '      more', '   = not a heading')).toBe('dl[dt"t|more|= not a heading"]')
+    expect(blocks(':: t', 'more')).toBe('dl[dt"t"] p"more"')
     expect(blocks(':: > t')).toBe('dl[dt"> t"]')
     expect(blocks(':: t', '  : indented')).toBe('dl[dt"t|: indented"]')
   })
@@ -581,12 +582,13 @@ describe('description lists', () => {
   })
 
   it('C2-B-020: a mark without the mark of the quote the description list sits in is a lazy line', () => {
-    expect(blocks('> :: t', ': d')).toBe('quote[dl[dt"t|: d"]]')
+    expect(blocks('> :: t', '> : d', ': e')).toBe('quote[dl[dt"t" dd[p"d|: e"]]]')
+    expect(blocks('> :: t', ': d')).toBe('quote[dl[dt"t"]] p": d"')
     expect(blocks('> :: t', '> : d')).toBe('quote[dl[dt"t" dd[p"d"]]]')
   })
 
   it('C2-B-022: a list marker at the column of a description list is a lazy line', () => {
-    expect(blocks(':: t', '- x')).toBe('dl[dt"t|- x"]')
+    expect(blocks(':: t', '- x')).toBe('dl[dt"t"] ul(-)[li[p"x"]]')
     expect(blocks(':: t', ': d', '- x')).toBe('dl[dt"t" dd[p"d|- x"]]')
     expect(blocks(':: t', ': d', ' - x')).toBe('dl[dt"t" dd[p"d" ul(-)[li[p"x"]]]]')
     expect(blocks('- a', '', '  :: t', '  : d', '- b')).toBe('ul(-)[li[p"a" dl[dt"t" dd[p"d"]]] li[p"b"]]')
@@ -714,7 +716,7 @@ describe('attribute lines', () => {
     expect(blocks('-{.i', '} b')).toBe('p"-{.i|} b"')
     expect(blocks('- {.i} b')).toBe('ul(-)[li[p"{.i} b"]]')
     expect(blocks('::{.c} t', ': d')).toBe('p"::{.c} t|: d"')
-    expect(blocks(':: t', ':{.c} d')).toBe('dl[dt"t|:{.c} d"]')
+    expect(blocks(':: t', ':{.c} d')).toBe('dl[dt"t"] p":{.c} d"')
   })
 })
 
@@ -895,8 +897,9 @@ describe('captions', () => {
     expect(blocks('%%%', 'x', '%%%', '^ c')).toBe('%%%"x" p"^ c"')
   })
 
-  it('C2-B-148: a caption takes lazy lines and ends as a paragraph does', () => {
-    expect(blocks('> q', '^ c', '^ d', 'e', '', 'f')).toBe('quote[p"q"] cap"c|^ d|e" p"f"')
+  it('C2-B-148, C2-B-234: a caption continues on lines indented past its caret and ends as a heading does', () => {
+    expect(blocks('> q', '^ c', '^ d', 'e', '', 'f')).toBe('quote[p"q"] cap"c" p"^ d|e" p"f"')
+    expect(blocks('> q', '^ c', '  ^ d', '  e', 'f')).toBe('quote[p"q"] cap"c|^ d|e" p"f"')
     expect(blocks('```', 'x', '```', '^ c', '```', 'y')).toBe('code"x" cap"c" code!"y"')
   })
 
@@ -1227,7 +1230,7 @@ describe('tables', () => {
   })
 
   it('C2-B-147: a table takes a caption', () => {
-    expect(blocks('| a |', '^ c', '^ d')).toBe('table[tr[td"a"]] cap"c|^ d"')
+    expect(blocks('| a |', '^ c', '^ d')).toBe('table[tr[td"a"]] cap"c" p"^ d"')
     expect(blocks('{#f}', '| a |', '^ c')).toBe('{#f}table[tr[td"a"]] cap"c"')
     expect(blocks('| a |', '', '^ c')).toBe('table[tr[td"a"]] p"^ c"')
   })

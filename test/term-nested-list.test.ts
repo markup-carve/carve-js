@@ -8,9 +8,10 @@ describe('C2-B-015: nested list after a definition term', () => {
     expect(shape('- :: t\n * x')).toBe('ul(-)[li[dl[dt"t"] ul(*)[li[p"x"]]]]')
   })
 
-  it('keeps a marker at the description column or starting at another number as term text', () => {
-    expect(shape('10. :: t\n    1. x')).toContain('1. x')
-    expect(shape('10. :: t\n  2. x')).toContain('2. x')
+  it('C2-B-234: keeps a marker indented past the term mark as term text, and opens a list for one that is not', () => {
+    expect(shape('10. :: t\n      2. x')).toBe('ol(10.)[li[dl[dt"t|2. x"]]]')
+    expect(shape('10. :: t\n    1. x')).toBe('ol(10.)[li[dl[dt"t"] ol(1.)[li[p"x"]]]]')
+    expect(shape('10. :: t\n  2. x')).toBe('ol(10.)[li[dl[dt"t"] ol(2.)[li[p"x"]]]]')
   })
 
   it('compares ownership correctly across a quote origin', () => {

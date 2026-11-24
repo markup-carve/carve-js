@@ -9,7 +9,6 @@ const BLOCKS: [string, string][] = [
   ['U-004', 'Some text\n:: TEXT\n: d\n'],
   ['U-006', '- item\n# TEXT\n'],
   ['U-009', '- text\n  :: TEXT\n  : desc\n'],
-  ['U-010', '| a | b |\n^ TEXT\n# H\n'],
   ['U-014', '- one\n+\n> TEXT\n- two\n'],
   ['U-015', '- a\n+\nTEXT\n- b\n'],
   ['U-016', '> quoted\n+\n- TEXT\n'],
@@ -31,8 +30,6 @@ const BLOCKS: [string, string][] = [
   ['U-101', '= TEXT\n'],
   ['U-102', '# Heading\n  TEXT\n'],
   ['U-103', 'a. TEXT\nb. two\n'],
-  ['U-106', ':: term\nTEXT\n: first\n'],
-  ['U-107', '| a | b |\n^ first\n^ TEXT\n'],
   ['U-109', '- item\n\n TEXT\n'],
 ]
 

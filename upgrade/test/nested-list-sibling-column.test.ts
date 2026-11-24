@@ -9,7 +9,7 @@ describe('U-237: a block after a nested list moves to the marker column of that 
     ['- ::: box\n  - inner\n   > q\n', '- ::: box\n  - inner\n\n  > q\n'],
     ['> - ::: box\n>   - inner\n>    > q\n', '> - ::: box\n>   - inner\n>\n>   > q\n'],
     ['- ::: box\n  - inner\n    %% c\n   > q\n', '- ::: box\n  - inner\n\n    %% c\n  > q\n'],
-    ['> - :: x\n>  t\n', '> - :: x\n>\n> t\n'],
+    ['> - :: x\n>  t\n', '> - :: x\n> t\n'],
   ])('keeps the block outside the last item: %j', (source, output) => {
     const result = upgrade(source)
     expect(result.output).toBe(output)
