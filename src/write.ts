@@ -2231,32 +2231,31 @@ function relocateCommentLosses(diagnostics: Diagnostic[], comments: string[]): v
 }
 
 /** C2-W-050, C2-W-117: each key value that holds a line feed is written with spaces and reported at its path. */
-function attributeValueLosses(document: DocumentNode, w: Writer, diagnostics: Diagnostic[]): void {
-  const pending: { node: Node, path: string }[] = [{ node: document, path: '' }]
+function attributeValueLosses(document: DocumentNode, w: Writer): void {
+  const pending: Node[] = [document]
   while (pending.length > 0) {
-    const { node, path } = pending.pop()!
+    const node = pending.pop()!
     const lostKeys = w.lostKeys.get(node)
     node.attrs?.keyValues?.forEach(([key, value], index) => {
       if (!value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) return
-      diagnostics.push({ code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
-        message: `Carve source cannot spell the line feed in the value of the key ${key} of a ${node.type} node`,
-        path: `${path}/attrs/keyValues/${index}/1` })
+      const entry: Diagnostic = { code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
+        message: `Carve source cannot spell the line feed in the value of the key ${key} of a ${node.type} node` }
+      addFinding(w.losses, node, entry)
+      w.losses.steps ??= new Map()
+      w.losses.steps.set(entry, `/attrs/keyValues/${index}/1`)
     })
     if (node.type === 'include') continue
-    forEachSlot(node, (children, step, single) => {
+    forEachSlot(node, (children, step) => {
       if (step.startsWith('metadata/')) return
-      for (let at = children.length - 1; at >= 0; at--) {
-        pending.push({ node: children[at]!, path: `${path}/${step}${single ? '' : `/${at}`}` })
-      }
+      for (let at = children.length - 1; at >= 0; at--) pending.push(children[at]!)
     }, undefined, document.extensions ?? [])
   }
 }
 
 /** Locate writer losses, moving a line-feed mismatch from a wrapper to its written leaf. */
 function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
-  const diagnostics = locatedLosses(document, w)
-  if (w.lineFeedValues) attributeValueLosses(document, w, diagnostics)
-  return diagnostics
+  if (w.lineFeedValues) attributeValueLosses(document, w)
+  return locatedLosses(document, w)
 }
 
 function locatedLosses(document: DocumentNode, w: Writer): Diagnostic[] {
