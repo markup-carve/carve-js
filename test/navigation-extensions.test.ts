@@ -123,9 +123,10 @@ describe('tocPlacement', () => {
     expect(html).not.toContain('#Intro')
   })
 
-  it('lists headings inside containers', () => {
-    const html = render('::: note\n= Inside\n:::\n\n::: toc\n:::\n', { extensions: [tocPlacement()], renderers: tocRenderers })
-    expect(html).toContain('<li><a href="#Inside">Inside</a></li>')
+  it('lists only the top-level headings, as tableOfContents does (carve#6531)', () => {
+    const html = render('= Top\n\n::: note\n= Inside\n:::\n\n::: toc\n:::\n', { extensions: [tocPlacement()], renderers: tocRenderers })
+    expect(html).toContain('<li><a href="#Top">Top</a></li>')
+    expect(html).not.toContain('<a href="#Inside">')
   })
 
   it('writes the directive with the list as its fallback, and the core div without the extension', () => {
@@ -191,6 +192,24 @@ describe('headingNumbers', () => {
     xref.display = 'page'
     const html = render(tree, { extensions: [headingNumbers()] })
     expect(html).not.toContain('Section 1 - C')
+  })
+
+  it('counts depth, not level, so a skipped level gives no duplicate number (carve#6531)', () => {
+    const skipped = render('= A\n\n=== C\n\n== B\n\n==== D\n', { extensions: [headingNumbers()] })
+    expect(skipped).toContain('<h3><span class="section-number">1.1</span> C</h3>')
+    expect(skipped).toContain('<h2><span class="section-number">1.2</span> B</h2>')
+    expect(skipped).toContain('<h4><span class="section-number">1.2.1</span> D</h4>')
+    const leading = render('== B\n\n= A\n\n== C\n', { extensions: [headingNumbers()] })
+    expect(leading).toContain('<h2><span class="section-number">1</span> B</h2>')
+    expect(leading).toContain('<h1><span class="section-number">2</span> A</h1>')
+    expect(leading).toContain('<h2><span class="section-number">2.1</span> C</h2>')
+  })
+
+  it('numbers only the top-level headings, not those in a note or a list item (carve#6531)', () => {
+    const html = render('= A\n\n::: note\n== N\n:::\n\n- item\n\n  == L\n\n== B\n', { extensions: [headingNumbers()] })
+    expect(html).toContain('<h2 id="N">N</h2>')
+    expect(html).toContain('<h2 id="L">L</h2>')
+    expect(html).toContain('<h2><span class="section-number">1.1</span> B</h2>')
   })
 
   it('keeps the number out of a table of contents', () => {
