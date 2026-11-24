@@ -2245,8 +2245,10 @@ function attributeValueLosses(document: DocumentNode, w: Writer): void {
       w.losses.steps.set(entry, `/attrs/keyValues/${index}/1`)
     })
     if (node.type === 'include') continue
+    // An extension written as its fallback writes none of its other slots.
+    const fallbackOnly = (node.type === 'block_extension' || node.type === 'inline_extension') && w.lost.has(node)
     forEachSlot(node, (children, step) => {
-      if (step.startsWith('metadata/')) return
+      if (step.startsWith('metadata/') || (fallbackOnly && step !== 'fallback')) return
       for (let at = children.length - 1; at >= 0; at--) pending.push(children[at]!)
     }, undefined, document.extensions ?? [])
   }
