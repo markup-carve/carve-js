@@ -800,13 +800,20 @@ export function flattenCellBreaks(children: Inline[]): boolean {
   return changed
 }
 
-function rows(node: Html.Element, context: HtmlContext, inHead: boolean): TableRowNode[] {
+function groupRows(node: Html.Element, context: HtmlContext): Html.Element[] {
   if (node.tagName !== 'table') {
     for (const child of elements(node)) {
       if (child.tagName !== 'tr') report(context, child, 'import-structure-repaired', 'Non-row child in table group')
     }
   }
-  const groupRows = elements(node).filter(child => child.nodeName === 'tr')
+  return elements(node).filter(child => child.nodeName === 'tr')
+}
+
+function rows(node: Html.Element, context: HtmlContext, inHead: boolean): TableRowNode[] {
+  return rowsOf(groupRows(node, context), context, inHead)
+}
+
+function rowsOf(groupRows: Html.Element[], context: HtmlContext, inHead: boolean): TableRowNode[] {
   const result: TableRowNode[] = groupRows.map(child => {
     for (const entry of elements(child)) {
       if (entry.nodeName !== 'th' && entry.nodeName !== 'td') {
@@ -818,6 +825,16 @@ function rows(node: Html.Element, context: HtmlContext, inHead: boolean): TableR
   })
   clampRowspans(result, groupRows, context)
   return result
+}
+
+/** C2-M-037: a row heads the columns when it has cells and each is a `<th>` with no `scope` or with `scope` `col`. */
+function headsColumns(tr: Html.Element): boolean {
+  const cells = elements(tr).filter(entry => entry.nodeName === 'th' || entry.nodeName === 'td')
+  return cells.length > 0 && cells.every(entry => {
+    if (entry.nodeName !== 'th') return false
+    const scope = attr(entry, 'scope')
+    return scope === undefined || asciiLower(scope) === 'col'
+  })
 }
 
 /** C2-A-093, C2-B-174: as in the HTML table model, a row span ends at the last row of its group. */
@@ -838,19 +855,37 @@ type TableChildren = Extract<Block, { type: 'table' }>['children']
 
 /**
  * C2-M-037, C2-A-086: the first `<thead>` is the first group and the first `<tfoot>` the last, as HTML displays them;
- * each further one is a body at its place, reported.
+ * each further one is a body at its place, reported. With no `<thead>`, the leading column-heading rows of the first
+ * body are the head, and a body they leave empty is dropped.
  */
 function tableGroups(node: Html.Element, context: HtmlContext): TableChildren {
-  const direct = rows(node, context, false)
   const groups = elements(node).filter(child => ['thead', 'tbody', 'tfoot'].includes(child.nodeName))
   const head = groups.find(group => group.nodeName === 'thead')
   const foot = groups.find(group => group.nodeName === 'tfoot')
-  const children: TableChildren = groups.filter(group => group !== head && group !== foot).map(group => {
+  const bodies = groups.filter(group => group !== head && group !== foot)
+  const directRows = groupRows(node, context)
+  const firstBody = directRows.length ? node : bodies[0]
+  let headRows: TableRowNode[] = []
+  const bodyOf = (group: Html.Element): TableRowNode[] => {
+    const all = group === node ? directRows : groupRows(group, context)
+    if (head !== undefined || group !== firstBody) return rowsOf(all, context, false)
+    let lead = 0
+    while (lead < all.length && headsColumns(all[lead] as Html.Element)) lead++
+    headRows = rowsOf(all.slice(0, lead), context, true)
+    return rowsOf(all.slice(lead), context, false)
+  }
+  const direct = directRows.length ? bodyOf(node) : []
+  const children: TableChildren = []
+  for (const group of bodies) {
     if (group.nodeName !== 'tbody') report(context, group, 'import-structure-repaired', `A further ${group.nodeName} read as a body`)
-    return { type: 'table_body', children: rows(group, context, false), ...attrs(context, group) }
-  })
+    const bodyRows = bodyOf(group)
+    const bodyAttrs = attrs(context, group)
+    if (bodyRows.length || group !== firstBody || headRows.length === 0) children.push({ type: 'table_body', children: bodyRows, ...bodyAttrs })
+    else if (Object.keys(bodyAttrs).length) report(context, group, 'import-attribute-dropped', 'The attributes of a body left empty by its head rows dropped')
+  }
   if (direct.length) children.unshift({ type: 'table_body', children: direct })
   if (head !== undefined) children.unshift({ type: 'table_head', children: rows(head, context, true), ...attrs(context, head) })
+  else if (headRows.length) children.unshift({ type: 'table_head', children: headRows })
   if (foot !== undefined) children.push({ type: 'table_foot', children: rows(foot, context, false), ...attrs(context, foot) })
   return children
 }
