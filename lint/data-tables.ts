@@ -392,7 +392,7 @@ const K94 = new RegExp("^[ \\t]*>", "")
 const K95 = new Set<string>(["definition_description"])
 const K96 = (item: unknown): unknown => obj(obj(item)?.["line"])?.["number"]
 const K97 = new RegExp("^::?(?:[ \\t]|$)", "")
-const K98 = new RegExp("^%%", "")
+const K98 = new RegExp("^:[ \\t]", "")
 const K99 = new RegExp("[A-Za-z0-9](?<pair>_[^_\\s](?:[^_]*[^_\\s])?_)", "gd")
 const K100 = new RegExp("^[A-Za-z0-9]$", "")
 const K101 = new RegExp("^\\+[ \\t]+[^ \\t]", "")
@@ -971,17 +971,11 @@ function rule32(self: ModelLine, path: string, context: LintContext): void {
   return
 }
 
-function rule33(self: ModelBlock, path: string, context: LintContext): void {
+function rule33(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(num(self.last_line?.["number"]) > num(self.line?.["number"]))) return
-  if (!test(K98, self.line?.["next"]?.["body"])) {
-    context.report("description-term-multi-line", num(self.line?.["next"]?.["body_start"]), num(self.line?.["next"]?.["end"]), path, {  }, 0)
-    return
-  }
-  if ((self.line?.["next2"] !== undefined)) {
-    context.report("description-term-multi-line", num(self.line?.["next2"]?.["body_start"]), num(self.line?.["next2"]?.["end"]), path, {  }, 0)
-    return
-  }
+  if (!(same(self.leaf, "definition_term") && !Boolean(self.leaf_first) && test(K98, self.body))) return
+  context.report("description-term-multi-line", num(self.body_start), num(self.end), path, {  }, 0)
+  return
 }
 
 function rule34(self: ModelInline, path: string, context: LintContext): void {
@@ -1928,7 +1922,7 @@ export const DATA_RULES: readonly DataRule[] = [
   { id: "deprecated-spaced-thematic-break", over: "line", types: undefined, verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule30 },
   { id: "deprecated-table-attribute", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule31 },
   { id: "description-separator-below-content-column", over: "line", types: undefined, verbatim: new Set([]), only: undefined, needs: {"block":["definition_description","definition_list"],"inline":[]}, run: rule32 },
-  { id: "description-term-multi-line", over: "block", types: ["definition_term"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule33 },
+  { id: "description-term-multi-line", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["definition_term"]), needs: {"block":[],"inline":[]}, run: rule33 },
   { id: "djot-emphasis-underscore", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule34 },
   { id: "djot-heading-continuation", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["caption","definition_term","heading","line","paragraph"]), needs: {"block":[],"inline":[]}, run: rule35 },
   { id: "djot-highlight-braces", over: "inline", types: ["highlight"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule36 },

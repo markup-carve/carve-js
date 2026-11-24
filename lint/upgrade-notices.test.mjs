@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 import { CATALOG } from './catalog.ts'
 
+// carve#6508 took description-term-multi-line back to the default on.
 const NOTICES = ['blank-reference-label', 'comment-fence-closer-with-text', 'deprecated-bare-highlight',
   'deprecated-bare-strike', 'deprecated-bare-underline', 'deprecated-cell-alignment', 'deprecated-continuation-marker',
   'deprecated-indented-line-under-heading', 'deprecated-loose-attribute', 'deprecated-separator-row',
   'deprecated-spaced-thematic-break', 'deprecated-substitution-arrow', 'deprecated-table-attribute',
-  'description-term-multi-line', 'djot-emphasis-underscore', 'djot-heading-continuation', 'djot-intraword-underscore',
+  'djot-emphasis-underscore', 'djot-heading-continuation', 'djot-intraword-underscore',
   'djot-plus-bullet', 'djot-subscript-tilde', 'djot-subscript-tilde-braced', 'djot-superscript-caret',
   'sigil-after-letter', 'thematic-break-spelling', 'tight-list-item-with-blank-line']
 const HEADING = '# a\n b\n'

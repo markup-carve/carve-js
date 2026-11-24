@@ -348,7 +348,9 @@ describe('the depth cap over blocks and inlines together', () => {
   })
 
   it('C2-B-190: a description mark that would open a container past the cap is term text, and nothing crashes', () => {
-    expect(inQuotes(199, [':: t', ': d'])).toEqual([{
+    // C2-B-234: the unindented line ends the term, and a mark that opens nothing closes the list (C2-B-071).
+    expect(inQuotes(199, [':: t', ': d']).map((node) => node.type)).toEqual(['definition_list', 'paragraph'])
+    expect(inQuotes(199, [':: t', '   : d'])).toEqual([{
       type: 'definition_list',
       children: [{ type: 'definition_term', children: [{ type: 'text', value: 't' }, { type: 'soft_break' }, { type: 'text', value: ': d' }] }],
     }])

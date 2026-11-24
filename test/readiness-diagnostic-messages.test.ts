@@ -22,6 +22,6 @@ describe('readiness diagnostic messages', () => {
     expect(lint('# H\n  | a').find(entry => entry.code === 'table-shaped-paragraph')?.message).toContain('heading text')
     expect(lint('![x](a)\n^ cap\n  | a').find(entry => entry.code === 'table-shaped-paragraph')?.message).toContain('caption text')
     expect(lint('::: |\n| a\n:::').find(entry => entry.code === 'table-shaped-paragraph')?.message).toContain('line-block line text')
-    expect(lint(':: term\n| a').find(entry => entry.code === 'table-shaped-paragraph')?.message).toContain('term text')
+    expect(lint(':: term\n   | a').find(entry => entry.code === 'table-shaped-paragraph')?.message).toContain('term text')
   })
 })

@@ -1785,7 +1785,7 @@
     "path": "resources/examples/edge-cases/0504-a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth.md",
     "line": 412,
     "input": ":: c\n%% note\nmore\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": []
   },
   {

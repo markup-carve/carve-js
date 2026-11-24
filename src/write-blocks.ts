@@ -403,7 +403,6 @@ function opensTypedBelow(w: Writer, before: Node, node: Node): boolean {
 }
 
 const INDENT_TAKERS: ReadonlySet<string> = new Set(['list', 'footnote', 'definition_list'])
-const LAZY_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'definition_term'])
 const LAZY_ENDS: ReadonlySet<string> = new Set([
   'list', 'list_item', 'footnote', 'block_quote', 'definition_list', 'definition_description',
 ])
@@ -417,7 +416,8 @@ function takesLazyLine(w: Writer, node: Node): boolean {
     if (children.length === 0) return at.type === 'list'
     at = children[children.length - 1]!
   }
-  return LAZY_LEAVES.has(at.type) || captionOf(at) !== undefined || isLeftOpen(w, at)
+  // C2-B-234: a term and a caption are labels and take no unindented line.
+  return at.type === 'paragraph' || isLeftOpen(w, at)
 }
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the column of the heading's text. */

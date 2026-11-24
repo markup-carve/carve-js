@@ -133,7 +133,7 @@ describe('replay fallback families', () => {
     const input = '> :: t\n:: t\n: 1. para\n> : d\n>   [^f]: n\ntail\n'
     const result = upgrade(input)
     expect(result.check).toBe('pass')
-    expect(result.output).toBe('> :: t\n\n:: t\n: 1. para\n\n> : d\n\n[^f]: n\ntail\n')
+    expect(result.output).toBe('> :: t\n:: t\n: 1. para\n\n> : d\n\n[^f]: n\ntail\n')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 
@@ -270,7 +270,7 @@ describe('replay fallback families', () => {
     const input = ':: t\n{{ data/p2.csv  @code:csv @lines:00-2 }}\n'
     const result = upgrade(input)
     expect(result.check).toBe('pass')
-    expect(result.output).toBe(':: t\n\n{{ data/p2.csv  \\@code:csv \\@lines:00-2 }}\n')
+    expect(result.output).toBe(':: t\n{{ data/p2.csv  \\@code:csv \\@lines:00-2 }}\n')
     expect(render(result.output)).toBe(carveToHtml(input))
   })
 

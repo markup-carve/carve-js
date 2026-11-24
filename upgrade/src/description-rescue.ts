@@ -1,6 +1,7 @@
 import { compareHtml } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
+import { insideQuotes } from './rules/lines.ts'
 import { lineEnd, lineStart, lineText, readLines } from './source.ts'
 
 interface Rescue {
@@ -483,6 +484,13 @@ function compoundDescriptionVariants(input: string): string[] {
   return found
 }
 
+/** U-433: a comment line directly below the term at `line` ended it in 0.1; the late blank line keeps that, not a moved mark. */
+function termAboveComment(input: string, line: number): boolean {
+  const lines = input.split('\n')
+  const below = insideQuotes(lines[line] ?? '').trimStart()
+  return insideQuotes(lines[line - 1] ?? '').trimStart().startsWith(':: ') && below.startsWith('%%') && !below.startsWith('%%%')
+}
+
 function firstPreserving(expected: string, candidates: string[]): string | null {
   for (const candidate of candidates) {
     try {
@@ -496,7 +504,7 @@ function firstPreserving(expected: string, candidates: string[]): string | null 
 
 /** C2-B-069, C2-B-076 and C2-B-078: put the mark and body at an owning column. */
 export function rescueDescription(input: string, output: string, mismatch: ReportRecord): Rescue | null {
-  if (!input.includes('::')) return null
+  if (!input.includes('::') || termAboveComment(input, mismatch.line)) return null
   const expected = html01(input)
   const mark = firstPreserving(expected, variants(output, Math.max(1, mismatch.line)))
   if (mark !== null) {

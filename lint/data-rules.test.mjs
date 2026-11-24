@@ -60,8 +60,9 @@ it('C2-B-110: comment-fence-closer-with-text reads a quoted line behind its quot
   expect(findings('>   %%%%\n> >   %%%% x\n', 'data', { upgrade: true })).toEqual([])
 })
 
-it('C2-B-069: description-term-multi-line starts behind the prefixes of the line', () => {
-  expect(findings('> :: w\n> w\n', 'data', { upgrade: true })).toEqual(['description-term-multi-line@9-10'])
+it('C2-B-069, C2-B-234: description-term-multi-line starts behind the prefixes of the line', () => {
+  expect(findings('> :: w\n>   : w\n', 'data')).toEqual(['description-term-multi-line@11-14'])
+  expect(findings('> :: w\n> w\n', 'data')).toEqual([])
 })
 
 it('bare-html-tag reads paragraph, heading and table row lines, not term lines', () => {

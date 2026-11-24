@@ -21,7 +21,7 @@ describe('0.2 lint reads source spelling within parsed text and containers', () 
   })
   it('requires a real opening quote mark before an alert and skips term text', () => {
     expect(ranges('>> [!NOTE]', 'github-alert-marker')).toEqual([])
-    expect(ranges('> :: a\n> :: t2\n>: key\n> > [!NOTE]', 'github-alert-marker')).toEqual([])
+    expect(ranges('> :: a\n> :: t2\n>   > [!NOTE]', 'github-alert-marker')).toEqual([])
     expect(ranges('> [!NOTE]', 'github-alert-marker')).toEqual([[2, 9]])
   })
   it('does not treat a short final backtick run as a closer', () => {
@@ -35,7 +35,7 @@ describe('0.2 lint reads source spelling within parsed text and containers', () 
   })
   it('skips caption text of a table and an image (carve#6215)', () => {
     expect(ranges('| x | y |\n^ <i>', 'bare-html-tag')).toEqual([])
-    expect(ranges('> | x | y |\n> ^ a\n> <i>', 'bare-html-tag')).toEqual([])
+    expect(ranges('> | x | y |\n> ^ a\n>   <i>', 'bare-html-tag')).toEqual([])
     expect(ranges('![i](u)\n^ <i>', 'bare-html-tag')).toEqual([])
     expect(ranges('| <i> | y |\n^ <b>', 'bare-html-tag')).toEqual([[2, 5]])
   })

@@ -4,13 +4,13 @@ import { offsetAfter, offsetBefore } from '../src/edits.ts'
 import { canWriteUpgrade, upgrade } from '../src/index.ts'
 
 const written: [string, string, string][] = [
-  // An inserted blank line stands above an escape inserted at the same line start.
-  ['U-106 U-104', ':: c\n::: t:: note\nbody\n:::\n',
-    ':: c\n\n\\::: t:: note\nbody\n:::\n'],
-  ['U-106 U-104', ':: a\n::: note: b\n\n  :: c\n  %% note\n\t\n  more\n',
-    ':: a\n\n\\::: note: b\n\n  :: c\n  %% note\n\t\n  more\n'],
-  ['U-106 U-065', ':: t\n_u_\n:  [^q]: noe\n    *x y child\ntail\n',
-    ':: t\n\n{_u_}\n:  [^q]: noe\n    *x y child\ntail\n'],
+  // C2-B-234: an unindented line ends the term in 0.2 too, so no blank line is written above the escape.
+  ['U-104', ':: c\n::: t:: note\nbody\n:::\n',
+    ':: c\n\\::: t:: note\nbody\n:::\n'],
+  ['U-104', ':: a\n::: note: b\n\n  :: c\n  %% note\n\t\n  more\n',
+    ':: a\n\\::: note: b\n\n  :: c\n  %% note\n\t\n  more\n'],
+  ['U-065', ':: t\n_u_\n:  [^q]: noe\n    *x y child\ntail\n',
+    ':: t\n{_u_}\n:  [^q]: noe\n    *x y child\ntail\n'],
   // C2-I-111 does not reach a line 0.2 writes as an include directive.
   ['U-011', '{{ dat---a/p2.csv @code:csv @lines:01-2 }}\n',
     '{{ dat---a/p2.csv @code:csv @lines:01-2 }}\n'],

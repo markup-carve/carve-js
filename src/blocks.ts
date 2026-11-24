@@ -18,7 +18,7 @@ import {
   DIV, DOCUMENT, FLAG_ALPHA, FLAG_ATTRIBUTES, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_CONTINUATION, FLAG_DELIMITED,
   FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_BLOCK_MATH, FLAG_PAREN,
   FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_SPAN_LEFT, FLAG_SPAN_UP, FLAG_STAR, FLAG_TIGHT,
-  FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, isIndentContainer, isList, isOpaqueLeaf,
+  FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, isIndentContainer, isLabel, isList, isOpaqueLeaf,
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import {
@@ -218,8 +218,8 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
   }
   if (blank) return blankLine(state, matched)
   if (leaf.kind === NO_LEAF && openMetadataBlock(state, matched, lineStart, end)) return
-  // C2-B-154: a line that does not continue the open heading meets it closed.
-  if (leaf.kind === HEADING && !continuesHeading(state, matched)) closeLeaf(state)
+  // C2-B-234: a line that does not continue the open label meets it closed.
+  if (isLabel(leaf.kind) && !continuesLabel(state, matched)) closeLeaf(state)
   if (isTextLeaf(leaf.kind)) {
     const captions = leaf.kind === PARAGRAPH && captionsAfterParagraph(state, matched, end)
     if (!captions && lazyLine(state, matched, lineStart, end)) return
@@ -258,6 +258,7 @@ function openLine(state: BlockState, matched: number, lineStart: number, end: nu
     closeTo(state, matched)
     writeEvent(state, eventTag(ENTER, CAPTION, 0), cursor.pos, 0)
     openTextLeaf(state, CAPTION, captionContentStart(state.src, cursor.pos, end), end)
+    state.leaf.column = cursor.column - cursor.origin
   } else {
     closeUnowned(state, matched, end)
     // C2-B-096: a caption line takes no attribute line, also where it is text.
@@ -467,8 +468,8 @@ function captionsAfterBlock(state: BlockState, matched: number, end: number): bo
   return state.above.captionDepth === containers.depth
 }
 
-/** C2-B-154: a heading takes only lines of its own containers that are indented past its marker. */
-function continuesHeading(state: BlockState, matched: number): boolean {
+/** C2-B-234: a label takes only lines of its own containers that are indented past its marker. */
+function continuesLabel(state: BlockState, matched: number): boolean {
   const cursor = state.cursor
   return matched === state.containers.depth && cursor.column - cursor.origin > state.leaf.column
 }
@@ -1171,6 +1172,7 @@ function openTerm(state: BlockState, end: number): boolean {
   }
   writeEvent(state, enterTag(state, TERM, 0), cursor.pos, 0)
   openTextLeaf(state, TERM, skipSpaces(state.src, markEnd, end), end)
+  state.leaf.column = cursor.column - cursor.origin
   return true
 }
 
