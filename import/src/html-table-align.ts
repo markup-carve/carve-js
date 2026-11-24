@@ -54,6 +54,12 @@ export function resolveAlignments(table: TableNode): void {
   resolveAxis(table, cells, 'valign')
 }
 
+function addEntry(byColumn: Map<number, Placed[]>, entry: Placed): void {
+  const entries = byColumn.get(entry.column)
+  if (entries === undefined) byColumn.set(entry.column, [entry])
+  else entries.push(entry)
+}
+
 function resolveAxis(table: TableNode, cells: Placed[], axis: Axis): void {
   const marks = headMarks(cells, axis)
   const byColumn = new Map<number, Placed[]>()
@@ -61,7 +67,7 @@ function resolveAxis(table: TableNode, cells: Placed[], axis: Axis): void {
     if (entry.head) continue
     const mark = marks.get(entry.column)
     if (mark !== undefined && entry.cell[axis] === mark) delete entry.cell[axis]
-    else if (mark === undefined) byColumn.set(entry.column, [...byColumn.get(entry.column) ?? [], entry])
+    else if (mark === undefined) addEntry(byColumn, entry)
   }
   const hasHead = cells.some(entry => entry.head)
   for (const [index, entries] of byColumn) {
