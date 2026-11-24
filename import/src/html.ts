@@ -880,8 +880,11 @@ function tableGroups(node: Html.Element, context: HtmlContext): TableChildren {
     if (group.nodeName !== 'tbody') report(context, group, 'import-structure-repaired', `A further ${group.nodeName} read as a body`)
     const bodyRows = bodyOf(group)
     const bodyAttrs = attrs(context, group)
-    if (bodyRows.length || group !== firstBody || headRows.length === 0) children.push({ type: 'table_body', children: bodyRows, ...bodyAttrs })
-    else if (Object.keys(bodyAttrs).length) report(context, group, 'import-attribute-dropped', 'The attributes of a body left empty by its head rows dropped')
+    if (bodyRows.length || group !== firstBody || headRows.length === 0) {
+      children.push({ type: 'table_body', children: bodyRows, ...bodyAttrs })
+    } else if (Object.keys(bodyAttrs).length) {
+      report(context, group, 'import-attribute-dropped', 'The attributes of a body its head rows left empty dropped')
+    }
   }
   if (direct.length) children.unshift({ type: 'table_body', children: direct })
   if (head !== undefined) children.unshift({ type: 'table_head', children: rows(head, context, true), ...attrs(context, head) })
