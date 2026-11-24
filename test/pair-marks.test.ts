@@ -16,7 +16,7 @@ describe('C2-I-050 joined bare marks', () => {
     }
   })
   it('reports the complete corpus-row pair', () => {
-    const found = lint('~a~\u200db~\n').find((entry) => entry.code === 'deprecated-bare-strike')
+    const found = lint('~a~\u200db~\n', { upgrade: true }).find((entry) => entry.code === 'deprecated-bare-strike')
     expect(found?.range).toBeDefined()
   })
   it('keeps a later pair when an earlier candidate cannot open', () => {

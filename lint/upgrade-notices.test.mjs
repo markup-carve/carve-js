@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 import { CATALOG } from './catalog.ts'
 
-const NOTICES = ['blank-reference-label', 'comment-fence-closer-with-text', 'deprecated-indented-line-under-heading',
-  'sigil-after-letter', 'tight-list-item-with-blank-line']
+const NOTICES = ['blank-reference-label', 'comment-fence-closer-with-text', 'deprecated-bare-highlight',
+  'deprecated-bare-strike', 'deprecated-bare-underline', 'deprecated-cell-alignment', 'deprecated-continuation-marker',
+  'deprecated-indented-line-under-heading', 'deprecated-loose-attribute', 'deprecated-separator-row',
+  'deprecated-spaced-thematic-break', 'deprecated-substitution-arrow', 'deprecated-table-attribute',
+  'description-term-multi-line', 'djot-emphasis-underscore', 'djot-heading-continuation', 'djot-intraword-underscore',
+  'djot-plus-bullet', 'djot-subscript-tilde', 'djot-subscript-tilde-braced', 'djot-superscript-caret',
+  'sigil-after-letter', 'thematic-break-spelling', 'tight-list-item-with-blank-line']
 const HEADING = '# a\n b\n'
 const reported = (source, options = {}) => lint(source, options)
   .some((entry) => entry.code === 'deprecated-indented-line-under-heading')
@@ -50,8 +55,9 @@ describe('C2-W-156: migration notices', () => {
   })
 
   it('leave the other rules at their defaults', () => {
-    const source = '_a_\n'
-    expect(lint(source, { upgrade: true }).map((entry) => entry.code)).toEqual(lint(source).map((entry) => entry.code))
+    const codes = (options) => lint('_a_ **b**\n', options).map((entry) => entry.code)
+    expect(codes({ upgrade: true }).filter((code) => !NOTICES.includes(code))).toEqual(codes())
+    expect(codes()).toEqual(['markdown-strong-double-star'])
   })
 
   it('refuse an upgrade value that is not a boolean', () => {

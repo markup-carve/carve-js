@@ -609,6 +609,7 @@ const PAIR_RULES = new Map([
   ['deprecated-bare-underline', 1], ['deprecated-bare-strike', 1], ['deprecated-bare-highlight', 1],
   ['markdown-strikethrough-double-tilde', 2], ['markdown-strong-double-star', 2],
 ])
+const PAIR_RULES_ON = { rules: Object.fromEntries([...PAIR_RULES.keys()].map((id) => [id, 'on' as const])) }
 
 /** C2-W-091: the backslashes the procedure placed stay, and it runs again with those the pairs ask for. */
 function keepPlaced(seeds: number[], toBare: readonly number[], paired: readonly number[]): void {
@@ -622,7 +623,8 @@ function keepPlaced(seeds: number[], toBare: readonly number[], paired: readonly
 function pairSeeds(form: string, toBare: readonly number[], seeds: readonly number[]): number[] {
   const offsets = stringOffsets(form)
   const found: number[] = []
-  for (const entry of lint(form)) {
+  // C2-W-146 runs these rules whatever their default (C2-W-156).
+  for (const entry of lint(form, PAIR_RULES_ON)) {
     const run = PAIR_RULES.get(entry.code)
     const start = entry.range === undefined ? undefined : offsets.get(entry.range.startOffset)
     if (run === undefined || start === undefined) continue

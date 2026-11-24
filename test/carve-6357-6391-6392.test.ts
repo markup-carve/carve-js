@@ -65,7 +65,7 @@ describe('carve#6391: a single hyphen is no potential opener of the hyphen kind'
 })
 
 describe('carve#6357: a plus behind an item marker and a quote mark', () => {
-  const found = (source: string) => lint(source, {}).filter((entry) => entry.code === 'deprecated-continuation-marker')
+  const found = (source: string) => lint(source, { upgrade: true }).filter((entry) => entry.code === 'deprecated-continuation-marker')
     .map((entry) => [entry.range?.startOffset, entry.range?.endOffset, entry.message])
 
   it.each(['* > > +\n', '1. > +\n', '- [ ] > +\n'])('reports nothing for %j', (source) => {

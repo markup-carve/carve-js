@@ -18,14 +18,14 @@ it('C2-B-081: a definition shaped line in a quote is reported', () => {
 it('C2-B-160 and C2-B-161: only a column-zero first-line hyphen run opens frontmatter', () => {
   for (const prefix of [' ', '  ', '    ', '\t']) {
     const source = `${prefix}---\n`
-    const entries = lint(source).filter((entry) => entry.code === 'thematic-break-spelling')
+    const entries = lint(source, { upgrade: true }).filter((entry) => entry.code === 'thematic-break-spelling')
     expect(entries).toHaveLength(1)
     expect(entries[0].range).toEqual({ startOffset: prefix.length, endOffset: prefix.length + 3 })
   }
-  const quoted = lint('> ---\n').filter((entry) => entry.code === 'thematic-break-spelling')
+  const quoted = lint('> ---\n', { upgrade: true }).filter((entry) => entry.code === 'thematic-break-spelling')
   expect(quoted).toHaveLength(1)
   expect(quoted[0].range).toEqual({ startOffset: 2, endOffset: 5 })
-  expect(lint('---\n').map((entry) => entry.code)).not.toContain('thematic-break-spelling')
+  expect(lint('---\n', { upgrade: true }).map((entry) => entry.code)).not.toContain('thematic-break-spelling')
 })
 
 it('C2-B-160: a hyphen run below a non-paragraph leaf is thematic break spelling', () => {
@@ -36,7 +36,7 @@ it('C2-B-160: a hyphen run below a non-paragraph leaf is thematic break spelling
     '::: note\n# H\n---\n:::\n',
     '= H\n---\n',
   ]) {
-    const codes = lint(source).map((entry) => entry.code)
+    const codes = lint(source, { upgrade: true }).map((entry) => entry.code)
     expect(codes, source).toContain('thematic-break-spelling')
     expect(codes, source).not.toContain('setext-heading-underline')
   }
@@ -355,8 +355,9 @@ describe('lint messages of the candidate 8 catalog', () => {
 
 describe('C2-W-109 lint options and ordering', () => {
   it('applies default, explicit, and platform rule states', () => {
-    expect(lint('_x_').some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
-    expect(lint('_x_', { rules: { 'deprecated-bare-underline': 'off' } })
+    expect(lint('_x_').some((entry) => entry.code === 'deprecated-bare-underline')).toBe(false)
+    expect(lint('_x_', { upgrade: true }).some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
+    expect(lint('_x_', { upgrade: true, rules: { 'deprecated-bare-underline': 'off' } })
       .some((entry) => entry.code === 'deprecated-bare-underline')).toBe(false)
     expect(lint('See @bob.').some((entry) => entry.code === 'platform-mention-token')).toBe(false)
     expect(lint('See @bob.', { platforms: ['github'] })
@@ -374,29 +375,31 @@ describe('C2-W-109 lint options and ordering', () => {
 })
 
 describe('C2-B-215 to C2-B-216 controls', () => {
+  const on = { rules: { 'deprecated-bare-underline': 'on' } }
+
   it('handles line, next line, document, and re-enable scopes', () => {
-    expect(lint('_x_ %% carve-lint-disable-line deprecated-bare-underline')).toEqual([])
-    expect(lint('%% carve-lint-disable-next-line deprecated-bare-underline\n_x_')).toEqual([])
-    expect(lint('%% carve-lint-disable\n_x_\n%% carve-lint-enable\n_y_').filter((entry) =>
+    expect(lint('_x_ %% carve-lint-disable-line deprecated-bare-underline', on)).toEqual([])
+    expect(lint('%% carve-lint-disable-next-line deprecated-bare-underline\n_x_', on)).toEqual([])
+    expect(lint('%% carve-lint-disable\n_x_\n%% carve-lint-enable\n_y_', on).filter((entry) =>
       entry.code === 'deprecated-bare-underline').length).toBe(1)
   })
 
   it('ignores malformed controls and protected syntax', () => {
-    expect(lint('%%  carve-lint-disable\n_x_').some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
-    expect(lint('`%% carve-lint-disable`\n_x_').some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
-    expect(lint('%%carve-lint-disable\n_x_').some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
-    expect(lint('{% %% carve-lint-disable %}\n_x_').some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
+    expect(lint('%%  carve-lint-disable\n_x_', on).some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
+    expect(lint('`%% carve-lint-disable`\n_x_', on).some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
+    expect(lint('%%carve-lint-disable\n_x_', on).some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
+    expect(lint('{% %% carve-lint-disable %}\n_x_', on).some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
   })
 
   it('uses the last document control and keeps line scopes independent', () => {
     const source = '%% carve-lint-disable\n_x_\n%% carve-lint-enable deprecated-bare-underline\n_y_'
-    expect(lint(source).filter((entry) => entry.code === 'deprecated-bare-underline').length).toBe(1)
+    expect(lint(source, on).filter((entry) => entry.code === 'deprecated-bare-underline').length).toBe(1)
     const local = '%% carve-lint-disable-next-line,deprecated-bare-underline\n_x_\n_y_'
-    expect(lint(local).filter((entry) => entry.code === 'deprecated-bare-underline').length).toBe(1)
+    expect(lint(local, on).filter((entry) => entry.code === 'deprecated-bare-underline').length).toBe(1)
   })
 
   it('keeps byte ranges after non-ASCII source', () => {
-    const finding = lint('😀 _x_').find((entry) => entry.code === 'deprecated-bare-underline')
+    const finding = lint('😀 _x_', on).find((entry) => entry.code === 'deprecated-bare-underline')
     expect(finding?.range).toEqual({ startOffset: 5, endOffset: 8 })
   })
 })
