@@ -26,6 +26,13 @@ describe('braced-span-opener-as-text: the closer of its own mark in its own leaf
     expect(findings('*a {/b {=c* d=} e/}')).toEqual([[3, 5], [7, 9]])
   })
 
+  it('reports only the opener a closer would pair with (C2-I-058)', () => {
+    expect(findings('*a {/b* c {/d/}')).toEqual([])
+    expect(findings('*a {/b* c {/d/} e/}')).toEqual([[3, 5]])
+    expect(findings('*a {/b {/c* d/}')).toEqual([[7, 9]])
+    expect(findings('*a {/b {/c* d/} e/}')).toEqual([[3, 5], [7, 9]])
+  })
+
   it('skips an escaped opener, an escaped closer and a closer in a code span', () => {
     expect(findings('*a \\{/b* /}')).toEqual([])
     expect(findings('*a {/b* \\/}')).toEqual([])
