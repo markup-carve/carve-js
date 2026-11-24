@@ -1,5 +1,5 @@
 // The diagnostics record (C2-A-172, C2-A-173): its entries, and the position each one takes from the node it is about.
-import { type DocumentNode, type ExtensionDeclaration, forEachSlot, type Node } from './ast.ts'
+import { type DocumentNode, type ExtensionDeclaration, forEachSlot, type Node, SOURCE_ORDER } from './ast.ts'
 
 /** C2-A-173: one entry of the diagnostics record. */
 export interface Diagnostic {
@@ -114,4 +114,60 @@ export function locateFindings(document: DocumentNode, findings: Findings): Diag
     }
   })
   return entries
+}
+
+const INDEX = /^(?:0|[1-9][0-9]*)$/
+
+/**
+ * C2-L-011 order of `path`: per node on the way down, 1, the rank of its slot and its index; a trailing 0
+ * when the rest names a field of the last node, which so comes before the nodes in its slots.
+ */
+function pathKey(document: DocumentNode, path: string, declarations: readonly ExtensionDeclaration[]): number[] {
+  const segments = path === '' ? [] : path.slice(1).split('/')
+  const key: number[] = []
+  let node: Node = document
+  for (let at = 0; at < segments.length;) {
+    let next: Node | undefined
+    let used = 0
+    let rank = 0
+    let index = 0
+    let slot = 0
+    forEachSlot(node, (nodes, step, single) => {
+      slot++
+      if (next !== undefined) return
+      const steps = step.split('/')
+      for (let part = 0; part < steps.length; part++) if (segments[at + part] !== steps[part]) return
+      const token = single ? '0' : segments[at + steps.length]
+      if (token === undefined || !INDEX.test(token) || Number(token) >= nodes.length) return
+      next = nodes[Number(token)]
+      used = steps.length + (single ? 0 : 1)
+      rank = slot
+      index = Number(token)
+    }, SOURCE_ORDER, declarations)
+    if (next === undefined) {
+      key.push(0)
+      break
+    }
+    key.push(1, rank, index)
+    node = next
+    at += used
+  }
+  return key
+}
+
+function compareKeys(a: readonly number[], b: readonly number[]): number {
+  for (let at = 0; at < a.length && at < b.length; at++) if (a[at] !== b[at]) return a[at]! - b[at]!
+  return a.length - b.length
+}
+
+/**
+ * C2-W-158: the writer's entries on a supplied tree in document order of their paths (C2-L-011). Entries
+ * the order does not decide (two fields of one node, one path) keep the order in which they were found.
+ */
+export function inDocumentOrder(document: DocumentNode, entries: Diagnostic[]): Diagnostic[] {
+  if (entries.length < 2) return entries
+  const declarations = document.extensions ?? []
+  const keyed = entries.map((entry, at) => ({ entry, at, key: pathKey(document, entry.path ?? '', declarations) }))
+  keyed.sort((a, b) => compareKeys(a.key, b.key) || a.at - b.at)
+  return keyed.map(({ entry }) => entry)
 }
