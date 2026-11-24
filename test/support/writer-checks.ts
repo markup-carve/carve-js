@@ -639,10 +639,10 @@ function nextRepair(source: BareText, tree: DocumentNode, seeds: readonly number
   return repair >= 0 ? repair : candidates[0] ?? -1
 }
 
-// C2-W-146: the pair rules of lint, with the length of the opening run each one reports.
+// C2-W-146: the pair rules of lint and `unattached-caption`, with the length of the run each one reports.
 const PAIR_RULES = new Map([
   ['deprecated-bare-underline', 1], ['deprecated-bare-strike', 1], ['deprecated-bare-highlight', 1],
-  ['markdown-strikethrough-double-tilde', 2], ['markdown-strong-double-star', 2],
+  ['markdown-strikethrough-double-tilde', 2], ['markdown-strong-double-star', 2], ['unattached-caption', 1],
 ])
 const PAIR_RULES_ON = { rules: Object.fromEntries([...PAIR_RULES.keys()].map((id) => [id, 'on' as const])) }
 

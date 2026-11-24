@@ -133,7 +133,8 @@ describe('the writer follow-ups of the reader fixes', () => {
   it('C2-B-197: a text line of the shape of a block image line takes escapes, so the caret line below stays text', () => {
     // C2-W-088 (carve-js#5283, option B): every bracket of the reported kind and the caret line take the escape.
     expect(roundTrip(lines('![a][b[c]', '^ d'))).toBe('!\\[a]\\[b\\[c]\n\\^ d\n')
-    expect(roundTrip(lines('![a][ ]', '^ c'))).toBe('![a][ ]\n^ c\n')
+    // carve#6585 (A1): the caret line stays text, which `unattached-caption` reports, so it takes the backslash.
+    expect(roundTrip(lines('![a][ ]', '^ c'))).toBe('![a][ ]\n\\^ c\n')
   })
 
   it('C2-W-055, C2-B-084: an expansion keeps its leading blanks, and one that ends in a blank or holds a line break is reported', () => {

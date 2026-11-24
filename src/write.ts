@@ -32,6 +32,7 @@ import { createPlan, notePlaces, type Plan } from './write-plan.ts'
 import { plainParagraph } from './write-plain.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { sourceCoreEquivalent, withCoreInlines } from './write-extension-source.ts'
+import { caretLineEscapes } from './write-carets.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
 export interface LayoutEntry extends WriterFacts {
@@ -1409,6 +1410,8 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
     const placed = w.escapes.get(text) ?? []
     w.escapes.set(text, [...new Set([...placed, ...offsets])].sort((a, b) => a - b))
   }
+  addEscapes(w, [...caretLineEscapes(group)].map(([node]) => [node, 0] as [TextNode, number])
+    .filter(([node]) => !(w.escapes.get(node) ?? []).includes(0)))
   addEscapes(w, earlyLoneNoteBrackets(w, group).filter(([node, at]) => !(w.escapes.get(node) ?? []).includes(at)))
   const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
   const end = repairOnce(w, document, from, first, reported)

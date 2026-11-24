@@ -194,15 +194,15 @@ describe('the planned writer', () => {
     }
   })
 
-  it('C2-B-146, C2-B-149: a caption mark below a line of text or after a blank line is text, and the plan writes it bare', () => {
-    for (const source of ['a\n\\^ b\n', '\\^ b\n', 'x\n\n\\^ b\n', '- a\n  \\^ b\n', 'a *b*\n\\^ c\n', '*x* ![i](u)\n\\^ b\n']) {
+  it('C2-B-146, C2-B-149, C2-W-146: a caption mark below a line of text or after a blank line is text, and the plan escapes it', () => {
+    // carve#6585 (A1): `unattached-caption` reports such a caret, so canonical output keeps its backslash.
+    for (const source of ['a\n\\^ b\n', '\\^ b\n', 'x\n\n\\^ b\n', '- a\n  \\^ b\n', 'a *b*\n\\^ c\n', '*x* ![i](u)\n\\^ b\n',
+      '![i](u)\n\\^ b\n']) {
       const result = formatBy(source, 'both')
-      expect(result.output.source, source).toBe(source.replace('\\^', '^'))
+      expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    // C2-B-147, C2-B-157: below a paragraph that may still be a block image, the repair decides.
-    for (const source of ['![i](u)\n\\^ b\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
   })
 
   it('C2-B-207: a text `#` of a caption before its number mark keeps its backslash in the formatted source', () => {

@@ -690,6 +690,14 @@ function mayCloseLineBlock(leaf: Leaf): boolean {
   return end - at >= 3 && (code(leaf, rest) < 0 || code(leaf, rest) === LF)
 }
 
+/** C2-W-146: a line of a line block that starts with a caret and a space is text that `unattached-caption` reports. */
+function caretLine(leaf: Leaf): boolean {
+  if (code(leaf, 0) !== 94 || leaf.kinds[0] !== TEXT || code(leaf, 1) !== SPACE) return false
+  let at = 2
+  while (code(leaf, at) === SPACE || code(leaf, at) === TAB) at++
+  return at < leaf.codes.length && code(leaf, at) !== LF
+}
+
 /** C2-W-092: the line starts of a paragraph by the rules of write-plan-lines.ts; of any other leaf, none may open a block. */
 function checkLines(leaf: Leaf, start: number, place: LeafPlace | undefined, escaped: Uint8Array): void {
   const rules = lineRules(start, place)
@@ -698,7 +706,10 @@ function checkLines(leaf: Leaf, start: number, place: LeafPlace | undefined, esc
   for (let at = -1; at < leaf.codes.length && leaf.undecided === null; at++) {
     leaf.cursor = Math.max(at, 0)
     if (at < 0 ? start !== LINE_START : leaf.codes[at] !== LF || leaf.kinds[at] === TEXT) continue
-    if (line && at < 0) undecidedIf(mayCloseLineBlock(leaf), leaf, 'line start')
+    if (line && at < 0) {
+      undecidedIf(mayCloseLineBlock(leaf), leaf, 'line start')
+      if (caretLine(leaf)) escaped[0] = 1
+    }
     else if (rules === null) undecidedIf(opensBlock(leaf, at + 1), leaf, 'line start')
     else above = checkLine(leaf, at, rules, escaped, above)
   }
