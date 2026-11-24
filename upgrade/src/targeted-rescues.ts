@@ -308,6 +308,11 @@ function tableCodeSpanCandidates(input: string, gate: Gate): Candidate[] {
   return found
 }
 
+// Each trial renders the whole document: past the first trials they stop once this much has been rendered,
+// which keeps a line with an opener every few bytes linear without cutting a small document short.
+const MIN_TRIALS = 64
+const TRIAL_BYTES = 1 << 20
+
 /** Exact HTML decides whether a candidate spelling preserves 0.1 rendering. */
 export function rescueTargeted(
   input: string,
@@ -316,32 +321,54 @@ export function rescueTargeted(
   site: Site = OPEN_SITE
 ): { output: string; record: ReportRecord } | null {
   const expected = html01(input)
+  // The line of the first difference goes first, so candidates elsewhere in the site cannot use up the budget.
+  for (const gates of site.focus === undefined ? [site] : [site.focus, site]) {
+    const found = firstPreserving(input, output, expected, gates, mismatch)
+    if (found !== null) return found
+  }
+  return null
+}
+
+function firstPreserving(
+  input: string,
+  output: string,
+  expected: string,
+  site: { input: Gate; output: Gate },
+  mismatch: ReportRecord
+): { output: string; record: ReportRecord } | null {
   const near = site.output
-  const candidates = [
-    ...simpleCandidates(output, near),
-    ...bracketCandidates(output, near),
-    ...lineCandidates(output, near),
-    ...multilineAttributeCandidates(input, site.input),
-    ...quotedCaretCandidates(input, site.input),
-    ...itemDefinitionCandidates(input, site.input),
-    ...tableCodeSpanCandidates(input, site.input),
-    ...smartQuoteCandidates(output, expected, near),
-    ...smartQuoteCandidates(output, expected, near).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190', near)),
-    ...languageCandidates(output, near),
-    ...substitutionAttributeCandidates(input, output, near),
-    ...floatingAttributeCandidates(output, near),
-    ...underlineBoundaryCandidates(output, near),
-    ...unresolvedFootnoteAttributeCandidates(output, near)
+  const sources: (() => Candidate[])[] = [
+    () => simpleCandidates(output, near),
+    () => bracketCandidates(output, near),
+    () => lineCandidates(output, near),
+    () => multilineAttributeCandidates(input, site.input),
+    () => quotedCaretCandidates(input, site.input),
+    () => itemDefinitionCandidates(input, site.input),
+    () => tableCodeSpanCandidates(input, site.input),
+    () => smartQuoteCandidates(output, expected, near),
+    () => smartQuoteCandidates(output, expected, near).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190', near)),
+    () => languageCandidates(output, near),
+    () => substitutionAttributeCandidates(input, output, near),
+    () => floatingAttributeCandidates(output, near),
+    () => underlineBoundaryCandidates(output, near),
+    () => unresolvedFootnoteAttributeCandidates(output, near)
   ]
-  for (const candidate of candidates) {
-    try {
-      if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
-      return {
-        output: candidate.output,
-        record: recordOf(candidate.id, mismatch.line, 'the clause-backed spelling preserves the complete 0.1 HTML')
+  let trials = 0
+  let rendered = 0
+  for (const source of sources) {
+    for (const candidate of source()) {
+      if (trials >= MIN_TRIALS && rendered >= TRIAL_BYTES) return null
+      trials++
+      rendered += candidate.output.length
+      try {
+        if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
+        return {
+          output: candidate.output,
+          record: recordOf(candidate.id, mismatch.line, 'the clause-backed spelling preserves the complete 0.1 HTML')
+        }
+      } catch {
+        /* A candidate can fail to parse under the new grammar. */
       }
-    } catch {
-      /* A candidate can fail to parse under the new grammar. */
     }
   }
   return null
