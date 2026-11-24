@@ -22,12 +22,12 @@ it('locates the value loss of a positioned node with its range (C2-W-103)', () =
   expect(result.diagnostics[0]!.range).toBeDefined()
 })
 
-it('reports no value of a slot that an extension written as its fallback does not write', () => {
+it('reports no value of the attributes or slots that an extension written as its fallback does not write', () => {
   const paragraph = (text: string, title: string): unknown =>
     ({ type: 'paragraph', attrs: { keyValues: [['title', title]] }, children: [{ type: 'text', value: text }] })
   const tree = {
     type: 'document', astVersion: '2.0', extensions: [{ name: 'org.example.n', version: '1', required: false, slots: ['s'] }],
-    children: [{ type: 'block_extension', name: 'org.example.n', version: '1', children: [],
+    children: [{ type: 'block_extension', name: 'org.example.n', version: '1', children: [], attrs: { keyValues: [['k', 'e\nf']] },
       slots: { s: [paragraph('in slot', 'a\nb')] }, fallback: [paragraph('a', 'c\nd')] }],
   } as unknown as Parameters<typeof writeWithDiagnostics>[0]
   const result = writeWithDiagnostics(tree)

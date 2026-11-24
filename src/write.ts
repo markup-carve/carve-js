@@ -2235,9 +2235,11 @@ function attributeValueLosses(document: DocumentNode, w: Writer): void {
   const pending: Node[] = [document]
   while (pending.length > 0) {
     const node = pending.pop()!
+    // An extension written as its fallback writes neither its attributes nor its other slots.
+    const fallbackOnly = (node.type === 'block_extension' || node.type === 'inline_extension') && w.lost.has(node)
     const lostKeys = w.lostKeys.get(node)
     node.attrs?.keyValues?.forEach(([key, value], index) => {
-      if (!value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) return
+      if (fallbackOnly || !value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) return
       const entry: Diagnostic = { code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
         message: `Carve source cannot spell the line feed in the value of the key ${key} of a ${node.type} node` }
       addFinding(w.losses, node, entry)
@@ -2245,8 +2247,6 @@ function attributeValueLosses(document: DocumentNode, w: Writer): void {
       w.losses.steps.set(entry, `/attrs/keyValues/${index}/1`)
     })
     if (node.type === 'include') continue
-    // An extension written as its fallback writes none of its other slots.
-    const fallbackOnly = (node.type === 'block_extension' || node.type === 'inline_extension') && w.lost.has(node)
     forEachSlot(node, (children, step) => {
       if (step.startsWith('metadata/') || (fallbackOnly && step !== 'fallback')) return
       for (let at = children.length - 1; at >= 0; at--) pending.push(children[at]!)
