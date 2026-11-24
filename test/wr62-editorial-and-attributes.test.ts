@@ -12,8 +12,10 @@ test('an editorial atom owns later line-start percent text', () => {
 test('an attribute block separates a bare span closer from following word text', () => {
   for (const content of ['a', 'a b', 'abc']) {
     for (const mark of ['*', '/']) {
-      const source = `${mark}${content}${mark}{.c}a`
-      expect(format(source)).toBe(`${source}\n`)
+      for (const following of ['a', mark]) {
+        const source = `${mark}${content}${mark}{.c}${following}`
+        expect(format(source)).toBe(`${source}\n`)
+      }
     }
   }
 })
