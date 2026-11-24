@@ -1925,7 +1925,19 @@ function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Nod
   // C2-I-090: a name character behind a mention or a tag makes the name longer.
   if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
-  return escapeSmartSide(c, textAt(es, i - 1), next)
+  return escapeSmartSideAfterConstruct(c, es, i, next)
+}
+
+/** A text quote whose own opener is being escaped can restore the following smart quote on the next parse. */
+function escapeSmartSideAfterConstruct(c: Check, es: readonly Node[], i: number, next: TextNode | null): boolean {
+  const before = c.escapes.length
+  const changed = escapeSmartSide(c, textAt(es, i - 1), next)
+  const prior = textAt(es, i - 1)
+  if (prior !== null && (prior.value.endsWith('"') || prior.value.endsWith("'")) &&
+    [...c.constructs].some(([node, at]) => node === prior && at === prior.value.length - 1)) {
+    for (const escape of c.escapes.slice(before)) c.behind.add(escape)
+  }
+  return changed
 }
 
 /** C2-I-105: the smart punctuation between `before` and `next` read as another kind; a neighbor takes the backslash. */
