@@ -773,6 +773,51 @@ function unclosedOpeners(c: Check, e: Node): [TextNode, number][] {
   return open
 }
 
+/** C2-W-125 case five: brackets inside a note that would take its own closer. */
+export function earlyLoneNoteBrackets(w: Writer, roots: readonly Node[]): [TextNode, number][] {
+  const check = createCheck(w)
+  const found: [TextNode, number][] = []
+  const pending = [...roots]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'inline_footnote') found.push(...earlyNoteOpeners(check, node))
+    const children = childNodes(node)
+    priorNoteOpeners(check, children, found)
+    pending.push(...children)
+  }
+  return found
+}
+
+function priorNoteOpeners(check: Check, children: readonly Node[], found: [TextNode, number][]): void {
+  const open: [TextNode, number][] = []
+  for (const child of children) {
+    if (child.type === 'text') {
+      for (let at = 0; at < child.value.length; at++) {
+        if (child.value.startsWith('^[', at)) { open.push([child, at + 1]); at++ }
+        else if (child.value[at] === ']' && open.length > 0) open.pop()
+      }
+    } else if (child.type === 'inline_footnote' && earlyNoteOpeners(check, child).length > 0) {
+      found.push(...open)
+    }
+  }
+}
+
+/** Inside a note, these caret pairs are literal text and cannot open another note. */
+function earlyNoteOpeners(check: Check, node: Node): [TextNode, number][] {
+  if (node.type !== 'inline_footnote' || !node.children.every((child) => child.type === 'text') ||
+    !node.children.some((child) => child.type === 'text' && child.value.includes('^['))) return []
+  const open = unclosedOpeners(check, node)
+  const first = open[0]
+  if (first === undefined) return []
+  let before = ''
+  for (const child of node.children) {
+    if (child.type !== 'text') continue
+    before += child === first[0] ? child.value.slice(0, first[1]) : child.value
+    if (child === first[0]) break
+  }
+  // A completed pair before the lone opener can have reported the `[` kind in the bare round.
+  return before.includes(']') ? [] : open
+}
+
 /** The flags the content of `e` is written with. */
 function contentFlags(c: Check, e: Node): number {
   return c.flags | contentFlag(e.type)
