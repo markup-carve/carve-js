@@ -8,8 +8,9 @@ const NOTICES = ['blank-reference-label', 'comment-fence-closer-with-text', 'con
   'deprecated-continuation-marker',
   'deprecated-indented-line-under-heading', 'deprecated-loose-attribute', 'deprecated-separator-row',
   'deprecated-spaced-thematic-break', 'deprecated-substitution-arrow', 'deprecated-table-attribute',
-  'djot-emphasis-underscore', 'djot-heading-continuation', 'djot-intraword-underscore',
-  'djot-plus-bullet', 'djot-subscript-tilde', 'djot-subscript-tilde-braced', 'djot-superscript-caret',
+  'djot-definition-list', 'djot-emphasis-underscore', 'djot-emphasis-underscore-braced', 'djot-heading-continuation',
+  'djot-intraword-underscore', 'djot-ordered-marker', 'djot-plus-bullet', 'djot-subscript-tilde',
+  'djot-subscript-tilde-braced', 'djot-superscript-caret', 'djot-tag-mention', 'djot-typography-sign',
   'sigil-after-letter', 'thematic-break-spelling', 'tight-list-item-with-blank-line']
 const HEADING = '# a\n b\n'
 const reported = (source, options = {}) => lint(source, options)
