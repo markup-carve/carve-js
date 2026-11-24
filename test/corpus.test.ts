@@ -22,9 +22,9 @@ function fields(mismatches: readonly Mismatch[]): string[] {
 describe('the examples of the specification', () => {
   const carve = CORPUS_EXAMPLES.filter((example) => example.kind !== 'import')
 
-  it('holds the 662 examples of the nine documents, 597 of them with a Carve input', () => {
-    expect(CORPUS_EXAMPLES).toHaveLength(662)
-    expect(carve).toHaveLength(597)
+  it('holds the 666 examples of the nine documents, 601 of them with a Carve input', () => {
+    expect(CORPUS_EXAMPLES).toHaveLength(666)
+    expect(carve).toHaveLength(601)
   })
 
   for (const example of carve) {
@@ -47,8 +47,8 @@ describe('the examples of the specification', () => {
 })
 
 describe('the clause cases of the specification', () => {
-  it('holds 1806 cases, each with the sentence that decides it', () => {
-    expect(CLAUSE_CASES).toHaveLength(1806)
+  it('holds 1864 cases, each with the sentence that decides it', () => {
+    expect(CLAUSE_CASES).toHaveLength(1864)
     for (const entry of CLAUSE_CASES) expect(entry.why.length).toBeGreaterThan(0)
   })
 

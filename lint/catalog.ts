@@ -250,6 +250,28 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
+  "continuation-reading-changed": { severity: "warning", default: "upgrade", messages: [
+    [
+      "This indented line continues the definition above in 0.2; in 0.1 it ",
+      "started a paragraph. Remove the indent to make it a separate block a",
+      "gain.",
+    ].join(''),
+    [
+      "This indented line continues the term above in 0.2; in 0.1 it starte",
+      "d a paragraph. Remove the indent to make it a separate block again.",
+    ].join(''),
+    [
+      "This line ends the caption above in 0.2; in 0.1 it continued the cap",
+      "tion. Indent it past the caret to keep it in the caption.",
+    ].join(''),
+  ], conditions: [
+    "the line continues a link definition or an abbreviation definition",
+    "the line continues a term",
+    [
+      "the line stands directly below a caption and is not indented past it",
+      "s caret",
+    ].join(''),
+  ] },
   "definition-in-container": { severity: "warning", default: "on", messages: [
     [
       "A definition is recognized only at column 0 outside every container,",
@@ -679,6 +701,14 @@ export const CATALOG = {
     [
       "Four-space indentation does not make a code block in Carve; this ren",
       "ders as a paragraph. Use a ``` fence.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
+  "link-definition-indented-line": { severity: "hint", default: "on", messages: [
+    [
+      "This indented line is not a title or attribute block, so it does not",
+      " continue the link definition above; it starts a new block.",
     ].join(''),
   ], conditions: [
     "",
