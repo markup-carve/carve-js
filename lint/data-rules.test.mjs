@@ -241,7 +241,8 @@ it('C2-W-149: the table fields give what the hand-written table rules report', (
     '|= a |= b |\n|={.x} ^ | c |\n', '| a | b |\n| c | d |\n| = ^ | e |\n', '| a | b |\n| c | \\< |\n', '| a | {} |\n', '| a | {% c %} |\n', '{table}\n```csv\na,<\n^,> abc\n```\n']
   for (const source of sources) expect(findings(source, 'data'), JSON.stringify(source)).toEqual(findings(source, 'code'))
   expect(findings('| a | b |\n%% c\n+ d |\n', 'data')).toEqual(['comment-splits-table-row@10-14'])
-  expect(findings('| a |{<} |\n', 'data')).toEqual(['table-row-attribute-as-cell@0-10'])
+  expect(findings('| a |{<} |\n', 'data')).toEqual([])
+  expect(findings('| a | {.x} |\n', 'data')).toEqual(['table-row-attribute-as-cell@0-12'])
   expect(findings('| a | {} |\n', 'data')).toEqual([])
 })
 
