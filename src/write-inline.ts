@@ -1,8 +1,8 @@
 // The inline nodes as Carve source (C2-W-069 to C2-W-080, C2-W-116). A line break of the
 // content is a line feed in the string; the block that holds the content places the lines.
 import {
-  type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type Inline, type InlineParent, type LinkNode,
-  type MentionNode, type Node, type NodeOfType, type ParagraphNode, type RubyNode, type TextNode, type InlineExtensionNode,
+  type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type Inline, type InlineParent, isBreak,
+  type LinkNode, type MentionNode, type Node, type NodeOfType, type ParagraphNode, type RubyNode, type TextNode, type InlineExtensionNode,
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { foldLabel } from './ast-attributes.ts'
@@ -1057,6 +1057,8 @@ export function joinsNextCode(nodes: readonly Node[], at: number): boolean {
 function writePart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number): string {
   const node = nodes[at]!
   if (node.type === 'non_breaking_space' && nodes[at + 1]?.type === 'soft_break') return unspelledSpace(w, node)
+  // C2-W-117, C2-W-124: two line endings make a blank line, so each soft break behind a break is lost.
+  if (node.type === 'soft_break' && isBreak(nodes[at - 1])) lose(w, node, null)
   const part = end > at + 1 ? codeRun(nodes, at, end) : writeInline(w, node, flags)
   // C2-W-022: no space or tab of text stands at the end of a line. Before the backslash of a hard break it is text.
   return node.type === 'text' && nodes[at + 1]?.type === 'soft_break' ? trimEnd(part) : part
