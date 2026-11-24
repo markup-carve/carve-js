@@ -162,4 +162,16 @@ export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean)
     if (value === OPENING) scan.openers.push(at)
     else closePair(scan, at)
   }
+  // An unmatched text opener can turn the preceding source-spelled reference into a full reference.
+  // Its spelling is an atom here, so the pair scan cannot see that link's own brackets.
+  checkSourceLinkBoundary(scan)
+}
+
+function checkSourceLinkBoundary(scan: Scan): void {
+  const leaf = scan.leaf
+  if (leaf.undecided === null && scan.openers.some((at) => followsSourceLink(leaf, at))) undecide(leaf, 'reference boundary')
+}
+
+function followsSourceLink(leaf: Leaf, at: number): boolean {
+  return leaf.kinds[at] === TEXT && at > 0 && leaf.codes[at - 1] === CLOSING && leaf.owners[at - 1]?.type === 'link'
 }

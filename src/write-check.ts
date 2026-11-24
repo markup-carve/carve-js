@@ -1866,11 +1866,7 @@ function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: 
   return true
 }
 
-/**
- * C2-W-088: the construct `a` that opens at `from` in `es[i]` reads on over the nodes behind it. A quote of the tree in
- * that stretch that the parse holds in another direction is reported in the same round: its neighbor takes the
- * backslash, as behind a construct (C2-W-125, case two).
- */
+/** Report quote neighbors in a construct's span after its opener escape, except delimiters that cannot open. */
 function escapeInnerQuotes(c: Check, es: readonly Node[], i: number, from: number, a: Node): void {
   const pos = a.pos!
   const quotes = new Map<number, string>()
@@ -1888,9 +1884,15 @@ function escapeInnerQuotes(c: Check, es: readonly Node[], i: number, from: numbe
     const node = es[k]!
     const kind = quotes.get(offset)
     const next = textAt(es, k + 1)
-    if (node.type === 'smart_punctuation' && kind !== undefined && kind !== node.kind && next !== null) escapeSmartNeighbor(c, next, false)
+    if (node.type === 'smart_punctuation' && kind !== undefined && kind !== node.kind && next !== null &&
+      !terminalDelimiter(next, es, k + 1)) escapeSmartNeighbor(c, next, false)
     offset += utf8Length(writeInline(c.w, node, c.flags))
   }
+}
+
+/** C2-I-047: a slash or star with no following character cannot open a paired span. */
+function terminalDelimiter(next: TextNode, es: readonly Node[], index: number): boolean {
+  return (next.value === '/' || next.value === '*') && index === es.length - 1
 }
 
 /** C2-W-125, case seven: escaping a comparison's first character would turn the preceding right quote left. */
