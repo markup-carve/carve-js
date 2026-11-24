@@ -2,6 +2,8 @@
 import { childNodes, isBreak, isInlineParent } from './ast.ts'
 import type { Node, TextNode } from './ast-nodes.ts'
 import { BRACKETED, type Check, CLOSING_MARKS, contentClosers, escapeAt, isEscaped } from './write-check.ts'
+import { BRACED_MARKS } from './inline-tables.ts'
+import { escapeOffsets, IN_CELL } from './write-inline.ts'
 import { isAsciiAlphanumeric, isBoundarySpace, isWordCharacter } from './unicode.ts'
 
 /** One leaf of the inline content of a block: a text node, a break, or the markup of another inline node. */
@@ -63,9 +65,9 @@ function kindKey(block: KindBlock, index: number, at: number, line: boolean): st
   const value = textOf(block, index)
   if (line) return `L${lineShape(value)}`
   const ch = value[at]!
-  if (ch === '{' && at + 1 < value.length) return `{${value[at + 1]}`
+  if (ch === '{' && at + 1 < value.length && BRACED_MARKS.includes(value[at + 1]!)) return `{${value[at + 1]}`
   // C2-W-088: a brace that ends its text reads as a braced opener with the mark of the markup behind it.
-  if (ch === '{') return `{${markBehind(block, index) ?? ''}`
+  if (ch === '{') return at + 1 < value.length ? '{' : `{${markBehind(block, index) ?? ''}`
   if (ch === '-' && (hyphenRun(block, index, at)[0] > 0 || (at === 0 && isDash(block.leaves[index - 1])) ||
     besideDash(block, index, at))) return '--'
   return ch
@@ -167,7 +169,7 @@ function charOffsets(key: string, block: KindBlock, index: number, value: string
   const delimiter = ch === SLASH || ch === STAR
   for (let at = value.indexOf(key[0]!); at >= 0; at = value.indexOf(key[0]!, at + 1)) {
     if (key.length === 2 && (at + 1 < value.length ? value[at + 1] : markBehind(block, index)) !== key[1]) continue
-    if (delimiter ? canOpen(block, index, at) : value.charCodeAt(at - 1) !== ch) offsets.push(at)
+    if (delimiter ? canOpen(block, index, at) : key.length > 1 && ch === 0x7b ? true : value.charCodeAt(at - 1) !== ch) offsets.push(at)
   }
   return offsets
 }
@@ -211,16 +213,18 @@ function edge(block: KindBlock, index: number, step: number): number {
  */
 export function escapeKinds(check: Check, group: readonly Node[], noKind: ReadonlySet<[TextNode, number]> = new Set()): void {
   const trials = new Set(check.trials)
-  const reported = check.escapes.filter((escape) => check.ownEscapes.get(escape[0])?.has(escape[1]) !== true && !trials.has(escape) &&
-    !noKind.has(escape) && !check.lengthening.has(escape))
+  const candidates = check.escapes.filter((escape) => check.ownEscapes.get(escape[0])?.has(escape[1]) !== true &&
+    !trials.has(escape) && !noKind.has(escape) && !check.lengthening.has(escape))
+  const braces = candidates.some(([node, at]) => node.value[at] === '{') ? braceContext(check, group) : null
+  const reported = candidates.filter(([node, at]) => reportedBrace(braces, node, at))
   if (reported.length === 0) return
   const owners = kindBlocks(group)
   const done = new Map<KindBlock, Set<string>>()
   for (const [node, at] of reported) {
     const block = owners.get(node)
     if (block === undefined) continue
-    const key = kindKey(block, block.places?.get(node) ?? -1, at,
-      check.lineEscapes.get(node)?.has(at) === true)
+    const key = reportedKey(check, block, node, at)
+    if (key.startsWith('{')) check.w.reportedBraceKinds.add(key)
     const keys = done.get(block) ?? new Set<string>()
     if (keys.has(key)) continue
     done.set(block, keys.add(key))
@@ -229,6 +233,128 @@ export function escapeKinds(check: Check, group: readonly Node[], noKind: Readon
       for (const offset of kindOffsets(key, block, index)) escapeAt(check, leaf.text, offset)
     })
   }
+}
+
+function reportedKey(check: Check, block: KindBlock, node: TextNode, at: number): string {
+  const index = block.places?.get(node) ?? -1
+  const inline = kindKey(block, index, at, false)
+  const line = check.lineEscapes.get(node)?.has(at) === true ||
+    (at === 0 && (block.leaves[index] as { lineStart?: boolean })?.lineStart === true && inline === '{')
+  return line ? kindKey(block, index, at, true) : inline
+}
+
+interface BraceContext {
+  bytes: Uint32Array
+  ranges: [number, number][]
+  starts: Map<TextNode, [number, readonly number[]]>
+}
+
+/** Locate each written text leaf and each parsed text range once for the round. */
+function braceContext(check: Check, group: readonly Node[]): BraceContext | null {
+  const source = check.source
+  const parsed = check.w.parsed
+  if (source === null || parsed === null) return null
+  return { bytes: byteOffsets(source), ranges: parsedTextRanges(parsed.children), starts: writtenTextStarts(check, group, source) }
+}
+
+export function writtenTextStarts(check: Check, group: readonly Node[], source: string): Map<TextNode, [number, readonly number[]]> {
+  const starts = new Map<TextNode, [number, readonly number[]]>()
+  const bytes = byteOffsets(source)
+  const inert = inertRanges(check.w.parsed?.children ?? [])
+  const pending = [...group].reverse().map(node => ({ node, inCell: false }))
+  let cursor = 0
+  for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
+    const { node } = entry
+    if (node.type !== 'text') {
+      pending.push(...[...childNodes(node)].reverse().map(child => ({ node: child, inCell: entry.inCell || node.type === 'table_cell' })))
+      continue
+    }
+    const escapes = escapeOffsets(check.w, node, entry.inCell ? IN_CELL : 0)
+    let written = ''
+    let next = 0
+    for (let at = 0; at < node.value.length; at++) {
+      if (escapes[next] === at) { written += '\\'; next++ }
+      written += node.value[at]
+    }
+    let start = nextTextPlace(source, written, cursor, bytes, inert)
+    let length = written.length
+    if (start < 0) { start = nextTextPlace(source, node.value, cursor, bytes, inert); length = node.value.length }
+    if (start < 0) continue
+    starts.set(node, [start, escapes])
+    cursor = start + length
+  }
+  return starts
+}
+
+/** Text in a code, literal, or math span cannot be the source of a text leaf. */
+function inertRanges(nodes: readonly Node[]): [number, number][] {
+  const ranges: [number, number][] = []
+  const pending = [...nodes]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if ((node.type === 'code' || node.type === 'literal_inline' || node.type === 'math') && node.pos !== undefined) {
+      ranges.push([node.pos.startOffset, node.pos.endOffset])
+    } else pending.push(...childNodes(node))
+  }
+  ranges.sort((a, b) => a[0] - b[0])
+  return ranges
+}
+
+function nextTextPlace(source: string, value: string, cursor: number, bytes: Uint32Array, inert: readonly [number, number][]): number {
+  if (value === '') return cursor
+  for (let start = source.indexOf(value, cursor); start >= 0; start = source.indexOf(value, start + 1)) {
+    const byte = bytes[start]!
+    let low = 0
+    let high = inert.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (inert[middle]![0] <= byte) low = middle + 1
+      else high = middle
+    }
+    if (low === 0 || byte >= inert[low - 1]![1]) return start
+  }
+  return -1
+}
+
+function parsedTextRanges(nodes: readonly Node[]): [number, number][] {
+  const ranges: [number, number][] = []
+  const parsedNodes: Node[] = [...nodes]
+  for (let node = parsedNodes.pop(); node !== undefined; node = parsedNodes.pop()) {
+    if (node.type === 'text' && node.pos !== undefined) ranges.push([node.pos.startOffset, node.pos.endOffset])
+    parsedNodes.push(...childNodes(node))
+  }
+  ranges.sort((a, b) => a[0] - b[0])
+  return ranges
+}
+
+function byteOffsets(source: string): Uint32Array {
+  const bytes = new Uint32Array(source.length + 1)
+  for (let at = 0, byte = 0; at < source.length; at++) {
+    bytes[at] = byte
+    const code = source.codePointAt(at)!
+    byte += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4
+    if (code > 0xffff) { at++; bytes[at] = byte - 4 }
+    bytes[at + 1] = byte
+  }
+  return bytes
+}
+
+/** A brace still held by parsed text is a case repair, not a reported construct. */
+function reportedBrace(context: BraceContext | null, text: TextNode, at: number): boolean {
+  if (text.value[at] !== '{' || context === null) return true
+  const located = context.starts.get(text)
+  if (located === undefined) return true
+  const [start, escapes] = located
+  let before = 0
+  while (escapes[before] !== undefined && escapes[before]! < at) before++
+  const byte = context.bytes[start + at + before]!
+  let low = 0
+  let high = context.ranges.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (context.ranges[middle]![0] <= byte) low = middle + 1
+    else high = middle
+  }
+  return low === 0 || byte >= context.ranges[low - 1]![1]
 }
 
 /**
@@ -264,8 +390,10 @@ function planKinds(block: KindBlock, escapes: ReadonlyMap<TextNode, readonly num
   block.leaves.forEach((leaf, index) => {
     if (leaf.text === null) return
     for (const at of escapes.get(leaf.text) ?? []) {
-      keys.add(kindKey(block, index, at, false))
-      if (isLineOpener(leaf, at)) keys.add(kindKey(block, index, at, true))
+      const line = isLineOpener(leaf, at)
+      const inline = kindKey(block, index, at, false)
+      if (!line || inline !== '{') keys.add(inline)
+      if (line) keys.add(kindKey(block, index, at, true))
     }
   })
   return keys

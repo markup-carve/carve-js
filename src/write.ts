@@ -16,7 +16,8 @@ import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
-import { escapeKinds, escapePartnerClosers, leavesKindBare } from './write-kinds.ts'
+import { escapeKinds, escapePartnerClosers, leavesKindBare, writtenTextStarts } from './write-kinds.ts'
+import { BRACED_MARKS, BRACED_NODES } from './inline-tables.ts'
 import {
   type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets,
   simpleSpanForest, earlyLoneNoteBrackets, earlyTextNoteClosers,
@@ -515,8 +516,37 @@ function keepCodeTrial(check: Check): void {
 
 /** C2-W-088 (CC-1568): every opener of each reported kind; a backslash of a C2-W-125 closer repair gives no kind. */
 function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): void {
+  // The comparison can reach a missing tree node before it reaches a construct in that
+  // node's text. If the read-back parse opened a construct on the trial's text brace,
+  // it is a reported opener rather than a C2-W-125 trial.
+  const starts = check.source === null || check.trials.length === 0 ? new Map() : writtenTextStarts(check, group, check.source)
+  check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, starts))
   escapeKinds(check, group, w.closerKinds ? undefined : check.closers)
   escapePartnerClosers(check, group)
+}
+
+function trialOpensBracedConstruct(
+  check: Check, text: TextNode, at: number, starts: ReadonlyMap<TextNode, [number, readonly number[]]>,
+): boolean {
+  const kind = BRACED_MARKS.indexOf(text.value[at + 1] ?? '')
+  const type = kind < 0 ? undefined : BRACED_NODES[kind]
+  const source = check.source
+  const parsed = check.w.parsed
+  if (text.value[at] !== '{' || type === undefined || source === null || parsed === null) return false
+  const located = starts.get(text)
+  if (located === undefined) return false
+  const [start, escapes] = located
+  let before = 0
+  while (escapes[before] !== undefined && escapes[before]! < at) before++
+  const sourceAt = start + at + before
+  if (source[sourceAt] !== '{') return false
+  const byte = utf8Length(source.slice(0, sourceAt))
+  const pending: Node[] = [...parsed.children]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === type && node.pos?.startOffset === byte) return true
+    pending.push(...childNodes(node))
+  }
+  return false
 }
 
 /**
@@ -527,16 +557,9 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   const check = compareGroup(w, document, group, first)
   // C2-W-125 tries to form a missing node separately from the constructs C2-W-088 found in the
   // read-back parse. A lone ineffective trial takes no escape. Multiple trials can work together.
-  let dropped = false
   dropEarlyTrials(check)
   logTrials(w, check.trials)
-  for (const [node, at] of check.trials.length <= 4 ? check.trials : []) {
-    if (check.trials.length > 1) continue
-    if (isAsked(w, group, first, node, at)) continue
-    const place = check.escapes.findIndex((escape) => escape[0] === node && escape[1] === at)
-    if (place >= 0) check.escapes.splice(place, 1)
-    dropped = true
-  }
+  let dropped = dropIdleTrial(w, check, group, first)
   dropped = dropIdleLeads(w, group, first, check) || dropped
   deferRepairs(check)
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
@@ -580,6 +603,16 @@ function dropEscapesAfterConstruct(w: Writer, group: readonly Node[], first: boo
   w.starts.clear()
   for (const [key, value] of savedStarts) w.starts.set(key, value)
   if (equal) check.escapes = kept
+}
+
+function dropIdleTrial(w: Writer, check: Check, group: readonly Node[], first: boolean): boolean {
+  const trial = check.trials.length === 1 ? check.trials[0] : undefined
+  if (trial === undefined || isAsked(w, group, first, trial[0], trial[1])) return false
+  const [node, at] = trial
+  const place = check.escapes.findIndex((escape) => escape[0] === node && escape[1] === at)
+  if (place >= 0) check.escapes.splice(place, 1)
+  check.marks.get(node)?.delete(at)
+  return true
 }
 
 /**
@@ -1113,6 +1146,7 @@ function compareWithRepair(
  */
 function clearGroupChoices(w: Writer): void {
   if (w.escapes.size > 0) w.escapes = new Map()
+  w.reportedBraceKinds.clear()
   if (w.forms.size > 0) w.forms.clear()
   if (w.attempts.size > 0) w.attempts.clear()
 }
@@ -1214,6 +1248,7 @@ interface SavedGroup {
   end: number
   lines: string[]
   escapes: Map<TextNode, number[]>
+  reportedBraceKinds: Set<string>
   forms: Map<Node, number>
   glued: Set<Node>
   attempts: Writer['attempts']
@@ -1224,7 +1259,8 @@ interface SavedGroup {
 
 function saveGroup(w: Writer, end: number): SavedGroup {
   return {
-    end, lines: [...w.lines], escapes: new Map([...w.escapes].map(([node, at]) => [node, [...at]])), forms: new Map(w.forms),
+    end, lines: [...w.lines], escapes: new Map([...w.escapes].map(([node, at]) => [node, [...at]])),
+    reportedBraceKinds: new Set(w.reportedBraceKinds), forms: new Map(w.forms),
     glued: new Set(w.glued), attempts: new Map(w.attempts), blankFirst: w.blankFirst, losses: markLosses(w), parsed: w.parsed,
   }
 }
@@ -1232,6 +1268,7 @@ function saveGroup(w: Writer, end: number): SavedGroup {
 function restoreGroup(w: Writer, saved: SavedGroup): number {
   w.lines = saved.lines
   w.escapes = saved.escapes
+  w.reportedBraceKinds = saved.reportedBraceKinds
   w.forms = saved.forms
   w.glued = saved.glued
   w.attempts = saved.attempts
@@ -1921,13 +1958,20 @@ function differingRanges(actual: readonly Node[], expected: readonly Node[], who
 // C2-W-010: the batch rounds of the prune; a group they do not settle is pruned one candidate per parse.
 const MAX_PRUNE_ROUNDS = 16
 
+/** A backslash placed by a reported brace kind stays even when removing it would still read back. */
+function reportedBraceEscape(w: Writer, source: string, at: number): boolean {
+  if (source[at + 1] !== '{') return false
+  return w.reportedBraceKinds.has('{') || w.reportedBraceKinds.has(`{${source[at + 2] ?? ''}`)
+}
+
 /** The prunable backslashes of `source`, by their offset. */
 function pruneCandidates(w: Writer, source: string): number[] {
   const found: number[] = []
   const scan: PruneScan = { scanned: 0, byte: 0, stars: null, found: new Map() }
   for (let at = source.indexOf('\\'); at >= 0; at = source.indexOf('\\', at + 1)) {
     // C2-W-125, case two: a backslash directly behind a quote mark is the escape of the neighbor that decides its direction.
-    if (source[at - 1] !== '"' && source[at - 1] !== "'" && prunableOpener(w, source, at, scan)) found.push(at)
+    if (!reportedBraceEscape(w, source, at) && source[at - 1] !== '"' && source[at - 1] !== "'" &&
+      prunableOpener(w, source, at, scan)) found.push(at)
   }
   return found
 }
@@ -2059,7 +2103,8 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
       break
     }
     // C2-W-125, case two: a backslash directly behind a quote mark is the escape of the neighbor that decides its direction.
-    if (!kept.has(at) && source[at - 1] !== '"' && source[at - 1] !== "'" && prunableOpener(w, source, at, scan)) {
+    if (!kept.has(at) && !reportedBraceEscape(w, source, at) && source[at - 1] !== '"' && source[at - 1] !== "'" &&
+      prunableOpener(w, source, at, scan)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
       const parsed = parseChunk(w, candidate)
       if (matchesGroup(parsed.children, group)) {

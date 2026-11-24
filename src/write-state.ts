@@ -52,6 +52,8 @@ export interface Writer {
   bareDotLead: string | null
   /** C2-W-088: the offsets in the value of a text node that take a backslash, in ascending order. */
   escapes: Map<TextNode, number[]>
+  /** Braced kinds reported by this group's repair rounds. */
+  reportedBraceKinds: Set<string>
   /** The spelling of a node that has more than one: 0 is the first choice of its clause. */
   forms: Map<Node, number>
   /** C2-W-069: the nodes braced only because their bare mark glued to the same mark before them in the last write. */
@@ -156,7 +158,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
   extensions: readonly ExtensionDefinition[] = []): Writer {
   return {
     extensions,
-    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), forms: new Map(), glued: new Set(),
+    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), reportedBraceKinds: new Set(),
+    forms: new Map(), glued: new Set(),
     bracedAnyway: new Set(),
     openColons: new Set(), starts: new Map(),
     attempts: new Map(), facts, wrapPoints: null,
