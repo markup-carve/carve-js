@@ -215,7 +215,7 @@ export function copiedTitle(title: readonly Inline[], texts: ReadonlyMap<string,
   const holder = { type: 'span', children: structuredClone(title) } as Node & { children: Inline[] }
   rewriteTree(holder, (node) => {
     const text = titleReferenced(node, texts)
-    return text === undefined ? undefined : [crossReferenceLink(node as XrefNode, [{ type: 'text', value: plainText(text) }])]
+    return text === undefined ? undefined : [crossReferenceLink(node as XrefNode, [{ type: 'text', value: plainText(text).trim() }])]
   }, true, false)
   return holder.children
 }
