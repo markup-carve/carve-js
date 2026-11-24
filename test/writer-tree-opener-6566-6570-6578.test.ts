@@ -33,3 +33,13 @@ describe('C2-W-125, case nine: an underline that reads as an attribute block (ca
     ['| {_=\\._} |', '| {_\\=._} |\n'],
   ])('writes %j as %j', checkWrites)
 })
+
+// carve#6578, C2-W-125: the brace before the tag forms the dash behind it, so the closing brace takes no backslash;
+// case six escapes the underscore behind the tag.
+describe('C2-W-125: a closing brace behind a tag, an underscore and a dash stays bare (carve#6578)', () => {
+  it.each([
+    ['x{#a\\_--}', 'x{#a\\_--}\n'],
+    ['_{#a\\_--}', '_{#a\\_--}\n'],
+    ['> x{#a\\_--}', '> x{#a\\_--}\n'],
+  ])('writes %j as %j', checkWrites)
+})
