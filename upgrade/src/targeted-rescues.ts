@@ -308,7 +308,10 @@ function tableCodeSpanCandidates(input: string, gate: Gate): Candidate[] {
   return found
 }
 
-const MAX_TRIALS = 64
+// Each trial renders the whole document: past the first trials they stop once this much has been rendered,
+// which keeps a line with an opener every few bytes linear without cutting a small document short.
+const MIN_TRIALS = 64
+const TRIAL_BYTES = 1 << 20
 
 /** Exact HTML decides whether a candidate spelling preserves 0.1 rendering. */
 export function rescueTargeted(
@@ -336,10 +339,12 @@ export function rescueTargeted(
     () => unresolvedFootnoteAttributeCandidates(output, near)
   ]
   let trials = 0
+  let rendered = 0
   for (const source of sources) {
     for (const candidate of source()) {
-      // Each trial renders the whole document, so a line with an opener per few bytes made this quadratic.
-      if (trials++ >= MAX_TRIALS) return null
+      if (trials >= MIN_TRIALS && rendered >= TRIAL_BYTES) return null
+      trials++
+      rendered += candidate.output.length
       try {
         if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
         return {
