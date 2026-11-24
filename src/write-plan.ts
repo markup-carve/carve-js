@@ -712,8 +712,10 @@ function lineRules(start: number, place: LeafPlace | undefined): LeafPlace | nul
 function checkLine(leaf: Leaf, at: number, rules: LeafPlace, escaped: Uint8Array, above: boolean): boolean {
   const escape = lineEscape(leaf, at + 1, at < 0, rules)
   // C2-W-088: the round that escapes the opener above reads this line below that block, not below paragraph text.
+  // Where the rule of a first line does not decide a line that starts with text, neither does the plan: the repair
+  // reads the line there (carve-js#5470). A node of the tree at the line start takes no escape of its line.
   const asFirst = above ? lineEscape(leaf, at + 1, true, rules) : escape
-  if (asFirst !== escape && asFirst !== UNDECIDED) {
+  if (asFirst !== escape && (asFirst !== UNDECIDED || leaf.kinds[at + 1] === TEXT)) {
     undecide(leaf, 'line below an opener')
     return false
   }

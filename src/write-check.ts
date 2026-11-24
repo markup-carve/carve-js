@@ -119,6 +119,11 @@ export interface Check {
   ownEscapes: Map<TextNode, Set<number>>
   /** A delimiter inside the content under comparison took a backslash because it closed the content early. */
   cut: boolean
+  /**
+   * The trials among `trials` that escape the first character of the content of a node (`escapeContentStart`), also
+   * where a probe of an outer content asked for them: the round tests each one in its context (`dropIdleLeads`).
+   */
+  leadTrials: Set<[TextNode, number]>
   /** The trials among `trials` that escape a backtick a probe found opening a code span. */
   codeTrials: Set<[TextNode, number]>
   /** Escapes of a closer that ended a node early (C2-W-125, case five); in a probe round they give no kind (C2-W-088). */
@@ -149,8 +154,8 @@ export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
-    cut: false, codeTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(), capped: [],
-    earlyCloser: false, notesDone: new Map(), note: null, parsed: [], parsedAt: 0,
+    cut: false, codeTrials: new Set(), leadTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(),
+    capped: [], earlyCloser: false, notesDone: new Map(), note: null, parsed: [], parsedAt: 0,
   }
 }
 
@@ -335,7 +340,7 @@ function endsLineWithCr(value: string, at: number): boolean {
 /** The characters that read on into markup that stands directly behind them: `\\(`, `![`, `^[`, `$` and a backtick run. */
 const JOINING = '\\!^$`'
 /** The closing mark of each node that has one, for the escape of that mark in its content (C2-W-093). */
-const CLOSING_MARKS = new Map([
+export const CLOSING_MARKS: ReadonlyMap<string, string> = new Map([
   ['emphasis', '/'], ['strong', '*'], ['underline', '_'], ['strike', '~'], ['highlight', '='], ['superscript', '^'], ['subscript', ','],
   ['insert', '+'], ['delete', '-'], ['span', ']'], ['link', ']'], ['inline_footnote', ']'], ['inline_extension', ']'],
 ])
@@ -345,11 +350,23 @@ const CLOSING_MARKS = new Map([
  * character that joins that markup, or else before its last opening brace, which may open a brace
  * form that takes the markup (C2-I-043).
  */
-function escapeEnd(c: Check, text: TextNode | null, braces: boolean): boolean {
+function escapeEnd(c: Check, text: TextNode | null, braces: boolean, behind: string | null = null): boolean {
   if (text === null) return false
   const value = text.value
-  if (value !== '' && JOINING.includes(value[value.length - 1]!) && escapeAt(c, text, value.length - 1)) return true
+  const last = value[value.length - 1]
+  if (last !== undefined && JOINING.includes(last) && (behind === null || joins(last, behind)) &&
+    escapeAt(c, text, value.length - 1)) return true
   return braces && escapeAt(c, text, value.lastIndexOf('{'))
+}
+
+/**
+ * Whether the character `last` reads on into the markup `behind`: a backslash escapes it, a backtick run opens a code
+ * span over it, `!` and `^` join a bracket and `$` a backtick. Before any other markup it is text, and the brace of
+ * C2-W-125, case one, is tried.
+ */
+function joins(last: string, behind: string): boolean {
+  if (last === '\\' || last === '`') return behind !== ''
+  return last === '$' ? behind.startsWith('`') : behind.startsWith('[')
 }
 
 /**
@@ -523,7 +540,8 @@ function escapeAfter(c: Check, es: readonly Node[], i: number): boolean {
 /** Asks for the escape that keeps the end of the content of `es[i]` from reading on into its closing markup. */
 function escapeInside(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]
-  return escapeEnd(c, e !== undefined && 'children' in e ? lastText(e) : null, true)
+  if (e === undefined || !('children' in e)) return false
+  return escapeEnd(c, lastText(e), true, closerOf(c.w, e, c.flags))
 }
 
 /** C2-W-125, case five: a closer in content precedes a brace that follows the node. */
@@ -553,9 +571,7 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
     if (!step(c, es, i, attempt)) continue
     for (let at = before; at < c.escapes.length; at++) {
       attempt.escapes.push(c.escapes[at]!)
-      if (!isTrial(c, step, c.escapes[at]!)) continue
-      c.trials.push(c.escapes[at]!)
-      if (stopsCodeSpan(step, c.escapes[at]!)) c.codeTrials.add(c.escapes[at]!)
+      if (isTrial(c, step, c.escapes[at]!)) addTrial(c, step, c.escapes[at]!)
     }
     // A deferred escape can leave another opener for the next round.
     if (step === escapeContentOpener) attempt.step--
@@ -566,6 +582,13 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
 }
 
 type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) => boolean
+
+/** Records the escape a step asked for as a trial, with what the round needs to know of it. */
+function addTrial(c: Check, step: RespellStep, escape: [TextNode, number]): void {
+  c.trials.push(escape)
+  if (step === contentStart) c.leadTrials.add(escape)
+  if (stopsCodeSpan(step, escape)) c.codeTrials.add(escape)
+}
 
 /** The other spelling of `es[i]`, without the escapes the steps before asked for. */
 function otherForm(c: Check, es: readonly Node[], i: number, attempt: Attempt): boolean {
@@ -593,13 +616,14 @@ function stopsCodeSpan(step: RespellStep, [node, at]: [TextNode, number]): boole
 }
 
 const contentConstruct: RespellStep = (c, es, i) => escapeContentConstruct(c, es[i]!)
+const contentStart: RespellStep = (c, es, i) => escapeContentStart(c, es[i]!)
 
 // C2-W-088: the leftmost construct takes the backslash first, so a construct inside the content is
 // escaped before the end of the content and the text behind the node.
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   (c, es, i, attempt) => markAtContentEdge(c, es[i]!) && otherForm(c, es, i, attempt),
-  (c, es, i) => escapeContentStart(c, es[i]!),
+  contentStart,
   (c, es, i) => escapeFootnoteBrace(c, es[i]!),
   contentConstruct,
   escapeContentOpener,
@@ -761,12 +785,14 @@ function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: numbe
   const known = c.w.probes.get(key)
   if (known !== undefined) {
     for (const [node, at] of known.taken) escapeAt(c, node, at)
+    for (const escape of known.leads ?? []) markLead(c, escape)
     return known.found
   }
   const before = c.escapes.length
   const found = runProbe(c, e, expected, flags, takes)
+  const taken = c.escapes.slice(before)
   // A probe cut short by the limit is not kept: its group is refused (C2-W-133).
-  if (!exhausted(c.w)) c.w.probes.set(key, { found, taken: c.escapes.slice(before) })
+  if (!exhausted(c.w)) c.w.probes.set(key, { found, taken, leads: taken.filter((escape) => c.leadTrials.has(escape)) })
   return found
 }
 
@@ -821,7 +847,14 @@ function probeRound(c: Check, w: Writer, e: Node, expected: readonly Node[], fla
   }
   extendChains(probe)
   const taken = probe.escapes.filter(([node, at]) => takes(node, at) && escapeAt(c, node, at))
+  for (const escape of probe.leadTrials) if (taken.includes(escape)) markLead(c, escape)
   return taken.length === 0 && probe.losses.length > 0 ? null : taken
+}
+
+/** Marks the escape `[node, at]` that `c` holds as a content-start trial, which the round tests in its context. */
+function markLead(c: Check, [node, at]: [TextNode, number]): void {
+  const own = c.escapes.find((escape) => escape[0] === node && escape[1] === at)
+  if (own !== undefined) c.leadTrials.add(own)
 }
 
 /** The id of `node` for the keys of the probes: one per node object. */
