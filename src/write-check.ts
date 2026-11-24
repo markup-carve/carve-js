@@ -1090,7 +1090,11 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
     !(own.has(node) && node.value[at] === mark) && !marks.includes(node.value[at]!)
   // Bare, a name sigil keeps its boundary; behind a word, no block opens and a leading space stays.
   const before = c.escapes.length
-  const found = probeEscapes(c, e, inlines, flags, 'across', takes) === true ||
+  // A note's content is read behind its sigil, which the probe stands in for with a mark that opens nothing.
+  const sigil = e.type === 'inline_footnote' ? standIn(c.w, e, 'sigil', ';') : null
+  const found = sigil !== null
+    ? probeEscapes(c, e, [sigil, ...inlines], flags, 'across', (node, at) => node !== sigil && takes(node, at)) === true
+    : probeEscapes(c, e, inlines, flags, 'across', takes) === true ||
     probeEscapes(c, e, [word, ...inlines], flags, 'across', takes) === true
   if (found && outer.length > 0) reportOpeners(c, before)
   return found
@@ -1191,8 +1195,8 @@ function noneForms(c: Check, e: Node): boolean {
 /** Whether a construct can open in the content of `e` and run on over its closer. */
 function mayCross(c: Check, e: Node, flags: number): boolean {
   const type: string = e.type
-  // A span is written as a link label is; the content of a note is read behind its sigil, which the probe does not hold.
-  if ((!isPairedMark(e) && type !== 'span') || !('children' in e)) return false
+  // A span is written as a link label is; a note is probed behind a stand-in for its sigil.
+  if ((!isPairedMark(e) && type !== 'span' && type !== 'inline_footnote') || !('children' in e)) return false
   if (!textsBelow(e).some((text) => opensAcross(text.value))) return false
   return type !== 'link' || canCrossLinkCloser(c.w, e.children as Node[], flags)
 }

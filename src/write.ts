@@ -508,10 +508,10 @@ function bitCount(value: number): number {
   return count
 }
 
-/** C2-W-088: a lone backtick trial that the test kept stopped a code span of the parse, which reports the backtick kind. */
+/** C2-W-088: backtick trials that the test kept stopped a code span of the parse, which reports the backtick kind. */
 function keepCodeTrial(check: Check): void {
-  const trial = check.trials[0]
-  if (check.trials.length === 1 && trial !== undefined && check.codeTrials.has(trial) && check.escapes.includes(trial)) check.trials = []
+  const kept = (trial: [TextNode, number]): boolean => check.codeTrials.has(trial) && check.escapes.includes(trial)
+  if (check.trials.length > 0 && check.trials.every(kept)) check.trials = []
 }
 
 /** C2-W-088 (CC-1568): every opener of each reported kind; a backslash of a C2-W-125 closer repair gives no kind. */
