@@ -1,5 +1,5 @@
 // The brace block of a node (C2-W-047 to C2-W-050): the id, the classes, the language, the keys.
-import { type Node } from './ast.ts'
+import { forEachSlot, type Node } from './ast.ts'
 import { UNDERSCORE } from './chars.ts'
 import { isAsciiLetter, isAsciiNameCharacter, isAsciiPunctuation } from './unicode.ts'
 
@@ -102,4 +102,24 @@ export function braceBlock(node: Node, extra?: BlockParts): string {
   const mark = extra?.mark ?? ''
   if (mark !== '') parts.unshift(mark)
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`
+}
+
+export function holdsLineFeedValue(item: Node): boolean {
+  if (item.attrs?.keyValues?.some(([, value]) => value.includes('\n')) === true) return true
+  let found = false
+  forEachSlot(item, (children) => { found ||= children.some(holdsLineFeedValue) })
+  return found
+}
+
+/** C2-W-050: a copy of `tree` with each key value in the spelling the writer gives it, or undefined where none changes. */
+export function withSpelledValues(tree: Node): Node | undefined {
+  if (!holdsLineFeedValue(tree)) return undefined
+  const copy = structuredClone(tree)
+  const visit = (item: Node): void => {
+    const keyValues = item.attrs?.keyValues
+    if (keyValues !== undefined) item.attrs!.keyValues = keyValues.map(([key, value]): [string, string] => [key, spelledValue(value)])
+    forEachSlot(item, (children) => { for (const child of children) visit(child) })
+  }
+  visit(copy)
+  return copy
 }

@@ -15,7 +15,7 @@ import { includeSource, unreadField } from './include.ts'
 import { isRegionMarkerLine } from './include-source.ts'
 import { isFenceWord } from './opener.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
-import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
+import { type BlockParts, braceBlock, isName, quoted, withSpelledValues } from './write-attributes.ts'
 import { BARE_BREAKS, bracedComment, IN_FIGURE_GROUP, lineCommentText, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
 import { isTypedFrontmatterOpener } from './lines.ts'
@@ -790,7 +790,9 @@ function sourceFormReadsBack(w: Writer, node: BlockExtensionNode, spelling: stri
     const attrs = braceBlock(node)
     const probe = attrs === '' ? spelling : `${attrs}\n${spelling}`
     const parsed = parseChunk(w, probe, w.extensions.length === 0 ? null : w.linkKeys).children[0]
-    return w.extensions.length === 0 ? sourceCoreEquivalent(node, parsed) : parsed !== undefined && treesEqual(node, parsed)
+    // C2-W-050: a value with a line feed reads back with the spaces it is written with.
+    const expected = (w.lineFeedValues ? withSpelledValues(node) : undefined) ?? node
+    return w.extensions.length === 0 ? sourceCoreEquivalent(expected, parsed) : parsed !== undefined && treesEqual(expected, parsed)
   } catch { return false }
 }
 

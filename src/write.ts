@@ -8,7 +8,7 @@ import {
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
-import { isKey, spelledValue } from './write-attributes.ts'
+import { holdsLineFeedValue, isKey, withSpelledValues } from './write-attributes.ts'
 import {
   blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, joinsIndentedRun, topPredecessors, writeBlocks,
 } from './write-blocks.ts'
@@ -882,26 +882,6 @@ function holdsRewrites(tree: Node): boolean {
     for (const item of Object.values(value) as unknown[]) if (typeof item === 'object' && item !== null) pending.push(item)
   }
   return false
-}
-
-function holdsLineFeedValue(item: Node): boolean {
-  if (item.attrs?.keyValues?.some(([, value]) => value.includes('\n')) === true) return true
-  let found = false
-  forEachSlot(item, (children) => { found ||= children.some(holdsLineFeedValue) })
-  return found
-}
-
-/** C2-W-050: a copy of `tree` with each key value in the spelling the writer gives it, or undefined where none changes. */
-function withSpelledValues(tree: Node): Node | undefined {
-  if (!holdsLineFeedValue(tree)) return undefined
-  const copy = structuredClone(tree)
-  const visit = (item: Node): void => {
-    const keyValues = item.attrs?.keyValues
-    if (keyValues !== undefined) item.attrs!.keyValues = keyValues.map(([key, value]): [string, string] => [key, spelledValue(value)])
-    forEachSlot(item, (children) => { for (const child of children) visit(child) })
-  }
-  visit(copy)
-  return copy
 }
 
 /** C2-W-002, C2-A-193: the writer disregards standard data namespaces in its readback check. */
