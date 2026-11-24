@@ -19,8 +19,8 @@ it('the targeted rescue stays linear on a line of bracketed openers', () => {
   expect(large / Math.max(small, 1)).toBeLessThan(8)
 }, 120_000)
 
-it('a small document keeps every rescue candidate past the first 64', () => {
-  const source = '```\n' + '</# '.repeat(200) + '\n```\n\n\\</#x>\n'
+it('a small document tries the line of the first difference before the rest of the site', () => {
+  const source = '```\n' + '</# '.repeat(1000) + '\n```\n\n\\</#x>\n'
   const result = upgrade(source)
   expect(result.check).toBe('pass')
   expect(result.records.map((record) => record.entry)).toContain('U-181')

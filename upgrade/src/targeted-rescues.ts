@@ -321,6 +321,21 @@ export function rescueTargeted(
   site: Site = OPEN_SITE
 ): { output: string; record: ReportRecord } | null {
   const expected = html01(input)
+  // The line of the first difference goes first, so candidates elsewhere in the site cannot use up the budget.
+  for (const gates of site.focus === undefined ? [site] : [site.focus, site]) {
+    const found = firstPreserving(input, output, expected, gates, mismatch)
+    if (found !== null) return found
+  }
+  return null
+}
+
+function firstPreserving(
+  input: string,
+  output: string,
+  expected: string,
+  site: { input: Gate; output: Gate },
+  mismatch: ReportRecord
+): { output: string; record: ReportRecord } | null {
   const near = site.output
   const sources: (() => Candidate[])[] = [
     () => simpleCandidates(output, near),

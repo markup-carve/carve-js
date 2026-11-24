@@ -14,6 +14,8 @@ export interface Gate {
 export interface Site {
   input: Gate
   output: Gate
+  /** The same gates on the line of the first difference alone, for a rescue that tries that line first. */
+  focus?: { input: Gate; output: Gate }
 }
 
 export const OPEN_GATE: Gate = { lines: () => true, at: () => true }
@@ -107,9 +109,12 @@ export function rescueSite(input: string, output: string, edits: readonly Edit[]
   const first = low >= 1 ? blocks[low - 1]![1] + 1 : 1
   const last = high + 1 < blocks.length ? blocks[high + 1]![0] - 1 : out.count
   const outputGate = gate(out, first, last, notesPlaced)
-  if (applyEdits(input, [...edits]) !== output) return { input: OPEN_GATE, output: outputGate }
+  const focusOutput = gate(out, line, line, notesPlaced)
+  if (applyEdits(input, [...edits]) !== output) {
+    return { input: OPEN_GATE, output: outputGate, focus: { input: OPEN_GATE, output: focusOutput } }
+  }
   const source = readLines(input)
-  const from = lineOf(source, startBefore(edits, lineStart(out, first)))
-  const to = lineOf(source, endBefore(edits, lineEnd(out, last)))
-  return { input: gate(source, from, to, notesPlaced), output: outputGate }
+  const inputGate = (low: number, high: number): Gate => gate(source,
+    lineOf(source, startBefore(edits, lineStart(out, low))), lineOf(source, endBefore(edits, lineEnd(out, high))), notesPlaced)
+  return { input: inputGate(first, last), output: outputGate, focus: { input: inputGate(line, line), output: focusOutput } }
 }
