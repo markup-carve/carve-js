@@ -121,7 +121,7 @@ export function family(rng: Random): Family {
   }
 }
 
-type Operation = [string, (source: string) => unknown]
+export type Operation = [string, (source: string) => unknown]
 const OPERATIONS: Operation[] = [
   ['parse', (source) => parse(source)],
   ['render', (source) => render(source)],
@@ -169,10 +169,17 @@ const FLOOR_MS = 8
 const STEP_BUDGET_MS = 4000
 const DEEP_MAX_BYTES = 2 * 1024 * 1024
 
+/** A family quadratic in bytes would build a string far past the budget only to drop it. */
+function nextPastBudget(sizes: number[]): boolean {
+  const [before, last] = sizes.slice(-2)
+  return before !== undefined && last !== undefined && last * last / before > 2 * DEEP_MAX_BYTES
+}
+
 function measure(operation: Operation, build: (n: number) => string, base: number): string | null {
   const times: number[] = []
   const sizes: number[] = []
   for (const factor of [1, 2, 4, 8]) {
+    if (nextPastBudget(sizes)) break
     const source = build(base * factor)
     if (source.length > DEEP_MAX_BYTES && times.length >= 2) break
     const ms = best(() => operation[1](source), factor === 8 ? 2 : 3)
@@ -188,6 +195,20 @@ function measure(operation: Operation, build: (n: number) => string, base: numbe
   if (last / first <= sizeRatio * SLACK) return null
   return `${operation[0]} n=${base}: ${times.map((ms) => ms.toFixed(1)).join(', ')} ms at ` +
     `${sizes.join(', ')} chars`
+}
+
+/**
+ * A cost per byte that rises at small sizes and then stays flat (cache sizes, a depth cap) repeats at the same sizes;
+ * a superlinear cost keeps its ratio at four times the base. The larger base shrinks to two times or the same base
+ * when the bytes of its second step would pass the budget, which `measure` takes regardless.
+ */
+export function superlinear(operation: Operation, build: (n: number) => string, base: number): string | null {
+  if (measure(operation, build, base) === null) return null
+  const two = build(base * 2).length
+  const step = two / Math.max(1, build(base).length)
+  let factor = 4
+  while (factor > 1 && two * step ** Math.log2(factor) > DEEP_MAX_BYTES) factor >>= 1
+  return measure(operation, build, base * factor)
 }
 
 function failure(error: unknown): Finding | null {
@@ -216,9 +237,7 @@ export function checkScaling(_source: string, rng: Random): Finding | null {
     if (found !== null) return { ...found, detail: `${operation[0]} ${chosen.name} n=${depth}\n${found.detail}` }
   }
   try {
-    const slow = measure(operation, chosen.build, Math.min(base, 625))
-    if (slow === null) return null
-    const again = measure(operation, chosen.build, Math.min(base, 625))
+    const again = superlinear(operation, chosen.build, Math.min(base, 625))
     return again === null ? null : { kind: `scaling-superlinear-${operation[0]}`, detail: `${chosen.name}\n${again}` }
   } catch (error) {
     const found = failure(error)
