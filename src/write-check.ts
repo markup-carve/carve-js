@@ -673,6 +673,9 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeAcrossCloser,
   escapeInside,
   escapeCloserBeforeBrace,
+  // C2-W-125: case five precedes case six, so a lone `[` of the content is escaped before the text behind the node.
+  // The window starts behind the text the parse read in its place, which can hold text before the node.
+  (c, es, i) => !readsBracketConstruct(c, es[i]!, true) && escapeUnclosedBrackets(c, es[i]!),
   escapeAfter,
   (c, es, i) => escapeContentLine(c, es[i]!),
   escapeOwnerBrackets,
@@ -1977,12 +1980,12 @@ const BRACKET_CONSTRUCTS: ReadonlySet<string> = new Set(['footnote_ref', 'inline
  * the nodes from the place of `e` on whose start lies within twice the length of its text and its sigil, which bounds
  * its written form with every character escaped.
  */
-function readsBracketConstruct(c: Check, e: Node): boolean {
+function readsBracketConstruct(c: Check, e: Node, fromEnd = false): boolean {
   const list = c.parsed
   const first = list[c.parsedAt]
   if (first === undefined) return false
   const span = 2 * (textsBelow(e).reduce((total, text) => total + utf8Length(text.value), 0) + 3)
-  const stop = (first.pos?.startOffset ?? 0) + span
+  const stop = ((fromEnd ? first.pos?.endOffset : first.pos?.startOffset) ?? 0) + span
   for (let at = c.parsedAt; at < list.length; at++) {
     const node = list[at]!
     if (at > c.parsedAt && (node.pos === undefined || node.pos.startOffset >= stop)) break
