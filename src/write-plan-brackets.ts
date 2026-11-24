@@ -170,6 +170,17 @@ export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean)
 function checkSourceLinkBoundary(scan: Scan): void {
   const leaf = scan.leaf
   if (leaf.undecided === null && scan.openers.some((at) => followsSourceLink(leaf, at))) undecide(leaf, 'reference boundary')
+  // The source of a later bracketed atom can close an unmatched text bracket. Its own source is opaque to this scan,
+  // so the repair must test that boundary against the read-back parse.
+  if (leaf.undecided === null && scan.openers.length > 0) {
+    const first = scan.openers[0]!
+    for (let unit = first + 1; unit < leaf.codes.length; unit++) {
+      if (leaf.kinds[unit] !== TEXT && leaf.owners[unit]?.type === 'footnote_ref') {
+        undecide(leaf, 'bracket atom boundary')
+        break
+      }
+    }
+  }
 }
 
 function followsSourceLink(leaf: Leaf, at: number): boolean {

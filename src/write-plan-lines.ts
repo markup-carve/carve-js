@@ -190,6 +190,10 @@ function hyphenLine(leaf: Leaf, at: number, place: LeafPlace): number {
  * follow. A last pipe that a node writes is left to the repair.
  */
 function pipeLine(leaf: Leaf, at: number): number {
+  // C2-B-166: the opening pipe cannot also be the row's closing pipe.
+  let close = at + 1
+  while (!isLineEnd(code(leaf, close)) && code(leaf, close) !== 124) close++
+  if (code(leaf, close) !== 124) return NO_ESCAPE
   if (lineEndsWith(leaf, at, 124)) return leaf.kinds[lastOfLine(leaf, at)] === TEXT ? at : UNDECIDED
   let last = at
   for (let unit = at + 1; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) if (leaf.codes[unit] === 124) last = unit

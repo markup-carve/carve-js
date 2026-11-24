@@ -1923,9 +1923,25 @@ function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Nod
   if (next !== null && a.attrs !== undefined && !sameValue(e.attrs, a.attrs) && next.value.startsWith('{')) return escapeAt(c, next, 0)
   // C2-I-015: a backtick behind a closing run makes it longer, so the span reads on into the text behind it.
   // C2-I-090: a name character behind a mention or a tag makes the name longer.
-  if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
+  if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) {
+    if (!escapeAt(c, next, 0)) return false
+    c.lengthening.add(c.escapes[c.escapes.length - 1]!)
+    return true
+  }
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
-  return escapeSmartSide(c, textAt(es, i - 1), next)
+  return escapeSmartSideAfterConstruct(c, es, i, next)
+}
+
+/** A text quote whose own opener is being escaped can restore the following smart quote on the next parse. */
+function escapeSmartSideAfterConstruct(c: Check, es: readonly Node[], i: number, next: TextNode | null): boolean {
+  const before = c.escapes.length
+  const changed = escapeSmartSide(c, textAt(es, i - 1), next)
+  const prior = textAt(es, i - 1)
+  if (prior !== null && (prior.value.endsWith('"') || prior.value.endsWith("'")) &&
+    [...c.constructs].some(([node, at]) => node === prior && at === prior.value.length - 1)) {
+    for (const escape of c.escapes.slice(before)) c.behind.add(escape)
+  }
+  return changed
 }
 
 /** C2-I-105: the smart punctuation between `before` and `next` read as another kind; a neighbor takes the backslash. */
@@ -2426,7 +2442,10 @@ function compareBlock(c: Check, e: Node, a: Node, absorbed = false): boolean {
   if (c.w.lost.has(e)) return true
   if (sourceCoreEquivalent(e, a)) return true
   if (e.type !== a.type) {
-    blockMismatch(c, e)
+    // A line-block line can be read as a comment fence instead of as text.
+    // Its text opener, rather than the line node, takes the repair escape.
+    if (e.type === 'line' && a.type === 'comment') escapeLineStart(c, childNodes(e), 0, e)
+    else blockMismatch(c, e)
     return false
   }
   const marks = c.spanMarks
@@ -2486,6 +2505,8 @@ function hasOpenerShape(nodes: readonly Node[], from: number): boolean {
   const node = nodes[from]
   const value = joinedValue(leadingTexts(nodes, from))
   if (value === '') return node !== undefined && node.type !== 'text'
+  // A pipe needs another pipe to close a row (C2-B-166); one pipe opens no block.
+  if (value[0] === '|' && value.indexOf('|', 1) < 0) return false
   return !isAsciiAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
 }
 

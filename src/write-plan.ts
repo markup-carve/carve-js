@@ -672,7 +672,7 @@ function definitionShape(leaf: Leaf, at: number): boolean {
 }
 
 /**
- * C2-B-123, C2-B-125: a line of a line block opens nothing but the closer, a bare run of three or more colons; the
+ * C2-B-123, C2-B-125: a line of a line block opens nothing but its closer and a comment block; the
  * spaces that lead it are content (C2-B-130). A tab meets the strip of C2-B-027, and a line of spaces alone is the
  * blank line between two stanzas (C2-B-131): those the plan leaves.
  */
@@ -681,6 +681,7 @@ function mayCloseLineBlock(leaf: Leaf): boolean {
   while (code(leaf, at) === SPACE) at++
   const first = code(leaf, at)
   if (first < 0 || first === LF || first === TAB) return true
+  if (first === 37 && code(leaf, at + 1) === 37 && code(leaf, at + 2) === 37) return true
   if (first !== 58) return false
   const end = runLength(leaf, at, 58) + at
   let rest = end
