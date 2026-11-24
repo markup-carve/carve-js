@@ -1850,7 +1850,8 @@ function readOnPastEnd(c: Check, owner: Node): void {
   }
   // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark. Case one, that brace,
   // is tried before case five, the closer. What the content took from behind its end is read again next round.
-  if (escapeInContent(c, owner) || escapeOpeningBrace(c, owner) || escapeEnd(c, lastText(owner), true)) {
+  if ((BRACKETED.has(owner.type) && escapeInContent(c, owner)) || escapeOpeningBrace(c, owner) ||
+    escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
     c.cut = true
     return
   }
