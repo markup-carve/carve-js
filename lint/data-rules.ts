@@ -1,6 +1,6 @@
 import { type RuleId } from './catalog.ts'
 import { type ModelAttribute, attributeRecords } from './data-attributes.ts'
-import { buildModel, DataWalk, type LineModel, type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
+import { buildModel, DataWalk, type LineModel, linePaths, type ModelBlock, type ModelInline, type ModelLine, type Walked } from './data-model.ts'
 import { DATA_RULES, type DataRule, useRecords, VERBATIM_LEAVES } from './data-tables.ts'
 import { type LintContext } from './types.ts'
 import { type Node } from '../src/ast.ts'
@@ -116,13 +116,20 @@ function runAttributes(walk: DataWalk, rules: Active, context: LintContext): voi
   }
 }
 
-function runLines(model: LineModel<BlockRun>, rules: Active, context: LintContext): void {
+function runLines(model: LineModel<BlockRun>, walked: readonly Walked[], rules: Active, context: LintContext): void {
   if (rules.lines.length === 0) return
+  // The paths are built on the first finding: most documents have none.
+  let paths: string[] | undefined
+  let at = 0
+  const lineContext: LintContext = { ...context, report: (id, start, end, _path, values, message) => {
+    paths ??= linePaths(walked, context, context.lines.length)
+    context.report(id, start, end, paths[at]!, values, message)
+  } }
   for (const line of model.lines.all()) {
     const runs = lineRuns(rules, line.leaf)
     if (runs.length === 0) continue
-    const path = context.lines[line.number - 1]?.path || line.table_path || ''
-    for (const run of runs) run(line, path, context)
+    at = line.number - 1
+    for (const run of runs) run(line, '', lineContext)
   }
 }
 
@@ -154,26 +161,10 @@ export function runDataRules(walk: DataWalk, context: LintContext, active: (id: 
   if (rules.lines.length === 0 && rules.blocks.length === 0 && rules.inline.size === 0) return
   const model = buildModel(walk.walked, context, (type, parent) => blockRuns(rules, type, parent), rules.needBlocks)
   useRecords(model.blocks, walk.inline, () => walk.ids(), () => model.lines.all())
-  let commentPaths: Map<number, string> | undefined
-  const report: LintContext['report'] = (id, start, end, path, values, message) => {
-    if (id === 'list-item-body-below-content-column') path = path.slice(0, path.lastIndexOf('/children/'))
-    if (id === 'comment-fence-closer-with-text') {
-      if (commentPaths === undefined) {
-        commentPaths = new Map()
-        for (const entry of walk.walked) {
-          if (entry.node.type !== 'comment' || entry.node.form !== 'block' || entry.node.pos === undefined) continue
-          for (let line = entry.node.pos.startLine; line <= entry.node.pos.endLine; line++) commentPaths.set(line, entry.path)
-        }
-      }
-      path = commentPaths.get(context.offsetLines[start] ?? 1) ?? path
-    }
-    context.report(id, start, end, path, values, message)
-  }
-  const reportingContext = { ...context, report }
   // The hand-written node rules report during the visit, before the line rules: findings at one offset keep that order.
-  runBlocks(model, reportingContext)
-  runInline(walk, rules, reportingContext)
-  runLines(model, rules, reportingContext)
+  runBlocks(model, context)
+  runInline(walk, rules, context)
+  runLines(model, walk.walked, rules, context)
   // The lookup index holds every record of the document; kept past the call it would hold the whole document alive.
   useRecords([], [])
 }
