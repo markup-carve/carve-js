@@ -10,6 +10,7 @@ import { buildSource } from './ast-blocks.ts'
 import { applyExtensions } from './extensions/claims.ts'
 import { AST_RESULTS } from './ast-tables.ts'
 import { sourceCoreEquivalent } from './write-extension-source.ts'
+import { treesEqual } from './ast-json.ts'
 import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
 import {
   escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode, keyIsContent, leadingCaret,
@@ -673,6 +674,8 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeAcrossCloser,
   escapeInside,
   escapeCloserBeforeBrace,
+  // C2-W-125: case five precedes case six, so a lone `[` of the content is escaped before the text behind the node.
+  (c, es, i) => !readsOtherBracketConstruct(c, es, i) && escapeUnclosedBrackets(c, es[i]!),
   escapeAfter,
   (c, es, i) => escapeContentLine(c, es[i]!),
   escapeOwnerBrackets,
@@ -1981,16 +1984,46 @@ function readsBracketConstruct(c: Check, e: Node): boolean {
   const list = c.parsed
   const first = list[c.parsedAt]
   if (first === undefined) return false
-  const span = 2 * (textsBelow(e).reduce((total, text) => total + utf8Length(text.value), 0) + 3)
-  const stop = (first.pos?.startOffset ?? 0) + span
+  const stop = (first.pos?.startOffset ?? 0) + bracketWindow(e)
   for (let at = c.parsedAt; at < list.length; at++) {
     const node = list[at]!
     if (at > c.parsedAt && (node.pos === undefined || node.pos.startOffset >= stop)) break
-    const pending = [node]
-    for (let below = pending.pop(); below !== undefined; below = pending.pop()) {
-      if (BRACKET_CONSTRUCTS.has(below.type)) return true
-      pending.push(...childNodes(below))
-    }
+    if (holdsBracketConstruct(node)) return true
+  }
+  return false
+}
+
+/** Twice the length of the text of `e` and its sigil, which bounds its written form with every character escaped. */
+function bracketWindow(e: Node): number {
+  return 2 * (textsBelow(e).reduce((total, text) => total + utf8Length(text.value), 0) + 3)
+}
+
+function holdsBracketConstruct(node: Node): boolean {
+  const pending = [node]
+  for (let below = pending.pop(); below !== undefined; below = pending.pop()) {
+    if (BRACKET_CONSTRUCTS.has(below.type)) return true
+    pending.push(...childNodes(below))
+  }
+  return false
+}
+
+/**
+ * As `readsBracketConstruct` for `es[i]`, with the window behind the text the parse read in its place, which can hold
+ * text before it. The siblings the tree holds behind it, matched in order, are no construct.
+ */
+function readsOtherBracketConstruct(c: Check, es: readonly Node[], i: number): boolean {
+  const list = c.parsed
+  const first = list[c.parsedAt]
+  if (first === undefined) return false
+  const stop = (first.pos?.endOffset ?? 0) + bracketWindow(es[i]!)
+  let next = i + 1
+  for (let at = c.parsedAt; at < list.length; at++) {
+    const node = list[at]!
+    if (at > c.parsedAt && (node.pos === undefined || node.pos.startOffset >= stop)) break
+    // Text of the tree can join the text around it in the parse, so only the other siblings are matched.
+    while (es[next]?.type === 'text') next++
+    if (next < es.length && treesEqual(es[next]!, node)) next++
+    else if (holdsBracketConstruct(node)) return true
   }
   return false
 }
