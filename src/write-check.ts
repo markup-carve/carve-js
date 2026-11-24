@@ -22,8 +22,8 @@ import { braceBlock, isKey, spelledValue } from './write-attributes.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharacter } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
-import { BRACED_MARKS } from './inline-tables.ts'
-import { emptyMemo, readAttributeBlock } from './attributes.ts'
+import { BRACED_MARKS, CLASS_KEY_REST } from './inline-tables.ts'
+import { classRunEnd, emptyMemo, readAttributeBlock } from './attributes.ts'
 import { textQuoteKind } from './write-plan-smart.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
@@ -700,16 +700,17 @@ const RESPELL_STEPS: readonly RespellStep[] = [
 ]
 
 /**
- * C2-W-125, case nine: the braced opener of `es[i]` reads as the key of a valid attribute block (C2-I-043), so the
- * first character of its content that the block holds takes the backslash: an underline of `=.` is `{_\=._}`.
+ * C2-W-125, case nine: the braced opener of `es[i]` reads as the key of a valid attribute block (C2-I-043). A key that
+ * starts with `_` is valid only with a value (C2-I-031), so the `=` behind the key characters of the content takes the
+ * backslash: an underline of `=.` is `{_\=._}`, of `a-b=c` is `{_a-b\=c_}`.
  */
 function escapeAttributeKey(c: Check, es: readonly Node[], i: number): boolean {
   const first = childNodes(es[i]!)[0]
   if (first?.type !== 'text') return false
   const text = writeInlines(c.w, es.slice(i), c.flags)
   if (text[0] !== '{' || readAttributeBlock(text, 0, text.length, emptyMemo(), null) < 0) return false
-  for (let at = 0; at < first.value.length; at++) if (escapeAt(c, first, at)) return true
-  return false
+  const equals = classRunEnd(first.value, 0, first.value.length, CLASS_KEY_REST)
+  return first.value[equals] === '=' && escapeAt(c, first, equals)
 }
 
 /**

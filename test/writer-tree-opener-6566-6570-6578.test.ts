@@ -31,6 +31,9 @@ describe('C2-W-125, case nine: an underline that reads as an attribute block (ca
     ['> a {_=\\._} b', '> a {_\\=._} b\n'],
     ['- {_=\\._}', '- {_\\=._}\n'],
     ['| {_=\\._} |', '| {_\\=._} |\n'],
+    // The `=` behind the key characters makes the block valid, so it takes the backslash, not a hyphen before it.
+    ['{_foo-bar=\\._}', '{_foo-bar\\=._}\n'],
+    ['{_a\\=b_}', '{_a\\=b_}\n'],
   ])('writes %j as %j', checkWrites)
 })
 
