@@ -860,21 +860,40 @@ function columnWidths(node: Html.Element, context: HtmlContext): (number | undef
   const group = elements(node).find(child => child.tagName === 'colgroup')
   return (group === undefined ? [] : elements(group).filter(child => child.tagName === 'col')).map(col => {
     const style = attr(col, 'style')
-    const width = style === undefined ? undefined : percentWidth(style)
-    // C2-M-041: another style of a `<col>` gives no width.
-    if (style !== undefined && width === undefined) {
-      report(context, col, 'import-attribute-dropped', 'A col style that gives no width dropped')
+    const read = style === undefined ? undefined : colStyleWidth(style)
+    // C2-M-041: a style that gives no width or holds another declaration is reported.
+    if (read !== undefined && (read.width === undefined || read.other)) {
+      report(context, col, 'import-attribute-dropped', 'A col style that gives no width or holds another declaration dropped')
     }
-    return width
+    return read?.width
   })
 }
 
-/** C2-M-041, C2-B-212: `width: N%;` with N a decimal number above 0 and at most 100, as a fraction. */
-function percentWidth(style: string): number | undefined {
-  if (!style.startsWith('width: ') || !style.endsWith('%;')) return undefined
-  const text = style.slice(7, -2)
-  if (!/^\d+(?:\.\d+)?$/u.test(text)) return undefined
-  const value = Number(text)
+const ASCII_WHITESPACE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/gu
+
+/**
+ * C2-M-041: the style of a `<col>` read as declarations; the last `width: N%` gives the width, and `other` says
+ * whether any other declaration stands beside it.
+ */
+function colStyleWidth(style: string): { width: number | undefined, other: boolean } {
+  let width: number | undefined
+  let declarations = 0
+  for (const piece of style.split(';')) {
+    if (piece.replace(ASCII_WHITESPACE, '') === '') continue
+    declarations++
+    const colon = piece.indexOf(':')
+    if (colon < 0 || piece.slice(0, colon).replace(ASCII_WHITESPACE, '').toLowerCase() !== 'width') continue
+    const value = percentWidth(piece.slice(colon + 1).replace(ASCII_WHITESPACE, ''))
+    if (value !== undefined) width = value
+  }
+  return { width, other: declarations > 1 }
+}
+
+/** C2-M-041, C2-B-212: `N%` with N a decimal number above 0 and at most 100, as a fraction. */
+function percentWidth(text: string): number | undefined {
+  const match = /^(\d+(?:\.\d+)?)%$/u.exec(text)
+  if (match === null) return undefined
+  const value = Number(match[1])
   return value > 0 && value <= 100 ? value / 100 : undefined
 }
 

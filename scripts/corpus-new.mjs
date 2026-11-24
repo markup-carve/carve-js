@@ -125,6 +125,11 @@ function diagnosticFields(actual, expected, source, files) {
   }
   for (const code of expected.notReported ?? []) if (actual.some(found => found.code === code)) out.push(`notReported:${code}`)
   if (expected.diagnosticsComplete && actual.length !== (expected.diagnostics ?? []).length) out.push('diagnosticsComplete')
+  // C2-W-158: an ordered record matches the listed entry at each position.
+  if (expected.diagnosticsOrdered && (expected.diagnostics ?? []).some((item, index) => actual[index] === undefined
+    || !diagnosticMatches(actual[index], typeof item === 'string' ? { code: item } : item, source, files))) {
+    out.push('diagnosticsOrdered')
+  }
   return out
 }
 
