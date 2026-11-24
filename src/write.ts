@@ -560,12 +560,14 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
 /**
  * C2-W-088, C2-W-125: a round whose parse holds a construct the tree does not hold escapes the openers of such
  * constructs and their kinds. The escape of a closer that ended a node early, or that the content took from the text
- * behind it, repairs what that construct can cause, so it waits for the parse after the construct's escape.
+ * behind it, or lengthens a node, repairs what that construct can cause. It waits for the parse
+ * after the construct's escape.
  */
 function deferRepairs(check: Check): void {
   if (check.constructs.size === 0) return
   const deferred = (escape: [TextNode, number]): boolean =>
-    !check.constructs.has(escape) && (check.closers.has(escape) || check.behind.has(escape))
+    !check.constructs.has(escape) && (check.closers.has(escape) || check.behind.has(escape) ||
+      (check.lengthening.has(escape) && !check.pairedLengthening.has(escape)))
   for (const escape of check.escapes.filter(deferred)) {
     check.escapes.splice(check.escapes.indexOf(escape), 1)
     check.marks.get(escape[0])?.delete(escape[1])

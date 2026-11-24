@@ -141,6 +141,8 @@ export interface Check {
   behind: Set<[TextNode, number]>
   /** C2-W-125, case six: escapes of a text character directly behind a node that would lengthen it; they give no kind (C2-W-088). */
   lengthening: Set<[TextNode, number]>
+  /** Lengthening escapes behind paired spans can be C2-W-125 trials beside reported constructs. */
+  pairedLengthening: Set<[TextNode, number]>
   /** C2-I-118: the capped openers this round escaped, each with its text and the end of its construct there. */
   capped: [TextNode, number, number][]
   /** C2-W-125, case eight: a text `^[` kept bare while its early closer took the backslash in this round. */
@@ -164,7 +166,8 @@ export function createCheck(w: Writer): Check {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
     cut: false, codeTrials: new Set(), leadTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(),
-    constructs: new Set(), behind: new Set(), lengthening: new Set(), capped: [], earlyCloser: false, notesDone: new Map(), note: null,
+    constructs: new Set(), behind: new Set(), lengthening: new Set(), pairedLengthening: new Set(), capped: [],
+    earlyCloser: false, notesDone: new Map(), note: null,
     parsed: [], parsedAt: 0, formsAround: false,
   }
 }
@@ -1533,7 +1536,11 @@ function endedEarly(c: Check, es: readonly Node[], i: number, owner: Node): void
 
 /** C2-W-125, case six: the escape just placed is of the closing mark that starts the text `es[i]` behind a node. */
 function markLengthening(c: Check, es: readonly Node[], i: number): void {
-  if (i > 0 && startsWithCloser(es[i - 1]!, es[i])) c.lengthening.add(c.escapes[c.escapes.length - 1]!)
+  if (i > 0 && startsWithCloser(es[i - 1]!, es[i])) {
+    const escape = c.escapes[c.escapes.length - 1]!
+    c.lengthening.add(escape)
+    if (isPaired(es[i - 1]!)) c.pairedLengthening.add(escape)
+  }
 }
 
 /** Steps over the characters that the expected text `e` and the parsed text `a` share at the cursor. False where they differ. */
