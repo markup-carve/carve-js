@@ -25,8 +25,8 @@ import { BRACED_MARKS } from './inline-tables.ts'
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
 export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys,
   positions = true): DocumentNode {
-  const cacheable = positions && src.length <= 8192 && w.extensions.length === 0 && w.abbreviations.size === 0 &&
-    (linkKeys === null || linkKeys.size === 0)
+  const plain = positions && plainParse(w, linkKeys)
+  const cacheable = plain && src.length <= 8192
   const cache = w.parseCache
   const cached = cacheable ? cache.trees.get(src) : undefined
   if (cached !== undefined && cached !== null) return cached
@@ -34,11 +34,27 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
     w.parses++
     w.work.chars += src.length
   }
+  // A longer source that one of the last rounds wrote again is counted as a parse, but its tree is reused.
+  const recent = plain && !cacheable ? cache.recent.find((entry) => entry[0] === src)?.[1] : undefined
+  if (recent !== undefined) return recent
   const extensions = w.extensions
   const source = buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys)
   const parsed = applyExtensions(source, extensions, linkKeys).document
   if (cacheable) remember(cache, src, parsed, cached === null)
+  else if (plain) rememberRecent(cache, src, parsed)
   return parsed
+}
+
+const RECENT_TREES = 2
+
+/** Whether a parse of the writer reads nothing but its source, so a tree of the same source can stand in for it. */
+function plainParse(w: Writer, linkKeys: ReadonlySet<string> | null): boolean {
+  return w.extensions.length === 0 && w.abbreviations.size === 0 && (linkKeys === null || linkKeys.size === 0)
+}
+
+function rememberRecent(cache: ParseCache, src: string, parsed: DocumentNode): void {
+  cache.recent.unshift([src, parsed])
+  cache.recent.length = Math.min(cache.recent.length, RECENT_TREES)
 }
 
 // The characters of the sources whose trees the parse cache keeps on first sight; the blocks it reuses are short.
@@ -107,6 +123,8 @@ export interface Check {
   codeTrials: Set<[TextNode, number]>
   /** Escapes of a closer that ended a node early (C2-W-125, case five); in a probe round they give no kind (C2-W-088). */
   closers: Set<[TextNode, number]>
+  /** The closers among `closers` that ended a braced emphasis or strong early, each with that node (C2-W-093). */
+  earlyClosers: [Node, [TextNode, number]][]
   /** The inline nodes around the content under comparison, innermost last, each as its list and its place there. */
   around: [readonly Node[], number, number][]
   /** Escapes of a construct a probe found running over the closers around its node: reported, so no trial (C2-W-088). */
@@ -123,8 +141,8 @@ export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
-    cut: false, codeTrials: new Set(), closers: new Set(), around: [], reported: new Set(), capped: [], earlyCloser: false,
-    notesDone: new Map(),
+    cut: false, codeTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(), capped: [],
+    earlyCloser: false, notesDone: new Map(),
   }
 }
 
@@ -1367,7 +1385,10 @@ function escapeMark(c: Check, nodes: readonly Node[], start: number, from: numbe
 function closedEarly(c: Check, es: readonly Node[], i: number, vi: number, owner: Node): void {
   const mark = CLOSING_MARKS.get(owner.type)
   if (isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
-  else if (mark !== undefined && escapeCloser(c, es, i, vi, mark)) c.cut = true
+  else if (mark !== undefined && escapeCloser(c, es, i, vi, mark)) {
+    c.cut = true
+    if (isPaired(owner)) c.earlyClosers.push([owner, c.escapes[c.escapes.length - 1]!])
+  }
   else c.losses.push([owner, null])
 }
 
