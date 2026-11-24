@@ -24,7 +24,7 @@ import {
 import {
   attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, cellMarksLength, continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
-  definitionTailLeft, isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDefinitionTailLine, isDescriptionListMark,
+  definitionTailLeft, isAbbreviation, isAttributeLine, isBareRun, isDefinition, definitionTailLineLeft, isDescriptionListMark,
   isDisplayMathOnly, isFenceLine,
   isFrontmatterCloser, isFrontmatterOpener, isLineComment, isTypedFrontmatterOpener,
   isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isThematicBreak, orderedDelimiter,
@@ -1108,21 +1108,30 @@ function openDefinitionLine(state: BlockState, kind: number, lineStart: number, 
 
 /**
  * C2-B-083, C2-B-084: a line indented past column 0 directly below an open definition continues it: the missing tail
- * of a link definition, once, or any line of an abbreviation expansion. Any other line closes the definition first.
+ * of a link definition, a title line then an attribute block line, or a text line of an abbreviation expansion, which
+ * a line that interrupts a heading continuation ends. Any other line closes the definition first.
  */
 function definitionLine(state: BlockState, lineStart: number, end: number): boolean {
   const leaf = state.leaf
   if (leaf.kind !== LINK_DEFINITION && leaf.kind !== ABBREVIATION) return false
   const pos = state.cursor.pos
-  const continues = pos > lineStart && pos < end && !isLineComment(state.src, pos, end) &&
-    (leaf.kind === ABBREVIATION || isDefinitionTailLine(state.src, pos, end, leaf.definitionTail))
+  let left = 0
+  let continues = pos > lineStart && pos < end && !isLineComment(state.src, pos, end)
+  if (continues && leaf.kind === ABBREVIATION) continues = !interruptsLeaf(state, 1, lineStart, end)
+  else if (continues) {
+    left = definitionTailLineLeft(state.src, pos, end, leaf.definitionTail)
+    continues = left >= 0
+  }
   if (!continues) {
     closeLeaf(state)
     return false
   }
   writeEvent(state, SPAN_TAG, pos, end)
   state.contentEnd = end
-  if (leaf.kind === LINK_DEFINITION) closeLeaf(state)
+  if (leaf.kind === LINK_DEFINITION) {
+    leaf.definitionTail = left
+    if (left === 0) closeLeaf(state)
+  }
   return true
 }
 
