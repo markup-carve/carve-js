@@ -300,7 +300,9 @@ function bracedComment(state: InlineState, pos: number, kind: number): number {
   }
   // C2-I-063: an editorial comment holds at least one character before the first closer. C2-B-138: none spans a
   // comment-only line.
-  if ((editorial && close === pos + 2) || close >= atomLimit(state, pos)) return pos + 1
+  // An editorial comment takes its literal content through the first #}. A later %%
+  // line is not a comment-only line once this earlier atom has claimed it.
+  if ((editorial && close === pos + 2) || (!editorial && close >= atomLimit(state, pos))) return pos + 1
   pushToken(state, kind, pos, close + 2, pos + 2, close, editorial ? 0 : FLAG_BRACED, NONE)
   return close + 2
 }

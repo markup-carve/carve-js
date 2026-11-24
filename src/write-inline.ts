@@ -1067,7 +1067,7 @@ function markForm(w: Writer, node: Node, mark: string, next: Node | undefined, b
   if (next?.type === 'text' && next.value.startsWith(mark)) w.forms.set(node, 1)
   // C2-I-047, C2-I-048: behind a word character a bare mark cannot open, and before one it cannot close. That depends
   // on the neighbors as written, so each write decides it again, as for a glued mark.
-  else if ((wordCode(before) || startsWithWord(next)) && !w.forms.has(node)) {
+  else if ((wordCode(before) || (braceBlock(node) === '' && startsWithWord(next))) && !w.forms.has(node)) {
     w.glued.add(node)
     w.forms.set(node, 1)
   }
