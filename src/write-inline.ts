@@ -1064,10 +1064,11 @@ function unspelledSpace(w: Writer, node: Node): string {
 
 /** C2-W-069: the braced form of an emphasis or strong `node` whose bare mark cannot pair where it stands. */
 function markForm(w: Writer, node: Node, mark: string, next: Node | undefined, before: number): void {
-  if (next?.type === 'text' && next.value.startsWith(mark)) w.forms.set(node, 1)
+  const nextTouchesCloser = braceBlock(node) === ''
+  if (nextTouchesCloser && next?.type === 'text' && next.value.startsWith(mark)) w.forms.set(node, 1)
   // C2-I-047, C2-I-048: behind a word character a bare mark cannot open, and before one it cannot close. That depends
   // on the neighbors as written, so each write decides it again, as for a glued mark.
-  else if ((wordCode(before) || startsWithWord(next)) && !w.forms.has(node)) {
+  else if ((wordCode(before) || (nextTouchesCloser && startsWithWord(next))) && !w.forms.has(node)) {
     w.glued.add(node)
     w.forms.set(node, 1)
   }
