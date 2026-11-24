@@ -8,7 +8,7 @@ import {
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
-import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
+import { addFinding, type Diagnostic, inDocumentOrder, locateFindings } from './diagnostics.ts'
 import { holdsLineFeedValue, isKey, withSpelledValues } from './write-attributes.ts'
 import {
   blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, joinsIndentedRun, topPredecessors, writeBlocks,
@@ -1667,26 +1667,22 @@ function writeDocument(w: Writer, run: WriterRun, document: DocumentNode): strin
   return out.length === 0 ? '\n' : `${out.join('\n')}\n`
 }
 
+const ROOT_METADATA_LOSSES: ReadonlySet<string> = new Set(['headers', 'footers', 'abstract', 'keywords', 'fields'])
+
 function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): void {
-  for (const name of ['headers', 'footers'] as const) {
-    if (document.metadata?.[name] !== undefined) diagnostics.push({
-      code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
-      message: `Carve source cannot spell root metadata.${name}`, path: `/metadata/${name}`,
-    })
+  // C2-W-158 leaves two fields of one node unordered; they stand in the key order of the tree, as in carve-php.
+  const metadata = (document.metadata ?? {}) as Readonly<Record<string, unknown>>
+  for (const name of Object.keys(metadata)) {
+    if (!ROOT_METADATA_LOSSES.has(name) || metadata[name] === undefined) continue
+    if (name === 'fields' && document.children.some((node) => node.type === 'frontmatter')) continue
+    diagnostics.push({ code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
+      message: `Carve source cannot spell root metadata.${name}`, path: `/metadata/${name}` })
   }
-  for (const name of ['abstract', 'keywords'] as const) if (document.metadata?.[name] !== undefined) diagnostics.push({
-    code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
-    message: `Carve source cannot spell root metadata.${name}`, path: `/metadata/${name}`,
-  })
   // C2-W-011, C2-M-074: no source gives the document node a language or a direction (C2-M-004 imports them).
   for (const name of ['lang', 'dir'] as const) if (document[name] !== undefined) diagnostics.push({
     code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
     message: `Carve source cannot spell the document ${name}`, path: `/${name}`,
   })
-  if (document.metadata?.fields !== undefined && !document.children.some((node) => node.type === 'frontmatter')) {
-    diagnostics.push({ code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
-      message: 'Carve source cannot spell root metadata.fields', path: '/metadata/fields' })
-  }
 }
 
 /** C2-W-088, C2-W-125: only these opener shapes can lose a backslash without changing the ordered repair. */
@@ -2418,7 +2414,7 @@ function attributeValueLosses(document: DocumentNode, w: Writer): void {
 /** Locate writer losses, moving a line-feed mismatch from a wrapper to its written leaf. */
 function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
   if (w.lineFeedValues) attributeValueLosses(document, w)
-  return locatedLosses(document, w)
+  return inDocumentOrder(document, locatedLosses(document, w))
 }
 
 function locatedLosses(document: DocumentNode, w: Writer): Diagnostic[] {
