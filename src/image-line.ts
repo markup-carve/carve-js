@@ -114,8 +114,8 @@ function nestedTailEnd(line: ImageLine, text: number, p: number): number {
 
 /**
  * The open brackets of the alt scan: per bracket, the offset of the inline footnote it opened, or -1 (C2-I-089).
- * `closing` holds the notes that closed in this pass with the offset of their `]`, `demote` the notes in which a caret
- * pair opens nothing, and `text` the notes that are text.
+ * `closing` holds the notes that opened in this pass with the offset of their `]` or NONE, `demote` the notes in which
+ * a caret pair opens nothing, and `text` the notes that are text.
  */
 interface Pairs {
   open: number[]
@@ -142,6 +142,7 @@ function openAt(line: ImageLine, pairs: Pairs, p: number): number {
     if (demoted(pairs, p)) return p + 1
     if (pairs.text?.has(p) === true) return p + 2
     pairs.open.push(p)
+    pairs.closing.set(p, NONE)
     pairs.notes++
     if (pairs.demote?.has(p) === true) pairs.demoted++
     return p + 2
@@ -208,24 +209,32 @@ function bracketClose(line: ImageLine, pos: number): number {
     const pairs: Pairs = { open: [-1], starts: [pos + 1], closing: new Map(), demote, text, caret: false, notes: 0, demoted: 0 }
     const close = bracketPass(line, pos, pairs)
     if (!pairs.caret || pass >= MAX_NOTE_PASSES) return close
-    // C2-I-074: the alt of an image that forms is source text, so a note in it is no note that closed.
-    const closing = close === NONE ? pairs.closing : new Map<number, number>()
+    // A note the first pass left open is tried with its caret pairs as brackets; where the image's own bracket closes
+    // depends on where the notes in it close, so they count whether the image forms or not.
     if (demote === null) {
-      demote = closing
+      demote = pairs.closing
       continue
     }
     const before = text?.size ?? 0
-    text = narrows(demote, closing, text)
+    text = narrows(demote, pairs.closing, text)
     if ((text?.size ?? 0) === before) return close
   }
 }
 
-/** Keeps the notes of `demote` that closed again in `closing`; one that did not is text from now on (C2-I-089). */
+/**
+ * Keeps the notes of `demote` that closed again in `closing`; one that did not is text from now on (C2-I-089). One that
+ * never closed holds only its `^[`, and one an enclosing note swallowed before it closed once keeps its place.
+ */
 function narrows(demote: Map<number, number>, closing: Map<number, number>, text: TextNotes | null): TextNotes | null {
   for (const [start, end] of demote) {
-    if (closing.has(start)) continue
+    const now = closing.get(start)
+    if (now !== undefined && now !== NONE) {
+      if (end === NONE) demote.set(start, now)
+      continue
+    }
+    if (now === undefined && end === NONE) continue
     demote.delete(start)
-    ;(text ??= new TextNotes()).add(start, end)
+    ;(text ??= new TextNotes()).add(start, end === NONE ? start + 1 : end)
   }
   return text
 }

@@ -524,7 +524,10 @@ function listItem(w: Writer, node: ListItemNode, prefix: string, flags: number, 
   const task = node.task
   const box = task === undefined ? '' : `[${task.mark}] `
   w.bareDotLead = marker === '.' && box === '' ? head + gap : null
-  body(w, node, prefix, flags, head + gap + box, marker.length + gap.length, tight)
+  const mark = head + gap + box
+  // C2-B-067: a description list opened on the marker line takes its descriptions at its own column, behind the box.
+  const width = node.children[0]?.type === 'definition_list' ? mark.length : marker.length + gap.length
+  body(w, node, prefix, flags, mark, width, tight)
 }
 
 /** The brace block above a list: its attributes, and the start value that no marker carries (C2-W-044). */

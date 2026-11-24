@@ -87,8 +87,9 @@ export interface InlineState {
   bracketDepth: number
   /**
    * C2-I-089: the starts of the inline footnotes that closed in the first pass and in each pass since, with the offset
-   * of their `]`, inside which a caret pair opens nothing; null in the first pass, which reads every caret pair and
-   * only notes whether one stood inside a note.
+   * of their `]` (NONE for one the first pass left open, tried next with its caret pairs as brackets), inside which a
+   * caret pair opens nothing; null in the first pass, which reads every caret pair and only notes whether one stood
+   * inside a note.
    */
   closedNotes: Map<number, number> | null
   /** C2-I-089: the notes that closed only while a caret pair in them opened, which are text. */
@@ -113,6 +114,8 @@ export interface InlineState {
   percentInImage: boolean
   /** The inline footnotes open on the bracket stack. */
   notesOpen: number
+  /** C2-I-089: the notes this pass opened, with the offset of their `]`, or NONE while open; an image alt drops no entry. */
+  passNotes: Map<number, number>
   /** C2-B-138: the content offsets of the comment-only lines, which no atom spans, once an atom asked. */
   commentLines: number[] | null
 
@@ -201,6 +204,7 @@ function createState(): InlineState {
     formedImages: null,
     percentInImage: false,
     notesOpen: 0,
+    passNotes: new Map(),
     commentLines: null,
     tokens: new Int32Array(INITIAL_TOKENS),
     tokenLength: 0,

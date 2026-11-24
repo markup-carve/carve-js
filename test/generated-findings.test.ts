@@ -83,7 +83,10 @@ describe('generated parser findings', () => {
     const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
     const options = { extensions: [tabExtension, tabsExtension] }
     const parsed = parseWithDiagnostics(source, options)
-    expect(parsed.document.children[0]?.type).toBe('block_extension')
+    // C2-I-089 (carve#6463): `![^[[^][]]()` in the body is a note, so a later `:n[...]` forms an inline extension,
+    // which a qualified fallback cannot hold (C2-X-022): the claim stands, its transform falls back.
+    expect(parsed.document.children[0]?.type).toBe('div')
+    expect(parsed.diagnostics.some((entry) => entry.code === 'extension-fallback-rendered')).toBe(true)
     expect(parsed.diagnostics.some((entry) => entry.code === 'extension-transform-failed')).toBe(false)
     expect(() => render(source, options)).not.toThrow()
   })

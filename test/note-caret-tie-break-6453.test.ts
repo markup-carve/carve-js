@@ -28,7 +28,7 @@ describe('C2-I-089: a note that would close only because a caret pair inside it 
   })
 
   it('keeps an image alt whose note is text as source', () => {
-    expect(first('![^[^[[^]\\[]](u)')).toBe('paragraph(image())')
+    expect(first('![^[^[[^]\\[]](u)')).toBe('paragraph(text "![", inline_footnote(text "^[[^][]"), text "(u)")')
   })
 
   it.each([
