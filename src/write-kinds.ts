@@ -206,12 +206,13 @@ function edge(block: KindBlock, index: number, step: number): number {
 
 /**
  * Adds to the escapes of `check` every opener of each kind they report in their block, so the rounds are bounded by
- * the kinds, not by the escapes. A C2-W-125 trial, an escape among `noKind` and a block opener inside a line give no kind.
+ * the kinds, not by the escapes. A C2-W-125 trial, an escape among `noKind` or `lengthening` and a block opener inside
+ * a line give no kind.
  */
 export function escapeKinds(check: Check, group: readonly Node[], noKind: ReadonlySet<[TextNode, number]> = new Set()): void {
   const trials = new Set(check.trials)
   const reported = check.escapes.filter((escape) => check.ownEscapes.get(escape[0])?.has(escape[1]) !== true && !trials.has(escape) &&
-    !noKind.has(escape))
+    !noKind.has(escape) && !check.lengthening.has(escape))
   if (reported.length === 0) return
   const owners = kindBlocks(group)
   const done = new Map<KindBlock, Set<string>>()

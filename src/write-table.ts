@@ -191,7 +191,11 @@ function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: n
   if (span !== undefined) return { prefix: head ? '=' : '', parts: [span], places: [] }
   const parts = cellContent(w, cell, flags).split('\n')
   const recorded = fragmentLines(w, row, cell, parts.length - 1)
-  if (recorded !== null) return { prefix: cellPrefix(w, cell, bare), parts, places: recorded }
+  if (recorded !== null) {
+    // C2-W-063, C2-B-184: span marks are read from the row line, so a first line that is only a mark takes the escape.
+    if (parts.length > 1 && (parts[0] === '^' || parts[0] === '<')) parts[0] = `\\${parts[0]}`
+    return { prefix: cellPrefix(w, cell, bare), parts, places: recorded }
+  }
   // C2-L-035: without a record that fits, the row is one line. C2-L-021: a fragment that starts an empty cell came
   // without a joining space, so it is joined without one.
   const wraps = w.facts?.get(cell)?.wraps?.length ?? 0
