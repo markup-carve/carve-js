@@ -71,6 +71,21 @@ function hasClass(node: Node, name: string): boolean {
   return node.attrs?.classes?.includes(name) === true
 }
 
+/** Advances the depth counter for a heading at `level` and returns its number; closing deeper headings continues their counter. */
+function countHeading(levels: number[], numbers: number[], level: number): string {
+  let closed: number | undefined
+  while (levels.length > 0 && levels[levels.length - 1]! > level) {
+    levels.pop()
+    closed = numbers.pop()
+  }
+  if (levels.length > 0 && levels[levels.length - 1] === level) numbers[numbers.length - 1]!++
+  else {
+    levels.push(level)
+    numbers.push(closed === undefined ? 1 : closed + 1)
+  }
+  return numbers.join('.')
+}
+
 /**
  * Numbers the sections, `1`, `1.1` and so on, in a `<span class="section-number">` before the heading text, and writes
  * a cross-reference `</#id>` to a numbered heading as "Section 1.2 - Title". Headings in a quote, with the class
@@ -92,17 +107,7 @@ export function headingNumbers(options: HeadingNumbersOptions = {}): ExtensionDe
       // carve#6531: only top-level headings, the ones a section wraps (C2-H-026), and a number counts depth, not level.
       for (const node of view.children) {
         if (node.type !== 'heading' || hasClass(node, 'unnumbered') || node.level < minLevel) continue
-        let closed: number | undefined
-        while (levels.length > 0 && levels[levels.length - 1]! > node.level) {
-          levels.pop()
-          closed = numbers.pop()
-        }
-        if (levels.length > 0 && levels[levels.length - 1] === node.level) numbers[numbers.length - 1]!++
-        else {
-          levels.push(node.level)
-          numbers.push(closed === undefined ? 1 : closed + 1)
-        }
-        const number = numbers.join('.')
+        const number = countHeading(levels, numbers, node.level)
         const id = headingId(node)
         if (id !== undefined && !byId.has(id)) byId.set(id, { number, title: derivedInlines(node.children) })
         pinId(node)
