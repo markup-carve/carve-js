@@ -1,7 +1,7 @@
 import { type DocumentNode, type Inline, type Node } from '../../ast.ts'
 import { type ExtensionDefinition } from '../types.ts'
-import { chrome, declare, derivedInlines, freezeCrossReferences, freezeReferences, headingId, headingReferences, headingTexts, pinId,
-  rewriteTree, visitTree } from './common.ts'
+import { chrome, copiedTitle, crossReferenceLink, declare, derivedInlines, freezeCrossReferences, freezeReferences, headingId,
+  headingReferences, headingTexts, pinId, rewriteTree, visitTree } from './common.ts'
 
 /** Options of {@link headingPermalinks}. */
 export interface HeadingPermalinksOptions {
@@ -122,11 +122,9 @@ export function headingNumbers(options: HeadingNumbersOptions = {}): ExtensionDe
         if (target === undefined) return undefined
         const children: Inline[] = crossref === 'number'
           ? [{ type: 'text', value: `${label} ${target.number}` }]
-          : [{ type: 'text', value: `${label} ${target.number} - ` }, ...structuredClone(target.title)]
-        const link: Inline = { type: 'link', href: `#${node.key}`, children }
-        if (node.attrs !== undefined) link.attrs = node.attrs
-        return [link]
-      }, true)
+          : [{ type: 'text', value: `${label} ${target.number} - ` }, ...copiedTitle(target.title, texts)]
+        return [crossReferenceLink(node, children)]
+      }, true, false)
       freezeCrossReferences(view, texts)
       return view
     },
