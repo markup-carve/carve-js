@@ -70,6 +70,12 @@ function diagnosticKey(entry: Diagnostic): string {
   return `${entry.file ?? ''}\u0000${entry.range?.startOffset ?? 0}\u0000${entry.code}`
 }
 
+/** What tells two findings apart; a file included twice repeats a finding with only another path and include chain. */
+export function findingKey(entry: Diagnostic): string {
+  return JSON.stringify([entry.file, entry.code, entry.severity, entry.channel, entry.message,
+    entry.range?.startOffset, entry.range?.endOffset])
+}
+
 function scopeOf(children: readonly Node[], file: string, outer: ReferenceScope | null): ReferenceScope {
   const scope: ReferenceScope = { outer, links: new Map(), notes: new Map() }
   for (const node of children) {
@@ -227,9 +233,8 @@ function located(visit: Visit, node: IncludeNode, text: string, part: Linted, en
     if (line <= kept.from || line > kept.to) return null
   }
   const file = node.file ?? ''
-  const key = `${file}\u0000${startOffset}\u0000${entry.code}`
-  if (visit.seen.has(key)) return null
   const range = { startOffset, endOffset: (entry.range?.endOffset ?? 0) + part.shift }
+  if (visit.seen.has(findingKey({ ...entry, range, file }))) return null
   // A finding of a section outside every selected block, such as one on the file as a whole, points at the include.
   const own = entry.path ?? ''
   const under = part.paths === null ? own : pathUnder(part.paths, own) ?? ''
@@ -238,7 +243,7 @@ function located(visit: Visit, node: IncludeNode, text: string, part: Linted, en
 
 function keepLocated(visit: Visit, entry: Diagnostic | null, inclusion: string): void {
   if (entry === null || !reconciled(entry, visit.references, inclusion)) return
-  visit.seen.add(diagnosticKey(entry))
+  visit.seen.add(findingKey(entry))
   visit.out.push(entry)
 }
 

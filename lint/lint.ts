@@ -6,7 +6,7 @@ import { CarveOptionError } from '../src/options.ts'
 import { CATALOG, type RuleId } from './catalog.ts'
 import { LINE_RULES } from './spelling.ts'
 import { finishStructure, NODE_RULES } from './structure.ts'
-import { lintIncludes } from './includes.ts'
+import { findingKey, lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 import { append } from '../src/append.ts'
@@ -523,7 +523,7 @@ export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
     (text, node, path) => lintPayload(text, node, path, rest), expands)
   const seen = new Set<string>()
   return all.filter((entry) => {
-    const key = `${entry.file ?? ''}\0${entry.code}\0${entry.range?.startOffset ?? ''}\0${entry.range?.endOffset ?? ''}`
+    const key = findingKey(entry)
     if (seen.has(key)) return false
     seen.add(key)
     return true
