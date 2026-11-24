@@ -385,10 +385,11 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "description-term-multi-line": { severity: "hint", default: "upgrade", messages: [
+  "description-term-multi-line": { severity: "hint", default: "on", messages: [
     [
-      "This line continues the term above. Add a blank line after the term ",
-      "if it is a paragraph.",
+      "This line continues the term above, so its `:` is term text and open",
+      "s no description. Put the description mark at the column of the term",
+      " mark.",
     ].join(''),
   ], conditions: [
     "",
