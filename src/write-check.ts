@@ -2426,7 +2426,10 @@ function compareBlock(c: Check, e: Node, a: Node, absorbed = false): boolean {
   if (c.w.lost.has(e)) return true
   if (sourceCoreEquivalent(e, a)) return true
   if (e.type !== a.type) {
-    blockMismatch(c, e)
+    // A line-block line can be read as a comment fence instead of as text.
+    // Its text opener, rather than the line node, takes the repair escape.
+    if (e.type === 'line' && a.type === 'comment') escapeLineStart(c, childNodes(e), 0, e)
+    else blockMismatch(c, e)
     return false
   }
   const marks = c.spanMarks
