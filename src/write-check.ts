@@ -2505,6 +2505,8 @@ function hasOpenerShape(nodes: readonly Node[], from: number): boolean {
   const node = nodes[from]
   const value = joinedValue(leadingTexts(nodes, from))
   if (value === '') return node !== undefined && node.type !== 'text'
+  // A pipe needs another pipe to close a row (C2-B-166); one pipe opens no block.
+  if (value[0] === '|' && value.indexOf('|', 1) < 0) return false
   return !isAsciiAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
 }
 
