@@ -159,6 +159,8 @@ const CASES = [
   { id: 'deprecated-cell-alignment', trigger: '|< a |', near: '|={<} a |', fragment: '< a' },
   { id: 'deprecated-indented-line-under-heading', trigger: '# Heading\n  continuation', near: '# Heading\ncontinuation',
     fragment: 'continuation' },
+  { id: 'continuation-reading-changed', trigger: ':: term\n  more\n: desc', near: ':: term\nmore\n: desc', fragment: 'more',
+    options: { upgrade: true } },
   { id: 'description-term-multi-line', trigger: ':: term\nmore\n: desc', near: ':: term\n: desc', fragment: 'more' },
   { id: 'figure-group-empty', trigger: '::: figure\ntext\n:::', near: '::: figure\n| a |\n^ cap\n:::', fragment: '::: figure' },
   { id: 'figure-group-nested', trigger: '::: figure\n::: figure\n:::\n:::', near: '::: figure\n| a |\n^ cap\n:::',

@@ -6,9 +6,7 @@
  * clause-correct result, in the spec gap report for the pin; the field must keep failing until the
  * corpus is corrected, and every other field of the example is still checked.
  */
-export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['writer-24', { fields: ['lint'], fix: 'carve#6516: a carve: 0.1 document also reports djot-emphasis-underscore (C2-W-156, CC-1831)' }],
-])
+export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
 export const REFUSED_AT: ReadonlyMap<string, string> = new Map([

@@ -461,18 +461,22 @@ export function definitionTailLeft(src: string, pos: number, end: number): numbe
 }
 
 /**
- * C2-B-083: the content of a line below a link definition, from `pos` on, is exactly the part of the tail in `left`:
- * a title, an attribute block, or a title, one space and an attribute block, then only spaces and tabs.
+ * C2-B-083: when the content of a line below a link definition, from `pos` on, is part of the tail in `left` (a title,
+ * an attribute block, or a title, one space and an attribute block, then only spaces and tabs), the parts still left
+ * after it; else -1. A title alone leaves the attribute block for the line below.
  */
-export function isDefinitionTailLine(src: string, pos: number, end: number, left: number): boolean {
+export function definitionTailLineLeft(src: string, pos: number, end: number, left: number): number {
   const quote = src.charCodeAt(pos)
   if ((left & TAIL_TITLE) !== 0 && (quote === QUOTE_MARK || quote === APOSTROPHE)) {
     const after = quotedEnd(src, pos, end, quote)
-    return after >= 0 && definitionTailEnd(src, after, end) >= 0
+    if (after < 0) return -1
+    const tail = definitionTailEnd(src, after, end)
+    if (tail < 0) return -1
+    return tail === end ? left & TAIL_BLOCK : 0
   }
-  if (quote !== BRACE_OPEN) return false
+  if ((left & TAIL_BLOCK) === 0 || quote !== BRACE_OPEN) return -1
   const block = readAttributeBlock(src, pos, end, emptyMemo(), null)
-  return block >= 0 && skipSpaces(src, block, end) === end
+  return block >= 0 && skipSpaces(src, block, end) === end ? 0 : -1
 }
 
 export function isLinkDefinition(src: string, pos: number, end: number): boolean {

@@ -258,8 +258,8 @@ function linkDefinitionNode(ctx: TreeContext, node: BlockNode, _flow: number, at
   const merged = attributes ?? emptyAttributes()
   const spans = node.spans!
   const out = linkDefinitionFields(ctx.src, end + 2, spans[1]!, foldLabel(ctx.src.slice(start, end)), merged)
-  // C2-B-083, C2-B-106: the tail line below completes the tail; its block is the block at the end of the line.
-  if (spans.length > 2) linkDefinitionTail(ctx.src, spans[2]!, spans[3]!, out, merged)
+  // C2-B-083, C2-B-106: the tail lines below complete the tail; its block is the block at the end of its last line.
+  for (let at = 2; at < spans.length; at += 2) linkDefinitionTail(ctx.src, spans[at]!, spans[at + 1]!, out, merged)
   if (attributes === null) setAttributes(out, merged)
   return out
 }

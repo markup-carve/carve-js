@@ -342,6 +342,14 @@ function ruleFunction(rule: DataRule, index: number, compiler: Compiler): string
       `  for (const found of matchAll(${regex}, text)) {`,
       '    groups = spansOf(found)', `    base = ${compiler.base(subject)}`, '    one()', '  }')
   }
+  // A let no condition or report reads declares nothing.
+  for (const name of compiler.lets.keys()) {
+    const value = local(name)
+    const declared = `  let ${value}: unknown = UNSET`
+    const read = new RegExp(`\\b${value}\\b`)
+    if (body.some((code) => code !== declared && read.test(code))) continue
+    body.splice(body.indexOf(declared), 3)
+  }
   if (body.some((code) => /[(\s]line[,)]/.test(code))) {
     if (rule.over === 'inline' || rule.over === 'attribute') throw new Error(`lint-model: ${rule.id} reads a line offset over ${rule.over} records`)
     body.unshift(`  const line = ${rule.over === 'block' ? 'self.line' : 'self'}`)
