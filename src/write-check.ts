@@ -17,7 +17,7 @@ import {
   writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
-import { braceBlock } from './write-attributes.ts'
+import { braceBlock, spelledValue } from './write-attributes.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharacter } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
@@ -214,12 +214,18 @@ function isCompared(c: Check, node: Node, name: string): boolean {
   return !isRecord(node) || !skipped(node, name, c.spanMarks)
 }
 
-/** C2-W-136: the `attrs` of `e` without the keys the writer reported and did not write, as the parse holds them. */
+/**
+ * C2-W-136, C2-W-050: the `attrs` of `e` as the parse holds them: without the keys the writer reported and did not
+ * write, and with each value in the spelling the writer gave it.
+ */
 function writtenAttrs(c: Check, e: Node): unknown {
   const keys = c.w.lostKeys.get(e)
   const attrs = e.attrs
-  if (keys === undefined || attrs === undefined) return attrs
-  const keyValues = (attrs.keyValues ?? []).filter(([key]) => !keys.includes(key))
+  if (attrs === undefined) return attrs
+  const respelled = attrs.keyValues?.some(([, value]) => value.includes('\n')) === true
+  if (keys === undefined && !respelled) return attrs
+  const keyValues = (attrs.keyValues ?? []).filter(([key]) => keys === undefined || !keys.includes(key))
+    .map(([key, value]): [string, string] => [key, spelledValue(value)])
   const rest: Fields = { ...attrs, keyValues: keyValues.length === 0 ? undefined : keyValues }
   return rest['id'] === undefined && (attrs.classes ?? []).length === 0 && keyValues.length === 0 ? undefined : rest
 }

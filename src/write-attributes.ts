@@ -38,11 +38,17 @@ export function quoted(value: string, pipes = false): string {
   return `${out}"`
 }
 
+/** C2-W-050: an attribute block is one line, so a line feed of a value is written as a space (reported by the writer). */
+export function spelledValue(value: string): string {
+  return value.includes('\n') ? value.replaceAll('\n', ' ') : value
+}
+
 /** C2-W-049, C2-W-050: one key with its value. */
 function keyPart(key: string, value: string, pipes: boolean): string {
   // C2-I-031: a bare key does not start with `_`.
   if (value === '') return key.startsWith('_') ? `${key}=""` : key
-  return `${key}=${isUnquoted(value) ? value : quoted(value, pipes)}`
+  const spelled = spelledValue(value)
+  return `${key}=${isUnquoted(spelled) ? spelled : quoted(spelled, pipes)}`
 }
 
 export interface BlockParts {
