@@ -1,4 +1,5 @@
-import { type DocumentNode, type HeadingNode, type Inline, type LinkNode, type Node } from '../../ast.ts'
+import { type DocumentNode, type HeadingNode, type Inline, type LinkNode, type Node, type XrefNode } from '../../ast.ts'
+import { plainText } from '../../ast-text.ts'
 
 const NOT_CHILDREN = new Set(['pos', 'segments', 'attrs', 'data', 'metadata', 'source', 'payload', 'props'])
 
@@ -11,32 +12,35 @@ export type Rewrite = (node: Node, ancestors: readonly Node[]) => Node[] | undef
 
 /**
  * Visits every node below `root` in document order, slots included, and splices in what `rewrite` returns. Extension
- * fallbacks are visited only with `fallbacks`, since they repeat what the slots hold.
+ * fallbacks are visited only with `fallbacks`, since they repeat what the slots hold. Without `intoReplacements` a
+ * replacement is not visited again: a rewrite that copies text containing what it rewrites stays linear (carve#6540).
  */
-export function rewriteTree(root: Node, rewrite: Rewrite, fallbacks: boolean, ancestors: Node[] = []): void {
+export function rewriteTree(root: Node, rewrite: Rewrite, fallbacks: boolean, intoReplacements = true,
+  ancestors: Node[] = []): void {
   ancestors.push(root)
   for (const [key, value] of Object.entries(root)) {
     if (NOT_CHILDREN.has(key) || (key === 'fallback' && !fallbacks) || value === null || typeof value !== 'object') continue
-    if (Array.isArray(value)) rewriteList(value, rewrite, fallbacks, ancestors)
-    else if (isNode(value)) rewriteTree(value, rewrite, fallbacks, ancestors)
+    if (Array.isArray(value)) rewriteList(value, rewrite, fallbacks, intoReplacements, ancestors)
+    else if (isNode(value)) rewriteTree(value, rewrite, fallbacks, intoReplacements, ancestors)
     else for (const list of Object.values(value as Record<string, unknown>)) {
-      if (Array.isArray(list)) rewriteList(list, rewrite, fallbacks, ancestors)
+      if (Array.isArray(list)) rewriteList(list, rewrite, fallbacks, intoReplacements, ancestors)
     }
   }
   ancestors.pop()
 }
 
-function rewriteList(list: unknown[], rewrite: Rewrite, fallbacks: boolean, ancestors: Node[]): void {
+function rewriteList(list: unknown[], rewrite: Rewrite, fallbacks: boolean, intoReplacements: boolean,
+  ancestors: Node[]): void {
   for (let at = 0; at < list.length; at++) {
     const item = list[at]
     if (!isNode(item)) continue
     const replaced = rewrite(item, ancestors)
     if (replaced === undefined) {
-      rewriteTree(item, rewrite, fallbacks, ancestors)
+      rewriteTree(item, rewrite, fallbacks, intoReplacements, ancestors)
       continue
     }
     list.splice(at, 1, ...replaced)
-    for (const node of replaced) rewriteTree(node, rewrite, fallbacks, ancestors)
+    if (intoReplacements) for (const node of replaced) rewriteTree(node, rewrite, fallbacks, intoReplacements, ancestors)
     at += replaced.length - 1
   }
 }
@@ -185,11 +189,33 @@ export function headingTexts(view: DocumentNode): Map<string, Inline[]> {
  */
 export function freezeCrossReferences(view: DocumentNode, texts: ReadonlyMap<string, Inline[]>): void {
   rewriteTree(view, (node) => {
-    if (node.type !== 'xref' || node.namespace !== 'heading' || (node.display !== undefined && node.display !== 'title')) return undefined
-    const text = texts.get(node.key)
+    const text = titleReferenced(node, texts)
     if (text === undefined) return undefined
-    const link: LinkNode = { type: 'link', href: `#${node.key}`, children: structuredClone(text) }
-    if (node.attrs !== undefined) link.attrs = node.attrs
-    return [link]
-  }, true)
+    return [crossReferenceLink(node as XrefNode, copiedTitle(text, texts))]
+  }, true, false)
+}
+
+/** The display text of the heading a title cross-reference resolves to in `texts`. */
+function titleReferenced(node: Node, texts: ReadonlyMap<string, Inline[]>): Inline[] | undefined {
+  if (node.type !== 'xref' || node.namespace !== 'heading' || (node.display !== undefined && node.display !== 'title')) return undefined
+  return texts.get(node.key)
+}
+
+export function crossReferenceLink(xref: XrefNode, children: Inline[]): LinkNode {
+  const link: LinkNode = { type: 'link', href: `#${xref.key}`, children }
+  if (xref.attrs !== undefined) link.attrs = xref.attrs
+  return link
+}
+
+/**
+ * carve#6540: a copy of a heading title, in which a cross-reference stays a link to its target with the target's plain
+ * title. It copies no title again, so the copies stay linear in the input and a title that cites itself ends.
+ */
+export function copiedTitle(title: readonly Inline[], texts: ReadonlyMap<string, Inline[]>): Inline[] {
+  const holder = { type: 'span', children: structuredClone(title) } as Node & { children: Inline[] }
+  rewriteTree(holder, (node) => {
+    const text = titleReferenced(node, texts)
+    return text === undefined ? undefined : [crossReferenceLink(node as XrefNode, [{ type: 'text', value: plainText(text).trim() }])]
+  }, true, false)
+  return holder.children
 }

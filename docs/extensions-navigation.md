@@ -44,7 +44,8 @@ Both renderers write the same HTML in `static` mode, since it holds no script.
 
 A transform that changes heading text, such as `headingNumbers()` or `headingPermalinks()`, keeps each heading's id and
 the targets of references to it. Text it inserts is left out of the derived text of a table of contents and of a
-numbered cross-reference.
+numbered cross-reference. A cross-reference inside a title these transforms copy stays a link to its heading, written
+with that heading's plain title, so a title that cites itself or the next heading copies no title again.
 
 `linkPolicy()` narrows the core `urlPolicy` option and never widens it: a URL the core refuses stays refused.
 

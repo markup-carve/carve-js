@@ -194,6 +194,29 @@ describe('headingNumbers', () => {
     expect(html).not.toContain('Section 1 - C')
   })
 
+  it('leaves a cross-reference inside a copied title a link with the plain title (carve#6540)', () => {
+    const src = '{#a}\n= A </#b>\n\n{#b}\n= B </#c>\n\n{#c}\n= C *x*\n\nSee </#a>.\n'
+    const html = render(src, { extensions: [headingNumbers()] })
+    expect(html).toContain('<h1><span class="section-number">1</span> A <a href="#b">Section 2 - B C x</a></h1>')
+    expect(html).toContain('<p>See <a href="#a">Section 1 - A B</a>.</p>')
+    expect(render(src, { extensions: [headingNumbers({ crossref: 'title' })] })).toContain('<p>See <a href="#a">A B</a>.</p>')
+  })
+
+  it('ends on a title that cites itself (carve#6540)', () => {
+    const { html, diagnostics } = renderWithDiagnostics('{#a}\n= Ref </#a>\n\nSee </#a>.\n', { extensions: [headingNumbers()] })
+    expect(diagnostics).toEqual([])
+    expect(html).toContain('<h1><span class="section-number">1</span> Ref <a href="#a">Section 1 - Ref Ref</a></h1>')
+  })
+
+  it('keeps titles that cite the next two headings linear (carve#6540)', () => {
+    const size = (count: number): number => {
+      let src = ''
+      for (let at = 0; at < count; at++) src += `{#h${at}}\n= T${at} </#h${at + 1}> </#h${at + 2}>\n\n`
+      return render(src, { extensions: [headingNumbers()] }).length
+    }
+    expect(size(24)).toBeLessThan(size(12) * 3)
+  })
+
   it('counts depth, not level, so a skipped level gives no duplicate number (carve#6531)', () => {
     const skipped = render('= A\n\n=== C\n\n== B\n\n==== D\n', { extensions: [headingNumbers()] })
     expect(skipped).toContain('<h3><span class="section-number">1.1</span> C</h3>')
