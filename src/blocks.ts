@@ -131,7 +131,8 @@ function openMetadataBlock(state: BlockState, matched: number, lineStart: number
 function closeBodyLeaf(state: BlockState, matched: number, end: number, blank: boolean): number {
   const opaque = state.leaf.kind !== TABLE
   closeLeaf(state)
-  if (!opaque || blank) return matched
+  // C2-B-018: a caption line without the quote's mark closes the quote as its caption, not before it.
+  if (!opaque || blank || captionsAfterBlock(state, matched, end)) return matched
   // C2-B-111: the leaf ends with its container. C2-B-135: a comment line is no exception,
   // so the containers that do not own this line close before it is read again.
   closeUnowned(state, matched, end)
