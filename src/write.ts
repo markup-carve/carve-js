@@ -1139,6 +1139,15 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   // A blank line separates groups, so earlier escape and form choices no longer affect readback.
   if (from > 0) clearGroupChoices(w)
   const group = document.children.slice(from, groupEnd(w, document.children, from))
+  const knownEscapes = simpleSpanForest(group)
+  if (run.path === 'plan' && knownEscapes.size > 0) {
+    for (const [node, offsets] of knownEscapes) w.escapes.set(node, offsets)
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    run.stats.planned++
+    run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), 0])
+    return from + group.length
+  }
   const reach = pairReach(group, w.escapes, EARLY)
   // Pair rules depend on text and escapes already chosen, so place their ordinary escapes before
   // the first write. The check below still handles a pair exposed by a later repair choice.
