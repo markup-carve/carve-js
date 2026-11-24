@@ -1923,7 +1923,11 @@ function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Nod
   if (next !== null && a.attrs !== undefined && !sameValue(e.attrs, a.attrs) && next.value.startsWith('{')) return escapeAt(c, next, 0)
   // C2-I-015: a backtick behind a closing run makes it longer, so the span reads on into the text behind it.
   // C2-I-090: a name character behind a mention or a tag makes the name longer.
-  if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
+  if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) {
+    if (!escapeAt(c, next, 0)) return false
+    c.lengthening.add(c.escapes[c.escapes.length - 1]!)
+    return true
+  }
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
   return escapeSmartSideAfterConstruct(c, es, i, next)
 }
