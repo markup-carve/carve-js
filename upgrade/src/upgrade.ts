@@ -759,6 +759,10 @@ function upgradeBase(input: string): UpgradeResult {
 
 /** Rewrite only source forms of the 0.1 host extensions the caller explicitly registered. */
 export function upgrade(input: string, registered: readonly RegisteredExtension[] = []): UpgradeResult {
+  return withUpgradeSession(() => upgradeWith(input, registered))
+}
+
+function upgradeWith(input: string, registered: readonly RegisteredExtension[]): UpgradeResult {
   const base = upgradeBase(input)
   if (registered.length === 0) return base
   const planned = respellExtensions(base.output, registered)

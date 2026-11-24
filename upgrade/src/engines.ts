@@ -32,12 +32,15 @@ interface UpgradeSession {
 
 let activeSession: UpgradeSession | null = null
 
-/** The upgrade is synchronous; repeated passes share the original 0.1 read for one call only. */
+/**
+ * The upgrade is synchronous; repeated passes share the original 0.1 read for one call only. A nested
+ * call joins the session already open, so one upgrade reads each text once (carve-js#5520).
+ */
 export function withUpgradeSession<T>(run: () => T): T {
-  const previous = activeSession
+  if (activeSession !== null) return run()
   activeSession = { trees: new Map<string, Node01>(), oldHtml: new Map<string, string>(),
     newHtml: [new Map<string, string>(), new Map<string, string>()] }
-  try { return run() } finally { activeSession = previous }
+  try { return run() } finally { activeSession = null }
 }
 
 /** A code point that takes two UTF-16 units, or a lone surrogate. */
