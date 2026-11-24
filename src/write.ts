@@ -521,7 +521,7 @@ function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): v
   // it is a reported opener rather than a C2-W-125 trial.
   const starts = check.source === null || check.trials.length === 0 ? new Map() : writtenTextStarts(check, group, check.source)
   check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, starts))
-  escapeKinds(check, group, w.closerKinds ? undefined : check.closers)
+  escapeKinds(check, group, w.closerKinds ? undefined : new Set([...check.closers, ...check.readOn]))
   escapePartnerClosers(check, group)
 }
 

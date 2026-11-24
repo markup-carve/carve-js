@@ -131,6 +131,11 @@ export interface Check {
   codeTrials: Set<[TextNode, number]>
   /** Escapes of a closer that ended a node early (C2-W-125, case five); in a probe round they give no kind (C2-W-088). */
   closers: Set<[TextNode, number]>
+  /**
+   * C2-W-125, case one: a brace in the content of a tree node that the parse read on past its closer. A span on the
+   * tree node's own opener is that node (C2-W-088), so the backslash gives no kind.
+   */
+  readOn: Set<[TextNode, number]>
   /** The closers among `closers` that ended a braced emphasis or strong early, each with that node (C2-W-093). */
   earlyClosers: [Node, [TextNode, number]][]
   /** The inline nodes around the content under comparison, innermost last, each as its list and its place there. */
@@ -167,7 +172,8 @@ export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
-    cut: false, codeTrials: new Set(), leadTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(),
+    cut: false, codeTrials: new Set(), leadTrials: new Set(), closers: new Set(), readOn: new Set(), earlyClosers: [], around: [],
+    reported: new Set(),
     constructs: new Set(), behind: new Set(), lengthening: new Set(), pairedLengthening: new Set(), capped: [],
     earlyCloser: false, notesDone: new Map(), note: null,
     parsed: [], parsedAt: 0, formsAround: false,
@@ -968,7 +974,7 @@ function probeRound(c: Check, w: Writer, e: Node, expected: readonly Node[], fla
   // A closer that ended a node early is no reported construct: its backslash is C2-W-125's and gives no kind (CC-1568).
   if (w.kindRounds) {
     const leaf: Node[] = [{ type: 'paragraph', children: expected } as ParagraphNode]
-    escapeKinds(probe, leaf, probe.closers)
+    escapeKinds(probe, leaf, new Set([...probe.closers, ...probe.readOn]))
     escapePartnerClosers(probe, leaf)
   }
   extendChains(probe)
@@ -1858,8 +1864,16 @@ function readOnPastEnd(c: Check, owner: Node): void {
   }
   // C2-W-125: repair a bracketed owner's content pairing first. Otherwise a brace before the closing mark can
   // read as a braced opener and takes the mark before case five tries the closer. Read the content again next round.
-  if ((BRACKETED.has(owner.type) && escapeInContent(c, owner)) || escapeOpeningBrace(c, owner) ||
-    escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
+  if (BRACKETED.has(owner.type) && escapeInContent(c, owner)) {
+    c.cut = true
+    return
+  }
+  if (escapeOpeningBrace(c, owner)) {
+    c.readOn.add(c.escapes[c.escapes.length - 1]!)
+    c.cut = true
+    return
+  }
+  if (escapeInContent(c, owner) || escapeEnd(c, lastText(owner), true)) {
     c.cut = true
     return
   }
@@ -2044,6 +2058,24 @@ function bracketsBalance(c: Check, e: TextNode, from: number, to: number): boole
   return depth === 0
 }
 
+/** The escapes `escapes` of a construct's opener: a case-five repair in a note, else an opener, and a read-on brace. */
+function keepOpenerEscapes(c: Check, escapes: readonly [TextNode, number][], caret: boolean, owner: Node): void {
+  for (const escape of escapes) {
+    (caret ? c.closers : c.constructs).add(escape)
+    if (!caret && readsIntoCloser(owner, escape)) c.readOn.add(escape)
+  }
+}
+
+/**
+ * C2-W-125, case one, C2-W-088: the brace that ends the content of `owner` reads with the closing mark of `owner` as a
+ * braced opener, so `owner` reads on. That is a repair of the tree's own node and gives no kind; like an opener, it
+ * goes before the repairs beside it.
+ */
+function readsIntoCloser(owner: Node, [text, at]: [TextNode, number]): boolean {
+  return text.value[at] === '{' && at === text.value.length - 1 && lastText(owner) === text &&
+    !BRACKETED.has(owner.type) && CLOSING_MARKS.has(owner.type)
+}
+
 /** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
 function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor, owner: Node): boolean {
   // C2-W-125: behind a content that ended early, the parse can open a construct on the markup of the tree.
@@ -2060,7 +2092,7 @@ function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: 
     // nothing to escape
   } else if (quoted) escapeAt(c, e, at.vi + 1)
   else escapeOpener(c, es, at.i, at.vi, a)
-  for (const escape of c.escapes.slice(before)) (caret ? c.closers : c.constructs).add(escape)
+  keepOpenerEscapes(c, c.escapes.slice(before), caret, owner)
   if (pos === undefined) return false
   if (!quoted) recordCappedRun(c, e, at.vi, end, openerShift(a))
   if (end < 0) {
