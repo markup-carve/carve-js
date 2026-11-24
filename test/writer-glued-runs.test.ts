@@ -29,7 +29,7 @@ describe('glued backtick runs', () => {
 
   it('a two-backtick fence reads on past a raw and a math span to the next run of two', () => {
     const tree = documentOf(paragraph(code('`q'), raw('r'), math('m'), raw('r')))
-    expect(written(tree)).toBe('`` `q ```r`{=html}$`m``r`{=html}\n')
+    expect(written(tree)).toBe('`` `q```r`{=html}$`m``r`{=html}\n')
     expect(losses(tree)).toEqual([`field-unspellable ${at(0)}/value`,
       `structure-unspellable ${at(1)}`, `structure-unspellable ${at(2)}`, `structure-unspellable ${at(3)}`])
   })
@@ -45,7 +45,7 @@ describe('glued backtick runs', () => {
 
   it('a span the leftover of a lost node opens takes the siblings before its own end (carve-js#5320)', () => {
     const tree = documentOf(paragraph(math('m'), raw('r`'), math('m'), code('c'), math('m')))
-    expect(written(tree)).toBe('$`m``` r` ``{=html}$`m``c`$`m`\n')
+    expect(written(tree)).toBe('$`m```r` ``{=html}$`m``c`$`m`\n')
     expect(losses(tree)).toEqual([`field-unspellable ${at(0)}/value`, `structure-unspellable ${at(1)}`,
       `structure-unspellable ${at(2)}`, `structure-unspellable ${at(3)}`, `structure-unspellable ${at(4)}`])
   })
@@ -59,13 +59,13 @@ describe('glued backtick runs', () => {
 
   it('a span that starts inside a lost span reads on and takes the siblings before its end (carve-js#5322)', () => {
     const first = documentOf(paragraph(math('q`'), code('m')))
-    expect(written(first)).toBe('$`` q` ```m`\n')
+    expect(written(first)).toBe('$``q` ```m`\n')
     expect(losses(first)).toEqual([`structure-unspellable ${at(0)}`, `structure-unspellable ${at(1)}`])
     const second = documentOf(paragraph(raw('`q'), math('`q'), code('r')))
-    expect(written(second)).toBe('`` `q ``{=html}$`` `q ```r`\n')
+    expect(written(second)).toBe('`` `q``{=html}$`` `q```r`\n')
     expect(losses(second)).toEqual([`structure-unspellable ${at(1)}`, `structure-unspellable ${at(2)}`])
     const third = documentOf(paragraph(math('` `'), code('a``b'), raw('q`'), raw('m'), code('x`')))
-    expect(written(third)).toBe('$`` ` ` ```a``b``` q` ``{=html}`m`{=html}`` x` ``\n')
+    expect(written(third)).toBe('$`` ` ` ```a``b```q` ``{=html}`m`{=html}``x` ``\n')
     expect(losses(third)).toEqual([`field-unspellable ${at(0)}/value`, `structure-unspellable ${at(1)}`,
       `structure-unspellable ${at(2)}`, `structure-unspellable ${at(3)}`, `structure-unspellable ${at(4)}`])
   })

@@ -268,13 +268,6 @@ function runLengths(value: string, code: number): number[] {
   return lengths
 }
 
-/** C2-I-016: whether a reader would take one space from each end of `value`. */
-function losesPadding(value: string): boolean {
-  if (!value.startsWith(' ') || !value.endsWith(' ')) return false
-  for (let at = 0; at < value.length; at++) if (value.charCodeAt(at) !== SPACE) return true
-  return false
-}
-
 /** C2-W-059: a braced comment, written `{%%}` when its value is empty. */
 export function bracedComment(value: string): string {
   return value === '' ? '{%%}' : `{% ${value} %}`
@@ -286,17 +279,18 @@ export function codeSpan(value: string): string {
   let length = 1
   while (taken[length] !== undefined) length++
   const run = '`'.repeat(length)
-  const padded = value.startsWith('`') || value.endsWith('`') || losesPadding(value)
-  return padded ? `${run} ${value} ${run}` : `${run}${value}${run}`
+  const open = value.startsWith('`') ? ' ' : ''
+  const close = value.endsWith('`') ? ' ' : ''
+  return `${run}${open}${value}${close}${run}`
 }
 
 /**
- * C2-W-077, C2-W-117: a value that starts with a line break and ends with a backtick loses the pad before the line
- * break (C2-I-002), so it has no spelling; the padded form is written and reported.
+ * C2-W-077, C2-W-117: C2-I-016 removes a space between a backtick and the run, so a value that starts with a space and a
+ * backtick or ends with a backtick and a space has no spelling; it is written unpadded on that side and reported.
  */
 function spanValue(w: Writer, node: Node, value: string, flags: number): string {
   const spelled = cellValue(w, node, value, flags)
-  if (spelled.startsWith('\n') && spelled.endsWith('`')) lose(w, node, 'value')
+  if (spelled.startsWith(' `') || spelled.endsWith('` ')) lose(w, node, 'value')
   return codeSpan(spelled)
 }
 

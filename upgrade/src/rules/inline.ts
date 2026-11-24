@@ -41,25 +41,37 @@ function runStart(src: string, start: number): number {
   return at
 }
 
+/** A run in a cell is closed only by the late pass, but a value with no spelling is reported in the first. */
+function inCell(visit: Visit): boolean {
+  return OPEN_RUNS.includes(visit.node.type) && visit.node.pos !== undefined && ancestor(visit, 'table') !== null
+}
+
 function unclosedRun(ctx: Context, visit: Visit): void {
   const node = visit.node
-  if (!canReportRun(visit, ctx.late)) return
+  const reportable = canReportRun(visit, ctx.late)
+  if (!reportable && !inCell(visit)) return
   const { startOffset: start, endOffset: end, startLine } = node.pos!
   const at = runStart(ctx.src, start)
   if (ctx.src[at] !== '`') return
   let width = 0
   while (ctx.src[at + width] === '`') width++
   const openerEnd = at + width
-  const mark = '`'.repeat(width)
   if (hasClosingRun(ctx.src, openerEnd, end, width)) return
   // The U-105 comment before a run that opens its paragraph leaves the run to close.
   if (ctx.findings.some((finding) => finding.edit !== null && start <= finding.offset && finding.offset <= end
     && !(finding.edit.entry === 'U-105' && finding.edit.start === start && finding.edit.end === start))) return
   // An empty run is only reported, so a quote can hold it too.
   if (end > openerEnd) {
-    if (canCloseRun(visit, ctx.late)) closeRun(ctx, startLine, start, openerEnd, end, mark)
+    if (unspellableRun(ctx.src, openerEnd, end)) noteRange(ctx, 'U-439', startLine, start, end, 'the 0.1 inline value has no 0.2 spelling')
+    else if (reportable && canCloseRun(visit, ctx.late)) closeRun(ctx, end, '`'.repeat(width))
     return
   }
+  if (reportable) emptyRun(ctx, visit)
+}
+
+function emptyRun(ctx: Context, visit: Visit): void {
+  const node = visit.node
+  const { startOffset: start, endOffset: end, startLine } = node.pos!
   // U-440: 0.1 wrote nothing for an empty literal-text run, so a late pass removes one with content before it
   // or in a cell, which may be empty; the complete HTML check keeps the removal only where it holds.
   if (ctx.late && node.type === 'literal_inline'
@@ -75,17 +87,14 @@ function hasContent(node: Node01): boolean {
   return node.type !== 'text' || String(node.value).trim() !== ''
 }
 
-function closeRun(ctx: Context, line: number, start: number, openerEnd: number, end: number, mark: string): void {
-  // C2-I-016: a value that starts or ends with a backtick is padded with one space on each side.
-  const pad = ctx.src[end - 1] === '`'
-  // C2-W-077: the pad before a leading line break is trailing whitespace, so such a value has no spelling.
-  if (pad && (ctx.src[openerEnd] === '\n' || ctx.src[openerEnd] === '\r')) {
-    noteRange(ctx, 'U-439', line, start, end, 'the 0.1 inline value starts with a line break and ends with a backtick')
-    return
-  }
-  const from = pad ? openerEnd : end
-  change(ctx, 'U-258', from, end, pad ? ` ${ctx.src.slice(openerEnd, end)} ${mark}` : mark,
-    'unclosed 0.1 inline run closed at its content end')
+/** C2-W-077: C2-I-016 removes a space between a backtick and the run, so such a value has no spelling. */
+function unspellableRun(src: string, openerEnd: number, end: number): boolean {
+  return (src[openerEnd] === ' ' && src[openerEnd + 1] === '`') || src.endsWith('` ', end)
+}
+
+function closeRun(ctx: Context, end: number, mark: string): void {
+  // C2-W-077: a value that ends with a backtick is padded on that side only.
+  change(ctx, 'U-258', end, end, ctx.src[end - 1] === '`' ? ` ${mark}` : mark, 'unclosed 0.1 inline run closed at its content end')
 }
 
 interface Bare {
@@ -348,6 +357,46 @@ function rawHtml(ctx: Context, node: Node01): void {
   }
 }
 
+const PADDED_SPANS = new Set(['code', 'math', 'literal_inline', 'raw_inline'])
+
+/** The offset of the first run of exactly `width` backticks from `from` before `end`, or -1. */
+function closingRunAt(src: string, from: number, end: number, width: number): number {
+  for (let at = from; at < end; at++) {
+    if (src[at] !== '`') continue
+    let run = 0
+    while (src[at + run] === '`') run++
+    if (run === width) return at
+    at += run - 1
+  }
+  return -1
+}
+
+/**
+ * U-441, C2-I-016: 0.1 removed one space from each end when both ends held one; 0.2 removes only a space next to a
+ * backtick. Each pad 0.1 removed and 0.2 keeps is deleted, unless the 0.1 value has no 0.2 spelling (C2-W-077).
+ */
+function paddedSpan(ctx: Context, node: Node01): void {
+  const { startOffset: start, endOffset: end, startLine } = node.pos!
+  const at = runStart(ctx.src, start)
+  if (ctx.src[at] !== '`') return
+  let width = 0
+  while (ctx.src[at + width] === '`') width++
+  const open = at + width
+  const close = closingRunAt(ctx.src, open, end, width)
+  if (close < 0) return
+  const raw = ctx.src.slice(open, close)
+  const padded = raw.startsWith(' ') && raw.endsWith(' ') && /[^ ]/u.test(raw)
+  const value = padded ? raw.slice(1, -1) : raw
+  if (value.startsWith(' `') || value.endsWith('` ')) {
+    noteRange(ctx, 'U-441', startLine, start, end, 'the 0.1 code value has no 0.2 spelling')
+    return
+  }
+  const keepsStart = padded && raw[1] !== '`'
+  const keepsEnd = padded && raw[raw.length - 2] !== '`'
+  if (keepsStart) change(ctx, 'U-441', open, open + 1, '', 'padding space 0.1 removed from a code span')
+  if (keepsEnd) change(ctx, 'U-441', close - 1, close, '', 'padding space 0.1 removed from a code span')
+}
+
 function inlineNode(ctx: Context, visit: Visit): void {
   const node = visit.node
   if (node.pos === undefined) return
@@ -362,6 +411,7 @@ function inlineNode(ctx: Context, visit: Visit): void {
   else if (node.type === 'tag') { sigil(ctx, node); unattachedId(ctx, visit) }
   else if (SIGILS.has(node.type)) sigil(ctx, node)
   else if (node.type === 'raw_inline' || node.type === 'raw_block') rawHtml(ctx, node)
+  if (PADDED_SPANS.has(node.type)) paddedSpan(ctx, node)
 }
 
 export function inline(ctx: Context): void {

@@ -138,10 +138,10 @@ describe('the comparison of section 1', () => {
 })
 
 describe('the report', () => {
-  it('holds the 335 entries of the upgrade map with their classes', () => {
+  it('holds the 336 entries of the upgrade map with their classes', () => {
     const count = (name: string): number => ENTRIES.filter((entry) => entry.class === name).length
     expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([
-      335, 151, 28, 128, 28
+      336, 152, 28, 128, 28
     ])
     // The tool's own entries, for cases the specification does not decide, stand apart.
     expect(EXTENSIONS.map((entry) => entry.id)).toEqual(['X-001', 'X-002', 'X-003'])

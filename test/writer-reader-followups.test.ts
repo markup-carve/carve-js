@@ -65,15 +65,27 @@ describe('a code span whose value starts with a line break', () => {
     }
   })
 
-  it('C2-W-077, C2-W-117: a value that starts with a line break and ends with a backtick is written padded and reported', () => {
-    for (const [src, written] of [['x `a`', 'x `` \n` ``\n'], ['x !`a`', 'x !`` \n` ``\n'], ['x $`a`', 'x $`` \n` ``\n']]) {
+  it('C2-W-077: a value that starts with a line break and ends with a backtick is padded on its closing side only', () => {
+    for (const [src, written] of [['x `a`', 'x ``\n` ``\n'], ['x !`a`', 'x !``\n` ``\n'], ['x $`a`', 'x $``\n` ``\n']]) {
       const tree = parse(src!)
       const paragraph = tree.children[0]
       if (paragraph?.type !== 'paragraph') throw new Error(src)
       Object.assign(paragraph.children[1]!, { value: '\n`' })
       const out = writeWithDiagnostics(tree, { check: false })
       expect(out.source, src).toBe(written)
-      expect(out.diagnostics.map((entry) => entry.code), src).toEqual(['field-unspellable'])
+      expect(out.diagnostics.map((entry) => entry.code), src).toEqual([])
+      expect(parse(out.source).children[0], src).toMatchObject({ children: [{}, { value: '\n`' }] })
+    }
+  })
+
+  it('C2-W-077, C2-W-117: a value that starts with a space and a backtick or ends with a backtick and a space is reported', () => {
+    for (const value of [' `a', 'a` ']) {
+      const tree = parse('x `a`')
+      const paragraph = tree.children[0]
+      if (paragraph?.type !== 'paragraph') throw new Error(value)
+      Object.assign(paragraph.children[1]!, { value })
+      const out = writeWithDiagnostics(tree, { check: false })
+      expect(out.diagnostics.map((entry) => entry.code), value).toEqual(['field-unspellable'])
     }
   })
 

@@ -859,8 +859,8 @@ describe('canonical forms: inline', () => {
     expect(write(documentOf(paragraph(code('a``b`c'))))).toBe('```a``b`c```\n')
   })
 
-  it('C2-W-077: a code span is padded where its content starts or ends with a backtick or a space that would be removed', () => {
-    expect(write(documentOf(paragraph(code('`'), ' ', code('`a'), ' ', code(' a '), ' ', code(' a'))))).toBe('`` ` `` `` `a `` `  a  ` ` a`\n')
+  it('C2-W-077: a code span is padded only on a side where its content is a backtick', () => {
+    expect(write(documentOf(paragraph(code('`'), ' ', code('`a'), ' ', code(' a '), ' ', code(' a'))))).toBe('`` ` `` `` `a`` ` a ` ` a`\n')
   })
 
   it('C2-W-078: a smart-punctuation node is written as its source', () => {

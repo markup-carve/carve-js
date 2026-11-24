@@ -61,13 +61,12 @@ function opaqueMask(output: string): Uint8Array {
  * C2-I-017, U-258: a backtick run with no closing run of its length in its content is text in 0.2, where 0.1 read code
  * to the end of the content. Each candidate closes the first such run at one line end of its paragraph.
  */
-function closingCandidates(output: string, at: number, length: number, ends: number[], id: string): Candidate[] {
+function closingCandidates(output: string, length: number, ends: number[], id: string): Candidate[] {
   const found: Candidate[] = []
   const mark = '`'.repeat(length)
   for (const end of ends) found.push({ id, output: output.slice(0, end) + mark + output.slice(end) })
-  // C2-I-016: a value that starts or ends with a backtick needs a space on each side.
-  const open = at + length
-  for (const end of ends) found.push({ id, output: `${output.slice(0, open)} ${output.slice(open, end)} ${mark}${output.slice(end)}` })
+  // C2-W-077: a value that ends with a backtick needs a space before the closing run.
+  for (const end of ends) found.push({ id, output: `${output.slice(0, end)} ${mark}${output.slice(end)}` })
   return found
 }
 
@@ -90,7 +89,7 @@ export function closedRunCandidates(output: string, id = 'U-258', gate: Gate = O
       at = close + length - 1
       continue
     }
-    return gate.at(at, limit) ? closingCandidates(output, at, length, ends, id) : found
+    return gate.at(at, limit) ? closingCandidates(output, length, ends, id) : found
   }
   return found
 }

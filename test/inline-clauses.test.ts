@@ -129,14 +129,16 @@ describe('code spans', () => {
     expect(inline('`a', 'b` c')).toBe('code"a|b" " c"')
   })
 
-  it('C2-I-016: one space is removed from each end when both are there', () => {
-    expect(inline('` a `')).toBe('code"a"')
-    expect(inline('`  a  `')).toBe('code" a "')
+  it('C2-I-016: only a space between a backtick and the run is removed', () => {
+    expect(inline('` a `')).toBe('code" a "')
+    expect(inline('`  a  `')).toBe('code"  a  "')
     expect(inline('` a`')).toBe('code" a"')
     expect(inline('`a `')).toBe('code"a "')
     expect(inline('` `')).toBe('code" "')
     expect(inline('`   `')).toBe('code"   "')
     expect(inline('`` ` ``')).toBe('code"`"')
+    expect(inline('`` `a ``')).toBe('code"`a "')
+    expect(inline('`` a` ``')).toBe('code" a`"')
   })
 
   it('C2-I-017: a backtick run with no closing run of its length is text, and the scan goes on behind it', () => {
@@ -160,7 +162,7 @@ describe('code spans', () => {
 describe('math spans', () => {
   it('C2-I-019: `$` and `$$` before a code span make math', () => {
     expect(inline('$`x` $$`y` $5 $ `z` $$$`w`')).toBe('math"x" " " dmath"y" " $5 $ " code"z" " $" dmath"w"')
-    expect(inline('$`` a`b ``')).toBe('math"a`b"')
+    expect(inline('$`` a`b ``')).toBe('math" a`b "')
     expect(inline('$`*x*`')).toBe('math"*x*"')
   })
 
@@ -173,7 +175,7 @@ describe('math spans', () => {
 describe('raw inline', () => {
   it('C2-I-021: a closed code span with `{=name}` glued to it is raw inline', () => {
     expect(inline('`<b>`{=html}')).toBe('raw(html)"<b>"')
-    expect(inline('`` a ` b ``{=x_-1}')).toBe('raw(x_-1)"a ` b"')
+    expect(inline('`` a ` b ``{=x_-1}')).toBe('raw(x_-1)" a ` b "')
     // The name is a raw format name (C2-B-225), which starts with an ASCII letter.
     expect(inline('`x`{=_a}')).toBe('code"x" "{=_a}"')
     expect(inline('`a`{=1x} `a`{=} `a`{=x y} `a` {=x}')).toBe('code"a" "{=1x} " code"a" "{=} " code"a" "{=x y} " code"a" " {=x}"')

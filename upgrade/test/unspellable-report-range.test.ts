@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { canWriteUpgrade, upgrade } from '../src/index.ts'
 
-describe('U-439: an unclosed 0.1 value that starts with a line break and ends with a backtick', () => {
+describe('U-439: an unclosed 0.1 value that starts with a space and a backtick', () => {
   it.each([
-    ['a ``\nb`\n', 2],
-    ['a !``\nb`\n', 2],
-    ['a $``\nb`\n', 2],
-    ['- ```\n+  y\n+   ```\n``\n', 15],
-  ])('C2-W-077 reports the run instead of padding it: %j', (source, startOffset) => {
+    ['a `` `b\n', 2],
+    ['a !`` `b\n', 2],
+    ['a $`` `b\n', 2],
+  ])('C2-W-077 reports the run instead of closing it: %j', (source, startOffset) => {
     const result = upgrade(source)
     expect(result.output).toBe(source)
     expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-439', class: 'report',
@@ -15,10 +14,18 @@ describe('U-439: an unclosed 0.1 value that starts with a line break and ends wi
     expect(result.records.some((record) => record.entry === 'U-258')).toBe(false)
     expect(canWriteUpgrade(result)).toBe(false)
   })
+})
 
-  it('still closes a value that starts with a line break and ends with a letter', () => {
-    const result = upgrade('a ``\nb\n')
-    expect(result.output).toBe('a ``\nb``\n')
+describe('U-258: an unclosed 0.1 value that starts with a line break', () => {
+  it.each([
+    ['a ``\nb`\n', 'a ``\nb` ``\n'],
+    ['a !``\nb`\n', 'a !``\nb` ``\n'],
+    ['a $``\nb`\n', 'a $``\nb` ``\n'],
+    ['- ```\n+  y\n+   ```\n``\n', '- ```\n+  y\n+   ```\n`` ```\n'],
+    ['a ``\nb\n', 'a ``\nb``\n'],
+  ])('C2-W-077 pads only the closing side: %j', (source, output) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(output)
     expect(result.check).toBe('pass')
   })
 })
@@ -63,5 +70,35 @@ describe('the explanation of an empty run cites the entry that reported it', () 
     expect(result.check).toBe('explained')
     expect(result.records).toContainEqual(expect.objectContaining({ entry: 'upgrade-difference',
       message: `the HTML matches after the declared transformations of ${entry}` }))
+  })
+})
+
+describe('U-441: a 0.1 code span padded on both sides', () => {
+  it.each([
+    ['a ` x ` b\n', 'a `x` b\n'],
+    ['> a ` x\n> y ` b\n', '> a `x\n> y` b\n'],
+    ['a `` x` `` b\n', 'a ``x` `` b\n'],
+    ['$` y ` !` z ` ` w `{=html}\n', '$`y` !`z` `w`{=html}\n'],
+    ['| a ` x ` |\n', '| a `x` |\n'],
+  ])('C2-I-016 removes the pads 0.1 removed: %j', (source, output) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(output)
+    expect(result.check).toBe('pass')
+  })
+
+  it.each([
+    ['a ``  `x `` b\n', 2, 11],
+    ['a ` ``b` c\n', 2, 8],
+  ])('C2-W-077 reports a 0.1 value that starts with a space and a backtick: %j', (source, startOffset, endOffset) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(source)
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-441', class: 'report', range: { startOffset, endOffset } }))
+    expect(canWriteUpgrade(result)).toBe(false)
+  })
+
+  it.each(['> x ` `` y\n', '| x ` `` y |\n'])('U-439 reports an unclosed run with no spelling in a quote or a cell: %j', (source) => {
+    const result = upgrade(source)
+    expect(result.records.some((record) => record.entry === 'U-439' && record.class === 'report')).toBe(true)
+    expect(canWriteUpgrade(result)).toBe(false)
   })
 })
