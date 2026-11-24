@@ -1,6 +1,7 @@
 import { type Node } from '../src/ast.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { escaped, isWord } from '../src/pair-marks.ts'
+import { type AttributeMemo, emptyMemo, readAttributeBlock } from '../src/attributes.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -145,6 +146,7 @@ interface OpenerScan {
   stack: number[]
   /** The paths of the bare strong and emphasis spans of the current leaf block. */
   bare: Set<string>
+  memo: AttributeMemo
   leaf: OpenerLeaf | null
   leaves: OpenerLeaf[]
 }
@@ -156,7 +158,7 @@ function openerScan(context: LintContext): OpenerScan {
   if (lastScan?.[0] === context) return lastScan[1]
   let scan = openerScans.get(context)
   if (scan === undefined) {
-    openerScans.set(context, scan = { path: null, start: 0, end: 0, scopes: [], stack: [0], bare: new Set(),
+    openerScans.set(context, scan = { path: null, start: 0, end: 0, scopes: [], stack: [0], bare: new Set(), memo: emptyMemo(),
       leaf: null, leaves: [] })
   }
   lastScan = [context, scan]
@@ -205,8 +207,23 @@ function collectOpeners(node: Node, path: string, range: [number, number], scan:
   }
   const leaf = scan.leaf
   if (leaf === null) return
-  if (node.type === 'text' || node.type === 'smart_punctuation') leaf.content.push(range[0], range[1], scope)
+  if (node.type === 'text') textContent(range, scope, scan, leaf, context.source)
+  else if (node.type === 'smart_punctuation') leaf.content.push(range[0], range[1], scope)
   else if (DELIMITED_SPANS.has(node.type)) spanMarks(node, range, scope, leaf, context)
+}
+
+/** C2-I-043: a valid attribute block left as text is still an atom, so no closer stands in it. */
+function textContent([start, end]: [number, number], scope: number, scan: OpenerScan, leaf: OpenerLeaf, source: string): void {
+  let from = start
+  for (let at = start; at < end; at++) {
+    if (source.charCodeAt(at) !== 0x7b) continue
+    const after = readAttributeBlock(source, at, end, scan.memo, null)
+    if (after < 0) continue
+    if (at > from) leaf.content.push(from, at, scope)
+    from = after
+    at = after - 1
+  }
+  if (end > from) leaf.content.push(from, end, scope)
 }
 
 /** The braced openers left as text in a text child of a bare strong or emphasis, collected in source order. */
