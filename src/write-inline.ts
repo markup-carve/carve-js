@@ -1043,6 +1043,11 @@ function markForm(w: Writer, node: Node, mark: string, next: Node | undefined, b
   }
 }
 
+/** C2-W-069, as `markForm` decides it: the text `after` behind a bare pair of `mark` keeps that pair from closing. */
+function bracedBy(after: Node | undefined, mark: string): boolean {
+  return (after?.type === 'text' && after.value.startsWith(mark)) || startsWithWord(after)
+}
+
 /** Whether the UTF-16 unit `code` is a word character; a surrogate half is not tested. */
 function wordCode(code: number): boolean {
   return code >= 0 && (code < 0xd800 || code > 0xdfff) && isWordCharacter(code)
@@ -1101,9 +1106,11 @@ function spanClosingBracket(w: Writer, node: TextNode, before: Node | undefined)
   if (!escapes.includes(closing)) w.escapes.set(node, [...escapes, closing].sort((a, b) => a - b))
 }
 
-function braceBesidePair(w: Writer, node: TextNode, next: Node | undefined, atEnd: boolean, flags: number): void {
-  const pairedNext = next?.type === 'strong' ? !bracedPair(w, next, flags, 2, IN_STRONG)
-    : next?.type === 'emphasis' && !bracedPair(w, next, flags, 1, IN_EMPHASIS)
+function braceBesidePair(w: Writer, node: TextNode, next: Node | undefined, after: Node | undefined, atEnd: boolean,
+  flags: number): void {
+  // C2-W-069: the text behind the pair can brace it (`markForm`), and a brace before a braced pair opens nothing more.
+  const pairedNext = next?.type === 'strong' ? !bracedPair(w, next, flags, 2, IN_STRONG) && !bracedBy(after, '*')
+    : next?.type === 'emphasis' && !bracedPair(w, next, flags, 1, IN_EMPHASIS) && !bracedBy(after, '/')
   const pairedEnd = atEnd && (flags & (IN_STRONG | IN_EMPHASIS)) !== 0
   if (!node.value.endsWith('{') || (!pairedNext && !pairedEnd)) return
   const at = node.value.length - 1
@@ -1118,7 +1125,7 @@ function placeEscapes(w: Writer, nodes: readonly Node[], at: number, end: number
     escapeGluedBacktick(w, node, nodes[at - 1])
     braceBeforeCommentCloser(w, node, nodes[end], nodes[end + 1], flags)
     spanClosingBracket(w, node, nodes[at - 1])
-    braceBesidePair(w, node, nodes[end], end === nodes.length, flags)
+    braceBesidePair(w, node, nodes[end], nodes[end + 1], end === nodes.length, flags)
   }
   // Behind an unescaped `!` the bracket reads as span text whatever the caret starts.
   if (node.type === 'span' && !afterBang) escapeLeadingCaret(w, node.children, flags)

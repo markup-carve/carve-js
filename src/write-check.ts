@@ -134,6 +134,10 @@ export interface Check {
   around: [readonly Node[], number, number][]
   /** Escapes of a construct a probe found running over the closers around its node: reported, so no trial (C2-W-088). */
   reported: Set<[TextNode, number]>
+  /** The escapes of the openers of constructs the parse holds and the tree does not (C2-W-088). */
+  constructs: Set<[TextNode, number]>
+  /** Escapes of a closing mark at the start of the text behind a node that took that text into its content (C2-W-093). */
+  behind: Set<[TextNode, number]>
   /** C2-I-118: the capped openers this round escaped, each with its text and the end of its construct there. */
   capped: [TextNode, number, number][]
   /** C2-W-125, case eight: a text `^[` kept bare while its early closer took the backslash in this round. */
@@ -155,7 +159,7 @@ export function createCheck(w: Writer): Check {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
     cut: false, codeTrials: new Set(), leadTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(),
-    capped: [], earlyCloser: false, notesDone: new Map(), note: null, parsed: [], parsedAt: 0,
+    constructs: new Set(), behind: new Set(), capped: [], earlyCloser: false, notesDone: new Map(), note: null, parsed: [], parsedAt: 0,
   }
 }
 
@@ -1552,7 +1556,10 @@ function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node)
     return false
   }
   // C2-W-093: the node before took this text into its content, its mark closing the node in place of the node's own.
-  if (at.vi === 0 && at.i > 0 && startsWithCloser(es[at.i - 1]!, es[at.i]) && escapeAt(c, es[at.i] as TextNode, 0)) return false
+  if (at.vi === 0 && at.i > 0 && startsWithCloser(es[at.i - 1]!, es[at.i]) && escapeAt(c, es[at.i] as TextNode, 0)) {
+    c.behind.add(c.escapes[c.escapes.length - 1]!)
+    return false
+  }
   // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
   if (at.vi === 0 && at.i > 0 && isBreak(es[at.i - 1])) escapeLineStart(c, es, openerLine(es, at.i), owner)
   else if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
@@ -1779,7 +1786,7 @@ function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: 
     // nothing to escape
   } else if (quoted) escapeAt(c, e, at.vi + 1)
   else escapeOpener(c, es, at.i, at.vi, a)
-  if (caret) for (const escape of c.escapes.slice(before)) c.closers.add(escape)
+  for (const escape of c.escapes.slice(before)) (caret ? c.closers : c.constructs).add(escape)
   if (pos === undefined) return false
   if (!quoted) recordCappedRun(c, e, at.vi, end, openerShift(a))
   if (end < 0) {
