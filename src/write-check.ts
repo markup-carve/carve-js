@@ -17,7 +17,7 @@ import {
   writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
-import { braceBlock, spelledValue } from './write-attributes.ts'
+import { braceBlock, isKey, spelledValue } from './write-attributes.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharacter } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
@@ -1012,6 +1012,85 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
  */
 function unformable(node: Node, flags: number): boolean {
   return node.type === 'span' && (flags & IN_CELL) === 0 && /[\r\n]/u.test(braceBlock(node))
+}
+
+/** Text of a simple span forest, with its potential openers. */
+function forestText(node: TextNode, inside: boolean, escapes: Map<TextNode, number[]>): boolean {
+  if (!inside || node.value !== '[ ') return false
+  const offsets: number[] = []
+  for (let at = node.value.indexOf('['); at >= 0; at = node.value.indexOf('[', at + 1)) offsets.push(at)
+  escapes.set(node, offsets)
+  return true
+}
+
+function forestWrapper(node: Node, inside: boolean): boolean {
+  return node.type === 'paragraph' || (!inside && (node.type === 'emphasis' || node.type === 'strong'))
+}
+
+/** Only the span attribute block is authored by this shortcut; other fields need the loss check. */
+function forestFieldsCanForm(node: Node): boolean {
+  if (node.data !== undefined || node.metadata !== undefined || node.lang !== undefined || node.dir !== undefined ||
+    node.pos !== undefined || node.segments !== undefined) return false
+  if (node.type !== 'span' && node.attrs !== undefined) return false
+  if (node.type === 'paragraph' && (node.role !== undefined || node.caption !== undefined)) return false
+  if (node.type === 'span' && !forestSpanAttrsCanForm(node)) return false
+  return true
+}
+
+/** A simple set of named values cannot be reframed as id, class, or language fields. */
+function forestKeyCanForm(key: string): boolean {
+  return isKey(key) && key === key.toLowerCase() && !['id', 'class', 'lang', 'dir'].includes(key)
+}
+
+function forestValueCanForm(value: string): boolean {
+  return !value.includes('\0') && !/[\uD800-\uDFFF]/u.test(value)
+}
+
+function forestSpanAttrsCanForm(node: Node): boolean {
+  if (node.type !== 'span') return false
+  const attrs = node.attrs
+  const pairs = attrs?.keyValues
+  if (attrs?.id !== undefined || attrs?.classes !== undefined || pairs === undefined || pairs.length === 0) return false
+  const seen = new Set<string>()
+  for (const [key, value] of pairs) {
+    if (!forestKeyCanForm(key) || !forestValueCanForm(value) || seen.has(key)) return false
+    seen.add(key)
+  }
+  return true
+}
+
+function forestNodeCanForm(node: Node, inside: boolean, escapes: Map<TextNode, number[]>): boolean {
+  if (!forestFieldsCanForm(node)) return false
+  if (node.type === 'span') return !unformable(node, 0) && !/[\[\]]/u.test(braceBlock(node))
+  if (node.type === 'text') return forestText(node, inside, escapes)
+  return forestWrapper(node, inside)
+}
+
+/** Every node the shortcut writes must be supported by a bracket opener in its subtree. */
+function forestNodesCanForm(scanned: readonly Node[], escapes: Map<TextNode, number[]>): boolean {
+  const hasOpener = new Map<Node, boolean>()
+  for (let at = scanned.length - 1; at >= 0; at--) {
+    const node = scanned[at]!
+    const found = node.type === 'text' ? escapes.has(node) : childNodes(node).some((child) => hasOpener.get(child))
+    if (node.type !== 'paragraph' && node.type !== 'text' && !found) return false
+    hasOpener.set(node, found)
+  }
+  return true
+}
+
+/** Independent formable span branches in one paragraph share a bracket kind in the repair. */
+export function simpleSpanForest(nodes: readonly Node[]): Map<TextNode, number[]> {
+  const escapes = new Map<TextNode, number[]>()
+  if (nodes.length !== 1 || nodes[0]?.type !== 'paragraph') return escapes
+  const pending: [Node, boolean][] = [[nodes[0], false]]
+  const scanned: Node[] = []
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
+    const [node, inside] = item
+    scanned.push(node)
+    if (!forestNodeCanForm(node, inside, escapes)) return new Map<TextNode, number[]>()
+    for (const child of childNodes(node)) pending.push([child, inside || node.type === 'span'])
+  }
+  return forestNodesCanForm(scanned, escapes) ? escapes : new Map<TextNode, number[]>()
 }
 
 /** Neither `e` nor a node around it can form, so no escape makes one form. */
