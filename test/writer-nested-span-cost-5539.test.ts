@@ -66,4 +66,15 @@ describe('nested span import cost (carve-js#5539, carve-js#5532)', () => {
       expect(planned.output).toEqual(repaired.output)
     }
   })
+
+  it('reports authored fields outside the formable span attributes', () => {
+    const children: Inline[] = [{ type: 'span', dir: 'rtl', attrs: { keyValues: [['title', 'ab']] },
+      children: [{ type: 'text', value: '[ ' }] }]
+    const document: DocumentNode = { type: 'document', astVersion: '2.0',
+      children: [{ type: 'paragraph', children }] }
+    const planned = writeTreeWithStats(document, undefined, 'plan', false)
+    const repaired = writeTreeWithStats(document, undefined, 'repair', false)
+    expect(planned.output).toEqual(repaired.output)
+    expect(planned.output.diagnostics.some((entry) => entry.code === 'field-unspellable')).toBe(true)
+  })
 })

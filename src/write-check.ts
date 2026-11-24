@@ -1028,6 +1028,22 @@ function forestWrapper(node: Node, inside: boolean): boolean {
   return node.type === 'paragraph' || (!inside && (node.type === 'emphasis' || node.type === 'strong'))
 }
 
+/** Only the span attribute block is authored by this shortcut; other fields need the loss check. */
+function forestFieldsCanForm(node: Node): boolean {
+  if (node.data !== undefined || node.metadata !== undefined || node.lang !== undefined || node.dir !== undefined ||
+    node.pos !== undefined || node.segments !== undefined) return false
+  if (node.type !== 'span' && node.attrs !== undefined) return false
+  if (node.type === 'paragraph' && (node.role !== undefined || node.caption !== undefined)) return false
+  return true
+}
+
+function forestNodeCanForm(node: Node, inside: boolean, escapes: Map<TextNode, number[]>): boolean {
+  if (!forestFieldsCanForm(node)) return false
+  if (node.type === 'span') return !unformable(node, 0) && !/[\[\]]/u.test(braceBlock(node))
+  if (node.type === 'text') return forestText(node, inside, escapes)
+  return forestWrapper(node, inside)
+}
+
 /** Every node the shortcut writes must be supported by a bracket opener in its subtree. */
 function forestNodesCanForm(scanned: readonly Node[], escapes: Map<TextNode, number[]>): boolean {
   const hasOpener = new Map<Node, boolean>()
@@ -1049,11 +1065,7 @@ export function simpleSpanForest(nodes: readonly Node[]): Map<TextNode, number[]
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
     const [node, inside] = item
     scanned.push(node)
-    if (node.type === 'span') {
-      if (unformable(node, 0) || /[\[\]]/u.test(braceBlock(node))) return new Map<TextNode, number[]>()
-    } else if (node.type === 'text') {
-      if (!forestText(node, inside, escapes)) return new Map<TextNode, number[]>()
-    } else if (!forestWrapper(node, inside)) return new Map<TextNode, number[]>()
+    if (!forestNodeCanForm(node, inside, escapes)) return new Map<TextNode, number[]>()
     for (const child of childNodes(node)) pending.push([child, inside || node.type === 'span'])
   }
   return forestNodesCanForm(scanned, escapes) ? escapes : new Map<TextNode, number[]>()
