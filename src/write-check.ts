@@ -135,6 +135,14 @@ export interface Check {
   earlyCloser: boolean
   /** C2-W-125, case eight: the text `^[` whose early closer this round already escaped, by text node. */
   notesDone: Map<TextNode, Set<number>>
+  /**
+   * In a probe of the content of an inline footnote whose parse in its context holds no caret pair, that note: a caret
+   * pair the probe reads opens nothing there (C2-I-089).
+   */
+  note: Node | null
+  /** The parsed list and the place in it of the node under respelling, for the test of `note`. */
+  parsed: readonly Node[]
+  parsedAt: number
 }
 
 export function createCheck(w: Writer): Check {
@@ -142,7 +150,7 @@ export function createCheck(w: Writer): Check {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
     cut: false, codeTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(), capped: [],
-    earlyCloser: false, notesDone: new Map(),
+    earlyCloser: false, notesDone: new Map(), note: null, parsed: [], parsedAt: 0,
   }
 }
 
@@ -678,7 +686,22 @@ function escapeTextNote(c: Check, es: readonly Node[], i: number): boolean {
 function escapeLoneBracket(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]!
   if ((e.type !== 'inline_footnote' && e.type !== 'inline_extension') || !('children' in e)) return false
-  // Each bracket that no later `]` of the content closes; where every one is closed, the first.
+  const open = unclosedOpeners(c, e)
+  let asked = false
+  // C2-W-088: where the parse holds no construct of its own there, the backslash is one of C2-W-125 and gives no kind.
+  const kindless = !readsBracketConstruct(c, e)
+  for (const [text, at] of open) asked = (kindless ? escapeBracket(c, text, at) : escapeAt(c, text, at)) || asked
+  return asked || escapeMark(c, e.children as Node[], 0, 0, '[')
+}
+
+function escapeUnclosedOpeners(c: Check, e: Node): boolean {
+  let asked = false
+  for (const [text, at] of unclosedOpeners(c, e)) asked = escapeAt(c, text, at) || asked
+  return asked
+}
+
+/** Each bracket of the content of `e` that no later `]` of it closes. */
+function unclosedOpeners(c: Check, e: Node): [TextNode, number][] {
   const open: [TextNode, number][] = []
   for (const text of textsBelow(e)) {
     for (let at = 0; at < text.value.length; at++) {
@@ -688,9 +711,7 @@ function escapeLoneBracket(c: Check, es: readonly Node[], i: number): boolean {
       else open.pop()
     }
   }
-  let asked = false
-  for (const [text, at] of open) asked = escapeAt(c, text, at) || asked
-  return asked || escapeMark(c, e.children as Node[], 0, 0, '[')
+  return open
 }
 
 /** The flags the content of `e` is written with. */
@@ -782,7 +803,14 @@ function probeRound(c: Check, w: Writer, e: Node, expected: readonly Node[], fla
   const probe = createCheck(w)
   probe.flags = flags
   probe.source = source
+  if (e.type === 'inline_footnote' && !readsBracketConstruct(c, e)) probe.note = e
   compareInlines(probe, expected, block.children, e)
+  // C2-W-125, case five: the lone brackets of such a note keep it open in its context, which the probe does not read.
+  if (probe.note !== null) {
+    const before = probe.escapes.length
+    escapeUnclosedOpeners(probe, probe.note)
+    for (const escape of probe.escapes.slice(before)) probe.closers.add(escape)
+  }
   // C2-W-088: a probe round escapes every opener of each kind its parse reports in the probed leaf block, as a round
   // of the group does; where that loses a node, the group runs again without kinds (CC-1633), and so do its probes.
   // A closer that ended a node early is no reported construct: its backslash is C2-W-125's and gives no kind (CC-1568).
@@ -1529,7 +1557,11 @@ function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: C
   else if (at.j + 1 >= as.length && isPaired(owner) && !joinsNext(es, at.i) && !holdsSpelling(c, es[at.i]!, as[at.j]!, at.aj)) {
     closedEarly(c, es, at.i, 0, owner)
   }
-  else return respell(c, es, at.i) && stepOver(c, es, as, at)
+  else {
+    c.parsed = as
+    c.parsedAt = at.j
+    return respell(c, es, at.i) && stepOver(c, es, as, at)
+  }
   return false
 }
 
@@ -1656,16 +1688,66 @@ export function escapeCappedRun(c: Check): void {
   }
 }
 
+/** C2-I-089: a caret pair that a probe of note content reads, where the note's parse in its context holds none. */
+function inNoteOnly(c: Check, a: Node): boolean {
+  return c.note !== null && (a.type === 'footnote_ref' || a.type === 'inline_footnote')
+}
+
+const BRACKET_CONSTRUCTS: ReadonlySet<string> = new Set(['footnote_ref', 'inline_footnote', 'link', 'span', 'image', 'inline_extension'])
+
+/**
+ * Whether the parse in its context reads a bracket construct where the note `e` is written: in
+ * the nodes from the place of `e` on whose start lies within twice the length of its text and its sigil, which bounds
+ * its written form with every character escaped.
+ */
+function readsBracketConstruct(c: Check, e: Node): boolean {
+  const list = c.parsed
+  const first = list[c.parsedAt]
+  if (first === undefined) return false
+  const span = 2 * (textsBelow(e).reduce((total, text) => total + utf8Length(text.value), 0) + 3)
+  const stop = (first.pos?.startOffset ?? 0) + span
+  for (let at = c.parsedAt; at < list.length; at++) {
+    const node = list[at]!
+    if (at > c.parsedAt && (node.pos === undefined || node.pos.startOffset >= stop)) break
+    const pending = [node]
+    for (let below = pending.pop(); below !== undefined; below = pending.pop()) {
+      if (BRACKET_CONSTRUCTS.has(below.type)) return true
+      pending.push(...childNodes(below))
+    }
+  }
+  return false
+}
+
+/** Whether the bare brackets of `e` in `[from, to)` close each other as ordinary brackets. */
+function bracketsBalance(c: Check, e: TextNode, from: number, to: number): boolean {
+  let depth = 0
+  for (let at = from; at < to; at++) {
+    const char = e.value[at]
+    if ((char !== '[' && char !== ']') || isEscaped(c, e, at)) continue
+    depth += char === '[' ? 1 : -1
+    if (depth < 0) return false
+  }
+  return depth === 0
+}
+
 /** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
 function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor, owner: Node): boolean {
   // C2-W-125: behind a content that ended early, the parse can open a construct on the markup of the tree.
   if (c.cut) return false
   const quoted = comparisonBehindQuote(es[at.i - 2], es[at.i - 1], e, at.vi, a)
-  if (quoted) escapeAt(c, e, at.vi + 1)
-  else escapeOpener(c, es, at.i, at.vi, a)
   const pos = a.pos
+  const end = pos === undefined ? -1 : spelledEnd(c.w, e, constructStart(e, es, at, a, owner), pos.endOffset - pos.startOffset, c.flags)
+  const caret = inNoteOnly(c, a)
+  const before = c.escapes.length
+  // C2-I-089: a probe reads the content of a note out of it, where a caret pair opens a construct. In the note it opens
+  // nothing and its brackets are ordinary: a pair of them stays bare, and a lone one takes a backslash of C2-W-125,
+  // case five, which gives no kind (C2-W-088).
+  if (caret && end >= 0 && bracketsBalance(c, e, at.vi, end)) {
+    // nothing to escape
+  } else if (quoted) escapeAt(c, e, at.vi + 1)
+  else escapeOpener(c, es, at.i, at.vi, a)
+  if (caret) for (const escape of c.escapes.slice(before)) c.closers.add(escape)
   if (pos === undefined) return false
-  const end = spelledEnd(c.w, e, constructStart(e, es, at, a, owner), pos.endOffset - pos.startOffset, c.flags)
   if (!quoted) recordCappedRun(c, e, at.vi, end, openerShift(a))
   if (end < 0) {
     escapeInnerQuotes(c, es, at.i, at.vi, a)
@@ -1808,6 +1890,8 @@ function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], 
   if (a.type !== e.type || at.aj > 0) {
     // C2-W-125: behind a content that ended early the parse reads its neighbors otherwise, which no respelling repairs.
     if (c.cut) return false
+    c.parsed = as
+    c.parsedAt = at.j
     if (respell(c, es, at.i)) return stepOver(c, es, as, at)
     return stepOverLost(c, e, es, as, at)
   }
