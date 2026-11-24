@@ -41,8 +41,9 @@ describe('C2-I-089: a note that would close only because a caret pair inside it 
     expect(format(out.source)).toBe(out.source)
   })
 
-  it('C2-W-091: prunes the backslash of an empty reference that no bare parse reports', () => {
-    expect(format('^\\[x] \\[^]\n')).toBe('^\\[x] [^]\n')
-    expect(format('^\\[x \\[^]]\n')).toBe('^\\[x [^]]\n')
+  // carve-js#5528 (ruled): the bare `^[` reports the kind `[`, so the bracket of `[^]` keeps its backslash (C2-W-088).
+  it('C2-W-091: keeps the backslash of an empty reference in a block whose bare parse reports the bracket kind', () => {
+    expect(format('^\\[x] \\[^]\n')).toBe('^\\[x] \\[^]\n')
+    expect(format('^\\[x \\[^]]\n')).toBe('^\\[x \\[^]]\n')
   })
 })

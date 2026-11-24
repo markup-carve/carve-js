@@ -2,7 +2,8 @@
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
 import {
-  childNodes, type CommentNode, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode,
+  childNodes, type CommentNode, type DocumentNode, forEachSlot, isInlineParent, isRecord, type Node, pointerToken, SOURCE_ORDER,
+  type TextNode,
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
@@ -1653,7 +1654,7 @@ function barePairStarts(nodes: readonly Node[]): Set<number> {
 }
 
 function prunableBracket(w: Writer, source: string, at: number, scan: PruneScan): boolean {
-  if (source.startsWith('^]', at + 2)) return !behindNoteOpener(source, at) || !opensInBare(w, source, at + 1)
+  if (source.startsWith('^]', at + 2)) return !reportsBracketKind(w, source, scanByte(scan, source, at))
   if (!source.startsWith('----', at + 2)) return false
   if (source[at - 1] !== '^') return true
   const close = nextIndex(scan, source, ']', at + 2)
@@ -1713,44 +1714,78 @@ function isNoteBracket(source: string, at: number): boolean {
 }
 
 /**
- * C2-W-088: the first round reads the text bare, so a `[` that opens a bracket construct in that parse was reported
- * and its backslash stays.
+ * C2-W-088: where the first round, which reads the text bare, reports the kind `[` in a leaf block, every run of `[`
+ * there takes a backslash, which stays (C2-W-091). The bare parse reports it where a leaf block holds more nodes of one
+ * type that open on a bracket than the same block of the tree.
  */
-function opensInBare(w: Writer, source: string, at: number): boolean {
-  if (bareBracketCache.source !== source) bareBracketCache = { source, starts: bareBracketStarts(w, source) }
-  return bareBracketCache.starts.has(at)
+function reportsBracketKind(w: Writer, source: string, byte: number): boolean {
+  if (w.parsed === null) return false
+  if (bracketKindCache.source !== source || bracketKindCache.parsed !== w.parsed) {
+    bracketKindCache = { source, parsed: w.parsed, leaves: bracketKindLeaves(w, source, w.parsed) }
+  }
+  const leaves = bracketKindCache.leaves
+  let low = 0
+  let high = leaves.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (leaves[middle]![1] <= byte) low = middle + 1
+    else high = middle
+  }
+  const leaf = leaves[low]
+  return leaf !== undefined && leaf[0] <= byte && leaf[2]
 }
 
-let bareBracketCache: { source: string, starts: Set<number> } = { source: '', starts: new Set() }
+let bracketKindCache: { source: string, parsed: DocumentNode | null, leaves: [number, number, boolean][] } =
+  { source: '', parsed: null, leaves: [] }
 
-/** The offsets in `source` of each `[` that opens an inline node of the parse of `source` without its escapes. */
-function bareBracketStarts(w: Writer, source: string): Set<number> {
-  const drop: number[] = []
-  for (let at = 0; at < source.length; at++) {
-    if (source[at] === '\\' && isAsciiPunctuation(source.charCodeAt(at + 1))) drop.push(at++)
-  }
-  const text = withoutBackslashes(source, drop).text
-  const bytes = nodeStarts(parseChunk(w, text).children)
-  const starts = new Set<number>()
-  let byte = 0
-  let dropped = 0
-  for (let index = 0; index < text.length; index++) {
-    while (dropped < drop.length && drop[dropped]! - dropped <= index) dropped++
-    if (text[index] === '[' && bytes.has(byte)) starts.add(index + dropped)
-    byte += unitBytes(text, index)
-  }
-  return starts
+/** The leaf blocks of `parsed` by their UTF-8 range in `source`, each with whether the bare parse reports `[` in it. */
+function bracketKindLeaves(w: Writer, source: string, parsed: DocumentNode): [number, number, boolean][] {
+  const bare = source.replace(/\\([\s\S])/g, (escape, next: string) => (isAsciiPunctuation(next.charCodeAt(0)) ? next : escape))
+  const bytes = new TextEncoder().encode(bare)
+  const bareLeaves = leafBlocks(parseChunk(w, bare).children)
+  const leaves = leafBlocks(parsed.children)
+  return leaves.flatMap((leaf, index) => {
+    if (leaf.pos === undefined) return []
+    const other = bareLeaves[index]
+    const reported = bareLeaves.length !== leaves.length || other === undefined || moreBracketNodes(other, leaf, bytes)
+    return [[leaf.pos.startOffset, leaf.pos.endOffset, reported] as [number, number, boolean]]
+  })
 }
 
-/** The UTF-8 start offsets of the nodes below `nodes` other than text. */
-function nodeStarts(nodes: readonly Node[]): Set<number> {
-  const bytes = new Set<number>()
-  const pending = [...nodes]
+/** The leaf blocks below `nodes`, in document order. */
+function leafBlocks(nodes: readonly Node[]): Node[] {
+  const leaves: Node[] = []
+  const pending = [...nodes].reverse()
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-    if (node.type !== 'text' && node.pos !== undefined) bytes.add(node.pos.startOffset)
+    if (isInlineParent(node)) leaves.push(node)
+    else pending.push(...[...childNodes(node)].reverse())
+  }
+  return leaves
+}
+
+/** Whether `bare` holds more nodes of a type that open on a bracket in `bytes` (`[`, `^[`, `![`) than `tree` holds. */
+function moreBracketNodes(bare: Node, tree: Node, bytes: Uint8Array): boolean {
+  const counts = new Map<string, number>()
+  for (const node of descendants(bare)) {
+    const start = node.pos?.startOffset ?? -1
+    const opens = bytes[start] === 0x5b || (bytes[start + 1] === 0x5b && (bytes[start] === 0x21 || bytes[start] === 0x5e))
+    if (start >= 0 && opens) counts.set(node.type, (counts.get(node.type) ?? 0) + 1)
+  }
+  for (const node of descendants(tree)) {
+    const count = counts.get(node.type)
+    if (count !== undefined) counts.set(node.type, count - 1)
+  }
+  return [...counts.values()].some((count) => count > 0)
+}
+
+function descendants(root: Node): Node[] {
+  const found: Node[] = []
+  const pending = [...childNodes(root)]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type !== 'text') found.push(node)
     for (const child of childNodes(node)) pending.push(child)
   }
-  return bytes
+  return found
 }
 
 /** Whether `parsed` reads back as the blocks of `group`. */

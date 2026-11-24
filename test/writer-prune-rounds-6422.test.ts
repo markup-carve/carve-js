@@ -13,7 +13,7 @@ function parses(source: string): number {
 const SHAPES: readonly [string, string, string][] = [
   ['list lines with a heading', '* * * {\\{#i}\n* * * # h\n', '* * * {\\{#i}\n* * * = h\n'],
   ['paragraph lines with a brace attribute', '{\\{#i} a\n', '{\\{#i} a\n'],
-  ['paragraph lines whose escapes are kept and taken out', '+ ^\\[^]\n+ x \\[^]\n+ {\\{*a*}\n', '+ ^\\[^]\n+ x [^]\n+ {\\{*a*}\n'],
+  ['paragraph lines whose escapes are kept and taken out', '+ ^\\[^]\n+ x \\[^]\n+ {\\{*a*}\n', '+ ^\\[^]\n+ x \\[^]\n+ {\\{*a*}\n'],
 ]
 
 describe('escape prune in rounds (carve#6422)', () => {

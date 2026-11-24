@@ -139,6 +139,8 @@ export interface Check {
   constructs: Set<[TextNode, number]>
   /** Escapes of a closing mark at the start of the text behind a node that took that text into its content (C2-W-093). */
   behind: Set<[TextNode, number]>
+  /** C2-W-125, case six: escapes of a text character directly behind a node that would lengthen it; they give no kind (C2-W-088). */
+  lengthening: Set<[TextNode, number]>
   /** C2-I-118: the capped openers this round escaped, each with its text and the end of its construct there. */
   capped: [TextNode, number, number][]
   /** C2-W-125, case eight: a text `^[` kept bare while its early closer took the backslash in this round. */
@@ -162,8 +164,8 @@ export function createCheck(w: Writer): Check {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false, owner: null, chains: [], source: null, bytes: null, lineEscapes: new Map(), ownEscapes: new Map(),
     cut: false, codeTrials: new Set(), leadTrials: new Set(), closers: new Set(), earlyClosers: [], around: [], reported: new Set(),
-    constructs: new Set(), behind: new Set(), capped: [], earlyCloser: false, notesDone: new Map(), note: null, parsed: [], parsedAt: 0,
-    formsAround: false,
+    constructs: new Set(), behind: new Set(), lengthening: new Set(), capped: [], earlyCloser: false, notesDone: new Map(), note: null,
+    parsed: [], parsedAt: 0, formsAround: false,
   }
 }
 
@@ -1529,6 +1531,11 @@ function endedEarly(c: Check, es: readonly Node[], i: number, owner: Node): void
   else c.losses.push([es[i] ?? owner, null])
 }
 
+/** C2-W-125, case six: the escape just placed is of the closing mark that starts the text `es[i]` behind a node. */
+function markLengthening(c: Check, es: readonly Node[], i: number): void {
+  if (i > 0 && startsWithCloser(es[i - 1]!, es[i])) c.lengthening.add(c.escapes[c.escapes.length - 1]!)
+}
+
 /** Steps over the characters that the expected text `e` and the parsed text `a` share at the cursor. False where they differ. */
 function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor, es: readonly Node[], owner: Node): boolean {
   const value = e.value
@@ -1549,6 +1556,7 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor, es: rea
     }
     // The parse read a character of the text as markup, such as a backslash before punctuation (C2-W-097).
     if (!escapeAt(c, e, at.vi + k)) differingCharacter(c, e, other, at, k)
+    else if (at.vi + k === 0) markLengthening(c, es, at.i)
     return false
   }
   at.vi += length
