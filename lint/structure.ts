@@ -121,121 +121,186 @@ const DELIMITED_SPANS: ReadonlySet<string> = new Set(['emphasis', 'strong', 'und
 // C2-I-007: a delimiter pairs only inside its bracket.
 const BRACKETS: ReadonlySet<string> = new Set(['link', 'span', 'inline_footnote', 'inline_extension'])
 
+/** The braced openers of one leaf block, from its first text opener on. Scope 0 is the block, each bracket a scope. */
 interface OpenerLeaf {
-  path: string
   start: number
   end: number
-  /** The leaf block and the brackets in it, scope 0 being the block. */
-  scopes: string[]
-  /** The open scopes, innermost last, as the depth-first visit stands. */
-  stack: number[]
-  openers: [number, string, string, number][]
-  /** The braced openers of formed spans after the first text opener: they take closers too (C2-I-058). */
-  formed: [number, string, number][]
-  /** Where a closer can stand: text and the marks of formed spans, not atoms such as code or a link tail (C2-W-107). */
-  content: [number, number, number][]
+  /** Text openers: offset, scope and the path of the text node, in source order. */
+  openers: number[]
+  openerScopes: number[]
+  openerPaths: string[]
+  /** Braced openers of formed spans, which take closers too (C2-I-058). */
+  formed: number[]
+  formedScopes: number[]
+  /** Where a closer can stand, as start, end and scope: text and the marks of spans, no atom (C2-W-107). */
+  content: number[]
 }
 
-interface OpenerScan { leaf: OpenerLeaf | null, leaves: OpenerLeaf[] }
+interface OpenerScan {
+  path: string | null
+  start: number
+  end: number
+  /** The bracket path prefixes of the current leaf block, and the open ones as indexes, innermost last. */
+  scopes: string[]
+  stack: number[]
+  leaf: OpenerLeaf | null
+  leaves: OpenerLeaf[]
+}
 
 const openerScans = new WeakMap<LintContext, OpenerScan>()
-
-/** The scope of the node at `path`: its innermost enclosing bracket, else the leaf block. */
-function scopeOf(path: string, leaf: OpenerLeaf): number {
-  while (leaf.stack.length > 1 && !path.startsWith(`${leaf.scopes[leaf.stack[leaf.stack.length - 1]!]}/`)) leaf.stack.pop()
-  return leaf.stack[leaf.stack.length - 1]!
-}
-
-function spanMarks(node: Node, range: [number, number], scope: number, leaf: OpenerLeaf, context: LintContext): void {
-  if (!('children' in node) || node.children.length === 0) return
-  const width = context.source[range[0]] === '{' ? 2 : 1
-  if (width === 2) leaf.formed.push([range[0], context.source[range[0] + 1]!, scope])
-  leaf.content.push([range[0], range[0] + width, scope])
-  const last = bounds(node.children[node.children.length - 1]!, context)
-  if (last !== null) leaf.content.push([last[1], last[1] + width, scope])
-}
-
-function bracedOpeners(node: Node, path: string, scope: number, leaf: OpenerLeaf, context: LintContext): void {
-  if (!('children' in node)) return
-  node.children.forEach((child, index) => {
-    if (child.type !== 'text') return
-    const text = bounds(child, context)
-    if (text === null) return
-    for (let at = text[0]; at + 1 < text[1]; at++) {
-      const mark = context.source[at + 1]!
-      if (context.source[at] !== '{' || !BRACED_MARKS.includes(mark) || escaped(context.source, at)) continue
-      if (leaf.openers.length === 0) openerScan(context).leaves.push(leaf)
-      leaf.openers.push([at, mark, `${path}/children/${index}`, scope])
-    }
-  })
-}
-
 let lastScan: [LintContext, OpenerScan] | null = null
 
 function openerScan(context: LintContext): OpenerScan {
   if (lastScan?.[0] === context) return lastScan[1]
   let scan = openerScans.get(context)
-  if (scan === undefined) openerScans.set(context, scan = { leaf: null, leaves: [] })
+  if (scan === undefined) {
+    openerScans.set(context, scan = { path: null, start: 0, end: 0, scopes: [], stack: [0], leaf: null, leaves: [] })
+  }
   lastScan = [context, scan]
   return scan
 }
 
-function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
-  const scan = openerScan(context)
-  const leaf = scan.leaf
-  const isLeaf = INLINE_LEAVES.has(node.type)
-  const opens = node.type === 'strong' || node.type === 'emphasis'
-  // Only a closer after an opener counts, so nothing is kept for a leaf block before its first opener.
-  if (!isLeaf && !opens && !BRACKETS.has(node.type) && (leaf?.openers.length ?? 0) === 0) return
-  const range = bounds(node, context)
-  if (range === null) return
-  if (isLeaf) scan.leaf = { path, start: range[0], end: range[1], scopes: [path], stack: [0], openers: [], formed: [], content: [] }
-  else if (leaf !== null && path.startsWith(`${leaf.path}/`)) collectOpeners(node, path, range, leaf, context)
+/** The scope of the node at `path`: its innermost enclosing bracket, else the leaf block. */
+function scopeOf(path: string, scan: OpenerScan): number {
+  while (scan.stack.length > 1 && !path.startsWith(scan.scopes[scan.stack[scan.stack.length - 1]!]!)) scan.stack.pop()
+  return scan.stack[scan.stack.length - 1]!
 }
 
-function collectOpeners(node: Node, path: string, range: [number, number], leaf: OpenerLeaf, context: LintContext): void {
-  const scope = scopeOf(path, leaf)
+function startLeaf(node: Node, path: string, scan: OpenerScan, context: LintContext): void {
+  const range = bounds(node, context)
+  scan.path = range === null ? null : `${path}/`
+  if (range !== null) [scan.start, scan.end] = range
+  scan.scopes.length = 1
+  scan.stack.length = 1
+  scan.leaf = null
+}
+
+function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
+  const scan = openerScan(context)
+  if (INLINE_LEAVES.has(node.type)) return startLeaf(node, path, scan, context)
+  const opens = node.type === 'strong' || node.type === 'emphasis'
+  // Only a closer after an opener counts, so nothing is kept for a leaf block before its first opener.
+  if (scan.path === null || (scan.leaf === null && !opens && !BRACKETS.has(node.type))) return
+  if (!path.startsWith(scan.path)) return
+  const range = bounds(node, context)
+  if (range !== null) collectOpeners(node, path, range, scan, context)
+}
+
+function collectOpeners(node: Node, path: string, range: [number, number], scan: OpenerScan, context: LintContext): void {
+  const scope = scopeOf(path, scan)
   if (BRACKETS.has(node.type)) {
-    leaf.stack.push(leaf.scopes.length)
-    leaf.scopes.push(path)
+    scan.stack.push(scan.scopes.length)
+    scan.scopes.push(`${path}/`)
     return
   }
   // An opener inside a braced span is removed by a braced closer, which the row does not report.
   if ((node.type === 'strong' || node.type === 'emphasis') && context.source[range[0]] !== '{') {
-    bracedOpeners(node, path, scope, leaf, context)
+    bracedOpeners(node, path, scope, scan, context)
   }
-  if (leaf.openers.length === 0) return
-  if (node.type === 'text' || node.type === 'smart_punctuation') leaf.content.push([range[0], range[1], scope])
+  const leaf = scan.leaf
+  if (leaf === null) return
+  if (node.type === 'text' || node.type === 'smart_punctuation') leaf.content.push(range[0], range[1], scope)
   else if (DELIMITED_SPANS.has(node.type)) spanMarks(node, range, scope, leaf, context)
 }
 
-/** The text openers that a braced closer pairs with, each closer taking the nearest open opener of its mark (C2-I-058). */
+function bracedOpeners(node: Node, path: string, scope: number, scan: OpenerScan, context: LintContext): void {
+  if (!('children' in node)) return
+  const source = context.source
+  node.children.forEach((child, index) => {
+    if (child.type !== 'text') return
+    const text = bounds(child, context)
+    if (text === null) return
+    for (let at = text[0]; at + 1 < text[1]; at++) {
+      if (source.charCodeAt(at) !== 0x7b || !BRACED_MARKS.includes(source[at + 1]!) || escaped(source, at)) continue
+      if (scan.leaf === null) {
+        scan.leaf = { start: scan.start, end: scan.end, openers: [], openerScopes: [], openerPaths: [], formed: [],
+          formedScopes: [], content: [] }
+        scan.leaves.push(scan.leaf)
+      }
+      scan.leaf.openers.push(at)
+      scan.leaf.openerScopes.push(scope)
+      scan.leaf.openerPaths.push(`${path}/children/${index}`)
+    }
+  })
+}
+
+function spanMarks(node: Node, range: [number, number], scope: number, leaf: OpenerLeaf, context: LintContext): void {
+  if (!('children' in node) || node.children.length === 0) return
+  const width = context.source[range[0]] === '{' ? 2 : 1
+  if (width === 2) {
+    leaf.formed.push(range[0])
+    leaf.formedScopes.push(scope)
+  }
+  leaf.content.push(range[0], range[0] + width, scope)
+  const last = bounds(node.children[node.children.length - 1]!, context)
+  if (last !== null) leaf.content.push(last[1], last[1] + width, scope)
+}
+
+/** The open braced openers of one scope, with the count of each mark. */
+interface OpenStack { at: number[], marks: string[], text: boolean[], counts: Map<string, number> }
+
+/** C2-I-058, C2-I-059: a closer takes the nearest open opener of its mark and removes every opener above it. */
+function closeNearest(stack: OpenStack, mark: string): number {
+  if ((stack.counts.get(mark) ?? 0) === 0) return -1
+  for (;;) {
+    const at = stack.at.pop()!
+    const top = stack.marks.pop()!
+    const text = stack.text.pop()!
+    stack.counts.set(top, stack.counts.get(top)! - 1)
+    if (top === mark) return text ? at : -1
+  }
+}
+
+function pushOpener(stacks: OpenStack[], at: number, mark: string, scope: number, text: boolean): void {
+  const stack = stacks[scope] ??= { at: [], marks: [], text: [], counts: new Map() }
+  stack.at.push(at)
+  stack.marks.push(mark)
+  stack.text.push(text)
+  stack.counts.set(mark, (stack.counts.get(mark) ?? 0) + 1)
+}
+
+let insideBuffer = new Int32Array(0)
+
+/** Each character of the leaf block holds its scope plus one, or zero outside the content. */
+function contentScopes(leaf: OpenerLeaf): Int32Array {
+  const length = leaf.end - leaf.start + 1
+  if (insideBuffer.length < length) insideBuffer = new Int32Array(length * 2)
+  insideBuffer.fill(0, 0, length)
+  for (let at = 0; at < leaf.content.length; at += 3) {
+    insideBuffer.fill(leaf.content[at + 2]! + 1, leaf.content[at]! - leaf.start, leaf.content[at + 1]! - leaf.start)
+  }
+  return insideBuffer
+}
+
+interface OpenCursor { stacks: OpenStack[], text: number, formed: number }
+
+/** Opens, in source order, every text and formed opener that starts before `end`. */
+function openBefore(end: number, cursor: OpenCursor, leaf: OpenerLeaf, source: string): void {
+  for (;;) {
+    const text = leaf.openers[cursor.text] ?? Infinity
+    const formed = leaf.formed[cursor.formed] ?? Infinity
+    if (Math.min(text, formed) >= end) return
+    if (text < formed) pushOpener(cursor.stacks, text, source[text + 1]!, leaf.openerScopes[cursor.text++]!, true)
+    else pushOpener(cursor.stacks, formed, source[formed + 1]!, leaf.formedScopes[cursor.formed++]!, false)
+  }
+}
+
+/** The text openers that a braced closer of their content would pair with. */
 function pairedOpeners(leaf: OpenerLeaf, context: LintContext): Set<number> {
-  // Each character holds its scope plus one, or zero outside the content.
-  const inside = new Int32Array(leaf.end - leaf.start + 1)
-  for (const [start, end, scope] of leaf.content) inside.fill(scope + 1, start - leaf.start, end - leaf.start)
-  const openers: [number, string, number, boolean][] = [...leaf.openers.map(([at, mark, , scope]): [number, string, number, boolean] =>
-    [at, mark, scope, true]), ...leaf.formed.map(([at, mark, scope]): [number, string, number, boolean] => [at, mark, scope, false])]
-  openers.sort((a, b) => a[0] - b[0])
-  const open = new Map<string, [number, boolean][]>()
+  const inside = contentScopes(leaf)
+  const cursor: OpenCursor = { stacks: [], text: 0, formed: 0 }
   const paired = new Set<number>()
   const source = context.source
-  let next = 0
   for (let at = leaf.start + 1; at < leaf.end; at++) {
     if (source.charCodeAt(at) !== 0x7d) continue
-    for (; next < openers.length && openers[next]![0] < at - 1; next++) {
-      const [start, mark, scope, text] = openers[next]!
-      const key = `${scope}${mark}`
-      const stack = open.get(key)
-      if (stack === undefined) open.set(key, [[start, text]])
-      else stack.push([start, text])
-    }
+    openBefore(at - 1, cursor, leaf, source)
     const mark = source[at - 1]!
     const scope = inside[at - leaf.start]!
     if (scope === 0 || inside[at - 1 - leaf.start] !== scope || !BRACED_MARKS.includes(mark)
       || escapedInside(at - 1, leaf, inside, source)) continue
-    const taken = open.get(`${scope - 1}${mark}`)?.pop()
-    if (taken?.[1] === true) paired.add(taken[0])
+    const stack = cursor.stacks[scope - 1]
+    const taken = stack === undefined ? -1 : closeNearest(stack, mark)
+    if (taken >= 0) paired.add(taken)
   }
   return paired
 }
@@ -254,9 +319,9 @@ function finishBracedOpeners(context: LintContext): void {
   lastScan = null
   for (const leaf of openerScans.get(context)?.leaves ?? []) {
     const paired = pairedOpeners(leaf, context)
-    for (const [at, , path] of leaf.openers) {
-      if (paired.has(at)) context.report('braced-span-opener-as-text', at, at + 2, path)
-    }
+    leaf.openers.forEach((at, index) => {
+      if (paired.has(at)) context.report('braced-span-opener-as-text', at, at + 2, leaf.openerPaths[index]!)
+    })
   }
 }
 

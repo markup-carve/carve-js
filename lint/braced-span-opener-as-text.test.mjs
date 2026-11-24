@@ -33,6 +33,11 @@ describe('braced-span-opener-as-text: the closer of its own mark in its own leaf
     expect(findings('*a {/b {/c* d/} e/}')).toEqual([[3, 5], [7, 9]])
   })
 
+  it('drops an opener that a closer of another mark removes (C2-I-059)', () => {
+    expect(findings('*a {/b {=c* d/} e=}')).toEqual([[3, 5]])
+    expect(findings('*a {/b {=c* d=} e/}')).toEqual([[3, 5], [7, 9]])
+  })
+
   it('skips an escaped opener, an escaped closer and a closer in a code span', () => {
     expect(findings('*a \\{/b* /}')).toEqual([])
     expect(findings('*a {/b* \\/}')).toEqual([])
