@@ -593,8 +593,8 @@ export const CATALOG = {
   ] },
   "fence-closer-indented": { severity: "hint", default: "on", messages: [
     [
-      "This line closes the block opened on line (n) although it is indente",
-      "d differently. If it is content, make the outer fence longer.",
+      "This line closes the block opened on line ${line} although it is ind",
+      "ented differently. If it is content, make the outer fence longer.",
     ].join(''),
   ], conditions: [
     "",
