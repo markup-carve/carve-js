@@ -791,6 +791,7 @@ function relocate(leaf: Leaf): void {
 
 function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
   const codes = leaf.codes
+  let candidateNote = false
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
     leaf.cursor = at
     const kind = leaf.kinds[at]
@@ -802,8 +803,22 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
     }
     if (kind === OPEN) openMark(leaf, at)
     else if (kind === CLOSE) leaf.openDepth--
-    else if (kind === TEXT) at = textUnit(leaf, at, escaped) - 1
+    else if (kind === TEXT) {
+      if (candidateNote && noteCandidateBracket(leaf, at)) return undecide(leaf, 'note candidate bracket')
+      candidateNote ||= startsNoteCandidate(leaf, at, escaped)
+      at = textUnit(leaf, at, escaped) - 1
+    }
   }
+}
+
+/** C2-I-089: an inner bracket may demote an earlier text `^[`, so its reading needs the full readback. */
+function noteCandidateBracket(leaf: Leaf, at: number): boolean {
+  return leaf.codes[at] === 91 && leaf.codes[at + 1] === 94 && leaf.kinds[at + 1] === TEXT
+}
+
+function startsNoteCandidate(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  return leaf.codes[at] === 91 && leaf.codes[at - 1] === 94 && leaf.kinds[at - 1] === TEXT &&
+    escaped[at - 1] === 0 && leaf.kinds[at - 2] !== ESCAPE
 }
 
 /**
