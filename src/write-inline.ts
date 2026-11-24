@@ -10,7 +10,7 @@ import { inlineContent } from './ast-blocks.ts'
 import { parseChunk } from './write-check.ts'
 import { unitBytes } from './positions.ts'
 import { emailEnd, urlEnd } from './inline-atoms.ts'
-import { isAsciiPunctuation, isBoundarySpace, isJoining } from './unicode.ts'
+import { isAsciiPunctuation, isBoundarySpace, isJoining, isWordCharacter } from './unicode.ts'
 import { braceBlock, quoted } from './write-attributes.ts'
 import { lose, trimEnd, type Writer } from './write-state.ts'
 
@@ -1032,6 +1032,27 @@ function unspelledSpace(w: Writer, node: Node): string {
   return '\u00a0'
 }
 
+/** C2-W-069: the braced form of an emphasis or strong `node` whose bare mark cannot pair where it stands. */
+function markForm(w: Writer, node: Node, mark: string, next: Node | undefined, before: number): void {
+  if (next?.type === 'text' && next.value.startsWith(mark)) w.forms.set(node, 1)
+  // C2-I-047, C2-I-048: behind a word character a bare mark cannot open, and before one it cannot close. That depends
+  // on the neighbors as written, so each write decides it again, as for a glued mark.
+  else if ((wordCode(before) || startsWithWord(next)) && !w.forms.has(node)) {
+    w.glued.add(node)
+    w.forms.set(node, 1)
+  }
+}
+
+/** Whether the UTF-16 unit `code` is a word character; a surrogate half is not tested. */
+function wordCode(code: number): boolean {
+  return code >= 0 && (code < 0xd800 || code > 0xdfff) && isWordCharacter(code)
+}
+
+function startsWithWord(node: Node | undefined): boolean {
+  if (node?.type !== 'text' || node.value === '') return false
+  return isWordCharacter(node.value.codePointAt(0)!)
+}
+
 /**
  * The spelling of `nodes[at, end)` behind the character `before`. C2-W-069: a bare mark glued to the same mark
  * before it makes one run and opens nothing, so the node is braced.
@@ -1039,7 +1060,7 @@ function unspelledSpace(w: Writer, node: Node): string {
 function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, before: number): string {
   const node = nodes[at]!
   const mark = node.type === 'emphasis' ? '/' : node.type === 'strong' ? '*' : null
-  if (mark !== null && nodes[end]?.type === 'text' && nodes[end].value.startsWith(mark)) w.forms.set(node, 1)
+  if (mark !== null) markForm(w, node, mark, nodes[end], before)
   const part = writePart(w, nodes, at, end, flags)
   if ((node.type !== 'emphasis' && node.type !== 'strong') || part === '' || part.charCodeAt(0) !== before) return part
   // The glue depends on the form of the node before, so the next write of the group decides it again (carve#6420).
