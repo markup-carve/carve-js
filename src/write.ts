@@ -19,7 +19,7 @@ import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes
 import { escapeKinds, escapePartnerClosers, leavesKindBare } from './write-kinds.ts'
 import {
   type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets,
-  simpleSpanForest,
+  simpleSpanForest, earlyLoneNoteBrackets,
   parseChunk, parseWritten,
 } from './write-check.ts'
 import { type Wrap } from './layout.ts'
@@ -1313,6 +1313,7 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
     const placed = w.escapes.get(text) ?? []
     w.escapes.set(text, [...new Set([...placed, ...offsets])].sort((a, b) => a - b))
   }
+  addEscapes(w, earlyLoneNoteBrackets(w, group))
   const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
   const end = repairOnce(w, document, from, first, reported)
   if (saved === null || w.losses.entries.length === reported) return end
