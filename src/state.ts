@@ -38,6 +38,8 @@ export interface OpenLeaf {
   lines: number
   /** Column of the marker of the open heading (C2-B-154). */
   column: number
+  /** C2-B-083: the parts of its tail the open link definition may still take. */
+  definitionTail: number
   // Closer character, opener run length and opener column of the open opaque leaf.
   fenceChar: number
   fenceLength: number
@@ -121,7 +123,7 @@ function createState(): BlockState {
       depth: 0,
     },
     leaf: {
-      kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0, raw: false,
+      kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, definitionTail: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0, raw: false,
       stanzaOpen: false, commentRun: 0,
       tableHeadRows: 0, tableHeadOpen: false, tableWidths: [],
     },
