@@ -460,9 +460,7 @@ function bracketLine(leaf: Leaf, at: number, place: LeafPlace, first: boolean): 
 /** C2-B-084, C2-B-081: on the first line outside every container, `*[` opens an abbreviation where its shape matches. */
 function starLine(leaf: Leaf, at: number, place: LeafPlace): number {
   if (code(leaf, at + 1) !== 91 || place.nested) return bullet(leaf, at)
-  // A node behind the text is content the expansion needs after its space.
-  const [line, whole] = textOfLine(leaf, at)
-  const shape = whole ? line : `${line}x`
+  const shape = lineShape(leaf, at)
   return isAbbreviation(shape, 0, shape.length) ? at : NO_ESCAPE
 }
 
@@ -470,9 +468,7 @@ function starLine(leaf: Leaf, at: number, place: LeafPlace): number {
 function taskBoxLine(leaf: Leaf, at: number, item: 'plain' | 'task'): number {
   if (code(leaf, at + 2) !== 93) return NO_ESCAPE
   if (item === 'task') return UNDECIDED
-  // A node behind the text is content the box needs after its space.
-  const [line, whole] = textOfLine(leaf, at)
-  const shape = whole ? line : `${line}x`
+  const shape = lineShape(leaf, at)
   return taskBoxEnd(shape, 0, shape.length) >= 0 ? at : NO_ESCAPE
 }
 
@@ -484,9 +480,26 @@ function isDefinitionLine(leaf: Leaf, at: number): boolean {
 }
 
 /** The text of the line from `at` up to its end or its first unit that is not text, and whether that is the end. */
-function textOfLine(leaf: Leaf, at: number): [string, boolean] {
+/**
+ * The line from `at` as the reader sees its start: its text, and behind it the first unit of the node that follows,
+ * with `x` for content. A line comment brings the space it takes with it (C2-I-023), so `[x]` before ` %%` stands
+ * before a space and content, as a task box does.
+ */
+function lineShape(leaf: Leaf, at: number): string {
+  const end = textEnd(leaf, at)
+  const line = charsText(leaf.codes, at, end)
+  if (end === leaf.codes.length || leaf.codes[end] === LF) return line
+  return leaf.codes[end] === SPACE && leaf.kinds[end] === ATOM ? `${line} x` : `${line}x`
+}
+
+function textEnd(leaf: Leaf, at: number): number {
   let end = at
   while (end < leaf.codes.length && leaf.codes[end] !== LF && (leaf.kinds[end] === TEXT || leaf.kinds[end] === ESCAPE)) end++
+  return end
+}
+
+function textOfLine(leaf: Leaf, at: number): [string, boolean] {
+  const end = textEnd(leaf, at)
   return [charsText(leaf.codes, at, end), end === leaf.codes.length || leaf.codes[end] === LF]
 }
 

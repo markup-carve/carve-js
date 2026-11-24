@@ -9,7 +9,7 @@ import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, 
 import {
   commentValue, contentNodes, FLOW_CELL, FLOW_UNPLACED, joinFragment, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
-import { CARET, DIGIT_0, DIGIT_9, DOT, GREATER, LESS, PERCENT, TILDE } from './chars.ts'
+import { CARET, CR, DIGIT_0, DIGIT_9, DOT, GREATER, LESS, PERCENT, TILDE } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
 import { DELIMITED_MALFORMED } from './parse-findings.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
@@ -258,7 +258,9 @@ interface RowCursor {
 /** The end of the first line of a row: the lines below it are continuation rows (C2-B-175). */
 function rowRangeEnd(src: string, row: BlockNode): number {
   const lineEnd = src.indexOf('\n', row.start)
-  return lineEnd >= 0 && lineEnd < row.end ? lineEnd : row.end
+  if (lineEnd < 0 || lineEnd >= row.end) return row.end
+  // C2-B-010: the CR of a CRLF ending is not part of the line.
+  return lineEnd > row.start && src.charCodeAt(lineEnd - 1) === CR ? lineEnd - 1 : lineEnd
 }
 
 /** C2-A-086: the comments above a row belong to the group of the row above them. */

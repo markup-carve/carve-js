@@ -195,6 +195,8 @@ function regionLine(state: BlockState, matched: number, end: number): void {
   if (state.leaf.kind !== NO_LEAF) closeLeaf(state)
   closeUnowned(state, matched, end)
   state.above.captionDepth = NO_DEPTH
+  // It is no blank line, so the blank lines above it stand inside its container, not between two items (C2-B-062).
+  state.above.blankCount = 0
   writeComment(state, end)
 }
 
