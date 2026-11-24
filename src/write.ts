@@ -1313,7 +1313,7 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
     const placed = w.escapes.get(text) ?? []
     w.escapes.set(text, [...new Set([...placed, ...offsets])].sort((a, b) => a - b))
   }
-  addEscapes(w, earlyLoneNoteBrackets(w, group))
+  addEscapes(w, earlyLoneNoteBrackets(w, group).filter(([node, at]) => !(w.escapes.get(node) ?? []).includes(at)))
   const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
   const end = repairOnce(w, document, from, first, reported)
   if (saved === null || w.losses.entries.length === reported) return end

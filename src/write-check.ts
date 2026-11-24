@@ -781,20 +781,24 @@ export function earlyLoneNoteBrackets(w: Writer, roots: readonly Node[]): [TextN
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (node.type === 'inline_footnote') found.push(...earlyNoteOpeners(check, node))
     const children = childNodes(node)
-    const open: [TextNode, number][] = []
-    for (const child of children) {
-      if (child.type === 'text') {
-        for (let at = 0; at < child.value.length; at++) {
-          if (child.value.startsWith('^[', at)) { open.push([child, at + 1]); at++ }
-          else if (child.value[at] === ']' && open.length > 0) open.pop()
-        }
-      } else if (child.type === 'inline_footnote' && earlyNoteOpeners(check, child).length > 0) {
-        found.push(...open)
-      }
-    }
+    priorNoteOpeners(check, children, found)
     pending.push(...children)
   }
   return found
+}
+
+function priorNoteOpeners(check: Check, children: readonly Node[], found: [TextNode, number][]): void {
+  const open: [TextNode, number][] = []
+  for (const child of children) {
+    if (child.type === 'text') {
+      for (let at = 0; at < child.value.length; at++) {
+        if (child.value.startsWith('^[', at)) { open.push([child, at + 1]); at++ }
+        else if (child.value[at] === ']' && open.length > 0) open.pop()
+      }
+    } else if (child.type === 'inline_footnote' && earlyNoteOpeners(check, child).length > 0) {
+      found.push(...open)
+    }
+  }
 }
 
 /** Inside a note, these caret pairs are literal text and cannot open another note. */
