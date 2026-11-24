@@ -416,10 +416,27 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
+  "djot-definition-list": { severity: "hint", default: "upgrade", messages: [
+    [
+      "Djot reads a line that starts with `: ` as the term of a definition ",
+      "list; Carve reads it as paragraph text. Write the term as `:: term` ",
+      "and the definition as `: definition` on the line below it.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
   "djot-emphasis-underscore": { severity: "warning", default: "upgrade", messages: [
     [
       "Djot emphasis `_x_` is literal text in Carve. Carve emphasis is `/x/",
       "`.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
+  "djot-emphasis-underscore-braced": { severity: "hint", default: "upgrade", messages: [
+    [
+      "Djot emphasis `{_x_}` is underline in Carve. Carve emphasis is `/x/`",
+      " or the braced `{/x/}`.",
     ].join(''),
   ], conditions: [
     "",
@@ -451,6 +468,15 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
+  "djot-ordered-marker": { severity: "hint", default: "upgrade", messages: [
+    [
+      "Djot reads this line as an ordered list item; Carve reads it as para",
+      "graph text. Carve has no marker in parentheses such as `(1)`, and an",
+      " uppercase marker with a dot needs two spaces before its text.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
   "djot-plus-bullet": { severity: "warning", default: "upgrade", messages: [
     [
       "Djot/Markdown `+` bullet is not a Carve bullet, so this line is a pa",
@@ -476,6 +502,22 @@ export const CATALOG = {
     [
       "Djot superscript `^x^` is literal text in Carve — Carve superscript ",
       "is the braced `{^x^}` only.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
+  "djot-tag-mention": { severity: "hint", default: "upgrade", messages: [
+    [
+      "Djot reads `#word` and `@word` as text; Carve reads them as a tag or",
+      " a mention. Escape the sigil as `\\#` or `\\@` to keep it as text.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
+  "djot-typography-sign": { severity: "hint", default: "upgrade", messages: [
+    [
+      "Djot keeps this run as typed; Carve smart typography writes it as a ",
+      "sign. Escape its punctuation characters to keep it as typed.",
     ].join(''),
   ], conditions: [
     "",
