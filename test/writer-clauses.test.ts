@@ -995,7 +995,8 @@ describe('escaping', () => {
   it('C2-W-092: a line that is no opener where it stands needs no escape', () => {
     expect(format('a = b\n= c')).toBe('a = b\n= c\n')
     expect(format('\\{.a}')).toBe('{.a}\n')
-    expect(format('> a\n\\^ b')).toBe('> a\n> ^ b\n')
+    // carve#6585 (A1, CC-2032): the caret that stays text keeps its backslash for `unattached-caption`.
+    expect(format('> a\n\\^ b')).toBe('> a\n> \\^ b\n')
   })
 
   it('C2-W-092: a caret and a space on the line below an image paragraph is escaped', () => {

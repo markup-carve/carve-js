@@ -342,6 +342,9 @@ function otherLine(leaf: Leaf, at: number, value: number, place: LeafPlace, firs
 function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): number {
   // C2-B-146: the mark needs one or more spaces and content behind it.
   if (code(leaf, at + 1) !== TAB && !hasContentBehind(leaf, at + 1)) return NO_ESCAPE
+  // C2-W-146, C2-W-092: a caret and a space that stay text are reported by `unattached-caption`, so the caret takes
+  // the backslash whether or not the line would attach.
+  if (code(leaf, at + 1) === SPACE) return at
   if (first) return decidedIf(place.before !== null)
   if (!mayBeBlockImage(leaf, at)) return NO_ESCAPE
   let unit = at - 2
