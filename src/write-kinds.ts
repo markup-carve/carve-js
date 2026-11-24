@@ -3,7 +3,7 @@ import { childNodes, isBreak, isInlineParent } from './ast.ts'
 import type { Node, TextNode } from './ast-nodes.ts'
 import { BRACKETED, type Check, CLOSING_MARKS, contentClosers, escapeAt, isEscaped } from './write-check.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
-import { escapeOffsets } from './write-inline.ts'
+import { escapeOffsets, IN_CELL } from './write-inline.ts'
 import { isAsciiAlphanumeric, isBoundarySpace, isWordCharacter } from './unicode.ts'
 
 /** One leaf of the inline content of a block: a text node, a break, or the markup of another inline node. */
@@ -261,14 +261,15 @@ export function writtenTextStarts(check: Check, group: readonly Node[], source: 
   const starts = new Map<TextNode, [number, readonly number[]]>()
   const bytes = byteOffsets(source)
   const inert = inertRanges(check.w.parsed?.children ?? [])
-  const pending = [...group].reverse()
+  const pending = [...group].reverse().map(node => ({ node, inCell: false }))
   let cursor = 0
-  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+  for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
+    const { node } = entry
     if (node.type !== 'text') {
-      pending.push(...[...childNodes(node)].reverse())
+      pending.push(...[...childNodes(node)].reverse().map(child => ({ node: child, inCell: entry.inCell || node.type === 'table_cell' })))
       continue
     }
-    const escapes = escapeOffsets(check.w, node, 0)
+    const escapes = escapeOffsets(check.w, node, entry.inCell ? IN_CELL : 0)
     let written = ''
     let next = 0
     for (let at = 0; at < node.value.length; at++) {

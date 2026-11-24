@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { format, parse, treesEqual } from '../src/index.ts'
-import type { ParagraphNode, TextNode } from '../src/ast-nodes.ts'
+import type { ParagraphNode, TableCellNode, TextNode } from '../src/ast-nodes.ts'
 import { createCheck } from '../src/write-check.ts'
 import { writtenTextStarts } from '../src/write-kinds.ts'
 import { createWriter } from '../src/write-state.ts'
@@ -59,4 +59,13 @@ it('does not locate a text leaf inside an earlier code span', () => {
   check.w.parsed = parse(source)
   const starts = writtenTextStarts(check, [paragraph], source)
   expect(starts.get(text)?.[0]).toBe(7)
+})
+
+it('locates text with mandatory pipe escapes in a table cell', () => {
+  const text: TextNode = { type: 'text', value: 'a|{^b^}' }
+  const cell: TableCellNode = { type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [text] }] }
+  const check = createCheck(createWriter(null, false))
+  check.w.escapes.set(text, [2])
+  const source = '| a\\|\\{^b^} |\n'
+  expect(writtenTextStarts(check, [cell], source).get(text)?.[0]).toBe(2)
 })
