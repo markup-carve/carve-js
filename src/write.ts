@@ -2,7 +2,7 @@
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
 import {
-  childNodes, type CommentNode, type DocumentNode, forEachSlot, isInlineParent, isRecord, type Node, pointerToken, SOURCE_ORDER,
+  childNodes, type CommentNode, type DocumentNode, forEachSlot, isBreak, isInlineParent, isRecord, type Node, pointerToken, SOURCE_ORDER,
   type TextNode,
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
@@ -521,7 +521,7 @@ function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): v
   // it is a reported opener rather than a C2-W-125 trial.
   const starts = check.source === null || check.trials.length === 0 ? new Map() : writtenTextStarts(check, group, check.source)
   check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, starts))
-  escapeKinds(check, group, w.closerKinds ? undefined : check.closers)
+  escapeKinds(check, group, w.closerKinds ? undefined : new Set([...check.closers, ...check.readOn]))
   escapePartnerClosers(check, group)
 }
 
@@ -562,6 +562,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   let dropped = dropIdleTrial(w, check, group, first)
   dropped = dropIdleLeads(w, group, first, check) || dropped
   deferRepairs(check)
+  dropped = dropIdleTrials(w, check, group, first) || dropped
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
   keepCodeTrial(check)
   dropLineDuplicates(check)
@@ -650,6 +651,62 @@ function dropIdleLeads(w: Writer, group: readonly Node[], first: boolean, check:
   }
   if (dropped) check.trials = check.trials.filter((trial) => check.escapes.includes(trial))
   return dropped
+}
+
+/**
+ * C2-W-125: a round can place trials for several nodes of one stretch, where the first one already forms the others
+ * (the brace before the tag of `x{#a\_--}` forms the dash behind it). A trial that changes nothing beside the other
+ * escapes of the round is no backslash of a case and is taken out. Only where the parse reads no construct: one it reads
+ * reports its kind (C2-W-088), and the rounds after it decide those trials.
+ */
+function dropIdleTrials(w: Writer, check: Check, group: readonly Node[], first: boolean): boolean {
+  if (check.trials.length < 2 || check.trials.length > MAX_RETESTED_TRIALS || !readsOnlyText(check.w.parsed)) return false
+  const placed = w.escapes
+  const lines = w.lines
+  const lead = w.lead
+  const leadSkip = w.leadSkip
+  const starts = new Map(w.starts)
+  const base = new Map<TextNode, number[]>()
+  for (const [node, offsets] of placed) {
+    base.set(node, offsets.filter((at) => !check.retracted.some((escape) => escape[0] === node && escape[1] === at)))
+  }
+  const withEscapes = (escapes: readonly [TextNode, number][]): Map<TextNode, number[]> => {
+    const all = new Map(base)
+    for (const [node, at] of escapes) all.set(node, [...(all.get(node) ?? []), at].sort((a, b) => a - b))
+    return all
+  }
+  let dropped = false
+  // The later trial goes first, so the earlier one, which the rounds of C2-W-088 reach first, is kept.
+  for (const trial of [...check.trials].reverse()) {
+    const others = check.escapes.filter((escape) => escape !== trial)
+    const without = groupTree(w, group, first, withEscapes(others))
+    if (!treesEqual(groupTree(w, group, first, withEscapes([...others, trial])), without)) continue
+    check.escapes.splice(check.escapes.indexOf(trial), 1)
+    check.marks.get(trial[0])?.delete(trial[1])
+    check.trials = check.trials.filter((other) => other !== trial)
+    dropped = true
+  }
+  w.escapes = placed
+  w.lines = lines
+  w.lead = lead
+  w.leadSkip = leadSkip
+  w.starts.clear()
+  for (const [key, value] of starts) w.starts.set(key, value)
+  return dropped
+}
+
+/** Whether the inline content of every leaf block of `parsed` is text and line breaks only. */
+function readsOnlyText(parsed: DocumentNode | null): boolean {
+  if (parsed === null) return false
+  const pending: Node[] = [...parsed.children]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (!isInlineParent(node)) {
+      pending.push(...childNodes(node))
+      continue
+    }
+    if (!childNodes(node).every((child) => child.type === 'text' || isBreak(child))) return false
+  }
+  return true
 }
 
 /** C2-W-125, case eight: the trials of a round that escaped an early note closer read the note it undoes. */
