@@ -66,20 +66,19 @@ export function utf16Positions<T>(src: string, tree: T): T {
   const table = codePointTable(src)
   const at = (offset: number): number => table[Math.min(offset, table.length - 1)]!
   const seen = new WeakSet<object>()
+  const convert = (pos: Partial<Pos>): void => {
+    if (typeof pos.startOffset === 'number') pos.startOffset = at(pos.startOffset)
+    if (typeof pos.endOffset === 'number') pos.endOffset = at(pos.endOffset)
+  }
   const stack: unknown[] = [tree]
   while (stack.length > 0) {
     const value = stack.pop()
     if (typeof value !== 'object' || value === null || seen.has(value)) continue
     seen.add(value)
-    if (Array.isArray(value)) {
-      for (const item of value) stack.push(item)
-      continue
-    }
-    const pos = (value as { pos?: Partial<Pos> }).pos
-    if (pos !== undefined && pos !== null && !seen.has(pos)) {
+    const pos = Array.isArray(value) ? undefined : (value as { pos?: Partial<Pos> | null }).pos
+    if (typeof pos === 'object' && pos !== null && !seen.has(pos)) {
       seen.add(pos)
-      if (typeof pos.startOffset === 'number') pos.startOffset = at(pos.startOffset)
-      if (typeof pos.endOffset === 'number') pos.endOffset = at(pos.endOffset)
+      convert(pos)
     }
     for (const inner of Object.values(value)) stack.push(inner)
   }

@@ -77,7 +77,8 @@ describe('carve-js#5510: upgrade record positions are UTF-16 offsets and input l
   })
 
   it.each([
-    ['a tab whose label holds astral characters', 'U-415', '😀\n\n[😀 Label 😀]\n:::: tabs\n::: tab\n😀 x 😀\n:::\n::::\n', '::: tab\n😀 x 😀\n:::', 5],
+    ['a tab whose label holds astral characters', 'U-415',
+      '😀\n\n[😀 Label 😀]\n:::: tabs\n::: tab\n😀 x 😀\n:::\n::::\n', '::: tab\n😀 x 😀\n:::', 5],
     ['a line block that holds astral characters', 'U-130', '😀\n\n::: |\n😀😀\tx 😀\n:::\n', '::: |\n😀😀\tx 😀\n:::', 3],
     ['an empty class span around astral text', 'U-282', '😀 a\n\n[😀 x 😀]{class=""}\n', '[😀 x 😀]{class=""}', 3],
   ] as const)('covers %s', (_name, entry, source, construct, line) => {
