@@ -430,6 +430,7 @@ function roundEscapes(text: string, toBare: readonly number[], parsed: Node, sou
   { targets: number[], best: Construct | null } {
   const unheld = unheldConstructs(parsed, text, toBare, source.held)
   const targets: number[] = []
+  const quotes: [number, number][] = []
   // C2-W-125, case eight: a construct behind the early closer read a note that closed early, so it takes none this round.
   let earlyCloser = Infinity
   for (const construct of unheld) {
@@ -439,10 +440,44 @@ function roundEscapes(text: string, toBare: readonly number[], parsed: Node, sou
     const found = constructTarget(text, toBare, construct, source, added)
     if (found === null || found[0] < 0) continue
     const [target, kind] = found
+    if (enclosedQuote(construct, unheld, toBare, source)) {
+      quotes.push([toBare[construct.start]!, target])
+      continue
+    }
     if (!added.includes(target) && !targets.includes(target)) targets.push(target)
     if (kind) kindTargets(source, added, target, targets)
   }
+  addQuoteNeighbors(source, added, targets, quotes)
   return { targets, best: unheld[0] ?? null }
+}
+
+/** The neighbor targets of the enclosed quotes that the round's other escapes leave reading the other way. */
+function addQuoteNeighbors(source: BareText, added: readonly number[], targets: number[], quotes: readonly [number, number][]): void {
+  const kept = targets.length === 0 ? quotes : wrongQuotes(source, [...added, ...targets], quotes)
+  for (const [, target] of kept) if (!added.includes(target) && !targets.includes(target)) targets.push(target)
+}
+
+function isQuote(type: string): boolean {
+  return type.startsWith('smart_punctuation:') && QUOTE_KINDS.includes(type.slice(type.indexOf(':') + 1))
+}
+
+/**
+ * C2-W-125 case two: a quote inside another reported construct takes its direction from that construct, so its
+ * neighbor takes the backslash only where the quote still reads the other way once the kinds of the round are escaped.
+ */
+function enclosedQuote(construct: Construct, unheld: readonly Construct[], toBare: readonly number[], source: BareText): boolean {
+  if (!isQuote(construct.type)) return false
+  if (!unheld.some((outer) => outer !== construct && outer.start < construct.start && outer.end > construct.end)) return false
+  return neighborBackslash(construct.type, toBare[construct.start]!, source.bare, source.held) >= 0
+}
+
+/** The quotes, by bare start and neighbor target, that the parse with `escapes` still reads as a construct the tree does not hold. */
+function wrongQuotes(source: BareText, escapes: readonly number[], quotes: readonly [number, number][]): [number, number][] {
+  if (quotes.length === 0) return []
+  const { text, toBare } = withEscapes(source.bare, [...escapes].sort((x, y) => x - y))
+  const unheld = unheldConstructs(parse(text), text, toBare, source.held)
+  const starts = new Set(unheld.filter((construct) => isQuote(construct.type)).map((construct) => toBare[construct.start]!))
+  return quotes.filter(([start]) => starts.has(start))
 }
 
 /**
