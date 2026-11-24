@@ -166,3 +166,13 @@ void test('a quadratic cost stays a finding at four times the size', () => {
   const found = growth('x'.repeat(1000), modeled((copies) => copies * copies))
   assert.equal(found, '1.00, 4.00, 16.00 ms; 16.00, 64.00, 256.00 ms')
 })
+
+void test('a growth case too slow to confirm within the case timeout repeats the small measurement', () => {
+  const lengths: number[] = []
+  const found = growth('x'.repeat(1000), (input) => {
+    lengths.push(input.length)
+    return (input.length / 100) ** 2
+  })
+  assert.equal(found, '100.00, 400.00, 1600.00 ms')
+  assert.equal(Math.max(...lengths), 4000)
+})
