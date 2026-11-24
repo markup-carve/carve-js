@@ -18,7 +18,7 @@ import {
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { braceBlock } from './write-attributes.ts'
-import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
+import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharacter } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
@@ -380,12 +380,14 @@ function joins(last: string, behind: string): boolean {
 /**
  * Asks for a backslash before the first bare closing mark of `e` in its content, or before the first bracket in it.
  * C2-W-125, case five: of brackets, each bare `]` that closes no bare `[` of the content ends `e` early in turn, so all
- * of them take one in this round.
+ * of them take one in this round. Where there is none, each bare `[` that no `]` of the content closes takes the
+ * closer behind the content, and those take it, where the parse holds no bracket construct of its own there; a
+ * bracket pair of the content stays bare.
  */
 function escapeInContent(c: Check, e: Node): boolean {
   const mark = CLOSING_MARKS.get(e.type)
   if (mark === undefined || !('children' in e)) return false
-  if (mark === ']' && escapeLoneClosers(c, e)) return true
+  if (mark === ']' && (escapeLoneClosers(c, e) || (!readsBracketConstruct(c, e) && escapeUnclosedBrackets(c, e)))) return true
   return escapeCloser(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
 }
 
@@ -450,7 +452,7 @@ function escapeOwnerMark(c: Check, e: Node): boolean {
   if (mark === undefined || !('children' in e)) return false
   if (mark === ']' && BRACKETED.has(c.owner!.type)) return false
   // C2-W-069, C2-W-093: a paired owner whose delimiter pairs in the content takes the braced form, as in `closedEarly`.
-  if (isPaired(c.owner!) && hasOtherForm(c, c.owner!) && textsBelow(e).some((text) => text.value.includes(mark))) {
+  if (isPaired(c.owner!) && hasOtherForm(c, c.owner!) && textsBelow(e).some((text) => holdsPairingMark(text.value, mark))) {
     changeForm(c, c.owner!)
     return true
   }
@@ -1116,6 +1118,21 @@ const ACROSS_OPENERS = '[`<{$:'
 
 function opensAcross(value: string): boolean {
   for (const opener of ACROSS_OPENERS) if (value.includes(opener)) return true
+  return false
+}
+
+/**
+ * C2-I-047, C2-I-048: whether `value` holds `mark` where its neighbors let it open or close. A mark between two word
+ * characters, or between two spaces, pairs with nothing; a mark at an edge of the text is counted, as its neighbor
+ * there is markup this test does not see.
+ */
+function holdsPairingMark(value: string, mark: string): boolean {
+  for (let at = value.indexOf(mark); at >= 0; at = value.indexOf(mark, at + 1)) {
+    if (at === 0 || at === value.length - 1) return true
+    const before = value.codePointAt(isSecondHalf(value, at - 1) ? at - 2 : at - 1)!
+    const after = value.codePointAt(at + 1)!
+    if ((!isWordCharacter(before) && !isBoundarySpace(after)) || (!isBoundarySpace(before) && !isWordCharacter(after))) return true
+  }
   return false
 }
 
@@ -2469,7 +2486,9 @@ function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, starts: St
   const nested = (node: Node | undefined): void => {
     if (node?.type !== 'text') return
     const written = c.w.lines[line] ?? ''
-    const start = written.indexOf(node.value)
+    // The text stands behind the prefix of its line, which can hold the same characters, as the markers of `- - -`.
+    const from = written.indexOf(node.value, line === firstLine ? place % PLACE_COLUMNS : 0)
+    const start = from >= 0 ? from : written.indexOf(node.value)
     if (start < 0) return
     for (const column of columns.get(line) ?? []) {
       const at = column - start < 0 ? -1 : nestedOpener(node.value, column - start)
