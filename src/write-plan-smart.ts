@@ -89,6 +89,12 @@ function singleKind(leaf: Leaf, end: number, previous: number, next: number): st
   return quoteOpens(previous) && !digit ? 'left_single_quote' : 'right_single_quote'
 }
 
+/** C2-I-104, C2-I-105: the kind the reader gives a straight quote `source` between two text characters. */
+export function textQuoteKind(source: string, previous: number, next: number): string {
+  if (source === '"') return quoteOpens(previous) ? 'left_double_quote' : 'right_double_quote'
+  return quoteOpens(previous) && !isAsciiDigit(next) ? 'left_single_quote' : 'right_single_quote'
+}
+
 function isRunCharacter(code: number): boolean {
   return code >= 0 && code < 128 && RUN_CHARACTERS.includes(String.fromCharCode(code))
 }

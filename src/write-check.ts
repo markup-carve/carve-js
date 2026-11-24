@@ -22,6 +22,7 @@ import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharact
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
+import { textQuoteKind } from './write-plan-smart.ts'
 
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
 export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys,
@@ -2056,9 +2057,21 @@ function escapeInnerQuotes(c: Check, es: readonly Node[], i: number, from: numbe
     const kind = quotes.get(offset)
     const next = textAt(es, k + 1)
     if (node.type === 'smart_punctuation' && kind !== undefined && kind !== node.kind && next !== null &&
-      !terminalDelimiter(next, es, k + 1)) escapeSmartNeighbor(c, next, false)
+      !terminalDelimiter(next, es, k + 1) && !readsBackAsText(node.source, node.kind, es[k - 1], next)) escapeSmartNeighbor(c, next, false)
     offset += utf8Length(writeInline(c.w, node, c.flags))
   }
+}
+
+/**
+ * C2-W-125, case two: where the text before a quote gives its kind once the construct is escaped, the right neighbor
+ * decides nothing and keeps no backslash; the next round reads the quote again.
+ */
+function readsBackAsText(source: string, kind: string, prior: Node | undefined, next: TextNode): boolean {
+  if (prior?.type !== 'text' || (source !== '"' && source !== "'")) return false
+  const previous = prior.value.codePointAt(prior.value.length - 1)
+  const following = next.value.codePointAt(0)
+  if (previous === undefined || following === undefined || (previous >= 0xdc00 && previous < 0xe000)) return false
+  return textQuoteKind(source, previous, following) === kind
 }
 
 /** C2-I-047: a slash or star with no following character cannot open a paired span. */
