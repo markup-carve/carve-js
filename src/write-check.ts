@@ -1033,7 +1033,7 @@ function scanChainNode(current: Node, brackets: ChainScan['brackets']): Node | n
   for (const child of children) {
     if (child.type !== 'text') continue
     // Repeated unmatched brackets have one repair choice; other text keeps the ordinary search.
-    if (child.value !== '' && (current.type !== 'span' || !/^(?:\[ )+$/u.test(child.value))) return false
+    if (child.value !== '' && (current.type !== 'span' || child.value !== '[ ')) return false
     for (let at = child.value.indexOf('['); at >= 0; at = child.value.indexOf('[', at + 1)) brackets.push([child, at])
   }
   const next = nested[0]
@@ -1064,7 +1064,14 @@ export function simpleSpanChain(nodes: readonly Node[]): SpanChain | null {
     if (next === null) break
     current = next
   }
+  return finishSpanChain(scan)
+}
+
+function finishSpanChain(scan: ChainScan): SpanChain | null {
   if (scan.spans.length === 0) return null
+  // A carriage return alone can remain in an attribute block, and brackets in a block can reframe the loss.
+  if (scan.spans.some((node) => { const block = braceBlock(node); return /[\[\]]/u.test(block) ||
+    (block.includes('\r') && !block.includes('\n')) })) return null
   const firstLoss = scan.spans.find((node) => unformable(node, 0)) ?? null
   const formable = scan.spans.filter((node) => !unformable(node, 0)).length
   const outerSpan = firstLoss !== null && scan.spans[0] !== firstLoss
@@ -1076,7 +1083,7 @@ export function simpleSpanChain(nodes: readonly Node[]): SpanChain | null {
 /** Text of a simple span forest, with its potential openers. */
 function forestText(node: TextNode, inside: boolean, escapes: Map<TextNode, number[]>): boolean {
   if (node.value === '') return true
-  if (!inside || !/^(?:\[ )+$/u.test(node.value)) return false
+  if (!inside || node.value !== '[ ') return false
   const offsets: number[] = []
   for (let at = node.value.indexOf('['); at >= 0; at = node.value.indexOf('[', at + 1)) offsets.push(at)
   escapes.set(node, offsets)
@@ -1092,7 +1099,7 @@ export function simpleSpanForest(nodes: readonly Node[]): Map<TextNode, number[]
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
     const [node, inside] = item
     if (node.type === 'span') {
-      if (unformable(node, 0)) return new Map<TextNode, number[]>()
+      if (unformable(node, 0) || /[\[\]]/u.test(braceBlock(node))) return new Map<TextNode, number[]>()
       spans++
     } else if (node.type === 'text') {
       if (!forestText(node, inside, escapes)) return new Map<TextNode, number[]>()

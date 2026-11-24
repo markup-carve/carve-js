@@ -33,4 +33,21 @@ describe('nested span import cost (carve-js#5539, carve-js#5532)', () => {
       expect(fast.stats.parses).toBe(0)
     }
   })
+
+  it('keeps ordinary repair for ambiguous bracket and attribute content', () => {
+    const span = (title: string, children: Inline[]): Inline =>
+      ({ type: 'span', attrs: { keyValues: [['title', title]] }, children })
+    const cases: Inline[] = [
+      { type: 'emphasis', children: [span('a\nb', [{ type: 'text', value: '[ [ ' },
+        span('a\nb', [{ type: 'text', value: '[ x' }])])] },
+      span('a\rb', [{ type: 'text', value: '[ ' }]),
+      span('ab', [{ type: 'text', value: '[ ' }, span('a\n[b', [{ type: 'text', value: '[ ' }])]),
+    ]
+    for (const child of cases) {
+      const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [child] }] }
+      const fast = writeTreeWithStats(document, undefined, 'plan', false)
+      const repaired = writeTreeWithStats(document, undefined, 'repair', false)
+      expect(fast.output).toEqual(repaired.output)
+    }
+  })
 })
