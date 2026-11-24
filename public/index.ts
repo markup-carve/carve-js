@@ -224,8 +224,9 @@ function checkFixOptions(options: unknown): void {
 }
 
 /**
- * The source with every fix applied that holds, as `carve lint --fix` writes it, and the number of fixes by rule. Every
- * fixable rule is on unless `rules` turns it off. A fix whose node does not stand where its finding started is dropped.
+ * The source with every fix applied that holds, as `carve lint --fix` writes it, and the number of fixes by rule. A rule
+ * fixes only where it is on under `lint` with the same options (C2-T-049): a migration notice needs a declared version
+ * below 0.2, `upgrade`, or `rules`. A fix whose node does not stand where its finding started is dropped.
  */
 export function fix(source: string, options?: FixOptions): FixResult {
   if (typeof source !== 'string') throw new CarveOptionError('source', 'not a string')

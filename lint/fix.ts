@@ -4,7 +4,7 @@ import { type Node } from '../src/ast.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { parse } from '../src/index.ts'
 import { lint } from './lint.ts'
-import { type RuleId } from './catalog.ts'
+import { CATALOG, type RuleId } from './catalog.ts'
 import { type LintOptions } from './types.ts'
 
 const encoder = new TextEncoder()
@@ -339,11 +339,9 @@ function quiet(
   return { chosen: current, findings: result.findings }
 }
 
-/** The options of the lint run that finds what to fix: every fixable rule is on unless `rules` turns it off. */
+/** C2-T-049: the options of the lint run that finds what to fix; each rule keeps its lint default (C2-T-031, C2-W-156). */
 export function fixOptions(options: LintOptions): LintOptions {
-  const rules: Record<string, 'on' | 'off'> = {}
-  for (const id of FIXES.keys()) rules[id] = 'on'
-  return { ...options, rules: { ...rules, ...options.rules } }
+  return { ...options }
 }
 
 const MAX_PASSES = 10
@@ -381,10 +379,14 @@ function runPasses(source: string, settings: LintOptions, excluded: ReadonlySet<
 
 interface Site { line: number, column: number }
 
+/** A migration notice on the fixed source reports how a 0.1 or Djot reader reads it, so it does not withhold a fix (CC-1354). */
+const NOTICES: ReadonlySet<string> = new Set(Object.entries(CATALOG).filter(([, row]) => row.default === 'upgrade').map(([id]) => id))
+
 function addedSites(
   after: readonly Diagnostic[], output: string, baseline: Map<string, number>, originalSites: Map<string, number>,
 ): Site[] | null {
-  const badCodes = new Set([...counts(after)].filter(([code, count]) => count > (baseline.get(code) ?? 0)).map(([code]) => code))
+  const badCodes = new Set([...counts(after)].filter(([code, count]) => !NOTICES.has(code) && count > (baseline.get(code) ?? 0))
+    .map(([code]) => code))
   if (badCodes.size === 0) return null
   const bytes = encoder.encode(output)
   const afterSites = sites(after, bytes)
