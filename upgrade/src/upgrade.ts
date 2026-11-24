@@ -719,13 +719,34 @@ function normalizationPreservesHtml(input: string, normalized: string, output: s
   } catch { return false }
 }
 
+/** Moves record ranges of the `normalized` text onto `input`, which adds a BOM or has CRLF for every LF. */
+function inputRanges(records: ReportRecord[], normalized: string, bom: boolean, crlf: boolean): ReportRecord[] {
+  // Each LF before an offset of the normalized text was a CRLF of the input.
+  const feeds: number[] = []
+  if (crlf) for (let at = normalized.indexOf('\n'); at >= 0; at = normalized.indexOf('\n', at + 1)) feeds.push(at)
+  const feedsBefore = (offset: number): number => {
+    let low = 0
+    let high = feeds.length
+    while (low < high) {
+      const middle = (low + high) >> 1
+      if (feeds[middle]! < offset) low = middle + 1
+      else high = middle
+    }
+    return low
+  }
+  const shift = (offset: number): number => offset + (bom ? 1 : 0) + feedsBefore(offset)
+  return records.map((record) => record.range === undefined ? record
+    : { ...record, range: { startOffset: shift(record.range.startOffset), endOffset: shift(record.range.endOffset) } })
+}
+
 /** Rewrites the Carve 0.1 document `input` into Carve 0.2 and checks the result against both engines. */
 function upgradeBase(input: string): UpgradeResult {
   const withoutBom = input.startsWith('\ufeff') ? input.slice(1) : input
   const crlf = withoutBom.includes('\r\n') && !withoutBom.replaceAll('\r\n', '').includes('\n')
   if (withoutBom === input && !crlf) return upgradeCore(input)
   const normalized = crlf ? withoutBom.replaceAll('\r\n', '\n') : withoutBom
-  const result = upgradeCore(normalized)
+  const core = upgradeCore(normalized)
+  const result = { ...core, records: inputRanges(core.records, normalized, withoutBom !== input, crlf) }
   const restored = crlf ? preserveLineEndings(withoutBom, result.output) : result.output
   const output = withoutBom === input ? restored : '\ufeff' + restored
   if (normalizationPreservesHtml(input, normalized, result.output, output, result.records)) {

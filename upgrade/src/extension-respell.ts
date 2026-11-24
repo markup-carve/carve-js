@@ -7,7 +7,7 @@ import { semanticSpan } from '../../extensions/inline/semantic-span.ts'
 import { withExtensions } from '../../src/extensions/standard/bundle.ts'
 import { compareHtmlExact } from './compare.ts'
 import { applyEdits, selectEdits, type Edit } from './edits.ts'
-import { type Node01 } from './engines.ts'
+import { type Node01, utf16Positions } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
 import { lineOf, readLines } from './source.ts'
 
@@ -36,7 +36,7 @@ export function respellExtensions(source: string, registered: readonly Registere
   if (registered.length === 0) return { output: source, records: [] }
   const old = registered.flatMap(name => name === 'wikilinks' ? [oldWikilinks()] : [oldSemanticSpan()])
   const nodes: Node01[] = []
-  walk(parseOld(source, { positions: true, extensions: old }) as Node01, nodes)
+  walk(utf16Positions(source, parseOld(source, { positions: true, extensions: old }) as Node01), nodes)
   const edits: Edit[] = []
   const records: ReportRecord[] = []
   const lines = readLines(source)
