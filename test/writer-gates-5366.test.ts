@@ -54,11 +54,11 @@ it('C2-W-003: a reference label over a line end formats like its folded spelling
 })
 
 // C2-W-088, C2-W-125 case two: a quote that the round's parse holds in another direction is reported with the other
-// constructs of that parse, also inside a construct that reads on over it; its right neighbor takes the backslash.
+// constructs of that parse. Where escaping a braced opener alone restores the quote's direction, the round ends there.
 it.each([
   ['x\\<="[', 'x\\<="\\[\n'],
-  ['x{-"\\-}', 'x\\{\\-"\\-}\n'],
-  ["x{-'\\-}", "x\\{\\-'\\-}\n"],
+  ['x{-"\\-}', 'x\\{-"-}\n'],
+  ["x{-'\\-}", "x\\{-'-}\n"],
   ['x<\\="{*', 'x\\<="\\{*\n'],
   ["x<\\='{/", "x\\<='\\{/\n"],
 ])('C2-W-088: a quote read in another direction in the same round %j', (input, expected) => {
