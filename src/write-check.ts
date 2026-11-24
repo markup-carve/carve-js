@@ -623,7 +623,7 @@ function otherForm(c: Check, es: readonly Node[], i: number, attempt: Attempt): 
 
 /** Whether the escape a step asked for is a C2-W-125 trial, which the round tests on its own and which gives no kind. */
 function isTrial(c: Check, step: RespellStep, escape: [TextNode, number]): boolean {
-  return step !== escapeLoneBracket && step !== escapeOwnerBrackets && step !== escapeContentOpener && !c.reported.has(escape)
+  return step !== escapeLoneBracket && step !== escapeOwnerBrackets && !c.reported.has(escape)
 }
 
 /**
@@ -637,12 +637,21 @@ function stopsCodeSpan(step: RespellStep, [node, at]: [TextNode, number]): boole
 
 const contentConstruct: RespellStep = (c, es, i) => escapeContentConstruct(c, es[i]!)
 const contentStart: RespellStep = (c, es, i) => escapeContentStart(c, es[i]!)
+const contentBraceBeforeStart: RespellStep = (c, es, i) => {
+  const node = es[i]!
+  const mark = CLOSING_MARKS.get(node.type)
+  const first = childNodes(node)[0]
+  // C2-W-125: case one precedes the content-start trial where both could form this node.
+  return mark !== undefined && first?.type === 'text' && first.value.startsWith(mark) &&
+    escapeOpeningBrace(c, node)
+}
 
 // C2-W-088: the leftmost construct takes the backslash first, so a construct inside the content is
 // escaped before the end of the content and the text behind the node.
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   (c, es, i, attempt) => markAtContentEdge(c, es[i]!) && otherForm(c, es, i, attempt),
+  contentBraceBeforeStart,
   contentStart,
   (c, es, i) => escapeFootnoteBrace(c, es[i]!),
   contentConstruct,
