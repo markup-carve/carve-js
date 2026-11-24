@@ -24,13 +24,14 @@ describe('nested span import cost (carve-js#5539, carve-js#5532)', () => {
     }
   })
 
-  it('writes the known impossible chain with the same source and loss as ordinary repair', () => {
+  it('keeps line-feed attribute losses and source while bounding the repair work', () => {
     for (const wrapper of ['emphasis', 'span'] as const) for (const depth of [1, 3, 25]) {
       const document = tree(depth, 'a\nb', wrapper)
       const fast = writeTreeWithStats(document, undefined, 'plan', false)
       const repaired = writeTreeWithStats(document, undefined, 'repair', false)
       expect(fast.output).toEqual(repaired.output)
-      expect(fast.stats.parses).toBe(0)
+      expect(fast.output.diagnostics.map((entry) => entry.code)).toEqual(Array(depth).fill('field-unspellable'))
+      expect(fast.stats.work.reduce((total, [, chars]) => total + chars, 0)).toBeLessThan(8 * fast.output.source.length)
     }
   })
 
