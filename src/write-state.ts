@@ -79,6 +79,8 @@ export interface Writer {
   readComments: Set<Node>
   /** C2-W-136: the keys of `attrs` of a node that were reported and not written; the reparse check does not ask for them. */
   lostKeys: Map<Node, string[]>
+  /** C2-W-050: the tree holds a key value with a line feed, which the writer spells with a space. */
+  lineFeedValues: boolean
   /** What `lose` and `loseKey` added, in order (a key, or null for the node), so a refused round takes it back. */
   lossLog: [Node, string | null][]
   /** The longest colon run among the fenced containers below a node (C2-W-039). */
@@ -159,7 +161,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     openColons: new Set(), starts: new Map(),
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(), readComments: new Set(),
-    lostKeys: new Map(), lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
+    lostKeys: new Map(), lineFeedValues: false,
+    lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
     prewrittenAttributes: null, bareAlts: false, cappedRuns: [], kindRounds: true, closerKinds: false, wholeTrials: false,
     trialLog: null, trialsRetested: false,

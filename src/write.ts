@@ -8,6 +8,7 @@ import {
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
+import { holdsLineFeedValue, isKey, withSpelledValues } from './write-attributes.ts'
 import {
   blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, joinsIndentedRun, topPredecessors, writeBlocks,
 } from './write-blocks.ts'
@@ -407,7 +408,7 @@ function givesTree(
   const all = new Map(placed)
   all.set(node, [...(placed.get(node) ?? []), at].sort((a, b) => a - b))
   const parsed = groupTree(w, group, first, all).children
-  return parsed.length === group.length && parsed.every((block, index) => writerEqual(group[index]!, block))
+  return parsed.length === group.length && parsed.every((block, index) => writerEqual(w, group[index]!, block))
 }
 
 /** Whether a trial escape changes the tree with earlier escapes in place, or gives it in a form of `wholeTrials`. */
@@ -480,7 +481,7 @@ function retestTrials(w: Writer, group: readonly Node[], first: boolean, check: 
       if ((subset & (1 << bit)) !== 0) escapes.set(node, [...(escapes.get(node) ?? []), at].sort((a, b) => a - b))
     })
     const parsed = groupTree(w, group, first, escapes).children
-    if (parsed.length === group.length && parsed.every((block, index) => writerEqual(group[index]!, block))) {
+    if (parsed.length === group.length && parsed.every((block, index) => writerEqual(w, group[index]!, block))) {
       found = subset
       break
     }
@@ -886,8 +887,10 @@ function holdsRewrites(tree: Node): boolean {
 }
 
 /** C2-W-002, C2-A-193: the writer disregards standard data namespaces in its readback check. */
-function writerEqual(expected: Node, actual: Node): boolean {
+function writerEqual(w: Writer, expected: Node, actual: Node): boolean {
   if (treesEqual(expected, actual) || sourceCoreEquivalent(expected, actual)) return true
+  const spelled = w.lineFeedValues ? withSpelledValues(expected) : undefined
+  if (spelled !== undefined) return writerEqual(w, spelled, actual)
   if (!holdsRewrites(expected)) return false
   const plain = withoutStandardData(expected)
   if (treesEqual(plain, actual)) return true
@@ -899,11 +902,11 @@ function writerEqual(expected: Node, actual: Node): boolean {
 function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
   if (group.length === 1 && w.extensions.length === 0 && w.abbreviations.size === 0) {
     const plain = plainParagraph(w.lines)
-    if (plain !== null && writerEqual(group[0]!, plain)) return true
+    if (plain !== null && writerEqual(w, group[0]!, plain)) return true
   }
   // Equality disregards positions (C2-A-161), so the readback builds none.
   const parsed = parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.linkKeys, false).children
-  return parsed.length === group.length && parsed.every((node, at) => writerEqual(group[at]!, node))
+  return parsed.length === group.length && parsed.every((node, at) => writerEqual(w, group[at]!, node))
 }
 
 /**
@@ -1442,7 +1445,7 @@ function reportUnread(w: Writer, group: readonly Node[]): void {
   const parsed = w.parsed?.children ?? []
   for (let at = 0; at < Math.max(group.length, parsed.length); at++) {
     const block = parsed[at]
-    if (block !== undefined && at < group.length && writerEqual(group[at]!, block)) continue
+    if (block !== undefined && at < group.length && writerEqual(w, group[at]!, block)) continue
     lose(w, group[Math.min(at, group.length - 1)]!, null)
     return
   }
@@ -2229,8 +2232,38 @@ function relocateCommentLosses(diagnostics: Diagnostic[], comments: string[]): v
   }
 }
 
+/** C2-W-050, C2-W-117: each key value that holds a line feed is written with spaces and reported at its path. */
+function attributeValueLosses(document: DocumentNode, w: Writer): void {
+  const pending: Node[] = [document]
+  while (pending.length > 0) {
+    const node = pending.pop()!
+    // A lost node has its one report (`lose`); an extension written as its fallback writes none of its other slots.
+    const lost = w.lost.has(node)
+    const fallbackOnly = lost && (node.type === 'block_extension' || node.type === 'inline_extension')
+    const lostKeys = w.lostKeys.get(node)
+    node.attrs?.keyValues?.forEach(([key, value], index) => {
+      if (lost || !value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) return
+      const entry: Diagnostic = { code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
+        message: `Carve source cannot spell the line feed in the value of the key ${key} of a ${node.type} node` }
+      addFinding(w.losses, node, entry)
+      w.losses.steps ??= new Map()
+      w.losses.steps.set(entry, `/attrs/keyValues/${index}/1`)
+    })
+    if (node.type === 'include') continue
+    forEachSlot(node, (children, step) => {
+      if (step.startsWith('metadata/') || (fallbackOnly && step !== 'fallback')) return
+      for (let at = children.length - 1; at >= 0; at--) pending.push(children[at]!)
+    }, undefined, document.extensions ?? [])
+  }
+}
+
 /** Locate writer losses, moving a line-feed mismatch from a wrapper to its written leaf. */
 function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
+  if (w.lineFeedValues) attributeValueLosses(document, w)
+  return locatedLosses(document, w)
+}
+
+function locatedLosses(document: DocumentNode, w: Writer): Diagnostic[] {
   if (!w.losses.entries.some((entry, at) => entry.code === 'structure-unspellable' ||
     (entry.code === 'field-unspellable' && w.losses.nodes[at]?.type === 'comment'))) {
     const diagnostics = locateFindings(document, w.losses)
@@ -2249,6 +2282,7 @@ function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteOptions['layout']): void {
   w.linkKeys = new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
+  w.lineFeedValues = holdsLineFeedValue(document)
   if (layout !== undefined && w.facts !== null) readLayout(w, w.facts, document, layout.nodes)
   readAbbreviations(w, document)
   const lead = document.children[0]
