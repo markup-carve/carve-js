@@ -199,7 +199,7 @@ export function edgeComment(node: InlineParent): boolean {
 export function edgeSpace(node: InlineParent): boolean {
   const first = node.children[0]
   const last = node.children[node.children.length - 1]
-  if (first?.type === 'text' ? startsWithSpace(first.value) : SPACE_NODES.has(first?.type ?? '')) return true
+  if (first?.type === 'text' ? startsWithSpace(first.value) : first?.type === 'soft_break' || first?.type === 'non_breaking_space') return true
   return last?.type === 'text' ? isBoundarySpace(last.value.charCodeAt(last.value.length - 1)) : SPACE_NODES.has(last?.type ?? '')
 }
 
@@ -227,9 +227,21 @@ const SPACE_NODES = new Set(['soft_break', 'hard_break', 'non_breaking_space'])
  */
 export function pairingMark(node: InlineParent, mark: number): boolean {
   const char = String.fromCharCode(mark)
-  for (const child of node.children) {
+  for (let index = 0; index < node.children.length; index++) {
+    const child = node.children[index]!
     if (child.type !== 'text') continue
     const value = child.value
+    for (let at = value.indexOf(char, 1); at > 0 && at + 1 < value.length; at = value.indexOf(char, at + 1)) {
+      const previous = codeBefore(value, at)
+      const following = value.codePointAt(at + 1)!
+      if (previous !== mark && previous !== BRACE_OPEN && !isWordCharacter(previous) &&
+        !isBoundarySpace(following) && following !== mark) return true
+    }
+    const next = node.children[index + 1]
+    if (next?.type === 'text' && next.value.startsWith('}') && value.length > 1 &&
+      value.charCodeAt(value.length - 1) === mark && value.charCodeAt(value.length - 2) !== mark &&
+      value.charCodeAt(value.length - 2) !== BRACE_OPEN &&
+      !isBoundarySpace(codeBefore(value, value.length - 1))) return true
     for (let at = value.indexOf(`${char}}`, 1); at > 0; at = value.indexOf(`${char}}`, at + 1)) {
       const previous = value.charCodeAt(at - 1)
       // C2-I-049, C2-I-055: a run is text, and behind a `{` the mark is a braced opener.
