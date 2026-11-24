@@ -316,3 +316,30 @@ describe('strict import losses', () => {
     expect(strict.diagnostics.some(entry => entry.code === 'import-destination-denied')).toBe(true)
   })
 })
+
+describe('C2-M-041: a col style read as declarations', () => {
+  const table = (style: string): string =>
+    `<table><colgroup><col style="${style}"><col></colgroup><tr><td>a</td><td>b</td></tr></table>`
+  const width = (style: string): string | undefined => /\{widths=([^ }]+)/u.exec(source(table(style)))?.[1]
+
+  it('skips empty and whitespace-only pieces and takes no report for a lone width', () => {
+    expect(width(';; width:25% ;\t;')).toBe('25')
+    expect(codes(table(';; width:25% ;\t;'))).not.toContain('import-attribute-dropped')
+  })
+
+  it('reads the property name without ASCII case and the value without surrounding whitespace', () => {
+    expect(width('\nWiDtH\t:\t12.5%\n')).toBe('12.5')
+  })
+
+  it('takes the last percentage width over a later width that is no percentage, and reports the other', () => {
+    expect(width('width: 30%; width: 40px')).toBe('30')
+    expect(codes(table('width: 30%; width: 40px'))).toContain('import-attribute-dropped')
+  })
+
+  it('gives no width for a piece without a colon, a spaced percent sign or a width out of range', () => {
+    for (const style of ['width', 'width: 40 %', 'width: 0%', 'width: 101%', 'max-width: 40%']) {
+      expect(width(style), style).toBeUndefined()
+      expect(codes(table(style)), style).toContain('import-attribute-dropped')
+    }
+  })
+})
