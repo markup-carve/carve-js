@@ -15,7 +15,7 @@ function imported(html: string): { source: string, codes: string[] } {
 describe('C2-W-145: a span count that no mark cell covers is written with span marks', () => {
   it('writes a colspan in a body row, in the head and to the end of the row', () => {
     expect(imported('<table><tr><th>A</th><th>B</th></tr><tr><td colspan="2">m</td></tr></table>'))
-      .toEqual({ source: '{body-rows=1 body-header-rows=1}\n| A | B |\n| m | < |\n', codes: [] })
+      .toEqual({ source: '|= A |= B |\n| m | < |\n', codes: [] })
     expect(imported('<table><thead><tr><th colspan="2">H</th></tr></thead><tbody><tr><td>a</td><td>b</td></tr></tbody></table>'))
       .toEqual({ source: '|= H |= < |\n| a | b |\n', codes: [] })
     expect(imported('<table><tr><td>a</td><td colspan="3">b</td></tr></table>'))

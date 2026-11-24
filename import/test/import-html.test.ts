@@ -343,3 +343,44 @@ describe('C2-M-041: a col style read as declarations', () => {
     }
   })
 })
+
+describe('C2-M-037: leading column-heading rows of a table with no thead (carve#6623)', () => {
+  const head = (html: string): { source: string, codes: string[] } => ({ source: source(html), codes: codes(html) })
+
+  it('a leading th row in a direct, explicit or implied body is the head, unreported', () => {
+    const expected = { source: '|= Name |= Value |\n| Alpha | b |\n', codes: [] }
+    expect(head('<table><tr><th>Name</th><th>Value</th></tr><tr><td>Alpha</td><td>b</td></tr></table>')).toEqual(expected)
+    expect(head('<table><tbody><tr><th>Name</th><th>Value</th></tr><tr><td>Alpha</td><td>b</td></tr></tbody></table>'))
+      .toEqual(expected)
+    expect(head('<table><tr><th scope="Col">Name</th><th>Value</th></tr><tr><td>Alpha</td><td>b</td></tr></table>'))
+      .toEqual(expected)
+  })
+
+  it('every leading heading row moves, and a body left empty is dropped', () => {
+    expect(head('<table><tr><th>A</th></tr><tr><th>B</th></tr><tr><td>1</td></tr></table>').source).toBe('|= A |\n|= B |\n| 1 |\n')
+    const only = children('<table><tr><th>A</th></tr></table>') as { children: { type: string }[] }[]
+    expect(only[0]?.children.map(group => group.type)).toEqual(['table_head'])
+  })
+
+  const groups = (html: string): string[] =>
+    (children(html) as { children: { type: string }[] }[])[0]?.children.map(group => group.type) ?? []
+
+  it('a row with a scope row, another scope or a td cell, and a th row after a body row stay in the body', () => {
+    for (const cells of ['<th scope="row">A</th>', '<th scope="rowgroup">A</th>', '<td>A</td>']) {
+      expect(groups(`<table><tr><th>X</th>${cells}</tr><tr><td>1</td><td>2</td></tr></table>`))
+        .toEqual(['table_body'])
+    }
+    expect(source('<table><tr><td>1</td></tr><tr><th>A</th></tr></table>')).toBe('| 1 |\n|= A |\n')
+  })
+
+  it('a thead keeps the rows of the first body where they are', () => {
+    expect(source('<table><thead><tr><th>H</th></tr></thead><tr><th>A</th></tr><tr><td>1</td></tr></table>'))
+      .toBe('{body-rows=1 body-header-rows=1}\n|= H |\n| A |\n| 1 |\n')
+  })
+
+  it('a row span in a moved row ends at the last head row', () => {
+    const result = importDocument('<table><tr><th rowspan="3">A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>',
+      { from: 'html' })
+    expect(result.diagnostics.map(entry => entry.code)).toContain('import-structure-repaired')
+  })
+})
