@@ -21,6 +21,10 @@ describe('C2-W-125: a lone content bracket is escaped before the text behind its
     ['> :a[\\[][]', '> :a[\\[][]\n'],
     ['- :a[x\\[][]', '- :a[x\\[][]\n'],
     ['| :a[\\[][] |', '| :a[\\[][] |\n'],
+    // A node the tree holds behind the extension is no construct of the parse.
+    [':a[\\[][]:b[x]', ':a[\\[][]:b[x]\n'],
+    [':a[\\[\\[]:b[y][]', ':a[\\[\\[]:b[y][]\n'],
+    ['^[\\[\\[]:b[y][]', '^[\\[\\[]:b[y][]\n'],
   ])('writes %j as %j', checkWrites)
 
   // The bare text reads a link or a span the tree does not hold, so the kind `[` escapes every bracket (C2-W-088).
