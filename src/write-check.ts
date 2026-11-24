@@ -2432,7 +2432,10 @@ function resync(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor):
     j = firstNodeFrom(as, j, offset)
     if (k > at.i && offset >= failed.endOffset && as[j]?.pos?.startOffset === offset) return resumeAt(at, k, j)
     // The node alone, not as a list of one: a list places escapes for its end, which would land in the real writer.
-    offset += utf8Length(writeInline(c.w, es[k]!, c.flags))
+    const own = writeInline(c.w, es[k]!, c.flags)
+    // Container prefixes on later lines would stand between the offsets.
+    if (own.includes('\n') && !spelledAt(c, offset, own)) return false
+    offset += utf8Length(own)
   }
   return false
 }
