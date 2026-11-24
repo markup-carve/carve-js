@@ -33,6 +33,13 @@ describe('braced-span-opener-as-text: the closer of its own mark in its own leaf
     expect(findings('*a {/b* \\\\/}')).toEqual([[3, 5]])
   })
 
+  it('reads the closer in the caption of a code block and skips one in a comment or math', () => {
+    expect(findings('```\nhi\n```\n^ *a {/b* c /}')).toEqual([[16, 18]])
+    expect(findings('~~~\nhi\n~~~\n^ *a {/b* c /}')).toEqual([[16, 18]])
+    expect(findings('*a {/b* {% /} %}')).toEqual([])
+    expect(findings('*a {/b* $`/}`')).toEqual([])
+  })
+
   it('skips an opener that a braced closer removed', () => {
     expect(findings('{*a {/b*} c/}')).toEqual([])
   })

@@ -116,9 +116,11 @@ function commentInLabel(node: Node, path: string, context: LintContext): void {
 const BRACED_MARKS = '*/_~=+-^,'
 const INLINE_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'heading', 'definition_term', 'cell_paragraph', 'line',
   'citation_definition'])
+// C2-W-107: lint does not search these for a closer.
+const OPAQUE_INLINES: ReadonlySet<string> = new Set(['autolink', 'code', 'raw_inline', 'literal_inline', 'math', 'comment'])
 
 interface OpenerScan {
-  leaf: { path: string, start: number, end: number, openers: [number, string, string][] } | null
+  leaf: { path: string, start: number, end: number, openers: [number, string, string][], opaque: [number, number][] } | null
   leaves: NonNullable<OpenerScan['leaf']>[]
 }
 
@@ -130,11 +132,12 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
   const range = bounds(node, context)
   if (range === null) return
   if (INLINE_LEAVES.has(node.type)) {
-    scan.leaf = { path, start: range[0], end: range[1], openers: [] }
+    scan.leaf = { path, start: range[0], end: range[1], openers: [], opaque: [] }
     return
   }
-  // An opener inside a braced span is removed by a braced closer, which the row does not report.
   const leaf = scan.leaf
+  if (leaf !== null && OPAQUE_INLINES.has(node.type) && path.startsWith(`${leaf.path}/`)) leaf.opaque.push(range)
+  // An opener inside a braced span is removed by a braced closer, which the row does not report.
   if ((node.type !== 'strong' && node.type !== 'emphasis') || context.source[range[0]] === '{' || leaf === null
     || !path.startsWith(`${leaf.path}/`)) return
   node.children.forEach((child, index) => {
@@ -150,14 +153,18 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
   })
 }
 
-/** The last unescaped braced closer of each mark in `[start, end)`, outside opaque leaves. */
-function lastClosers(start: number, end: number, context: LintContext): Map<string, number> {
+/** The last unescaped braced closer of each mark in the leaf block, outside its opaque inlines. */
+function lastClosers(leaf: NonNullable<OpenerScan['leaf']>, context: LintContext): Map<string, number> {
   const last = new Map<string, number>()
   let slashes = 0
-  for (let at = start; at < end; at++) {
+  let skip = 0
+  for (let at = leaf.start; at < leaf.end; at++) {
     const char = context.source[at]!
-    if (context.leafMask[at] === 1) slashes = 0
-    else if (char === '\\') slashes++
+    while (skip < leaf.opaque.length && leaf.opaque[skip]![1] <= at) skip++
+    if (skip < leaf.opaque.length && leaf.opaque[skip]![0] <= at) {
+      at = leaf.opaque[skip]![1] - 1
+      slashes = 0
+    } else if (char === '\\') slashes++
     else {
       if (slashes % 2 === 0 && context.source[at + 1] === '}' && BRACED_MARKS.includes(char)) last.set(char, at)
       slashes = 0
@@ -169,7 +176,7 @@ function lastClosers(start: number, end: number, context: LintContext): Map<stri
 /** C2-I-059: an opener counts when a braced closer of its mark follows it in the same leaf block. */
 function finishBracedOpeners(context: LintContext): void {
   for (const leaf of openerScans.get(context)?.leaves ?? []) {
-    const last = lastClosers(leaf.start, leaf.end, context)
+    const last = lastClosers(leaf, context)
     for (const [at, mark, path] of leaf.openers) {
       if ((last.get(mark) ?? -1) >= at + 2) context.report('braced-span-opener-as-text', at, at + 2, path)
     }
@@ -212,6 +219,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('platform-issue-reference', ['text'], platformIssue),
   nodeRule('platform-mention-token', ['text', 'mention'], platformMention),
       nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
-    nodeRule('braced-span-opener-as-text', ['strong', 'emphasis', ...INLINE_LEAVES] as Node['type'][], bracedSpanAsText),
+    nodeRule('braced-span-opener-as-text', ['strong', 'emphasis', ...INLINE_LEAVES, ...OPAQUE_INLINES] as Node['type'][],
+      bracedSpanAsText),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
       ]
