@@ -17,7 +17,7 @@ import {
   writeInline, writeInlines,
 } from './write-inline.ts'
 import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
-import { braceBlock, spelledValue } from './write-attributes.ts'
+import { braceBlock, isKey, spelledValue } from './write-attributes.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharacter } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
 import { escapeKinds, escapePartnerClosers } from './write-kinds.ts'
@@ -1016,7 +1016,6 @@ function unformable(node: Node, flags: number): boolean {
 
 /** Text of a simple span forest, with its potential openers. */
 function forestText(node: TextNode, inside: boolean, escapes: Map<TextNode, number[]>): boolean {
-  if (node.value === '') return true
   if (!inside || node.value !== '[ ') return false
   const offsets: number[] = []
   for (let at = node.value.indexOf('['); at >= 0; at = node.value.indexOf('[', at + 1)) offsets.push(at)
@@ -1034,6 +1033,21 @@ function forestFieldsCanForm(node: Node): boolean {
     node.pos !== undefined || node.segments !== undefined) return false
   if (node.type !== 'span' && node.attrs !== undefined) return false
   if (node.type === 'paragraph' && (node.role !== undefined || node.caption !== undefined)) return false
+  if (node.type === 'span' && !forestSpanAttrsCanForm(node)) return false
+  return true
+}
+
+/** A simple set of named values cannot be reframed as id, class, or language fields. */
+function forestSpanAttrsCanForm(node: Node): boolean {
+  if (node.type !== 'span') return false
+  const attrs = node.attrs
+  const pairs = attrs?.keyValues
+  if (attrs?.id !== undefined || attrs?.classes !== undefined || pairs === undefined || pairs.length === 0) return false
+  const seen = new Set<string>()
+  for (const [key] of pairs) {
+    if (!isKey(key) || ['id', 'class', 'lang', 'dir'].includes(key) || seen.has(key)) return false
+    seen.add(key)
+  }
   return true
 }
 

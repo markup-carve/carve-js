@@ -58,6 +58,7 @@ describe('nested span import cost (carve-js#5539, carve-js#5532)', () => {
     for (const sibling of [
       { type: 'span', attrs: { keyValues: [['title', 'ab']] }, children: [] },
       { type: 'emphasis', children: [] },
+      { type: 'text', value: '' },
     ] as Inline[]) {
       const document: DocumentNode = { type: 'document', astVersion: '2.0',
         children: [{ type: 'paragraph', children: [opener, sibling] }] }
@@ -76,5 +77,17 @@ describe('nested span import cost (carve-js#5539, carve-js#5532)', () => {
     const repaired = writeTreeWithStats(document, undefined, 'repair', false)
     expect(planned.output).toEqual(repaired.output)
     expect(planned.output.diagnostics.some((entry) => entry.code === 'field-unspellable')).toBe(true)
+  })
+
+  it('keeps readback for attributes that do not retain their field shape', () => {
+    for (const attrs of [undefined, { keyValues: [['title', 'ab'], ['title', 'cd']] as [string, string][] },
+      { classes: [] as string[] }]) {
+      const child: Inline = { type: 'span', ...(attrs === undefined ? {} : { attrs }),
+        children: [{ type: 'text', value: '[ ' }] }
+      const document: DocumentNode = { type: 'document', astVersion: '2.0',
+        children: [{ type: 'paragraph', children: [child] }] }
+      expect(writeTreeWithStats(document, undefined, 'plan', false).output)
+        .toEqual(writeTreeWithStats(document, undefined, 'repair', false).output)
+    }
   })
 })
