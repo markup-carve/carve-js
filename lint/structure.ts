@@ -143,6 +143,8 @@ interface OpenerScan {
   /** The bracket path prefixes of the current leaf block, and the open ones as indexes, innermost last. */
   scopes: string[]
   stack: number[]
+  /** The paths of the bare strong and emphasis spans of the current leaf block. */
+  bare: Set<string>
   leaf: OpenerLeaf | null
   leaves: OpenerLeaf[]
 }
@@ -154,7 +156,8 @@ function openerScan(context: LintContext): OpenerScan {
   if (lastScan?.[0] === context) return lastScan[1]
   let scan = openerScans.get(context)
   if (scan === undefined) {
-    openerScans.set(context, scan = { path: null, start: 0, end: 0, scopes: [], stack: [0], leaf: null, leaves: [] })
+    openerScans.set(context, scan = { path: null, start: 0, end: 0, scopes: [], stack: [0], bare: new Set(),
+      leaf: null, leaves: [] })
   }
   lastScan = [context, scan]
   return scan
@@ -172,6 +175,7 @@ function startLeaf(node: Node, path: string, scan: OpenerScan, context: LintCont
   if (range !== null) [scan.start, scan.end] = range
   scan.scopes.length = 1
   scan.stack.length = 1
+  scan.bare.clear()
   scan.leaf = null
 }
 
@@ -180,7 +184,8 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
   if (INLINE_LEAVES.has(node.type)) return startLeaf(node, path, scan, context)
   const opens = node.type === 'strong' || node.type === 'emphasis'
   // Only a closer after an opener counts, so nothing is kept for a leaf block before its first opener.
-  if (scan.path === null || (scan.leaf === null && !opens && !BRACKETS.has(node.type))) return
+  if (scan.path === null || (scan.leaf === null && !opens && !BRACKETS.has(node.type)
+    && (node.type !== 'text' || scan.bare.size === 0))) return
   if (!path.startsWith(scan.path)) return
   const range = bounds(node, context)
   if (range !== null) collectOpeners(node, path, range, scan, context)
@@ -194,8 +199,9 @@ function collectOpeners(node: Node, path: string, range: [number, number], scan:
     return
   }
   // An opener inside a braced span is removed by a braced closer, which the row does not report.
-  if ((node.type === 'strong' || node.type === 'emphasis') && context.source[range[0]] !== '{') {
-    bracedOpeners(node, path, scope, scan, context)
+  if ((node.type === 'strong' || node.type === 'emphasis') && context.source[range[0]] !== '{') scan.bare.add(path)
+  if (node.type === 'text' && scan.bare.has(path.slice(0, path.lastIndexOf('/children/')))) {
+    bracedOpeners(path, range, scope, scan, context)
   }
   const leaf = scan.leaf
   if (leaf === null) return
@@ -203,25 +209,20 @@ function collectOpeners(node: Node, path: string, range: [number, number], scan:
   else if (DELIMITED_SPANS.has(node.type)) spanMarks(node, range, scope, leaf, context)
 }
 
-function bracedOpeners(node: Node, path: string, scope: number, scan: OpenerScan, context: LintContext): void {
-  if (!('children' in node)) return
+/** The braced openers left as text in a text child of a bare strong or emphasis, collected in source order. */
+function bracedOpeners(path: string, text: [number, number], scope: number, scan: OpenerScan, context: LintContext): void {
   const source = context.source
-  node.children.forEach((child, index) => {
-    if (child.type !== 'text') return
-    const text = bounds(child, context)
-    if (text === null) return
-    for (let at = text[0]; at + 1 < text[1]; at++) {
-      if (source.charCodeAt(at) !== 0x7b || !BRACED_MARKS.includes(source[at + 1]!) || escaped(source, at)) continue
-      if (scan.leaf === null) {
-        scan.leaf = { start: scan.start, end: scan.end, openers: [], openerScopes: [], openerPaths: [], formed: [],
-          formedScopes: [], content: [] }
-        scan.leaves.push(scan.leaf)
-      }
-      scan.leaf.openers.push(at)
-      scan.leaf.openerScopes.push(scope)
-      scan.leaf.openerPaths.push(`${path}/children/${index}`)
+  for (let at = text[0]; at + 1 < text[1]; at++) {
+    if (source.charCodeAt(at) !== 0x7b || !BRACED_MARKS.includes(source[at + 1]!) || escaped(source, at)) continue
+    if (scan.leaf === null) {
+      scan.leaf = { start: scan.start, end: scan.end, openers: [], openerScopes: [], openerPaths: [], formed: [],
+        formedScopes: [], content: [] }
+      scan.leaves.push(scan.leaf)
     }
-  })
+    scan.leaf.openers.push(at)
+    scan.leaf.openerScopes.push(scope)
+    scan.leaf.openerPaths.push(path)
+  }
 }
 
 function spanMarks(node: Node, range: [number, number], scope: number, leaf: OpenerLeaf, context: LintContext): void {

@@ -33,6 +33,11 @@ describe('braced-span-opener-as-text: the closer of its own mark in its own leaf
     expect(findings('*a {/b {/c* d/} e/}')).toEqual([[3, 5], [7, 9]])
   })
 
+  it('pairs openers of nested bare spans in source order', () => {
+    expect(findings('*a /x {/inner/ y {/outer* c /}*')).toEqual([[17, 19]])
+    expect(findings('*a {/b /x {/c/ d* e /}')).toEqual([[10, 12]])
+  })
+
   it('drops an opener that a closer of another mark removes (C2-I-059)', () => {
     expect(findings('*a {/b {=c* d/} e=}')).toEqual([[3, 5]])
     expect(findings('*a {/b {=c* d=} e/}')).toEqual([[3, 5], [7, 9]])
