@@ -41,13 +41,24 @@ describe('carve fix and carve lint --fix', () => {
       ['**a ~~b~~ c**\n', '*a {~b~} c*\n'],
       ['> - **ä😀**\n', '> - *ä😀*\n'],
     ]
-    for (const [input, output] of cases) expect(fixSource(input, {}).output, JSON.stringify(input)).toBe(output)
+    for (const [input, output] of cases) expect(fixSource(input, { upgrade: true }).output, JSON.stringify(input)).toBe(output)
+  })
+
+  it('keeps a 0.2 spelling that only a migration notice reports, unless the notice is on (C2-T-049)', () => {
+    for (const input of ['a =x= b\n', 'a _x_ b\n', 'H~2~O\n', 'x^2^\n', 'a\n\n---\n', '+ x\n']) {
+      expect(fixSource(input, {}).output, JSON.stringify(input)).toBe(input)
+    }
+    expect(fixSource('---\ncarve: 0.1\n---\na =x= b\n', {}).output).toBe('---\ncarve: 0.1\n---\na {=x=} b\n')
+    expect(fixSource('a =x= b\n', { rules: { 'deprecated-bare-highlight': 'on' } }).output).toBe('a {=x=} b\n')
+    expect(fixSource('a =x= b\n', { upgrade: true, rules: { 'deprecated-bare-highlight': 'off' } }).output).toBe('a =x= b\n')
+    expect(fixSource('a **b**\n', {}).output).toBe('a *b*\n')
   })
 
   it('leaves a range that two rules would rewrite differently, and a fix that would not hold', () => {
     // djot-subscript-tilde reads `~t~` as subscript, deprecated-bare-strike as strike.
-    expect(fixSource('a ~t~ b\n', {}).output).toBe('a ~t~ b\n')
-    expect(fixSource('a ~t~ b\n', { rules: { 'djot-subscript-tilde': 'off' } }).output).toBe('a {~t~} b\n')
+    expect(fixSource('a ~t~ b\n', { upgrade: true }).output).toBe('a ~t~ b\n')
+    // CC-1354: djot-subscript-tilde-braced then reports the strike, which does not withhold the fix.
+    expect(fixSource('a ~t~ b\n', { upgrade: true, rules: { 'djot-subscript-tilde': 'off' } }).output).toBe('a {~t~} b\n')
     // A `-` line directly below text opens no list, so the `+` stays.
     expect(fixSource('x\n+ y\n', {}).output).toBe('x\n+ y\n')
     expect(fixSource('a **b** c\n', { rules: { 'markdown-strong-double-star': 'off' } }).output).toBe('a **b** c\n')
@@ -56,7 +67,7 @@ describe('carve fix and carve lint --fix', () => {
   it('every fixable rule is in the catalog, and the fixed source no longer reports it', () => {
     for (const id of FIXES.keys()) expect(CATALOG[id], id).toBeDefined()
     const input = 'a **b** ~~c~~ _d_ x^2^ =e=\n\n+ item\n\n# T ##\n\n---\n'
-    const fixed = fixSource(input, {}).output
+    const fixed = fixSource(input, { upgrade: true }).output
     const left = lint(fixed, { rules: Object.fromEntries([...FIXES.keys()].map((id) => [id, 'on'])) })
     expect(left.filter((entry) => FIXES.has(entry.code as never)).map((entry) => entry.code)).toEqual([])
   })

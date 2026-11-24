@@ -69,7 +69,7 @@ describe('fixEdits', () => {
     for (const source of ['**a**\n', '~~a~~\n', 'a _b_ c\n', 'snake_case_name\n', 'x^2^\n', 'a =b= c\n', '+ a\n', '# Title ##  \n', 'a\n\n---\n']) {
       const findings = lint(source, allFixable).filter((entry) => fixEdits(source, entry) !== null)
       expect(findings).toHaveLength(1)
-      expect(applyEdits(source, fixEdits(source, findings[0]!)!)).toBe(fix(source).output)
+      expect(applyEdits(source, fixEdits(source, findings[0]!)!)).toBe(fix(source, allFixable).output)
     }
   })
 

@@ -1,9 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { fix, fixEdits, lint } from '../public/index.ts'
+import { fix as fixWith, fixableRules, fixEdits, lint } from '../public/index.ts'
 
 interface ClauseCase { kind: string, input?: string }
 const clauseCases = (JSON.parse(readFileSync(new URL('../data/conformance/clause-cases.json', import.meta.url), 'utf8')) as { cases: ClauseCase[] }).cases
+
+// C2-T-049: a migration notice fixes only when turned on, so these closure checks name every fixable rule.
+const allFixable = { rules: Object.fromEntries(fixableRules.map((rule) => [rule, 'on'])) } as Parameters<typeof lint>[1]
+const fix = (source: string) => fixWith(source, allFixable)
 
 function counts(source: string): Map<string, number> {
   const result = new Map<string, number>()
