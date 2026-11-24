@@ -36,3 +36,9 @@ it('reports no value of the attributes or slots that an extension written as its
     ['structure-unspellable', '/children/0'], ['field-unspellable', '/children/0/fallback/0/attrs/keyValues/0/1'],
   ])
 })
+
+it('gives a node it leaves out only its node loss', () => {
+  const tree = { type: 'document', astVersion: '2.0',
+    children: [{ type: 'paragraph', attrs: { keyValues: [['title', 'a\nb']] }, children: [] }] } as unknown as Parameters<typeof writeWithDiagnostics>[0]
+  expect(writeWithDiagnostics(tree).diagnostics.map((entry) => [entry.code, entry.path])).toEqual([['structure-unspellable', '/children/0']])
+})

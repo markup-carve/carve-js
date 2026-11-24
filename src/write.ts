@@ -2235,11 +2235,12 @@ function attributeValueLosses(document: DocumentNode, w: Writer): void {
   const pending: Node[] = [document]
   while (pending.length > 0) {
     const node = pending.pop()!
-    // An extension written as its fallback writes neither its attributes nor its other slots.
-    const fallbackOnly = (node.type === 'block_extension' || node.type === 'inline_extension') && w.lost.has(node)
+    // A lost node has its one report (`lose`); an extension written as its fallback writes none of its other slots.
+    const lost = w.lost.has(node)
+    const fallbackOnly = lost && (node.type === 'block_extension' || node.type === 'inline_extension')
     const lostKeys = w.lostKeys.get(node)
     node.attrs?.keyValues?.forEach(([key, value], index) => {
-      if (fallbackOnly || !value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) return
+      if (lost || !value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) return
       const entry: Diagnostic = { code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
         message: `Carve source cannot spell the line feed in the value of the key ${key} of a ${node.type} node` }
       addFinding(w.losses, node, entry)
