@@ -146,6 +146,8 @@ export interface Writer {
 export interface ProbeResult {
   found: boolean | null
   taken: [TextNode, number][]
+  /** The escapes among `taken` that are content-start trials (`leadTrials` in write-check.ts). */
+  leads?: [TextNode, number][]
 }
 
 export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: boolean,

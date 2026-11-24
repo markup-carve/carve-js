@@ -1,11 +1,11 @@
 // C2-W-088: a round escapes every potential opener of each kind its parse reports in a leaf block.
 import { childNodes, isBreak, isInlineParent } from './ast.ts'
 import type { Node, TextNode } from './ast-nodes.ts'
-import { BRACKETED, type Check, contentClosers, escapeAt, isEscaped } from './write-check.ts'
+import { BRACKETED, type Check, CLOSING_MARKS, contentClosers, escapeAt, isEscaped } from './write-check.ts'
 import { isAsciiAlphanumeric, isBoundarySpace, isWordCharacter } from './unicode.ts'
 
 /** One leaf of the inline content of a block: a text node, a break, or the markup of another inline node. */
-type Leaf = { text: TextNode, lineStart: boolean } | { text: null, kind: 'break' | 'markup', dash?: boolean }
+type Leaf = { text: TextNode, lineStart: boolean } | { text: null, kind: 'break' | 'markup', dash?: boolean, mark?: string }
 
 interface KindBlock {
   leaves: Leaf[]
@@ -45,7 +45,9 @@ function flatten(nodes: readonly Node[], out: Leaf[]): void {
       const dash = node.type === 'smart_punctuation' && /^-+$/.test(node.source)
       out.push({ text: null, kind: 'markup', dash })
       flatten(childNodes(node), out)
-      out.push({ text: null, kind: 'markup', dash })
+      // The closer of a paired node starts with its mark in either form, so a text brace before it reads as `{` and that mark.
+      const mark = BRACKETED.has(node.type) ? undefined : CLOSING_MARKS.get(node.type)
+      out.push(mark === undefined ? { text: null, kind: 'markup', dash } : { text: null, kind: 'markup', dash, mark })
     }
   }
 }
@@ -62,6 +64,8 @@ function kindKey(block: KindBlock, index: number, at: number, line: boolean): st
   if (line) return `L${lineShape(value)}`
   const ch = value[at]!
   if (ch === '{' && at + 1 < value.length) return `{${value[at + 1]}`
+  // C2-W-088: a brace that ends its text reads as a braced opener with the mark of the markup behind it.
+  if (ch === '{') return `{${markBehind(block, index) ?? ''}`
   if (ch === '-' && (hyphenRun(block, index, at)[0] > 0 || (at === 0 && isDash(block.leaves[index - 1])) ||
     besideDash(block, index, at))) return '--'
   return ch
@@ -76,6 +80,12 @@ function besideDash(block: KindBlock, index: number, at: number): boolean {
 
 function isDash(leaf: KindBlock['leaves'][number] | undefined): boolean {
   return leaf !== undefined && leaf.text === null && leaf.dash === true
+}
+
+/** The mark of the paired markup directly behind the text leaf `index`, or undefined. */
+function markBehind(block: KindBlock, index: number): string | undefined {
+  const next = block.leaves[index + 1]
+  return next !== undefined && next.text === null ? next.mark : undefined
 }
 
 function textOf(block: KindBlock, index: number): string {
@@ -156,7 +166,7 @@ function charOffsets(key: string, block: KindBlock, index: number, value: string
   const ch = key.charCodeAt(0)
   const delimiter = ch === SLASH || ch === STAR
   for (let at = value.indexOf(key[0]!); at >= 0; at = value.indexOf(key[0]!, at + 1)) {
-    if (key.length === 2 && value[at + 1] !== key[1]) continue
+    if (key.length === 2 && (at + 1 < value.length ? value[at + 1] : markBehind(block, index)) !== key[1]) continue
     if (delimiter ? canOpen(block, index, at) : value.charCodeAt(at - 1) !== ch) offsets.push(at)
   }
   return offsets

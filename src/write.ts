@@ -534,6 +534,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     if (place >= 0) check.escapes.splice(place, 1)
     dropped = true
   }
+  dropped = dropIdleLeads(w, group, first, check) || dropped
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
   keepCodeTrial(check)
   dropLineDuplicates(check)
@@ -552,6 +553,25 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     if (w.blankFirst) return true
   }
   return applyChanges(w, check)
+}
+
+/**
+ * C2-W-125, C2-W-088: a probe of an outer content asks for the trials of the nodes inside it together, so the test of a
+ * lone trial above does not reach them. A content-start trial among several is tested on its own in the group, like a
+ * lone one: where it does not change the parse, it is no backslash of the procedure and is taken out.
+ */
+function dropIdleLeads(w: Writer, group: readonly Node[], first: boolean, check: Check): boolean {
+  if (check.trials.length < 2 || check.trials.length > 4 || check.leadTrials.size === 0) return false
+  let dropped = false
+  for (const trial of check.trials) {
+    if (!check.leadTrials.has(trial) || isAsked(w, group, first, trial[0], trial[1])) continue
+    const place = check.escapes.indexOf(trial)
+    if (place >= 0) check.escapes.splice(place, 1)
+    check.marks.get(trial[0])?.delete(trial[1])
+    dropped = true
+  }
+  if (dropped) check.trials = check.trials.filter((trial) => check.escapes.includes(trial))
+  return dropped
 }
 
 /** C2-W-125, case eight: the trials of a round that escaped an early note closer read the note it undoes. */
