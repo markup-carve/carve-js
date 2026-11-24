@@ -205,6 +205,34 @@ export function edgeSpace(node: InlineParent): boolean {
 
 const SPACE_NODES = new Set(['soft_break', 'hard_break', 'non_breaking_space'])
 
+/**
+ * C2-W-069: a text of the content holds the node's own mark where it would pair: a single mark glued before a `}`
+ * behind a character that is no space can close the bare form there (C2-I-048), and in the braced form it is that
+ * form's closer. Marks at the edges of a text are left to the rounds, which see their neighbors.
+ */
+export function pairingMark(node: InlineParent, mark: number): boolean {
+  const char = String.fromCharCode(mark)
+  for (const child of node.children) {
+    if (child.type !== 'text') continue
+    const value = child.value
+    for (let at = value.indexOf(`${char}}`, 1); at > 0; at = value.indexOf(`${char}}`, at + 1)) {
+      const previous = value.charCodeAt(at - 1)
+      // C2-I-049, C2-I-055: a run is text, and behind a `{` the mark is a braced opener.
+      if (previous !== mark && previous !== BRACE_OPEN && !isBoundarySpace(codeBefore(value, at))) return true
+    }
+  }
+  return false
+}
+
+const BRACE_OPEN = 0x7b
+const SLASH = 0x2f
+const STAR = 0x2a
+
+function codeBefore(value: string, at: number): number {
+  const low = value.charCodeAt(at - 1)
+  return low >= 0xdc00 && low <= 0xdfff && at >= 2 ? value.codePointAt(at - 2)! : low
+}
+
 function startsWithSpace(value: string): boolean {
   const code = value.codePointAt(0)
   return code !== undefined && (isBoundarySpace(code) || isJoining(code))
@@ -242,8 +270,12 @@ function paired(mark: string, bit: number, inside: number): InlineWriter {
 }
 
 function bracedPair(w: Writer, node: InlineParent, flags: number, bit: number, inside: number): boolean {
-  return (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node) ||
-    edgeSpace(node)
+  if ((flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || edgeComment(node) || edgeSpace(node) ||
+    pairingMark(node, bit === 1 ? SLASH : STAR)) {
+    w.bracedAnyway.add(node)
+    return true
+  }
+  return (w.forms.get(node) ?? 0) > 0
 }
 
 /** C2-W-071, C2-W-116: a span that has only a braced form. */

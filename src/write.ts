@@ -16,8 +16,8 @@ import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { escapeKinds, escapePartnerClosers, leavesKindBare } from './write-kinds.ts'
 import {
-  type Check, compareBlocks, createCheck, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets, parseChunk,
-  parseWritten,
+  type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets,
+  parseChunk, parseWritten,
 } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -540,6 +540,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   if (w.kindRounds) escapeReportedKinds(w, check, group)
   extendChains(check)
   extendForms(w, check, group)
+  extendClosers(w, check, group)
   escapeCappedRun(check)
   retestTrials(w, group, first, check)
   logTrials(w, check.escapes)
@@ -585,6 +586,66 @@ function extendForms(w: Writer, check: Check, group: readonly Node[]): void {
     }
     forEachSlot(node, (children) => { for (const child of children) pending.push(child) })
   }
+}
+
+/**
+ * C2-W-093, C2-W-010: a braced emphasis or strong whose content closer took a backslash gives the same backslash to
+ * each braced node of the group with the same content, so the rounds do not grow with the number of such nodes.
+ */
+function extendClosers(w: Writer, check: Check, group: readonly Node[]): void {
+  if (check.earlyClosers.length === 0) return
+  const keys = new Map<Node, string>()
+  const asked = new Map<string, [Node, number[], number]>()
+  const shapes = new Set<string>()
+  for (const [owner, [text, at]] of check.earlyClosers) {
+    const path = pathTo(owner, text)
+    if (path === null) continue
+    asked.set(contentKey(owner, keys), [owner, path, at])
+    shapes.add(shapeOf(owner))
+  }
+  const pending = [...group]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    forEachSlot(node, (children) => { for (const child of children) pending.push(child) })
+    const found = writtenBraced(w, node) && shapes.has(shapeOf(node)) ? asked.get(contentKey(node, keys)) : undefined
+    const text = found === undefined || found[0] === node ? null : follow(node, found[1])
+    if (text !== null && escapeAt(check, text, found![2])) check.closers.add(check.escapes[check.escapes.length - 1]!)
+  }
+}
+
+function shapeOf(node: Node): string {
+  return `${node.type} ${childNodes(node).length}`
+}
+
+function writtenBraced(w: Writer, node: Node): boolean {
+  return (node.type === 'emphasis' || node.type === 'strong') && (w.bracedAnyway.has(node) || (w.forms.get(node) ?? 0) > 0)
+}
+
+/** The type and fields of `node` and of everything below it, without positions. */
+function contentKey(node: Node, keys: Map<Node, string>): string {
+  const known = keys.get(node)
+  if (known !== undefined) return known
+  const fields: Record<string, unknown> = {}
+  for (const [name, value] of Object.entries(node)) if (name !== 'pos' && name !== 'children') fields[name] = value
+  const children = 'children' in node ? (node.children as Node[]).map((child) => contentKey(child, keys)).join(',') : ''
+  const key = `${JSON.stringify(fields)}[${children}]`
+  keys.set(node, key)
+  return key
+}
+
+function pathTo(from: Node, text: TextNode): number[] | null {
+  if (from === text) return []
+  const children = 'children' in from ? from.children as Node[] : []
+  for (let at = 0; at < children.length; at++) {
+    const rest = pathTo(children[at]!, text)
+    if (rest !== null) return [at, ...rest]
+  }
+  return null
+}
+
+function follow(from: Node, path: readonly number[]): TextNode | null {
+  let node: Node | undefined = from
+  for (const at of path) node = node !== undefined && 'children' in node ? (node.children as Node[])[at] : undefined
+  return node?.type === 'text' ? node : null
 }
 
 function recordedReference(w: Writer, node: Node): string | undefined {

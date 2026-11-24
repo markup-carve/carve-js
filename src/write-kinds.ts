@@ -9,6 +9,8 @@ type Leaf = { text: TextNode, lineStart: boolean } | { text: null, kind: 'break'
 
 interface KindBlock {
   leaves: Leaf[]
+  /** The place of each text node in `leaves`. */
+  places?: Map<TextNode, number>
 }
 
 /** C2-W-088: the text nodes of each block of `group`, in order, with the block that holds them. */
@@ -19,7 +21,12 @@ function kindBlocks(group: readonly Node[]): Map<TextNode, KindBlock> {
     if (isInlineParent(node)) {
       const block: KindBlock = { leaves: [] }
       flatten(childNodes(node), block.leaves)
-      for (const leaf of block.leaves) if (leaf.text !== null) owners.set(leaf.text, block)
+      block.places = new Map()
+      block.leaves.forEach((leaf, index) => {
+        if (leaf.text === null) return
+        owners.set(leaf.text, block)
+        block.places!.set(leaf.text, index)
+      })
       continue
     }
     for (const child of childNodes(node)) pending.push(child)
@@ -201,7 +208,7 @@ export function escapeKinds(check: Check, group: readonly Node[], noKind: Readon
   for (const [node, at] of reported) {
     const block = owners.get(node)
     if (block === undefined) continue
-    const key = kindKey(block, block.leaves.findIndex((leaf) => leaf.text === node), at,
+    const key = kindKey(block, block.places?.get(node) ?? -1, at,
       check.lineEscapes.get(node)?.has(at) === true)
     const keys = done.get(block) ?? new Set<string>()
     if (keys.has(key)) continue
