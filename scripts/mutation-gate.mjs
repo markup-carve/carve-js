@@ -22,7 +22,7 @@ const mutations = [
   { id: 'block-frontmatter', file: 'blocks.ts', from: 'if (!isFrontmatterOpener(src, pos, end)) return false', to: 'if (isFrontmatterOpener(src, pos, end)) return false' },
   { id: 'block-lazy', file: 'blocks.ts', from: 'if (interruptsLeaf(state, matched, lineStart, end)) return false', to: 'if (!interruptsLeaf(state, matched, lineStart, end)) return false' },
   { id: 'block-blank', file: 'blocks.ts', from: 'if (blank) return blankLine(state, matched)', to: 'if (!blank) return blankLine(state, matched)' },
-  { id: 'block-heading', file: 'blocks.ts', from: 'leaf.kind === HEADING && !continuesHeading(state, matched)', to: 'leaf.kind === HEADING && continuesHeading(state, matched)' },
+  { id: 'block-heading', file: 'blocks.ts', from: 'isLabel(leaf.kind) && !continuesLabel(state, matched)', to: 'isLabel(leaf.kind) && continuesLabel(state, matched)' },
   { id: 'inline-code', file: 'inline-scan.ts', from: 'table[BACKTICK] = scanBacktick', to: 'table[BACKTICK] = scanBareMark' },
   { id: 'inline-break', file: 'inline-scan.ts', from: 'table[LF] = scanLineBreak', to: 'table[LF] = scanBareMark' },
   { id: 'inline-image', file: 'inline-scan.ts', from: 'return next === BRACKET_OPEN ? scanImageOpen(state, pos) : pos + 1', to: 'return next !== BRACKET_OPEN ? scanImageOpen(state, pos) : pos + 1' },
