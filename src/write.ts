@@ -19,6 +19,7 @@ import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes
 import { escapeKinds, escapePartnerClosers, leavesKindBare } from './write-kinds.ts'
 import {
   type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets,
+  simpleSpanChain, simpleSpanForest,
   parseChunk, parseWritten,
 } from './write-check.ts'
 import { type Wrap } from './layout.ts'
@@ -1138,6 +1139,12 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   // A blank line separates groups, so earlier escape and form choices no longer affect readback.
   if (from > 0) clearGroupChoices(w)
   const group = document.children.slice(from, groupEnd(w, document.children, from))
+  if (writeKnownSpanChain(w, run, group)) return from + group.length
+  return writeOrdinaryGroup(w, run, document, from, first, group)
+}
+
+function writeOrdinaryGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,
+  group: readonly Node[]): number {
   const reach = pairReach(group, w.escapes, EARLY)
   // Pair rules depend on text and escapes already chosen, so place their ordinary escapes before
   // the first write. The check below still handles a pair exposed by a later repair choice.
@@ -1163,6 +1170,23 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
     return end
   }
   return repairPairEscapes(w, run, document, from, first, end)
+}
+
+/** The sole impossible span in a uniform bracket chain has one source and one loss. */
+function writeKnownSpanChain(w: Writer, run: WriterRun, group: readonly Node[]): boolean {
+  if (run.path !== 'plan') return false
+  const chain = simpleSpanChain(group)
+  if (chain === null || chain.loss === null) return false
+  for (const [text, offsets] of chain.escapes) {
+    const placed = w.escapes.get(text) ?? []
+    w.escapes.set(text, [...new Set([...placed, ...offsets])].sort((a, b) => a - b))
+  }
+  resetLines(w)
+  writeBlocks(w, group, '', 0, false)
+  lose(w, chain.loss, null)
+  run.stats.repaired++
+  run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), 0])
+  return true
 }
 
 /** The choices of the group a pair round can take back; the losses of the document are a mark, not a copy. */
@@ -1263,6 +1287,15 @@ function repairBareAlts(w: Writer, document: DocumentNode, from: number, first: 
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
 function repairGroup(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+  // A bracket left open in a bracketed node's content would consume that node's closer.
+  // Collect these independent escapes before the readback instead of discovering one nest per parse.
+  const group = document.children.slice(from, groupEnd(w, document.children, from))
+  const chain = simpleSpanChain(group)
+  const seeded = chain?.escapes ?? simpleSpanForest(group)
+  for (const [text, offsets] of seeded) {
+    const placed = w.escapes.get(text) ?? []
+    w.escapes.set(text, [...new Set([...placed, ...offsets])].sort((a, b) => a - b))
+  }
   const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
   const end = repairOnce(w, document, from, first, reported)
   if (saved === null || w.losses.entries.length === reported) return end

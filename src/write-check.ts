@@ -1014,6 +1014,94 @@ function unformable(node: Node, flags: number): boolean {
   return node.type === 'span' && (flags & IN_CELL) === 0 && /[\r\n]/u.test(braceBlock(node))
 }
 
+/** A chain whose bracket escapes or impossible span can be decided from its markup alone. */
+export interface SpanChain {
+  loss: Node | null
+  escapes: Map<TextNode, number[]>
+}
+
+interface ChainScan {
+  spans: Node[]
+  brackets: [TextNode, number][]
+}
+
+/** The next node in a simple chain, or false where it has another repair choice. */
+function scanChainNode(current: Node, brackets: ChainScan['brackets']): Node | null | false {
+  const children = childNodes(current)
+  const nested = children.filter((child) => child.type !== 'text')
+  if (nested.length > 1) return false
+  for (const child of children) {
+    if (child.type !== 'text') continue
+    // Repeated unmatched brackets have one repair choice; other text keeps the ordinary search.
+    if (child.value !== '' && (current.type !== 'span' || !/^(?:\[ )+$/u.test(child.value))) return false
+    for (let at = child.value.indexOf('['); at >= 0; at = child.value.indexOf('[', at + 1)) brackets.push([child, at])
+  }
+  const next = nested[0]
+  if (next === undefined) return null
+  if (next.type !== 'span' && next.type !== 'emphasis' && next.type !== 'strong') return false
+  return next.type !== 'span' && current.type !== 'paragraph' ? false : next
+}
+
+function chainEscapes(brackets: ChainScan['brackets'], needed: boolean): Map<TextNode, number[]> {
+  const escapes = new Map<TextNode, number[]>()
+  if (!needed) return escapes
+  for (const [text, at] of brackets) {
+    const offsets = escapes.get(text) ?? []
+    offsets.push(at)
+    escapes.set(text, offsets)
+  }
+  return escapes
+}
+
+export function simpleSpanChain(nodes: readonly Node[]): SpanChain | null {
+  if (nodes.length !== 1 || nodes[0]?.type !== 'paragraph') return null
+  const scan: ChainScan = { spans: [], brackets: [] }
+  let current: Node = nodes[0]
+  for (;;) {
+    if (current.type === 'span') scan.spans.push(current)
+    const next = scanChainNode(current, scan.brackets)
+    if (next === false) return null
+    if (next === null) break
+    current = next
+  }
+  if (scan.spans.length === 0) return null
+  const firstLoss = scan.spans.find((node) => unformable(node, 0)) ?? null
+  const formable = scan.spans.filter((node) => !unformable(node, 0)).length
+  const outerSpan = firstLoss !== null && scan.spans[0] !== firstLoss
+  // Mixed formable and impossible spans can change which closer a bracket takes.
+  if (firstLoss !== null && formable > (outerSpan ? 1 : 0)) return null
+  return { loss: firstLoss, escapes: chainEscapes(scan.brackets, firstLoss === null || outerSpan) }
+}
+
+/** Text of a simple span forest, with its potential openers. */
+function forestText(node: TextNode, inside: boolean, escapes: Map<TextNode, number[]>): boolean {
+  if (node.value === '') return true
+  if (!inside || !/^(?:\[ )+$/u.test(node.value)) return false
+  const offsets: number[] = []
+  for (let at = node.value.indexOf('['); at >= 0; at = node.value.indexOf('[', at + 1)) offsets.push(at)
+  escapes.set(node, offsets)
+  return true
+}
+
+/** Independent formable span branches in one paragraph share a bracket kind in the repair. */
+export function simpleSpanForest(nodes: readonly Node[]): Map<TextNode, number[]> {
+  const escapes = new Map<TextNode, number[]>()
+  if (nodes.length !== 1 || nodes[0]?.type !== 'paragraph') return escapes
+  const pending: [Node, boolean][] = [[nodes[0], false]]
+  let spans = 0
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
+    const [node, inside] = item
+    if (node.type === 'span') {
+      if (unformable(node, 0)) return new Map<TextNode, number[]>()
+      spans++
+    } else if (node.type === 'text') {
+      if (!forestText(node, inside, escapes)) return new Map<TextNode, number[]>()
+    } else if (node.type !== 'paragraph') return new Map<TextNode, number[]>()
+    for (const child of childNodes(node)) pending.push([child, inside || node.type === 'span'])
+  }
+  return spans > 0 ? escapes : new Map<TextNode, number[]>()
+}
+
 /** Neither `e` nor a node around it can form, so no escape makes one form. */
 function noneForms(c: Check, e: Node): boolean {
   return unformable(e, c.flags) && !c.formsAround && c.around.every(([list, at, flags]) => unformable(list[at]!, flags))
