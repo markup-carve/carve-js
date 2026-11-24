@@ -199,10 +199,16 @@ function measure(operation: Operation, build: (n: number) => string, base: numbe
 
 /**
  * A cost per byte that rises at small sizes and then stays flat (cache sizes, a depth cap) repeats at the same sizes;
- * a superlinear cost keeps its ratio at four times the base.
+ * a superlinear cost keeps its ratio at four times the base. The larger base shrinks to two times or the same base
+ * when the bytes of its second step would pass the budget, which `measure` takes regardless.
  */
 export function superlinear(operation: Operation, build: (n: number) => string, base: number): string | null {
-  return measure(operation, build, base) === null ? null : measure(operation, build, base * 4)
+  if (measure(operation, build, base) === null) return null
+  const two = build(base * 2).length
+  const step = two / Math.max(1, build(base).length)
+  let factor = 4
+  while (factor > 1 && two * step ** Math.log2(factor) > DEEP_MAX_BYTES) factor >>= 1
+  return measure(operation, build, base * factor)
 }
 
 function failure(error: unknown): Finding | null {

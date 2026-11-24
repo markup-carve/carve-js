@@ -24,3 +24,13 @@ void test('a cost per byte that rises at small sizes and then stays flat is not 
 void test('a quadratic cost stays superlinear at four times the base', () => {
   assert.match(superlinear(modeled((length) => (length / 200) ** 2), build, 100) ?? '', /^model n=400: /)
 })
+
+void test('the confirmation of a family quadratic in bytes stays within the byte budget', () => {
+  const lengths: number[] = []
+  const squared = (n: number): string => {
+    lengths.push(n * n)
+    return 'x'.repeat(n * n)
+  }
+  assert.notEqual(superlinear(modeled((length) => (length / 262144) ** 2 * 0.6), squared, 512), null)
+  assert.ok(Math.max(...lengths) <= 4 * 1024 * 1024, String(Math.max(...lengths)))
+})
