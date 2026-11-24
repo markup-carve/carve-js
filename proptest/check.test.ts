@@ -112,9 +112,11 @@ void test('C2-X-051, D2: a line comment consuming every closer makes the tabs cl
   const body = readFileSync(join(import.meta.dirname, '../test/fixtures/plan-quote-depth.crv'), 'utf8').trimEnd()
   const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
   const result = formatWithDiagnostics(source, { extensions: tabsExtensions })
-  assert.deepEqual(result.diagnostics, [])
+  // C2-I-089 (carve#6463): `![^[[^][]]()` in the body is a note, so a later `:n[...]` forms an inline extension,
+  // which a qualified fallback cannot hold (C2-X-022): the transform falls back, and the write stays spellable.
+  assert.deepEqual(result.diagnostics.map((entry) => entry.code), ['extension-fallback-rendered'])
   assert.equal(format(source, { extensions: tabsExtensions }), result.source)
-  assert.equal(parse(source, { extensions: tabsExtensions }).children[0]?.type, 'block_extension')
+  assert.equal(parse(source, { extensions: tabsExtensions }).children[0]?.type, 'div')
 })
 
 void test('C2-X-051: a failed claim retains its core div and reports the extension', () => {
