@@ -40,11 +40,57 @@ export function withUpgradeSession<T>(run: () => T): T {
   try { return run() } finally { activeSession = previous }
 }
 
-/** The 0.1 tree of `src` with positions. Offsets are string offsets. */
+/** A code point that takes two UTF-16 units, or a lone surrogate. */
+const SURROGATE = /[\u{10000}-\u{10FFFF}\uD800-\uDFFF]/u
+
+/** UTF-16 offset of every code point offset of `src`, one entry past the end. */
+function codePointTable(src: string): Uint32Array {
+  const table = new Uint32Array(src.length + 1)
+  let point = 0
+  for (let at = 0; at < src.length; point++) {
+    table[point] = at
+    const unit = src.charCodeAt(at)
+    const low = src.charCodeAt(at + 1)
+    at += unit >= 0xd800 && unit <= 0xdbff && low >= 0xdc00 && low <= 0xdfff ? 2 : 1
+  }
+  table[point] = src.length
+  return table.subarray(0, point + 1)
+}
+
+/**
+ * Rewrites the code point offsets of every `pos` in a 0.1 tree of `src` into UTF-16 offsets, in place, so that the
+ * tool can slice `src` with them. Lines are kept; columns are not read by the tool and stay as 0.1 counts them.
+ */
+export function utf16Positions<T>(src: string, tree: T): T {
+  if (!SURROGATE.test(src)) return tree
+  const table = codePointTable(src)
+  const at = (offset: number): number => table[Math.min(offset, table.length - 1)]!
+  const seen = new WeakSet<object>()
+  const stack: unknown[] = [tree]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (typeof value !== 'object' || value === null || seen.has(value)) continue
+    seen.add(value)
+    if (Array.isArray(value)) {
+      for (const item of value) stack.push(item)
+      continue
+    }
+    const pos = (value as { pos?: Partial<Pos> }).pos
+    if (pos !== undefined && pos !== null && !seen.has(pos)) {
+      seen.add(pos)
+      if (typeof pos.startOffset === 'number') pos.startOffset = at(pos.startOffset)
+      if (typeof pos.endOffset === 'number') pos.endOffset = at(pos.endOffset)
+    }
+    for (const inner of Object.values(value)) stack.push(inner)
+  }
+  return tree
+}
+
+/** The 0.1 tree of `src` with positions. Offsets are UTF-16 offsets into `src`; lines count from 1. */
 export function parse01(src: string): Node01 {
   const cached = activeSession?.trees.get(src)
   if (cached !== undefined) return cached
-  const tree = parse(src, { positions: true }) as unknown as Node01
+  const tree = utf16Positions(src, parse(src, { positions: true }) as unknown as Node01)
   activeSession?.trees.set(src, tree)
   return tree
 }
