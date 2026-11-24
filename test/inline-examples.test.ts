@@ -22,7 +22,7 @@ const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
   [5, ['*a [b* c] d'], 'p[strong["a [b"] " c] d"]'],
   [6, ['\\*not strong\\* and \\# and a\\ b and \\a and C:\\dir'], 'p["*not strong* and # and a" nbsp "b and \\a and C:\\dir"]'],
   [7, ['`a\\*b` and [x](/a\\(b) and \\[not a span]{.c}'], 'p[code"a\\*b" " and " a(/a(b)["x"] " and [not a span]{.c}"]'],
-  [8, ['`code` and `` a ` b `` and ` x ` and `*a*`'], 'p[code"code" " and " code"a ` b" " and " code"x" " and " code"*a*"]'],
+  [8, ['`code` and `` a ` b `` and ` x ` and `*a*`'], 'p[code"code" " and " code" a ` b " " and " code" x " " and " code"*a*"]'],
   [9, ['a `b', 'c` d'], 'p["a " code"b|c" " d"]'],
   [10, ['see `unclosed *x* and [y](/u)'], 'p["see `unclosed " strong["x"] " and " a(/u)["y"]]'],
   [11, ['!`/kaet/` and !`a<b>`{.ipa} and \\!`x`'], 'p[lit"/kaet/" " and " lit"a<b>"{.ipa} " and !" code"x"]'],

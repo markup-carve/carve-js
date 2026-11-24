@@ -77,14 +77,14 @@ function writtenBack(tree: DocumentNode): Inline[] {
 }
 
 describe('verbatim spans and destinations', () => {
-  it('C2-W-077: a code span is padded only where a reader would take the padding or the run', () => {
+  it('C2-W-077: a code span is padded only on a side where its value is a backtick', () => {
     const code = (value: string): DocumentNode => paragraphOf({ type: 'text', value: 'x' }, { type: 'code', value })
     expect(write(code('a'))).toBe('x`a`\n')
-    expect(write(code(' a '))).toBe('x`  a  `\n')
+    expect(write(code(' a '))).toBe('x` a `\n')
     expect(write(code('  '))).toBe('x`  `\n')
     expect(write(code(' a'))).toBe('x` a`\n')
-    expect(write(code('`a'))).toBe('x`` `a ``\n')
-    expect(write(code('a`'))).toBe('x`` a` ``\n')
+    expect(write(code('`a'))).toBe('x`` `a``\n')
+    expect(write(code('a`'))).toBe('x``a` ``\n')
     expect(write(code('a``b`c'))).toBe('x```a``b`c```\n')
     for (const value of ['a', ' a ', '  ', ' a', 'a ', '`a', 'a`', 'a``b`c', '`']) {
       expect(writtenBack(code(value))).toEqual([{ type: 'text', value: 'x' }, { type: 'code', value }])

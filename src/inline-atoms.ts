@@ -141,11 +141,14 @@ function indexedClosingRun(state: InlineState, pos: number, length: number): num
   return matches[cursor] ?? NONE
 }
 
-/** C2-I-016: the content starts and ends with a space and holds a character that is not a space. */
-function hasSpacePadding(text: string, start: number, end: number): boolean {
-  if (end - start < 2 || text.charCodeAt(start) !== SPACE || text.charCodeAt(end - 1) !== SPACE) return false
-  for (let p = start + 1; p < end - 1; p++) if (text.charCodeAt(p) !== SPACE) return true
-  return false
+/** C2-I-016: a space directly after the opening run is removed when a backtick follows it. */
+function padsStart(text: string, start: number, end: number): boolean {
+  return end - start >= 2 && text.charCodeAt(start) === SPACE && text.charCodeAt(start + 1) === BACKTICK
+}
+
+/** C2-I-016: a space directly before the closing run is removed when a backtick precedes it. */
+function padsEnd(text: string, start: number, end: number): boolean {
+  return end - start >= 2 && text.charCodeAt(end - 1) === SPACE && text.charCodeAt(end - 2) === BACKTICK
 }
 
 /** C2-I-021: the offset behind the raw-format marker at `pos`, or NONE. */
@@ -168,9 +171,8 @@ function codeSpan(state: InlineState, start: number, run: number, kind: number, 
   if (close === NONE && state.codeRuns === null) close = indexedClosingRun(state, open, length)
   // C2-I-017, C2-I-119: with no closing run the opener is text, the prefix with it, and the scan goes on behind the run.
   if (close === NONE || close >= limit) return open
-  const padded = hasSpacePadding(text, open, close)
-  const contentStart = padded ? open + 1 : open
-  const contentEnd = padded ? close - 1 : close
+  const contentStart = padsStart(text, open, close) ? open + 1 : open
+  const contentEnd = padsEnd(text, open, close) ? close - 1 : close
   const after = close + open - run
   const marker = kind === CODE_SPAN ? rawMarkerEnd(text, after, state.end) : NONE
   if (marker !== NONE) {

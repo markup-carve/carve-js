@@ -3,7 +3,8 @@ import { lint } from './lint.ts'
 import { CATALOG } from './catalog.ts'
 
 // carve#6508 took description-term-multi-line back to the default on.
-const NOTICES = ['blank-reference-label', 'comment-fence-closer-with-text', 'continuation-reading-changed',
+const NOTICES = ['blank-reference-label', 'code-span-padding-kept', 'comment-fence-closer-with-text',
+  'continuation-reading-changed',
   'deprecated-bare-highlight', 'deprecated-bare-strike', 'deprecated-bare-underline', 'deprecated-cell-alignment',
   'deprecated-continuation-marker',
   'deprecated-indented-line-under-heading', 'deprecated-loose-attribute', 'deprecated-separator-row',

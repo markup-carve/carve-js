@@ -178,6 +178,16 @@ export const CATALOG = {
       ".2",
     ].join(''),
   ] },
+  "code-span-padding-kept": { severity: "warning", default: "upgrade", messages: [
+    [
+      "The spaces at the ends of this span read otherwise than in 0.1, whic",
+      "h removed one space from each end when both ends held one; 0.2 remov",
+      "es only a space next to a backtick. Check the spaces at the ends of ",
+      "the span.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
   "colon-fence-length-mismatch": { severity: "warning", default: "on", messages: [
     [
       "Bare ${authoredWidth}-colon fence does not close the innermost ${exp",
