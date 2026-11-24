@@ -20,7 +20,7 @@ describe('C2-W-010: a pair behind a braced pair is written the same on every pat
   it.each([
     ['{*{  *} {{*{x*}\n', '{*{  *} \\{*{x*\n'],
     ['{*{  *}{{*x}*}\n', '{*{  *}\\{*x}*\n'],
-    ['1. {{*x *} {{*{x*}\n', '. {{*x *} \\{*{x*\n'],
+    ['. {{*x *} {{*{x*}\n', '. {{*x *} \\{*{x*\n'],
     ['> {*{ *} {{*x}*}{{/{*/a /x /\n', '> {*{ *} \\{*x}*{{/{*/a /x /\n'],
     ['> - {*{  *}{{*x*}\n', '> - {*{  *}\\{*x*\n'],
   ])('writes %j as %j', checkWrites)
