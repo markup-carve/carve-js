@@ -48,26 +48,39 @@ function averageParse(source: string): number {
 
 function median(values: number[]): number { return values.sort((left, right) => left - right)[1] ?? 0 }
 
-/** A growth past the bound that a second measurement repeats; one slow sample on a shared runner is noise. */
-function growth(source: string, average: (input: string) => number): string | null {
-  const first = measureGrowth(source, average)
-  return first === null ? null : measureGrowth(source, average)
+// Copies of a nesting input nest inside each other until a depth cap (MAX_DEPTH) stops them, so the cost per byte of
+// a linear engine rises from 1x to 4x and then stays flat. A superlinear cost keeps its ratio at four times the size.
+// The 4x to 16x pass is projected from the measured 1x to 4x ratio; past this budget it would outlast the runner's
+// 3-second case timeout, so a case that slow repeats the 1x to 4x measurement instead.
+const CONFIRM_BUDGET_MS = 1500
+const ROUNDS = 3
+
+/** A growth past the bound that a second, larger measurement repeats; one slow sample on a shared runner is noise. */
+export function growth(source: string, average: (input: string) => number): string | null {
+  const small = ratio(source, 1, average)
+  if (small === null) return null
+  const step = small.four / small.one
+  const projected = ROUNDS * small.four * (1 + Math.sqrt(step) + step)
+  if (projected > CONFIRM_BUDGET_MS) return ratio(source, 1, average)?.detail ?? null
+  const large = ratio(source, 4, average)
+  return large === null ? null : `${small.detail}; ${large.detail}`
 }
 
-function measureGrowth(source: string, average: (input: string) => number): string | null {
+function ratio(source: string, base: number,
+  average: (input: string) => number): { detail: string, one: number, four: number } | null {
   const one: number[] = []
   const two: number[] = []
   const four: number[] = []
-  for (let at = 0; at < 3; at++) {
-    one.push(average(source))
-    two.push(average(source.repeat(2)))
-    four.push(average(source.repeat(4)))
+  for (let at = 0; at < ROUNDS; at++) {
+    one.push(average(source.repeat(base)))
+    two.push(average(source.repeat(base * 2)))
+    four.push(average(source.repeat(base * 4)))
   }
   const measured = [median(one), median(two), median(four)]
   const [first, second, third] = measured
   if (first === undefined || second === undefined || third === undefined) return null
   if (first <= 0.5 || second <= 0.5 || third / first <= 9) return null
-  return measured.map((ms) => ms.toFixed(2)).join(', ') + ' ms'
+  return { detail: measured.map((ms) => ms.toFixed(2)).join(', ') + ' ms', one: first, four: third }
 }
 
 function checkParse(source: string, rng: Random): Finding | null {
