@@ -225,6 +225,14 @@ function lineBlockComment(ctx: TreeContext, spans: readonly number[], at: number
   }
   const end = Math.min(last, spans.length - 2)
   const out = place(ctx, { type: 'comment', form: 'block', value: lines.join('\n') } satisfies CommentNode, start, spans[end + 1]!)
+  // C2-B-111: a comment block that the body ends before its closer is unclosed, as one outside a line block.
+  if (last >= spans.length) {
+    const block: BlockNode = {
+      kind: COMMENT_BLOCK, start, end: spans[end + 1]!, aux: 0, flags: 0, exitFlags: FLAG_UNCLOSED, facts: 0, rowFacts: 0,
+      children: null, spans: null, attributes: null,
+    }
+    ctx.notes.push({ what: UNCLOSED, node: out, block, from: 0 })
+  }
   return [out, end]
 }
 
