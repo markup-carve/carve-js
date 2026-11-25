@@ -65,11 +65,10 @@ function inlineList(r: Render, nodes: readonly Inline[], nested: boolean): strin
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     // Most nodes are text, which needs no writer.
-    if (node.type === 'text') out += r.verse === 0 ? escapeTextNode(r, node.value) : verseText(r, node.value, r.verse === 2)
+    if (node.type === 'text') out += r.verse ? verseText(r, node.value, !nested && at === 0) : escapeTextNode(r, node.value)
     else if (r.settings.quotes !== null && node.type === 'smart_punctuation' && r.settings.smartTypography &&
       isApostrophe(node, nodes[at - 1], nodes[at + 1])) out += escapeText(smartGlyph(node))
     else if (!isBreak(node) || !isSkippedBreak(nodes, at, nested)) out += writeOwn(r, node.type, node) ?? ''
-    if (r.verse === 2) r.verse = 1
   }
   return out
 }
@@ -86,7 +85,8 @@ function verseColumns(text: string): number {
 
 /**
  * C2-H-043: the text of a line of a line block. Each run of spaces and tabs is written as one `&nbsp;` per column
- * when it leads the line (`lead` and at offset 0) or covers two or more columns, and as one space otherwise.
+ * when it leads the line (`lead`: the node is the line's first child, and the run starts it) or covers two or more
+ * columns, and as one space otherwise.
  * Columns count code points from the start of the text node; a tab advances to the next multiple of 4.
  */
 function verseText(r: Render, text: string, lead: boolean): string {

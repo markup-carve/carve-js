@@ -483,11 +483,11 @@ function rawBlock(r: Render, node: RawBlockNode, level: number): void {
 
 /** C2-H-043: a line writes the spaces and tabs of its text nodes with their columns (see `verseText`). */
 function lineHtml(r: Render, node: LineNode): string {
-  r.verse = 2
+  r.verse = true
   try {
     return inlineHtml(r, node.children)
   } finally {
-    r.verse = 0
+    r.verse = false
   }
 }
 
@@ -1011,9 +1011,9 @@ export function renderDocument(
     ((rule.allowedInline?.includes('link') ?? true) && !(rule.deniedInline?.includes('link') ?? false))
   const r: Render = {
     settings, resolution, taskLabels, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
-    linkNotes: [], abbrDepth: 0,
+    linkNotes: [], abbrDepth: 0, verse: false,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
-    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(), verse: 0,
+    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }

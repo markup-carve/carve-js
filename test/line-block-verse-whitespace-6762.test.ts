@@ -13,6 +13,7 @@ describe('verse whitespace in a line block (C2-H-043)', () => {
     ['a &  <b', '<p>a &amp;&nbsp;&nbsp;&lt;b</p>'],
     ['*a  b*  c', '<p><strong>a&nbsp;&nbsp;b</strong>&nbsp;&nbsp;c</p>'],
     ['*a* b', '<p><strong>a</strong> b</p>'],
+    ['[ a](u)', '<p><a href="u"> a</a></p>'],
     ['$`a  b`', '<p><span class="math inline" role="math">\\(a  b\\)</span></p>'],
   ])('%j', (body, html) => {
     expect(line(body)).toBe(html)
