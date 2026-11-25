@@ -16,6 +16,7 @@
 
 import { isUrlAllowed } from '../../src/html-attributes.ts'
 import type { UrlPolicy } from '../../src/index.ts'
+import { STYLE_PATTERNS } from '../../src/render-tables.ts'
 
 /** Options gate the small set of constructs that are safe only in some
  *  contexts. All default OFF. */
@@ -155,21 +156,14 @@ function normalizeForCheck(value: string): string {
   return decodeCssEscapes(decodeEntities(value))
 }
 
-// Blank a style value that can fetch or execute. Mirrors the core renderer's
-// hasDangerousCss: whole-value rejection, not CSS surgery. CSS escapes are
-// decoded first so `u\72l(` folds to `url(`.
+// Blank a style value that can fetch or execute: the core renderer's STYLE_PATTERNS
+// (C2-H-162, CSS image functions included) plus `javascript:`. Whole-value rejection,
+// not CSS surgery. CSS escapes are decoded first so `u\72l(` folds to `url(`.
 export function styleIsDangerous(value: string): boolean {
   const compact = normalizeForCheck(value.replace(/\/\*[\s\S]*?\*\//g, ''))
     .toLowerCase()
     .replace(/\s+/g, '')
-  return (
-    compact.includes('expression(') ||
-    compact.includes('url(') ||
-    compact.includes('@import') ||
-    compact.includes('behavior:') ||
-    compact.includes('-moz-binding') ||
-    compact.includes('javascript:')
-  )
+  return compact.includes('javascript:') || STYLE_PATTERNS.some((pattern) => compact.includes(pattern))
 }
 
 // A `url(...)` whose content does not begin with `#` is a NON-LOCAL reference.

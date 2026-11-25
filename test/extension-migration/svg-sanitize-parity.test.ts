@@ -123,3 +123,30 @@ describe('sanitizeSvg root xmlns (carve#6755)', () => {
     expect(root.attrs!.filter((attr) => attr.name.toLowerCase() === 'xmlns').map((attr) => attr.value)).toEqual(['http://www.w3.org/2000/svg'])
   })
 })
+
+describe('sanitizeSvg style (carve#6760)', () => {
+  it('drops a style with a CSS image function', () => {
+    const styles = [
+      'cursor:image-set("https://e.example/p.png" 1x),auto',
+      'background:-webkit-image-set("https://e.example/p.png" 1x)',
+      "background:image('https://e.example/p.png')",
+      'background:src("https://e.example/p.png")',
+      'background:IMAGE\\2d set("https://e.example/p.png" 1x)',
+    ]
+    for (const style of styles) {
+      expect(sanitizeSvg(`<svg style='${style}'/>`, { allowStyle: true }).svg, style).toBe('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    }
+    expect(sanitizeSvg('<svg style="fill:red;cursor:pointer"/>', { allowStyle: true }).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg" style="fill:red;cursor:pointer"/>')
+  })
+
+  const FUNCS = ['image-set(', '-webkit-image-set(', 'image(', 'src(', 'url(', 'IMAGE-SET (', 'im\\61ge(', 'ima/**/ge-set(', 'image&#45;set(',
+    's\\72 c(', 'Image\\2D Set(', 'expression(', '@import ', 'behavior:', '-moz-binding:', 'javascript:']
+  sweep('style image functions', () => {
+    const prop = pick(['cursor', 'background', 'background-image', 'mask', 'fill', 'list-style', 'border-image', 'content'])
+    const style = `${pick(['', 'fill:red;'])}${prop}:${pick(FUNCS)}${pick(['"https://e.example/p.png"', "'//e.example/p'", 'https://e.example/p', '"x.png" 1x'])})`
+    return { src: `<svg><rect style=${quoted(style)}/></svg>`, opts: { allowStyle: true } }
+  }, (svg, src) => {
+    expect(svg, src).not.toContain('style=')
+  })
+})
