@@ -8,7 +8,7 @@ import {
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
-import { addFinding, type Diagnostic, inDocumentOrder, locateFindings } from './diagnostics.ts'
+import { addFinding, type Diagnostic, type FindingOrder, inDocumentOrder, locateFindings } from './diagnostics.ts'
 import { holdsLineFeedValue, isKey, withSpelledValues } from './write-attributes.ts'
 import {
   blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, joinsIndentedRun, topPredecessors, writeBlocks,
@@ -2565,19 +2565,20 @@ function attributeValueLosses(document: DocumentNode, w: Writer): void {
 /** Locate writer losses, moving a line-feed mismatch from a wrapper to its written leaf. */
 function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
   if (w.lineFeedValues) attributeValueLosses(document, w)
-  return inDocumentOrder(document, locatedLosses(document, w))
+  const order: FindingOrder = new Map()
+  return inDocumentOrder(document, locatedLosses(document, w, order), order)
 }
 
-function locatedLosses(document: DocumentNode, w: Writer): Diagnostic[] {
+function locatedLosses(document: DocumentNode, w: Writer, order: FindingOrder): Diagnostic[] {
   if (!w.losses.entries.some((entry, at) => entry.code === 'structure-unspellable' ||
     (entry.code === 'field-unspellable' && w.losses.nodes[at]?.type === 'comment'))) {
-    const diagnostics = locateFindings(document, w.losses)
+    const diagnostics = locateFindings(document, w.losses, order)
     rootMetadataLosses(document, diagnostics)
     return diagnostics
   }
   const candidates = lineFeedCandidates(document, w)
   // C2-W-103: locate original and added findings together, retaining ranges and include ancestry.
-  const diagnostics = locateFindings(document, w.losses)
+  const diagnostics = locateFindings(document, w.losses, order)
   suppressLineFeedWrappers(document, diagnostics, candidates.text)
   relocateCommentLosses(diagnostics, candidates.comments)
   rootMetadataLosses(document, diagnostics)
