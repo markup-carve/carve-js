@@ -172,8 +172,9 @@ export function styleIsDangerous(value: string): boolean {
 // quoting and internal `)` — `url("https://a)b#x")` still matches because the char
 // right after `url("` is not `#`. Local `url(#id)` refs never match. The lookahead
 // group reads the space and quote atomically: a backtracking `\s*['"]?` let `(?!#)`
-// pass one character early on `url('#g')` (carve#6763).
-const NONLOCAL_URL_RE = /url\((?=(\s*['"]?\s*))\1(?!#)/i
+// pass one character early on `url('#g')` (carve#6763). Only CSS whitespace is skipped:
+// a URL keeps a leading no-break space, so `url(\u00a0#g)` names another resource (carve#6773).
+const NONLOCAL_URL_RE = /url\((?=([\t\n\f\r ]*['"]?[\t\n\f\r ]*))\1(?!#)/i
 // Any absolute-URL scheme (`https:`, `ms-msdt:`, …). Used to reject URLs inside
 // reference/animation values, which the plain scheme *denylist* would wave through
 // (e.g. an external `https:` retargeting an animated `href`).
