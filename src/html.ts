@@ -866,7 +866,7 @@ function commentsAndBreaks(nodes: readonly Node[]): boolean {
   let comment = false
   for (const child of nodes) {
     if (child.type === 'comment') comment = true
-    else if (child.type !== 'soft_break' && child.type !== 'hard_break') return false
+    else if (!isBreak(child)) return false
   }
   return comment
 }
