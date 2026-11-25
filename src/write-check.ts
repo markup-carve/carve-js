@@ -18,7 +18,7 @@ import {
   spelledEnd,
   writeInline, writeInlines,
 } from './write-inline.ts'
-import { type Attempt, type ParseCache, PLACE_COLUMNS, type Writer } from './write-state.ts'
+import { type Attempt, type ParseCache, PLACE_COLUMNS, recordedRaw, type Writer } from './write-state.ts'
 import { braceBlock, isKey, spelledValue } from './write-attributes.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharacter } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
@@ -366,7 +366,7 @@ function hasOtherForm(c: Check, node: Node): boolean {
   // C2-W-069: a pair braced for its content or place has no bare form; asking for one would only restart the rounds.
   if (node.type === 'emphasis' || node.type === 'strong') return !c.w.bracedAnyway.has(node)
   if (node.type === 'comment') return true
-  return 'key' in node && node.key !== undefined && c.w.facts?.get(node)?.rawRef !== undefined
+  return recordedRaw(c.w, node) !== undefined
 }
 
 /** The last text node below `node`, or `node` itself where it is one. */
@@ -888,7 +888,7 @@ function caretText(link: LinkNode): boolean {
 
 /** C2-W-075: a reference written as authored keeps its caret as spelled, so only a bare one keeps it bare here. */
 function bareAuthoredCaret(w: Writer | undefined, link: LinkNode): boolean {
-  const raw = w?.facts?.get(link)?.rawRef
+  const raw = w === undefined ? undefined : recordedRaw(w, link)
   return raw === undefined || raw.startsWith('[^')
 }
 

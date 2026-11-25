@@ -12,7 +12,7 @@ import { unitBytes } from './positions.ts'
 import { emailEnd, urlEnd } from './inline-atoms.ts'
 import { isAsciiPunctuation, isBoundarySpace, isJoining, isWordCharacter } from './unicode.ts'
 import { braceBlock, quoted } from './write-attributes.ts'
-import { lose, trimEnd, type Writer } from './write-state.ts'
+import { lose, recordedRaw, trimEnd, type Writer } from './write-state.ts'
 
 /** The content stands in a table cell: a pipe in text takes a backslash (C2-W-098). */
 export const IN_CELL = 1
@@ -428,7 +428,7 @@ export function target(node: LinkNode | ImageNode, href: string | undefined, pip
 /** C2-W-075, C2-W-084: the verbatim text of a reference, where the sidecar holds it and the reparse did not refuse it. */
 export function rawReference(w: Writer, node: LinkNode | ImageNode, flags: number): string | null {
   if (node.key === undefined || (w.forms.get(node) ?? 0) > 0) return null
-  const raw = w.facts?.get(node)?.rawRef
+  const raw = recordedRaw(w, node)
   if (raw === undefined) return null
   if (!raw.includes('\n')) return raw
   // C2-W-067: a break inside a label of a cell is not kept; the label folds it to a space (C2-I-079).
