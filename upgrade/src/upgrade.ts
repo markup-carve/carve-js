@@ -28,7 +28,7 @@ import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
 import { rescueEscape } from './escape-rescue.ts'
 import { rescueDashRun } from './dash-run-rescue.ts'
 import { rescueIgnoredLine } from './ignored-line-rescue.ts'
-import { LATE_VARIANTS, RULES } from './rules/index.ts'
+import { LATE_VARIANTS, REPAIRS_VARIANT, RULES } from './rules/index.ts'
 import { itemColumns, itemParagraphBreaks, nestedOrderedBreaks } from './rules/late.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
@@ -567,6 +567,7 @@ function lateHosts(input: string, parsed: Context): boolean[] {
     list && hasLateEdits(parsed, itemParagraphBreaks), list && hasLateEdits(parsed, nestedOrderedBreaks), types.has('table'),
     definitions,
     true,
+    types.has('definition_list'),
   ]
 }
 
@@ -601,7 +602,7 @@ function latePass(input: string, first: string, parsed: Context): UpgradeResult 
   const hosts = lateHosts(input, parsed)
   const fusedComment = hasFusedCommentBlockOpener(input, parsed)
   const order = [...LATE_VARIANTS.keys()]
-  if (fusedComment) order.unshift(order.pop()!)
+  if (fusedComment) order.unshift(...order.splice(REPAIRS_VARIANT, 1))
   for (const index of order) {
     if (hosts[index] === false) continue
     const result = checkedLateVariant(input, LATE_VARIANTS[index]!, parsed, tried)

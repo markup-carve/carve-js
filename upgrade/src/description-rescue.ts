@@ -504,7 +504,7 @@ function firstPreserving(expected: string, candidates: string[]): string | null 
 
 /** C2-B-069, C2-B-076 and C2-B-078: put the mark and body at an owning column. */
 export function rescueDescription(input: string, output: string, mismatch: ReportRecord): Rescue | null {
-  if (!input.includes('::') || termAboveComment(input, mismatch.line)) return null
+  if (!input.includes('::') || termAboveComment(output, mismatch.line)) return null
   const expected = html01(input)
   const mark = firstPreserving(expected, variants(output, Math.max(1, mismatch.line)))
   if (mark !== null) {
