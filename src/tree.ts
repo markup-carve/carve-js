@@ -1,4 +1,4 @@
-import { readAttributeLines } from './ast-attributes.ts'
+import { type Attributes, readAttributeLines } from './ast-attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
   ATTRIBUTES, CELL, COMMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_SPAN_LEFT, FLAG_SPAN_UP,
@@ -106,7 +106,7 @@ function exitNode(node: BlockNode, headRows: number, src: string): void {
     node.facts = headRows
     const rows = resolveTable(node, src)
     // C2-B-187: the footer rows are the last rows of the body.
-    node.rowFacts = Math.min(node.aux, rows - headRows)
+    node.rowFacts = Math.min(node.aux, rows - node.facts)
   }
   if (node.children !== null) orphanAttributes(node.children)
 }
@@ -171,12 +171,13 @@ function orphanAttributes(children: BlockNode[]): void {
  * A cell that joins another is removed from its row; a mark that joins nothing is the text of its cell (C2-B-173).
  */
 function resolveTable(table: BlockNode, src: string): number {
-  const headRows = table.facts
   let rows = 0
   for (const row of table.children!) if (row.kind === ROW && (row.flags & FLAG_CONTINUATION) === 0) rows++
+  const attributes = tableAttributes(table, src)
+  const headRows = endHead(table, attributes, rows)
   // C2-B-187: the footer rows are the last rows below the head.
   const footStart = rows - Math.min(table.aux, rows - headRows)
-  const bodies = bodyBoundaries(table, src, headRows, footStart)
+  const bodies = bodyBoundaries(attributes, headRows, footStart)
   const kept: BlockNode[] = []
   let owners: (BlockNode | null)[] = []
   let last: BlockNode | null = null
@@ -197,10 +198,22 @@ function resolveTable(table: BlockNode, src: string): number {
   return rowIndex
 }
 
+function tableAttributes(table: BlockNode, src: string): Attributes | null {
+  return table.attributes === null || table.attributes.length === 0 || src === '' ? null : readAttributeLines(src, table.attributes)
+}
+
+/** C2-B-187: an empty `body-rows` ends the head above a footer count smaller than the rows. Returns the head rows. */
+function endHead(table: BlockNode, attributes: Attributes | null, rows: number): number {
+  if (table.aux < rows && table.facts > rows - table.aux && bodyPartition(attributes, 0)?.data.length === 0) {
+    table.facts = rows - table.aux
+  }
+  return table.facts
+}
+
 /** C2-B-230: the row indexes at which a body of `body-rows` starts. */
-function bodyBoundaries(table: BlockNode, src: string, headRows: number, footStart: number): Set<number> {
-  if (table.attributes === null || table.attributes.length === 0 || src === '') return new Set()
-  const partition = bodyPartition(readAttributeLines(src, table.attributes), footStart - headRows)
+function bodyBoundaries(attributes: Attributes | null, headRows: number, footStart: number): Set<number> {
+  if (attributes === null) return new Set()
+  const partition = bodyPartition(attributes, footStart - headRows)
   return new Set(partition === null ? [] : bodyStarts(partition).map((start) => start + headRows))
 }
 

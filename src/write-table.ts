@@ -109,9 +109,17 @@ function partitioned(bodies: readonly TableBodyNode[]): boolean {
     leadingHeaderRows(body) > 0 || body.rowHeadColumns !== undefined)
 }
 
+function headEndsAboveFoot(table: TableNode): boolean {
+  const head = rowsOf(table, 'table_head')
+  const foot = rowsOf(table, 'table_foot')
+  return head.length > 0 && head.every(isHeaderRow) && foot.length > 0 && isHeaderRow(foot[0]!)
+}
+
 /** C2-W-136, C2-B-230: `body-rows`, and `body-header-rows` and `body-header-cols` where a body needs them. */
 function bodyKeys(table: TableNode): (readonly [string, string])[] {
   const bodies = bodiesOf(table)
+  // C2-W-136, C2-B-187: an empty `body-rows` ends the head above a foot that leads with a row of header cells.
+  if (bodies.length === 0) return headEndsAboveFoot(table) ? [['body-rows', '']] : []
   if (!partitioned(bodies)) return []
   const header = bodies.map(leadingHeaderRows)
   const data = bodies.map((body, at) => body.children.filter((row) => row.type === 'table_row').length - header[at]!)
