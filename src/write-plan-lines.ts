@@ -70,6 +70,14 @@ function hasContentBehind(leaf: Leaf, at: number, glued = false): boolean {
   return !isLineEnd(code(leaf, end))
 }
 
+/** Whether the first unit behind the blanks at `at` opens a line comment. */
+function onlyLineCommentBehind(leaf: Leaf, at: number): boolean {
+  let end = at
+  while (isBlank(code(leaf, end))) end++
+  const owner = leaf.owners[end]
+  return owner?.type === 'comment' && owner.form === 'line'
+}
+
 /** Whether only blanks follow `at` on its line. */
 function restIsBlank(leaf: Leaf, at: number): boolean {
   let end = at
@@ -343,8 +351,9 @@ function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): numb
   // C2-B-146: the mark needs one or more spaces and content behind it.
   if (code(leaf, at + 1) !== TAB && !hasContentBehind(leaf, at + 1)) return NO_ESCAPE
   // C2-W-146, C2-W-092: a caret and a space that stay text are reported by `unattached-caption`, so the caret takes
-  // the backslash whether or not the line would attach.
-  if (code(leaf, at + 1) === SPACE) return at
+  // the backslash whether or not the line would attach. The rule reads the line without its line comment, so a
+  // caret line that holds only a comment is not reported.
+  if (code(leaf, at + 1) === SPACE && !onlyLineCommentBehind(leaf, at + 1)) return at
   if (first) return decidedIf(place.before !== null)
   if (!mayBeBlockImage(leaf, at)) return NO_ESCAPE
   let unit = at - 2

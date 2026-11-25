@@ -45,7 +45,9 @@ function testLineStart(nodes: readonly Node[], at: number, found: Map<TextNode, 
   if (CARET_LINE.test(node.value) || (CARET_ALONE.test(node.value) && contentBehind(nodes, at + 1))) found.set(node, [0])
 }
 
+/** The rule reads a line without its line comment, so a comment alone behind the caret is no content. */
 function contentBehind(nodes: readonly Node[], from: number): boolean {
   const next = nodes[from]
   return next !== undefined && next.type !== 'soft_break' && next.type !== 'hard_break'
+    && !(next.type === 'comment' && next.form === 'line')
 }
