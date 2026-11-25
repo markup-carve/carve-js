@@ -131,6 +131,7 @@ const CASES = [
   { id: 'indented-code-block', trigger: '    code', near: '```\ncode\n```', fragment: 'code' },
   { id: 'unattached-block-attribute', trigger: '{.x}', near: '{.x}\ntext', fragment: '{.x}' },
   { id: 'empty-include-path', trigger: '{{ }}', near: '{{ file.crv }}', fragment: '{{ }}' },
+  { id: 'reserved-syntax', trigger: '{#dj}: x', near: '{#dj}\nx', fragment: '{#dj}: x' },
   { id: 'comment-splits-table-row', trigger: '| a |\n%% x\n+ b |', near: '| a |\n+ b |\n%% x', fragment: '%% x' },
   { id: 'include-attributes-unused', trigger: '{.wide}\n{{ a.crv }}', near: '{.wide}\n{{ a.js @code }}', fragment: '{.wide}\n{{ a.crv }}' },
   { id: 'include-lines-table-rows-hint', trigger: '{table}\n{{ d.csv @lines:1-2 @code:csv }}', near: '{table}\n{{ d.csv @rows:1-2 @code:csv }}',

@@ -920,6 +920,21 @@ export const CATALOG = {
       "ter case",
     ].join(''),
   ] },
+  "reserved-syntax": { severity: "warning", default: "on", messages: [
+    [
+      "This \"${text}\" is reserved for an include from the same document in ",
+      "a later 0.2 release and renders as literal text. Write \\{{ to keep t",
+      "he text.",
+    ].join(''),
+    [
+      "A line that starts with \"${text}\" is reserved for a definition in a ",
+      "later 0.2 release and renders as literal text. Write \\{# to keep the",
+      " text.",
+    ].join(''),
+  ], conditions: [
+    "a directive with a section and no path",
+    "a line that starts with an id in braces and a colon",
+  ] },
   "semantic-attribute-outside-span": { severity: "warning", default: "on", messages: [
     [
       "\"${name}\" is a semantic span attribute (PART 9 §10) and only applies",

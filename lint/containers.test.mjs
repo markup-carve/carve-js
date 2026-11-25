@@ -39,6 +39,7 @@ const SCOPED = {
   'region-marker-renders-as-text': 'C2-B-217: the marker after spaces and tabs only',
   'quote-fence-ends-the-quote-above': 'a quote line directly above the fence',
   'description-separator-below-content-column': 'a description separator inside a list item by definition',
+  'reserved-syntax': 'a definition line, reserved only at the top level (C2-B-236)',
 }
 
 const WRAPS = {
