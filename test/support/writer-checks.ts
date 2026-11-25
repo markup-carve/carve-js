@@ -541,7 +541,7 @@ function kindTargets(source: BareText, added: readonly number[], at: number, tar
  * The procedure of C2-W-088 from the backslashes `seeds`: the form it reaches, or the text at which it ends
  * with the tree unformed and the construct it last looked at.
  */
-type ProcedureEnd = { form: string, toBare: number[] } | { text: string, best: Construct | null }
+type ProcedureEnd = { form: string, toBare: number[] } | { text: string, best: Construct | null, first: number[] }
 
 /** The constructs of the parse of `bare` with the backslashes `added`, as `name@start` with their ends, in bare offsets. */
 function formedConstructs(bare: string, added: readonly number[]): Map<string, number> {
@@ -594,12 +594,14 @@ function lengthenedEnd(source: BareText, seeds: readonly number[]): number {
 
 function runProcedure(source: BareText, tree: DocumentNode, seeds: readonly number[]): ProcedureEnd {
   const added = [...seeds].sort((x, y) => x - y)
+  let first: number[] | null = null
   for (;;) {
     const { text, toBare } = withEscapes(source.bare, added)
     const parsed = parse(text)
     if (treesEqual(parsed, tree)) return { form: text, toBare }
     const { targets, best } = roundEscapes(text, toBare, parsed, source, added)
-    if (targets.length === 0) return { text, best }
+    first ??= targets
+    if (targets.length === 0) return { text, best, first }
     added.push(...targets)
     added.sort((x, y) => x - y)
   }
@@ -699,6 +701,9 @@ export function referenceForm(written: string, tree: DocumentNode): ReferenceFor
         : `the ${best.type} at ${best.start}, whose opener takes no backslash`
       return { gap: `the parse of ${JSON.stringify(result.text)} differs from the tree, holds ${what}, and C2-W-125 places nothing` }
     }
+    // C2-W-125 (carve#6656): the case backslash goes beside the kinds its round reports and does not cancel them.
+    const kinds = result.first.filter((at) => at !== extra && !seeds.includes(at))
+    if (kinds.length > 0 && 'form' in runProcedure(source, tree, [...seeds, extra, ...kinds])) seeds.push(...kinds)
     seeds.push(extra)
   }
   return { gap: `no fixed point for ${JSON.stringify(written)}` }
