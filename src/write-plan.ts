@@ -21,7 +21,7 @@ import { type Writer } from './write-state.ts'
 import { MAX_DEPTH } from './state.ts'
 import { plainLeaf } from './write-plain.ts'
 import { braceBlock } from './write-attributes.ts'
-import { BRACED_MARKS } from './inline-tables.ts'
+import { BRACED_MARKS, CHARACTER_CLASSES, CLASS_KEY_REST } from './inline-tables.ts'
 
 /** What one planned write of a group collects. */
 export interface Plan {
@@ -303,7 +303,7 @@ function hostBlock(leaf: Leaf, at: number, escaped: Uint8Array): number {
   const codes = leaf.codes
   while (end < codes.length && end - at < LONGEST_BLOCK && codes[end] !== LF && leaf.kinds[end] === TEXT && escaped[end] === 0) end++
   if (end - at >= LONGEST_BLOCK) return UNDECIDED
-  const text = charsText(leaf.codes, at, end)
+  const text = writtenText(leaf, at, end, escaped)
   if (readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0) return isHost(leaf, at) ? ESCAPED : UNDECIDED
   return end === leaf.codes.length || leaf.codes[end] === LF ? 0 : UNDECIDED
 }
@@ -755,9 +755,9 @@ function atomEnd(leaf: Leaf, at: number): number {
 }
 
 /** C2-W-125 six: a unit of text behind an atom that would lengthen it. */
-function checkAtomEnd(leaf: Leaf, end: number, node: Node): void {
+function checkAtomEnd(leaf: Leaf, end: number, node: Node, escaped: Uint8Array): void {
   const next = code(leaf, end)
-  if (next < 0 || leaf.kinds[end] !== TEXT) return
+  if (next < 0 || leaf.kinds[end] !== TEXT || escaped[end] !== 0) return
   const type = node.type
   if (type === 'mention' || type === 'tag' || type === 'caption_number') {
     undecidedIf(isAsciiAlphanumeric(next) || next === 95 || next === 45 || next === 46, leaf, 'sigil end')
@@ -810,10 +810,10 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
     if (kind === ATOM && !continuesAtom(leaf, at)) {
       const node = leaf.owners[at]!
       checkAtom(leaf, at, node)
-      checkAtomEnd(leaf, atomEnd(leaf, at), node)
+      checkAtomEnd(leaf, atomEnd(leaf, at), node, escaped)
       continue
     }
-    if (kind === OPEN) openMark(leaf, at)
+    if (kind === OPEN) openMark(leaf, at, escaped)
     else if (kind === CLOSE) leaf.openDepth--
     else if (kind === TEXT) {
       if (candidateNote && noteCandidateBracket(leaf, at)) return undecide(leaf, 'note candidate bracket')
@@ -835,16 +835,87 @@ function startsNoteCandidate(leaf: Leaf, at: number, escaped: Uint8Array): boole
 
 /**
  * C2-I-043: a valid attribute block comes first at a brace, and `{_` may open one, since a key may start with `_`
- * (C2-I-030). A braced underline whose source reads as a block is left to the repair.
+ * (C2-I-030). C2-W-125 case nine: where the source reads as a block, the `=` behind the key characters of the content
+ * takes the backslash, as `escapeAttributeKey` places it; a block that still reads is left to the repair.
  */
-function openMark(leaf: Leaf, at: number): void {
+function openMark(leaf: Leaf, at: number, escaped: Uint8Array): void {
   leaf.openDepth++
   if (leaf.codes[at] !== 123 || code(leaf, at + 1) !== 95) return
   let end = at
   while (end < leaf.codes.length && leaf.codes[end] !== LF) end++
-  const text = charsText(leaf.codes, at, end)
-  undecidedIf(readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0, leaf, 'attribute block')
+  if (!readsAsBlock(leaf, at, end, escaped)) return
+  let equals = at + 2
+  while (leaf.kinds[equals] === TEXT && isKeyRest(leaf.codes[equals]!)) equals++
+  if (leaf.kinds[equals] !== TEXT || leaf.codes[equals] !== 61 || escaped[equals] !== 0) return undecide(leaf, 'attribute block')
+  escaped[equals] = 1
+  if (readsAsBlock(leaf, at, end, escaped)) {
+    escaped[equals] = 0
+    undecide(leaf, 'attribute block')
+  }
 }
+
+function isKeyRest(value: number): boolean {
+  return value < 128 && (CHARACTER_CLASSES[value]! & CLASS_KEY_REST) !== 0
+}
+
+function readsAsBlock(leaf: Leaf, at: number, end: number, escaped: Uint8Array): boolean {
+  const text = writtenText(leaf, at, end, escaped)
+  return readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0
+}
+
+/** The source of the units from `at` to `end`, with the backslashes the plan placed so far. */
+function writtenText(leaf: Leaf, at: number, end: number, escaped: Uint8Array): string {
+  let text = ''
+  let from = at
+  for (let unit = at; unit < end; unit++) {
+    if (escaped[unit] === 0) continue
+    text += charsText(leaf.codes, from, unit) + '\\'
+    from = unit
+  }
+  return text + charsText(leaf.codes, from, end)
+}
+
+/**
+ * C2-I-092, C2-W-125 six: a `_` of text behind a mention or a tag would lengthen its name, and the backslash alone
+ * keeps it. It is placed before the scan, so a brace before the atom reads the text as the reader reads it. The repair
+ * keeps a backslash its first round placed for another construct (C2-W-091), so the plan places these only where the
+ * rest of the leaf opens nothing: no mark, no atom but smart punctuation, no brace before the sigil but the one right
+ * before it, and at most MAX_NAME_ENDS of them, which the repair tries one by one.
+ */
+function nameEndEscapes(leaf: Leaf, escaped: Uint8Array): void {
+  let placed = 0
+  for (let at = 0; at < leaf.codes.length; at++) {
+    if (!startsName(leaf, at)) continue
+    const end = atomEnd(leaf, at)
+    if (leaf.kinds[end] === TEXT && leaf.codes[end] === 95 && escaped[end] === 0) {
+      escaped[end] = 1
+      placed++
+    }
+    at = end - 1
+  }
+  if (placed > 0 && (placed > MAX_NAME_ENDS || opensBesideNames(leaf))) undecide(leaf, 'sigil end')
+}
+
+function startsName(leaf: Leaf, at: number): boolean {
+  if (leaf.kinds[at] !== ATOM || continuesAtom(leaf, at)) return false
+  const type = leaf.owners[at]!.type
+  return type === 'mention' || type === 'tag'
+}
+
+/** A mark, an atom other than a name or smart punctuation, or a text brace not right before an atom. */
+function opensBesideNames(leaf: Leaf): boolean {
+  for (let at = 0; at < leaf.codes.length; at++) {
+    const kind = leaf.kinds[at]
+    if (kind === OPEN || kind === CLOSE) return true
+    if (kind === TEXT && leaf.codes[at] === 123 && leaf.kinds[at + 1] !== ATOM) return true
+    if (kind !== ATOM || continuesAtom(leaf, at)) continue
+    const type = leaf.owners[at]!.type
+    if (type !== 'mention' && type !== 'tag' && type !== 'smart_punctuation') return true
+  }
+  return false
+}
+
+const MAX_NAME_ENDS = 4
 
 /** Decides the unit of text at `at` by its resolver. Returns the unit behind what it decided. */
 function textUnit(leaf: Leaf, at: number, escaped: Uint8Array): number {
@@ -886,9 +957,13 @@ function attributeBlockEnd(leaf: Leaf, at: number, escaped: Uint8Array): number 
   let closes = false
   for (; end < leaf.codes.length && end - at < LONGEST_BLOCK && leaf.codes[end] !== LF; end++) closes ||= leaf.codes[end] === 125
   if (!closes) return -1
-  const text = charsText(leaf.codes, at, end)
+  const text = writtenText(leaf, at, end, escaped)
   const block = readAttributeBlock(text, 0, text.length, emptyMemo(), null)
-  return block < 0 ? -1 : at + block
+  if (block < 0) return -1
+  // The written text holds a backslash before each escaped unit, which is no unit of the leaf.
+  let unit = at
+  for (let offset = 0; offset < block; unit++) offset += escaped[unit] === 0 ? 1 : 2
+  return unit
 }
 
 /** C2-I-028, C2-W-090: a valid block of text behind a host would attach to it, so its brace takes the backslash. */
@@ -1018,6 +1093,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   leaf.inLine = place?.line === true
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
+  if (leaf.undecided === null) nameEndEscapes(leaf, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) bracesBeforeMarks(leaf, escaped)
