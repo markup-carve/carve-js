@@ -122,10 +122,15 @@ function fragmentInlines(ctx: TreeContext, spans: number[], flow: number): Inlin
   ctx.resolvable = false
   const children: Inline[] = []
   let joined = false
+  // carve#6691: a cell over several columns holds its fragments in column order, which the place lookup cannot search.
+  let ordered = true
+  for (let at = 2; at < spans.length && ordered; at += 2) ordered = spans[at]! >= spans[at - 1]!
   for (let at = 0; at < spans.length; at += 2) {
     // An empty fragment adds nothing.
     if (spans[at] === spans[at + 1]) continue
-    const nodes = contentNodes(ctx, spans, at, at + 2, true, flow)
+    const nodes = ordered
+      ? contentNodes(ctx, spans, at, at + 2, true, flow)
+      : contentNodes(ctx, [spans[at]!, spans[at + 1]!], 0, 2, true, flow)
     if (joined) joinFragment(ctx, children, nodes, spans[at]!)
     else for (const child of nodes) children.push(child)
     joined = true

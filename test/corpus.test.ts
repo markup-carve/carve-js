@@ -47,8 +47,8 @@ describe('the examples of the specification', () => {
 })
 
 describe('the clause cases of the specification', () => {
-  it('holds 2019 cases, each with the sentence that decides it', () => {
-    expect(CLAUSE_CASES).toHaveLength(2019)
+  it('holds 2028 cases, each with the sentence that decides it', () => {
+    expect(CLAUSE_CASES).toHaveLength(2028)
     for (const entry of CLAUSE_CASES) expect(entry.why.length).toBeGreaterThan(0)
   })
 
