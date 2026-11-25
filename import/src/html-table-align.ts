@@ -3,26 +3,35 @@ import type { TableCellNode, TableNode } from '../../src/index.ts'
 
 interface Placed { cell: TableCellNode, column: number, head: boolean }
 
-/** The cells of `table` with the column each starts in, as a render places them (C2-H-056). */
-function placed(table: TableNode): Placed[] {
+/** The cells of a table's groups with the column each starts in, as a render places them (C2-H-056). */
+function placed(groups: TableNode['children']): Placed[] {
   const result: Placed[] = []
-  for (const group of table.children) {
+  for (const group of groups) {
     if (group.type === 'comment') continue
-    const covered: number[] = []
-    for (const row of group.children) if (row.type === 'table_row') placeRow(row.children, covered, group.type === 'table_head', result)
+    const freeAt: number[] = []
+    let index = 0
+    const head = group.type === 'table_head'
+    for (const row of group.children) if (row.type === 'table_row') placeRow(row.children, freeAt, index++, head, result)
   }
   return result
 }
 
-function placeRow(cells: TableCellNode[], covered: number[], head: boolean, result: Placed[]): void {
+/** `freeAt` holds, per column, the first row of the group that a row span from above no longer covers. */
+function placeRow(cells: TableCellNode[], freeAt: number[], index: number, head: boolean, result: Placed[]): void {
   let column = 0
   for (const cell of cells) {
-    while ((covered[column] ?? 0) > 0) covered[column] = (covered[column++] ?? 1) - 1
+    while ((freeAt[column] ?? 0) > index) column++
     result.push({ cell, column, head })
     const colspan = cell.colspan ?? 1
-    for (let more = 0; more < colspan; more++) covered[column + more] = (cell.rowspan ?? 1) - 1
+    const end = index + (cell.rowspan ?? 1)
+    for (let more = 0; more < colspan; more++) freeAt[column + more] = Math.max(freeAt[column + more] ?? 0, end)
     column += colspan
   }
+}
+
+/** C2-M-039: the columns a parse counts (C2-B-172), with the slots that row spans from above take in each row. */
+export function gridWidth(groups: TableNode['children']): number {
+  return placed(groups).reduce((width, entry) => Math.max(width, entry.column + (entry.cell.colspan ?? 1)), 0)
 }
 
 type Axis = 'align' | 'valign'
@@ -50,7 +59,7 @@ function sharedMark(cells: Placed[], axis: Axis): string | undefined {
  * entry (C2-B-211); any other cell keeps its own. Each axis on its own (C2-M-040).
  */
 export function resolveAlignments(table: TableNode): void {
-  const cells = placed(table)
+  const cells = placed(table.children)
   resolveAxis(table, cells, 'align')
   resolveAxis(table, cells, 'valign')
 }

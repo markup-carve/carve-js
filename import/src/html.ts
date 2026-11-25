@@ -15,7 +15,7 @@ import { htmlImage, inline, inlineChildren, normalizeBreaks, trimInlineEdges } f
 import { collectNotes, isFootnoteSection } from './html-notes.ts'
 import { applyAdapter, type Adapter } from './html-adapter.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
-import { resolveAlignments } from './html-table-align.ts'
+import { gridWidth, resolveAlignments } from './html-table-align.ts'
 import {
   cell, coalesce, complete, documentOf, ensureForeignDepth, imageParagraph, paragraph, row, softText, type ImportResult, type LossSettings,
 } from './kit.ts'
@@ -946,30 +946,6 @@ function percentWidth(text: string): number | undefined {
   if (match === null) return undefined
   const value = Number(match[1])
   return value > 0 && value <= 100 ? value / 100 : undefined
-}
-
-/** The end column of a row whose cells skip the slots `covered` holds, the rows each slot stays taken; then one row passes. */
-function placeRowWidth(cells: TableCellNode[], covered: number[]): number {
-  let column = 0
-  for (const entryCell of cells) {
-    while ((covered[column] ?? 0) > 0) column++
-    const colspan = entryCell.colspan ?? 1
-    for (let more = 0; more < colspan; more++) covered[column + more] = Math.max(covered[column + more] ?? 0, entryCell.rowspan ?? 1)
-    column += colspan
-  }
-  for (let index = 0; index < covered.length; index++) covered[index] = Math.max(0, (covered[index] ?? 0) - 1)
-  return column
-}
-
-/** C2-M-039: the columns a parse counts (C2-B-172), with the slots that row spans from above take in each row. */
-function gridWidth(children: TableChildren): number {
-  let width = 0
-  for (const group of children) {
-    if (group.type === 'comment') continue
-    const covered: number[] = []
-    for (const row of group.children) if (row.type === 'table_row') width = Math.max(width, placeRowWidth(row.children, covered))
-  }
-  return width
 }
 
 function tableColumns(children: TableChildren, node: Html.Element, context: HtmlContext): TableColumnNode[] {

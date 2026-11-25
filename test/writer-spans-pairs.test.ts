@@ -62,6 +62,12 @@ describe('C2-W-145: a span count that no mark cell covers is written with span m
     expect(columns(third)).toBe(3)
   })
 
+  it('C2-M-040: a row span past a short row leaves later cells in their own column for alignment', () => {
+    expect(imported('<table><thead><tr><th>A</th><th>B</th><th align="right">C</th></tr></thead><tbody><tr><td>a</td>' +
+      '<td rowspan="2">r</td><td>x</td></tr><tr><td>b</td></tr><tr><td>c</td><td align="right">d</td><td>y</td></tr></tbody></table>'))
+      .toEqual({ source: '|= A |= B |={>} C |\n| a | r | x |\n| b | ^ |\n| c |{>} d | y |\n', codes: [] })
+  })
+
   it('reads back as the supplied tree with the marks added, renders the same grid and leaves the tree as it was', () => {
     const cell = (value: string, extra: Partial<TableCellNode> = {}): TableCellNode =>
       ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [{ type: 'text', value }] }], ...extra })
