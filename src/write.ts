@@ -1839,6 +1839,8 @@ interface PruneScan {
   scanned: number
   byte: number
   stars: boolean | null
+  /** The backslashes of the source that are no case-six escape behind a name and no escaped backslash, or null. */
+  others: number | null
   /** The last match of each search, so that searches from increasing offsets read the source once. */
   found: Map<string, number>
 }
@@ -1906,13 +1908,49 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   if (source[at + 2] !== '#') return false
   const close = nextIndex(scan, source, '}', at + 3)
   const escapedDash = nextIndex(scan, source, '\\-', at + 3)
-  return close >= 0 && (escapedDash < 0 || escapedDash > close || !inHyphenRun(source, escapedDash))
+  if (close < 0) return false
+  if (escapedDash < 0 || escapedDash > close) return true
+  // C2-W-125: a round that reports a construct keeps the case backslash it placed beside it (C2-W-091).
+  return close - at <= LONGEST_TAG_BRACE && !inHyphenRun(source, escapedDash) &&
+    otherBackslashes(scan, source) === bracedNameEscapes(source, at, close) + 1
 }
+
+/** The case-six escapes behind a name between the brace at `at` and its closer. */
+function bracedNameEscapes(source: string, at: number, close: number): number {
+  let count = 0
+  for (let slash = source.indexOf('\\', at + 2); slash >= 0 && slash < close; slash = source.indexOf('\\', slash + 2)) {
+    if (behindName(source, slash)) count++
+  }
+  return count
+}
+
+/** The backslashes of `source` that escape a construct: the brace being pruned and those of other kinds. */
+function otherBackslashes(scan: PruneScan, source: string): number {
+  if (scan.others !== null) return scan.others
+  let count = 0
+  for (let at = source.indexOf('\\'); at >= 0; at = source.indexOf('\\', at + 2)) {
+    const next = source.charCodeAt(at + 1)
+    if (next !== 92 && isAsciiPunctuation(next)) count++
+  }
+  return scan.others = count
+}
+
+/** C2-W-125 case six: the backslash at `at` stands directly behind a tag or mention name, not in a hyphen run. */
+function behindName(source: string, at: number): boolean {
+  const next = source[at + 1]
+  if (next !== '_' && next !== '.' && (next !== '-' || inHyphenRun(source, at))) return false
+  return NAME_BEFORE.test(source.slice(Math.max(0, at - 64), at))
+}
+
+const NAME_BEFORE = /[#@][\p{L}\p{N}]+$/u
+// A longer brace keeps its backslash, so the scan of each candidate stays short.
+const LONGEST_TAG_BRACE = 256
 
 /**
  * C2-W-090, C2-W-099: the `\-` at `at` escapes a hyphen run, a kind of a later round that keeps the brace escape of
  * an earlier one (C2-W-091). Otherwise it is the case-six backslash behind the name, which gives the tree alone, so
- * the brace escape of case one goes (C2-W-125, carve#6687): `x{#a\-w}`, `x{#a\--w}`, but `x\{#a\---}`.
+ * the brace escape of case one goes where no other construct takes a backslash (C2-W-125, carve#6687): `x{#a\-w}`,
+ * `x{#a\--w}`, but `x\{#a\---}` and `x\{#a\-w} \*s*`.
  */
 function inHyphenRun(source: string, at: number): boolean {
   return source[at - 1] === '-' || (source[at + 2] === '-' && source[at + 3] === '-')
@@ -2115,7 +2153,7 @@ function reportedBraceEscape(w: Writer, source: string, at: number): boolean {
 /** The prunable backslashes of `source`, by their offset. */
 function pruneCandidates(w: Writer, source: string): number[] {
   const found: number[] = []
-  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, found: new Map() }
+  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, others: null, found: new Map() }
   for (let at = source.indexOf('\\'); at >= 0; at = source.indexOf('\\', at + 1)) {
     // C2-W-125, case two: a backslash directly behind a quote mark is the escape of the neighbor that decides its direction.
     if (!reportedBraceEscape(w, source, at) && source[at - 1] !== '"' && source[at - 1] !== "'" &&
@@ -2242,7 +2280,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
   let { source, kept } = pruneBatch(w, group, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
   let at = source.indexOf('\\')
   // A pruned backslash at `at` leaves the source before `at` as it was, so the scan goes on from there.
-  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, found: new Map() }
+  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, others: null, found: new Map() }
   while (at >= 0) {
     // C2-W-133: each candidate is one parse more, so the pruning counts toward the limit of the repair.
     if (exhausted(w)) {
@@ -2259,6 +2297,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
         source = candidate
         w.parsed = parsed
         scan.stars = null
+        scan.others = null
         scan.found.clear()
         const pruned = at
         kept = new Set([...kept].map((offset) => (offset > pruned ? offset - 1 : offset)))

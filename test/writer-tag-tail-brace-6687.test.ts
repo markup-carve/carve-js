@@ -34,3 +34,20 @@ describe('C2-W-125: a brace around a tag tail stays bare beside another node (ca
     ['x{#a\\--}x', 'x\\{#a-\\-}x\n'],
   ])('keeps the brace backslash of %j', checkWrites)
 })
+
+// C2-W-125, C2-W-091: where another construct of the paragraph takes a backslash, the brace keeps its own.
+describe('C2-W-125: the brace keeps its backslash beside another escaped construct (carve#6687)', () => {
+  it.each([
+    ['x{#a\\-w\\---}', 'x\\{#a\\-w\\---}\n'],
+    ['x{#a\\-w} \\*s*', 'x\\{#a\\-w} \\*s*\n'],
+    ['x{#a\\-w} \\[l](u)', 'x\\{#a\\-w} \\[l](u)\n'],
+    ['\\--- x{#a\\-w}', '\\--- x\\{#a\\-w}\n'],
+    ['x{#a\\-w} y{#b\\-w}', 'x\\{#a\\-w} y\\{#b\\-w}\n'],
+    ['x{@a\\-w} y{#b\\-w}', 'x{@a\\-w} y\\{#b\\-w}\n'],
+  ])('writes %j as %j', checkWrites)
+
+  // A backslash before a letter is text, not an escape.
+  it.each([
+    ['x{#a\\-w} c\\\\d', 'x{#a\\-w} c\\d\n'],
+  ])('prunes the brace of %j', checkWrites)
+})
