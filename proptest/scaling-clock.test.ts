@@ -22,7 +22,10 @@ for (;;) {
 }
 `
 
-void test('CPU time spent on another thread during one step is not superlinear growth (carve-js#5201)', async () => {
+// Without a per-thread clock (Node before 23.9) the checks fall back to the process clock and keep this noise.
+void test('CPU time spent on another thread during one step is not superlinear growth (carve-js#5201)', {
+  skip: typeof process.threadCpuUsage !== 'function',
+}, async () => {
   const flag = new Int32Array(new SharedArrayBuffer(8))
   const worker = new Worker(BURNER, { eval: true, workerData: flag.buffer })
   await new Promise((resolve) => worker.once('online', resolve))
