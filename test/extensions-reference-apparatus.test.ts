@@ -290,3 +290,57 @@ describe('withExtensions', () => {
     expect(result.html).toContain('href="#ref-doe"')
   })
 })
+
+describe('citations mode and pool placement (carve#6752, carve#6759)', () => {
+  const DOE = 'See :cite[doe].\n\n::: bibliography\n:: [doe]{author="Doe" year="2020"}\n: Doe, J. A book.\n:::\n'
+
+  it('refuses a mode outside numbered and author-date when the renderer is created (C2-X-068)', () => {
+    expect(() => citations({ mode: 'other' as never })).toThrow('invalid citations mode')
+    expect(() => citations({ mode: 'numbered' })).not.toThrow()
+  })
+
+  it('takes the mode from the carve.cite renderer options of the command line (C2-T-010)', async () => {
+    const { registration } = await import('../cli/standard-extensions.ts')
+    const bundle = (mode?: string): ExtensionBundle => {
+      const options = new Map(mode === undefined ? [] : [['carve.cite', { mode }]])
+      const { extensions, renderers, transforms } = registration(['carve.cite'], options, true)
+      return { extensions, renderers, transforms }
+    }
+    const numbered = [
+      '<p>See [<a href="#ref-doe" data-cite-key="doe">1</a>].</p>',
+      '<div class="bibliography">',
+      '  <ol class="references">',
+      '    <li id="ref-doe">Doe, J. A book.</li>',
+      '  </ol>',
+      '</div>',
+    ].join('\n')
+    expect(html(DOE, bundle())).toBe(numbered)
+    expect(html(DOE, bundle('numbered'))).toBe(numbered)
+    expect(html(DOE, bundle('author-date'))).toBe([
+      '<p>See (<a href="#ref-doe" data-cite-key="doe">Doe 2020</a>).</p>',
+      '<div class="bibliography">',
+      '  <ul class="references">',
+      '    <li id="ref-doe">Doe, J. A book.</li>',
+      '  </ul>',
+      '</div>',
+    ].join('\n'))
+  })
+
+  it('lists a pool-only entry in the last directive, after its own entries', () => {
+    const source = 'See :cite[c].\n\n::: references\n:: a\n: A.\n:::\n\n::: references\n:: b\n: B.\n:::\n'
+    expect(html(source, citations({ bibliography: [{ id: 'c', title: 'Pool.' }] }))).toBe([
+      '<p>See [<a id="cite-c-1" href="#ref-c" data-cite-key="c">3</a>].</p>',
+      '<div class="references">',
+      '  <ol class="references">',
+      '    <li id="ref-a">A.</li>',
+      '  </ol>',
+      '</div>',
+      '<div class="references">',
+      '  <ol start="2" class="references">',
+      '    <li id="ref-b">B.</li>',
+      '    <li id="ref-c">Pool.. <a href="#cite-c-1" class="ref-backref">↩</a></li>',
+      '  </ol>',
+      '</div>',
+    ].join('\n'))
+  })
+})

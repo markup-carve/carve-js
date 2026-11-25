@@ -284,19 +284,19 @@ function citationsTransform(view: DocumentNode, options: CitationsOptions): Docu
     })
     node.props = { ...node.props, refs }
   }
-  let placed = false
+  // carve#6759: pool-only entries are numbered after every directive entry, so they close the last directive's list.
+  const last = [...directives.keys()].at(-1)
   let claimed = false
   walkView(view, (node) => {
     if (!isReferences(node)) return undefined
     const body = withoutEntries(node)
     const keys = directives.get(node) ?? []
-    const listKeys = placed ? keys : [...keys, ...order.filter((key) => !sourceKeys.has(key))]
+    const listKeys = node === last ? [...keys, ...order.filter((key) => !sourceKeys.has(key))] : keys
     body.children.push(referenceList(listKeys, entries, refIds, useIds, mode, true, numbers.get(listKeys[0] ?? '') ?? 1))
-    placed = true
     claimed = true
     return claimDirective(REFERENCES, node, [body])
   })
-  if (!placed && order.length > 0) {
+  if (last === undefined && order.length > 0) {
     // No directive places the list: it goes at the end of the document, as in 0.1.
     const list = referenceList(order, entries, refIds, useIds, mode)
     view.children.push({ type: 'block_extension', name: REFERENCES, version: '1', children: [], slots: { body: [list] },
@@ -343,6 +343,9 @@ export const referencesRenderer: ExtensionRenderer = slotRenderer('body')
 
 /** The provisional standard citations extension. */
 export function citations(options: CitationsOptions = {}): ExtensionBundle {
+  if (options.mode !== undefined && options.mode !== 'numbered' && options.mode !== 'author-date') {
+    throw new Error('invalid citations mode')
+  }
   const render = (node: BlockExtensionNode | InlineExtensionNode, host: ExtensionRenderHost): string =>
     renderCitation(node, host, options.mode)
   return {
