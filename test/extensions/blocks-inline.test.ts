@@ -117,6 +117,33 @@ describe('spoiler', () => {
   })
 })
 
+describe('raw HTML in a disclosure body (carve-js#5637)', () => {
+  const raw = (prefix: string) => ['```=html', '<div>', '  x', '</div>', '```'].map((text) => prefix + text).join('\n')
+  const cases = [
+    ['details', use(details())], ['spoiler', use(spoiler())],
+  ] as const
+
+  it('writes the raw lines byte exact at their own column (C2-H-134)', () => {
+    const options = { ...use(details()), rawHtml: true }
+    expect(render(`::: details "R"\n${raw('')}\n:::\n`, options)).toBe(
+      '<details>\n  <summary>R</summary>\n<div>\n  x\n</div>\n</details>')
+    expect(render(`- a\n\n  ::: details "R"\n${raw('  ')}\n  :::\n`, options)).toBe(
+      '<ul>\n  <li>a\n    <details>\n      <summary>R</summary>\n<div>\n  x\n</div>\n    </details>\n  </li>\n</ul>')
+  })
+
+  for (const [name, bundle] of cases) {
+    for (const mode of ['interactive', 'static'] as const) {
+      for (const [prefix, open, close] of [['', '', ''], ['  ', '- a\n\n', ''], ['> ', '', ''], ['    ', '- a\n\n  - b\n\n', '']] as const) {
+        it(`keeps every raw line in ${name} (${mode}, prefix ${JSON.stringify(prefix)})`, () => {
+          const fence = prefix + `::: ${name} "R"`
+          const html = render(`${open}${fence}\n${raw(prefix)}\n${prefix}after\n${prefix}:::\n${close}`, { ...bundle, mode, rawHtml: true })
+          expect(html).toContain('\n<div>\n  x\n</div>\n')
+        })
+      }
+    }
+  }
+})
+
 describe('semanticSpan', () => {
   it('renders the four added keys in the 0.1 nesting order', () => {
     const options = use(semanticSpan())

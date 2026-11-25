@@ -576,8 +576,9 @@ function rendererHost(r: Render, blockDepth: number): ExtensionRenderHost {
         for (const node of nodes.filter(isBlockNode)) {
           r.out = ''
           writeBlocks(r, [node], depth)
-          if (html !== '' && r.out !== '') html += `\n${'  '.repeat(depth)}`
-          html += r.out.slice(1 + depth * 2)
+          if (r.out === '') continue
+          // carve-js#5637: no fixed indent cut; a raw HTML line is written at its own column (C2-H-134).
+          html += (html === '' ? '' : '\n') + r.out.slice(1)
         }
         return html
       } finally {

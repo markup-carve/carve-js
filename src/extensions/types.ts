@@ -46,7 +46,7 @@ export interface ExtensionDefinition {
 }
 
 export interface ExtensionRenderHost {
-  /** Render blocks at `depth`, leaving the first line unindented for insertion by the caller. */
+  /** Render blocks at `depth`, every line as the core writes it there (a raw HTML line keeps its own column). */
   blocks(nodes: readonly Node[], depth?: number): string
   inlines(nodes: readonly Node[]): string
   plainText(nodes: readonly Node[]): string

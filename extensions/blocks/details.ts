@@ -23,12 +23,11 @@ export function disclosureDefinition(name: string, source: string): ExtensionDef
     transform: disclosureTransform(name) }
 }
 
-/** Writes structural lines around a body already rendered at its actual depth. */
+/** Writes structural lines around a body already rendered at its actual depth, its first line indented by the host. */
 export function container(head: string, inner: string, body: string, tail: string, host: ExtensionRenderHost): string {
   const indent = '  '.repeat(host.blockDepth)
-  const childIndent = `${indent}  `
-  return `${head}\n${childIndent}${inner}` +
-    (body === '' ? '' : `\n${childIndent}${body}`) +
+  return `${head}\n${indent}  ${inner}` +
+    (body === '' ? '' : `\n${body}`) +
     `\n${indent}${tail}`
 }
 
