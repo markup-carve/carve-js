@@ -68,3 +68,23 @@ describe('carriers that disagree', () => {
     expect(importDocument(html, { from: 'html' }).document.children[0]).toMatchObject({ type: 'abbreviation_def', expansion: 'x‮y' })
   })
 })
+
+describe('line block whitespace', () => {
+  const lineBlock = (body: string): string => `<div class="line-block" data-carve-line-block>\n  <p>${body}</p>\n</div>\n`
+  const imported = (body: string): string => importDocument(lineBlock(body), { from: 'html', rawHtml: true }).source
+
+  it('C2-H-043: a run of no-break spaces inside a line reads back as the spaces that wrote it', () => {
+    const nbsp = (count: number): string => '&nbsp;'.repeat(count)
+    expect(imported(`tab gap<br>\nwide${nbsp(8)}gap<br>\n${nbsp(4)}lead<br>\nwide${nbsp(2)}two<br>\na b`))
+      .toBe('::: |\ntab gap\nwide        gap\n    lead\nwide  two\na b\n:::\n')
+  })
+
+  it('C2-H-043: runs are read at any inline depth, and a code span keeps its text', () => {
+    expect(imported('<em>a&nbsp;&nbsp;b</em> c')).toBe('::: |\n/a  b/ c\n:::\n')
+    expect(imported('<code>a  b\tc</code>&nbsp;&nbsp;d')).toBe('::: |\n`a  b\tc`  d\n:::\n')
+  })
+
+  it('C2-H-043: a lone no-break space inside a line is no run the renderer writes, so it stays U+00A0', () => {
+    expect(imported('a&nbsp;b c&nbsp; d')).toBe('::: |\na b c  d\n:::\n')
+  })
+})
