@@ -43,7 +43,8 @@ export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks
 /** Rules that run only when the first pass leaves a difference, so a source that already upgrades keeps its result. */
 export const LATE_RULES: readonly Rule[] = [lineComments, typedQuotes]
 
-const REPAIRS: readonly Rule[] = [repairs, ...RULES.map((rule) => rule === inline ? inlineBraced : rule === tables ? tablesHeadStyles : rule),
+const REPAIRS: readonly Rule[] = [repairs,
+  ...RULES.map((rule) => rule === inline ? inlineBraced : rule === tables ? tablesHeadStyles : rule),
   ...LATE_RULES, descriptionColumns, flippedStrong, crossLineStrong, literalTableHeader, duplicateItemDefinitions,
   itemNoteDefinitions, literalLinkBeforeCode,
   wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary, literalQuoteAfterAttributes, innerFenceRun,
