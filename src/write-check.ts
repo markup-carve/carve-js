@@ -845,38 +845,63 @@ export function earlyLoneNoteBrackets(w: Writer, roots: readonly Node[]): [TextN
   return found
 }
 
-/** C2-W-125 case eight: keep a text note opener bare by escaping its early closer before a later caret link is written. */
-export function earlyTextNoteClosers(roots: readonly Node[]): [TextNode, number][] {
+/**
+ * C2-W-125 case eight: a text `^[` stays bare before a later link whose text is a caret, so the `]` that closed it early
+ * takes the backslash before the first write. Only the first such link behind the closers keeps its caret bare, since a
+ * later bare caret could close a caret pair with it; not a collapsed or shortcut reference, which spells its caret
+ * through its key, nor a reference written as authored (C2-W-075). Another node between leaves the case to the rounds.
+ */
+export function earlyTextNoteClosers(roots: readonly Node[], w?: Writer): [TextNode, number][] {
   const found: [TextNode, number][] = []
   const pending = [...roots]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     const children = childNodes(node)
-    scanTextNoteClosers(children, found)
+    scanTextNoteClosers(w, children, found)
     pushAll(pending, children)
   }
   return found
 }
 
-function scanTextNoteClosers(children: readonly Node[], found: [TextNode, number][]): void {
-  let depth = 0
-  let closer: [TextNode, number] | null = null
+function scanTextNoteClosers(w: Writer | undefined, children: readonly Node[], found: [TextNode, number][]): void {
+  if (!children.some((child) => child.type === 'link' && caretText(child))) return
+  // With its closers escaped the note stays open, so each `]` at its own depth closes it early.
+  const scan: TextNoteScan = { depth: 0, closers: [] }
   for (const child of children) {
-    if (child.type === 'text') {
-      const next = scanTextNote(child, depth, closer)
-      depth = next.depth
-      closer = next.closer
-    } else if (child.type === 'link' && closer !== null && leadingCaret(child)) { found.push(closer); closer = null }
+    if (child.type === 'text') scanTextNote(child, scan)
+    else if (child.type === 'link' && caretText(child) && scan.closers.length > 0) {
+      pushAll(found, scan.closers)
+      if (child.refForm !== 'collapsed' && child.refForm !== 'shortcut' && bareAuthoredCaret(w, child)) w?.caseEightLinks.add(child)
+      scan.closers = []
+      scan.depth = 0
+    } else if (!isBreak(child)) {
+      scan.closers = []
+      scan.depth = 0
+    }
   }
 }
 
-function scanTextNote(text: TextNode, depth: number, closer: [TextNode, number] | null):
-  { depth: number, closer: [TextNode, number] | null } {
-  for (let at = 0; at < text.value.length; at++) {
-    if (depth === 0 && text.value.startsWith('^[', at)) { depth = 1; closer = null; at++ }
-    else if (depth > 0 && text.value[at] === '[') depth++
-    else if (depth > 0 && text.value[at] === ']' && --depth === 0) closer = [text, at]
+/** Link text that is a lone caret: `^a` or `^ a` would read as a footnote key, and the rounds decide those. */
+function caretText(link: LinkNode): boolean {
+  const first = link.children[0]
+  return link.children.length === 1 && first?.type === 'text' && first.value === '^'
+}
+
+/** C2-W-075: a reference written as authored keeps its caret as spelled, so only a bare one keeps it bare here. */
+function bareAuthoredCaret(w: Writer | undefined, link: LinkNode): boolean {
+  const raw = w?.facts?.get(link)?.rawRef
+  return raw === undefined || raw.startsWith('[^')
+}
+
+interface TextNoteScan { depth: number, closers: [TextNode, number][] }
+
+function scanTextNote(text: TextNode, scan: TextNoteScan): void {
+  const value = text.value
+  for (let at = 0; at < value.length; at++) {
+    if (scan.depth === 0 && value.startsWith('^[', at)) { scan.depth = 1; scan.closers = []; at++ }
+    else if (scan.depth > 0 && value[at] === '[') scan.depth++
+    else if (scan.depth === 1 && value[at] === ']') scan.closers.push([text, at])
+    else if (scan.depth > 1 && value[at] === ']') scan.depth--
   }
-  return { depth, closer }
 }
 
 function priorNoteOpeners(check: Check, children: readonly Node[], found: [TextNode, number][]): void {

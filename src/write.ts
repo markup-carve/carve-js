@@ -1404,7 +1404,7 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
 
 function writeOrdinaryGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,
   group: readonly Node[]): number {
-  addEscapes(w, earlyTextNoteClosers(group).filter(([node, at]) => !(w.escapes.get(node) ?? []).includes(at)))
+  addEscapes(w, earlyTextNoteClosers(group, w).filter(([node, at]) => !(w.escapes.get(node) ?? []).includes(at)))
   const reach = pairReach(group, w.escapes, EARLY)
   // Pair rules depend on text and escapes already chosen, so place their ordinary escapes before
   // the first write. The check below still handles a pair exposed by a later repair choice.

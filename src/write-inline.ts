@@ -25,8 +25,6 @@ export const IN_BRACKET = 16
 export const IN_FIGURE_GROUP = 32
 /** C2-I-089: inside an inline footnote, where a caret pair opens nothing. */
 export const IN_NOTE = 64
-/** C2-W-125 case eight: an earlier text note took its early closer. */
-const AFTER_TEXT_NOTE_CLOSER = 128
 
 const BACKSLASH = 92
 const EXCLAMATION = 33
@@ -620,14 +618,11 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
   // A backslash before the caret would change the key; the check places it only where the link needs it.
-  if ((flags & AFTER_TEXT_NOTE_CLOSER) !== 0 && leadingCaret(node)) {
-    const first = node.children[0] as TextNode
-    const escapes = w.escapes.get(first)
-    if (escapes?.[0] === 0) w.escapes.set(first, escapes.slice(1))
-  } else if (!keyIsContent(node)) escapeLeadingCaret(w, node.children, flags)
+  // C2-W-125 case eight: the caret behind a text note whose closers took the backslash stays bare.
+  if (!keyIsContent(node) && !w.caseEightLinks.has(node)) escapeLeadingCaret(w, node.children, flags)
   escapeLoneLinkBrackets(w, node)
   if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
-  const content = writeInlines(w, node.children, (flags & ~AFTER_TEXT_NOTE_CLOSER) | IN_BRACKET)
+  const content = writeInlines(w, node.children, flags | IN_BRACKET)
   return `[${collapsedContent(node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`
 }
 
@@ -1195,27 +1190,12 @@ function inlinePart(w: Writer, nodes: readonly Node[], at: number, end: number, 
   return gluedPart(w, nodes, at, end, flags, last)
 }
 
-interface TextNoteScan { open: boolean, closer: boolean }
-
-function noteLinkFlags(node: Node, flags: number, scan: TextNoteScan): number {
-  return node.type === 'link' && scan.closer && leadingCaret(node) ? flags | AFTER_TEXT_NOTE_CLOSER : flags
-}
-
-function advanceTextNoteScan(scan: TextNoteScan, node: Node): void {
-  if (node.type !== 'text') return
-  for (let p = 0; p < node.value.length; p++) {
-    if (node.value.startsWith('^[', p)) { scan.open = true; p++ }
-    else if (node.value[p] === ']' && scan.open) { scan.closer = true; scan.open = false }
-  }
-}
-
 export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): string {
   let out = ''
   // Whether `out` is empty or ends a line. Asking the string itself would flatten it once per node.
   let lineStart = true
   // The last character of `out`, kept apart for the same reason.
   let last = -1
-  const textNote: TextNoteScan = { open: false, closer: false }
   for (let at = 0; at < nodes.length;) {
     const node = nodes[at]!
     // C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it.
@@ -1231,11 +1211,10 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
     }
     const end = partEnd(w, nodes, at)
     placeEscapes(w, nodes, at, end, flags, last === EXCLAMATION && out.charCodeAt(out.length - 2) !== BACKSLASH)
-    const part = inlinePart(w, nodes, at, end, noteLinkFlags(node, flags, textNote), last, lineStart)
+    const part = inlinePart(w, nodes, at, end, flags, last, lineStart)
     out += part
     last = part === '' ? last : part.charCodeAt(part.length - 1)
     lineStart = last === 10 || (lineStart && part === '')
-    advanceTextNoteScan(textNote, node)
     at = end
   }
   return out
