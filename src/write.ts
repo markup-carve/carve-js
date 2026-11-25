@@ -723,11 +723,12 @@ function dropIdleLeads(w: Writer, group: readonly Node[], first: boolean, check:
 /**
  * C2-W-125: a round can place trials for several nodes of one stretch, where the first one already forms the others
  * (the brace before the tag of `x{#a\_--}` forms the dash behind it). A trial that changes nothing beside the other
- * escapes of the round is no backslash of a case and is taken out. Only where the parse reads no construct: one it reads
- * reports its kind (C2-W-088), and the rounds after it decide those trials.
+ * escapes of the round is no backslash of a case and is taken out. Only where the parse reads no node the tree lacks,
+ * as a strong of the tree beside the stretch (carve#6687): a construct it reports gives its kind (C2-W-088), and the
+ * rounds after it decide those trials.
  */
 function dropIdleTrials(w: Writer, check: Check, group: readonly Node[], first: boolean): boolean {
-  if (check.trials.length < 2 || check.trials.length > MAX_RETESTED_TRIALS || !readsOnlyText(check.w.parsed)) return false
+  if (check.trials.length < 2 || check.trials.length > MAX_RETESTED_TRIALS || !readsNoOtherNode(check.w.parsed, group)) return false
   const placed = w.escapes
   const lines = w.lines
   const lead = w.lead
@@ -743,11 +744,13 @@ function dropIdleTrials(w: Writer, check: Check, group: readonly Node[], first: 
     return all
   }
   let dropped = false
+  // The tree with every escape of the round changes only where a trial is taken out, and then into the tree without it.
+  let all = groupTree(w, group, first, withEscapes(check.escapes))
   // The later trial goes first, so the earlier one, which the rounds of C2-W-088 reach first, is kept.
   for (const trial of [...check.trials].reverse()) {
-    const others = check.escapes.filter((escape) => escape !== trial)
-    const without = groupTree(w, group, first, withEscapes(others))
-    if (!treesEqual(groupTree(w, group, first, withEscapes([...others, trial])), without)) continue
+    const without = groupTree(w, group, first, withEscapes(check.escapes.filter((escape) => escape !== trial)))
+    if (!treesEqual(all, without)) continue
+    all = without
     check.escapes.splice(check.escapes.indexOf(trial), 1)
     check.marks.get(trial[0])?.delete(trial[1])
     check.trials = check.trials.filter((other) => other !== trial)
@@ -762,18 +765,25 @@ function dropIdleTrials(w: Writer, check: Check, group: readonly Node[], first: 
   return dropped
 }
 
-/** Whether the inline content of every leaf block of `parsed` is text and line breaks only. */
-function readsOnlyText(parsed: DocumentNode | null): boolean {
+/**
+ * Whether each leaf block of `parsed` holds, beside text and breaks, only inline nodes that equal nodes of the same leaf
+ * of the tree, in their order: a node read elsewhere, as a span on another bracket, is a construct the tree lacks.
+ */
+function readsNoOtherNode(parsed: DocumentNode | null, group: readonly Node[]): boolean {
   if (parsed === null) return false
-  const pending: Node[] = [...parsed.children]
-  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-    if (!isInlineParent(node)) {
-      pushAll(pending, childNodes(node))
-      continue
+  const read = leafBlocks(parsed.children)
+  const tree = leafBlocks(group)
+  if (read.length !== tree.length) return false
+  return read.every((leaf, index) => {
+    const held = childNodes(tree[index]!)
+    let at = 0
+    for (const node of childNodes(leaf)) {
+      if (node.type === 'text' || isBreak(node)) continue
+      while (at < held.length && !treesEqual(held[at]!, node)) at++
+      if (at++ === held.length) return false
     }
-    if (!childNodes(node).every((child) => child.type === 'text' || isBreak(child))) return false
-  }
-  return true
+    return true
+  })
 }
 
 /** C2-W-125, case eight: the trials of a round that escaped an early note closer read the note it undoes. */
@@ -1829,6 +1839,8 @@ interface PruneScan {
   scanned: number
   byte: number
   stars: boolean | null
+  /** The backslashes of the source that are no case-six escape behind a name and no escaped backslash, or null. */
+  others: number | null
   /** The last match of each search, so that searches from increasing offsets read the source once. */
   found: Map<string, number>
 }
@@ -1896,7 +1908,73 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   if (source[at + 2] !== '#') return false
   const close = nextIndex(scan, source, '}', at + 3)
   const escapedDash = nextIndex(scan, source, '\\-', at + 3)
-  return close >= 0 && (escapedDash < 0 || escapedDash > close)
+  if (close < 0) return false
+  if (escapedDash < 0 || escapedDash > close) return true
+  // C2-W-125: a round that reports a construct keeps the case backslash it placed beside it (C2-W-091).
+  return close - at <= LONGEST_TAG_BRACE && !inHyphenRun(source, escapedDash) &&
+    otherBackslashes(w, scan, source) === bracedNameEscapes(source, at, close) + 1
+}
+
+/** The case-six escapes behind a name between the brace at `at` and its closer. */
+function bracedNameEscapes(source: string, at: number, close: number): number {
+  let count = 0
+  for (let slash = source.indexOf('\\', at + 2); slash >= 0 && slash < close; slash = source.indexOf('\\', slash + 2)) {
+    if (behindName(source, slash)) count++
+  }
+  return count
+}
+
+/**
+ * The backslashes of `source` that escape a construct: the brace being pruned and those of other kinds. Only those in
+ * text count; a code span, a destination or an attribute value holds its backslashes as they are.
+ */
+function otherBackslashes(w: Writer, scan: PruneScan, source: string): number {
+  if (scan.others !== null) return scan.others
+  const ranges: [number, number][] = []
+  const pending: Node[] = [...parseChunk(w, source).children]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'text' && node.pos !== undefined) ranges.push([node.pos.startOffset, node.pos.endOffset])
+    pushAll(pending, childNodes(node))
+  }
+  ranges.sort((a, b) => a[0] - b[0])
+  const bytes = new TextEncoder().encode(source)
+  let count = 0
+  let range = 0
+  for (let at = bytes.indexOf(92); at >= 0; at = bytes.indexOf(92, at + 2)) {
+    while (range < ranges.length && ranges[range]![1] <= at) range++
+    const inText = range < ranges.length && ranges[range]![0] <= at
+    if (inText && bytes[at + 1] !== 92 && isAsciiPunctuation(bytes[at + 1]!)) count++
+  }
+  return scan.others = count
+}
+
+/** C2-W-125 case six: the backslash at `at` stands directly behind a tag or mention name, not in a hyphen run. */
+function behindName(source: string, at: number): boolean {
+  const next = source[at + 1]
+  if (next !== '_' && next !== '.' && (next !== '-' || inHyphenRun(source, at))) return false
+  let start = at
+  for (;;) {
+    const low = source.charCodeAt(start - 1)
+    const width = low >= 0xdc00 && low <= 0xdfff && start >= 2 ? 2 : 1
+    if (start - width < 0 || !NAME_CHARACTER.test(source.slice(start - width, start))) break
+    start -= width
+  }
+  return start < at && (source[start - 1] === '#' || source[start - 1] === '@')
+}
+
+// The characters a tag or mention name can hold before its end (C2-I-090, C2-I-092).
+const NAME_CHARACTER = /^[\p{L}\p{N}_-]$/u
+// A longer brace keeps its backslash, so the scan of each candidate stays short.
+const LONGEST_TAG_BRACE = 256
+
+/**
+ * C2-W-090, C2-W-099: the `\-` at `at` escapes a hyphen run, a kind of a later round that keeps the brace escape of
+ * an earlier one (C2-W-091). Otherwise it is the case-six backslash behind the name, which gives the tree alone, so
+ * the brace escape of case one goes where no other construct takes a backslash (C2-W-125, carve#6687): `x{#a\-w}`,
+ * `x{#a\--w}`, but `x\{#a\---}` and `x\{#a\-w} \*s*`.
+ */
+function inHyphenRun(source: string, at: number): boolean {
+  return source[at - 1] === '-' || (source[at + 2] === '-' && source[at + 3] === '-')
 }
 
 /**
@@ -2096,7 +2174,7 @@ function reportedBraceEscape(w: Writer, source: string, at: number): boolean {
 /** The prunable backslashes of `source`, by their offset. */
 function pruneCandidates(w: Writer, source: string): number[] {
   const found: number[] = []
-  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, found: new Map() }
+  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, others: null, found: new Map() }
   for (let at = source.indexOf('\\'); at >= 0; at = source.indexOf('\\', at + 1)) {
     // C2-W-125, case two: a backslash directly behind a quote mark is the escape of the neighbor that decides its direction.
     if (!reportedBraceEscape(w, source, at) && source[at - 1] !== '"' && source[at - 1] !== "'" &&
@@ -2223,7 +2301,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
   let { source, kept } = pruneBatch(w, group, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
   let at = source.indexOf('\\')
   // A pruned backslash at `at` leaves the source before `at` as it was, so the scan goes on from there.
-  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, found: new Map() }
+  const scan: PruneScan = { scanned: 0, byte: 0, stars: null, others: null, found: new Map() }
   while (at >= 0) {
     // C2-W-133: each candidate is one parse more, so the pruning counts toward the limit of the repair.
     if (exhausted(w)) {
@@ -2240,6 +2318,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
         source = candidate
         w.parsed = parsed
         scan.stars = null
+        scan.others = null
         scan.found.clear()
         const pruned = at
         kept = new Set([...kept].map((offset) => (offset > pruned ? offset - 1 : offset)))

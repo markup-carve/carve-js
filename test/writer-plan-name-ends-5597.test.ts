@@ -27,8 +27,9 @@ describe('planned C2-W-125 backslashes of carve-js#5597', () => {
   })
 
   it('C2-W-125, C2-W-091: shapes where the repair keeps another backslash stay with the repair', () => {
-    // The rounds report the attribute block or the strong pair first and keep the backslash they placed for it.
-    expect(format('x{#a\\_--} *s*\n')).toBe('x{#a\\_--\\} *s*\n')
+    // The rounds report the attribute block first and keep the backslash they placed for it. A strong of the tree
+    // beside the stretch reports nothing, so its closing brace stays bare (carve#6687).
+    expect(format('x{#a\\_--} *s*\n')).toBe('x{#a\\_--} *s*\n')
     expect(format('x{ #a\\_}\n')).toBe('x\\{ #a\\_}\n')
     expect(planned('x{#a\\_--} *s*\n').repaired).toBe(1)
   })
