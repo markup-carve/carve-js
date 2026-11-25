@@ -467,7 +467,9 @@ function divElement(node: Html.Element, context: HtmlContext): Block {
   return { type: 'div', ...head, children: flow(parts.rest, node, context), ...mapped }
 }
 
-/** C2-H-043: one paragraph per stanza, a line per `<br>`, and leading spaces as no-break spaces. */
+const NBSP_RUN = /\u00a0{2,}/g
+
+/** C2-H-043: one paragraph per stanza, a line per `<br>`, and the no-break spaces of whitespace runs as spaces. */
 function lineBlock(node: Html.Element, context: HtmlContext): Block {
   const lines: Extract<Block, { type: 'line_block' }>['children'] = []
   for (const stanza of elements(node).filter(child => child.tagName === 'p')) {
@@ -500,7 +502,17 @@ function lineInline(nodes: Html.ChildNode[], host: Html.Element, context: HtmlCo
     if (lead?.type === 'text') lead.value = spaces + lead.value
     else children.unshift({ type: 'text', value: spaces })
   }
-  return normalizeBreaks(coalesce(children), host, context)
+  return restoreRuns(normalizeBreaks(coalesce(children), host, context))
+}
+
+/** C2-H-043: a run of two or more no-break spaces inside a line is what a run of two or more columns writes. */
+function restoreRuns(children: Inline[]): Inline[] {
+  for (const child of children) {
+    if (child.type === 'text') child.value = child.value.replace(NBSP_RUN, run => ' '.repeat(run.length))
+    // An image's text sits in `alt` and an inline footnote's in the note, outside the line.
+    else if (child.type !== 'image' && child.type !== 'inline_footnote' && 'children' in child) restoreRuns(child.children as Inline[])
+  }
+  return children
 }
 
 /** C2-H-030, C2-H-031, C2-H-037: the marker an ordered list derives its attributes from, and the bullet of `data-marker`. */
