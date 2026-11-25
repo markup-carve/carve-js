@@ -596,7 +596,12 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
 function compareWithLinkFallback(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean, initial: boolean): Check {
   const attempts = initial && w.sawLink && !w.linkFallback ? copyAttempts(w.attempts) : null
   const check = compareGroup(w, document, group, first)
-  if (attempts === null || (reportsConstruct(check, group) && !linkRepairRequested(group, check))) return check
+  if (attempts === null) return check
+  if (reportsConstruct(check, group) && !linkRepairRequested(group, check)) {
+    // C2-W-125: the case backslash is placed in this round, beside the kind escapes (carve#6656 ruling A, carve#6681).
+    w.linkFallback = true
+    return check
+  }
   w.attempts = attempts
   w.linkFallback = true
   resetLines(w)
