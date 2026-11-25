@@ -522,12 +522,17 @@ function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): v
   // node's text. If the read-back parse opened a construct on the trial's text brace,
   // it is a reported opener rather than a C2-W-125 trial.
   const located = check.source === null || check.trials.length === 0 ? undefined : locateTexts(check, group, check.source)
-  if (located !== undefined) check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, located))
+  if (located !== undefined) {
+    const opened = parsedStarts(check.w.parsed)
+    check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, located, opened))
+  }
   escapeKinds(check, group, w.closerKinds ? undefined : new Set([...check.closers, ...check.readOn]), located)
   escapePartnerClosers(check, group)
 }
 
-function trialOpensBracedConstruct(check: Check, text: TextNode, at: number, { bytes, starts }: TextStarts): boolean {
+function trialOpensBracedConstruct(
+  check: Check, text: TextNode, at: number, { bytes, starts }: TextStarts, opened: ParsedStarts,
+): boolean {
   const kind = BRACED_MARKS.indexOf(text.value[at + 1] ?? '')
   const type = kind < 0 ? undefined : BRACED_NODES[kind]
   const source = check.source
@@ -540,13 +545,29 @@ function trialOpensBracedConstruct(check: Check, text: TextNode, at: number, { b
   while (escapes[before] !== undefined && escapes[before]! < at) before++
   const sourceAt = start + at + before
   if (source[sourceAt] !== '{') return false
-  const byte = bytes[sourceAt]!
-  const pending: Node[] = [...parsed.children]
-  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-    if (node.type === type && node.pos?.startOffset === byte) return true
-    pushAll(pending, childNodes(node))
+  return opened(type, bytes[sourceAt]!)
+}
+
+/**
+ * Whether the parse holds a node of a type at a start offset. The nodes are walked once, on the first question, for
+ * all trials of a round rather than once per trial.
+ */
+type ParsedStarts = (type: string, offset: number) => boolean
+
+function parsedStarts(parsed: DocumentNode | null): ParsedStarts {
+  let starts: Map<string, Set<number>> | null = null
+  return (type, offset) => {
+    if (starts === null) {
+      starts = new Map()
+      const pending: Node[] = [...parsed?.children ?? []]
+      for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+        const at = node.pos?.startOffset
+        if (at !== undefined) starts.set(node.type, (starts.get(node.type) ?? new Set<number>()).add(at))
+        pushAll(pending, childNodes(node))
+      }
+    }
+    return starts.get(type)?.has(offset) === true
   }
-  return false
 }
 
 /**
