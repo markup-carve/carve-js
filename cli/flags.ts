@@ -182,7 +182,7 @@ function checkDirectoryCombinations(parsed: ParsedArgs): void {
   if (typeof values['output'] !== 'string') throw new UsageError('--directory needs --output DIR')
   if (values['from'] !== 'gfm' && values['from'] !== 'markdown') throw new UsageError('--directory imports --from gfm or markdown')
   if (parsed.files.length > 0) throw new UsageError('--directory takes no file')
-  for (const name of ['adapter', 'raw-html', 'report-losses', 'allow-loss', 'max-render-losses']) {
+  for (const name of ['adapter', 'raw-html', 'list-table', 'report-losses', 'allow-loss', 'max-render-losses']) {
     if (values[name] !== undefined) throw new UsageError(`--directory cannot be combined with --${name}`)
   }
 }

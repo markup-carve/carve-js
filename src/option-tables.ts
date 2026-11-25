@@ -11,6 +11,7 @@ export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
   ["headingShift", "render"],
   ["includes", "parse"],
   ["labels", "render"],
+  ["listTable", "import"],
   ["maxLosses", "render"],
   ["mode", "render"],
   ["normalize", "format"],
@@ -42,6 +43,7 @@ export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
   ["headingShift", "count"],
   ["includes", "structure"],
   ["labels", "map"],
+  ["listTable", "boolean"],
   ["maxLosses", "count"],
   ["mode", "enum"],
   ["normalize", "boolean"],
@@ -83,6 +85,7 @@ export const ENUM_DEFAULTS: ReadonlyMap<string, string> = new Map([
 
 export const BOOLEAN_DEFAULTS: ReadonlyMap<string, boolean> = new Map([
   ["alignTables", false],
+  ["listTable", false],
   ["normalize", false],
   ["rawHtml", false],
   ["roundtrip", false],

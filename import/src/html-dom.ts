@@ -59,6 +59,8 @@ export interface HtmlContext extends Context {
   anchorKeys: Set<string>
   /** The templates that stand where a render writes them, and the definitions each holds. */
   templates: Map<Html.Element, AbbreviationDefNode[]>
+  /** C2-M-112: a table with a cell of blocks becomes a list table. */
+  listTable?: boolean
 }
 
 export function attr(node: Html.Element, name: string): string | undefined {

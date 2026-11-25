@@ -29,6 +29,8 @@ export interface ImportOptions {
   labels?: Readonly<Record<string, string>>
   /** HTML only (C2-M-102): the editor that wrote the HTML; default `generic`. */
   adapter?: 'generic' | 'tiptap' | 'prosemirror' | 'ckeditor' | 'tinymce' | 'word' | 'google-docs'
+  /** HTML only (C2-M-112): a table with a cell of blocks becomes a list table. */
+  listTable?: boolean
   /** C2-M-082: makes each loss of the import an error. */
   strictLosses?: boolean
   /** Markdown, GFM and Djot: adds `constructs`, a record of each construct of the input and whether the tree holds it. */
@@ -42,7 +44,8 @@ export interface ImportOptions {
  */
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   if (options === undefined) throw new CarveOptionError('from', 'required')
-  checkOptions(options, { from: 'string', rawHtml: 'boolean', labels: 'labels', adapter: 'string', strictLosses: 'boolean', constructs: 'boolean' })
+  checkOptions(options, { from: 'string', rawHtml: 'boolean', labels: 'labels', adapter: 'string', listTable: 'boolean', strictLosses: 'boolean',
+    constructs: 'boolean' })
   if (!FORMATS.includes(options.from)) throw new CarveOptionError('from', `unknown value ${JSON.stringify(options.from)}`)
   if (typeof input !== 'string') throw new ImportInputError('the input is not text', options.from)
   return importAny(input, options)
