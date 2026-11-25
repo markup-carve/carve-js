@@ -43,5 +43,5 @@ export function importDocument(input: string, options: ImportOptions): ImportRes
   }
   const adapter = readAdapter(options.adapter)
   if (typeof input !== 'string') throw new ImportInputError('the input is not text', 'html')
-  return runImport('html', options, () => importHtml(input, options.rawHtml === true, {}, true, options.labels, adapter))
+  return runImport('html', options, () => importHtml(input, options.rawHtml === true, {}, true, options.labels, adapter, options))
 }

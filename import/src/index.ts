@@ -39,6 +39,6 @@ function importByFormat(input: string, options: ImportOptions): ImportResult {
     case 'gfm':
     case 'djot': return importThroughHtml(input, options.from, options.constructs === true)
     case 'bbcode': return importBbcode(input)
-    case 'html': return importHtml(input, options.rawHtml === true, {}, true, options.labels, readAdapter(options.adapter))
+    case 'html': return importHtml(input, options.rawHtml === true, {}, true, options.labels, readAdapter(options.adapter), options)
   }
 }

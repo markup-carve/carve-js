@@ -17,7 +17,7 @@ import { applyAdapter, type Adapter } from './html-adapter.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
 import { resolveAlignments } from './html-table-align.ts'
 import {
-  cell, coalesce, complete, documentOf, ensureForeignDepth, imageParagraph, paragraph, row, softText, type ImportResult,
+  cell, coalesce, complete, documentOf, ensureForeignDepth, imageParagraph, paragraph, row, softText, type ImportResult, type LossSettings,
 } from './kit.ts'
 import { append } from '../../src/append.ts'
 import { DEFAULT_LABELS } from '../../src/option-tables.ts'
@@ -1057,7 +1057,7 @@ export interface HubHooks {
 
 export function importHtml(
   input: string, rawHtml = false, hooks: HubHooks = {}, sourceLocations = true, labels: Readonly<Record<string, string>> = {},
-  adapter: Adapter = 'generic',
+  adapter: Adapter = 'generic', losses?: LossSettings,
 ): ImportResult {
   const full = isFullDocument(input)
   const foreign = full ? parse(input, { sourceCodeLocationInfo: sourceLocations }) : parseFragment(input, sourceLocations)
@@ -1067,6 +1067,7 @@ export function importHtml(
   const context: HtmlContext = { format: 'html', input, rawHtml, labels: { ...DEFAULT_LABELS, ...labels }, diagnostics: [], deferred: [],
     notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),
     anchorKeys: new Set() }
+  if (losses !== undefined) context.losses = losses
   if (!full) fragmentBody(input, context)
   collectNotes(foreign.childNodes, context)
   rootLanguage(foreign.childNodes, context)

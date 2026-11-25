@@ -19,7 +19,10 @@ export function isKey(text: string): boolean {
 /** C2-I-032: an unquoted value has no space, tab, quote, backslash, pipe or closing brace. */
 function isUnquoted(value: string): boolean {
   if (value.length === 0) return false
-  for (const char of value) if (' \t"\'\\|}'.includes(char)) return false
+  for (let at = 0; at < value.length; at++) {
+    const code = value.charCodeAt(at)
+    if (code === 32 || code === 9 || code === 34 || code === 39 || code === 92 || code === 124 || code === 125) return false
+  }
   return true
 }
 
@@ -92,8 +95,12 @@ function idPart(id: string | undefined, parts: string[], pipes: boolean): void {
 
 /** C2-W-048: the brace block of `node`, or the empty string when it has nothing to write. */
 export function braceBlock(node: Node, extra?: BlockParts): string {
-  const parts: string[] = []
+  return extra === undefined && keysOnly(node) ? keysBlock(node.attrs?.keyValues ?? NONE) : partsBlock(node, extra)
+}
+
+function partsBlock(node: Node, extra: BlockParts | undefined): string {
   const attrs = node.attrs
+  const parts: string[] = []
   if (attrs !== undefined) idPart(attrs.id, parts, extra?.pipes === true)
   classParts(attrs?.classes ?? NONE, parts, extra)
   const lang = node.lang
@@ -104,8 +111,26 @@ export function braceBlock(node: Node, extra?: BlockParts): string {
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`
 }
 
+function keysOnly(node: Node): boolean {
+  return node.lang === undefined && node.attrs?.id === undefined && node.attrs?.classes === undefined
+}
+
+/** `braceBlock` of a node with keys only. */
+function keysBlock(keyValues: readonly [string, string][]): string {
+  let block = ''
+  for (const [key, value] of keyValues) if (isKey(key)) block += `${block === '' ? '{' : ' '}${keyPart(key, value, false)}`
+  return block === '' ? '' : `${block}}`
+}
+
+/** Whether a value of `keyValues` holds a line feed (C2-W-050). */
+export function holdsLineFeed(keyValues: readonly (readonly [string, string])[] | undefined): boolean {
+  if (keyValues === undefined) return false
+  for (let at = 0; at < keyValues.length; at++) if (keyValues[at]![1].includes('\n')) return true
+  return false
+}
+
 export function holdsLineFeedValue(item: Node): boolean {
-  if (item.attrs?.keyValues?.some(([, value]) => value.includes('\n')) === true) return true
+  if (holdsLineFeed(item.attrs?.keyValues)) return true
   let found = false
   forEachSlot(item, (children) => { found ||= children.some(holdsLineFeedValue) })
   return found
