@@ -82,6 +82,28 @@ describe('carve process', () => {
     expect(result.stderr).toMatch(/structure-unspellable/)
   })
 
+  it('C2-T-025, C2-T-026, C2-T-034: an allowed writer code is no loss, so the import writes the source', () => {
+    const cases = [
+      ['<table><tr><td>a</td><td rowspan="2">r</td></tr><tr><td colspan="2">w</td></tr></table>', '| a | r |\n| w | < |\n'],
+      ['<table><thead><tr><th>a</th><th rowspan="2">r</th></tr><tr><th colspan="2">w</th></tr></thead></table>',
+        '|= a |= r |\n|= w |= < |\n'],
+      ['<table><tr><td>a</td><td rowspan="3">r</td></tr><tr><td colspan="2">w</td></tr><tr><td>b</td></tr></table>',
+        '| a | r |\n| w | < |\n| b | ^ |\n'],
+      ['<table><tr><td>a</td><td>b</td><td rowspan="2">r</td></tr><tr><td>c</td><td colspan="2">w</td></tr></table>',
+        '| a | b | r |\n| c | w | < |\n'],
+      ['<html lang="en"><body><p>a</p></body></html>', 'a\n'],
+    ]
+    for (const [html, source] of cases) {
+      const refused = cli(['import', '--from=html'], html)
+      expect([refused.status, refused.stdout], html).toEqual([1, ''])
+      expect(refused.stderr).toMatch(/^carve\[writer-refused\]: <stdin>: the import lost content\n/)
+      for (const strict of [[], ['--strict-losses']]) {
+        const result = cli(['import', '--from=html', '--allow-loss', 'field-unspellable', ...strict], html)
+        expect([result.status, result.stdout, result.stderr], html).toEqual([0, source, ''])
+      }
+    }
+  })
+
   it('C2-W-011, C2-M-083: an image-only paragraph and a denied destination import with output and status 0', () => {
     const image = cli(['import', '--from=html'], '<p><img src="a.png" alt="i"></p>\n')
     expect([image.status, image.stdout]).toEqual([0, '![i](a.png)\n'])
