@@ -291,7 +291,7 @@ describe('withExtensions', () => {
   })
 })
 
-describe('citations mode (carve#6752)', () => {
+describe('citations mode and pool placement (carve#6752, carve#6759)', () => {
   const DOE = 'See :cite[doe].\n\n::: bibliography\n:: [doe]{author="Doe" year="2020"}\n: Doe, J. A book.\n:::\n'
 
   it('refuses a mode outside numbered and author-date when the renderer is created (C2-X-068)', () => {
@@ -326,4 +326,21 @@ describe('citations mode (carve#6752)', () => {
     ].join('\n'))
   })
 
+  it('lists a pool-only entry in the last directive, after its own entries', () => {
+    const source = 'See :cite[c].\n\n::: references\n:: a\n: A.\n:::\n\n::: references\n:: b\n: B.\n:::\n'
+    expect(html(source, citations({ bibliography: [{ id: 'c', title: 'Pool.' }] }))).toBe([
+      '<p>See [<a id="cite-c-1" href="#ref-c" data-cite-key="c">3</a>].</p>',
+      '<div class="references">',
+      '  <ol class="references">',
+      '    <li id="ref-a">A.</li>',
+      '  </ol>',
+      '</div>',
+      '<div class="references">',
+      '  <ol start="2" class="references">',
+      '    <li id="ref-b">B.</li>',
+      '    <li id="ref-c">Pool.. <a href="#cite-c-1" class="ref-backref">↩</a></li>',
+      '  </ol>',
+      '</div>',
+    ].join('\n'))
+  })
 })
