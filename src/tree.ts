@@ -188,7 +188,8 @@ function resolveTable(table: BlockNode, src: string): number {
       joinContinuation(row, last!, owners, pending)
       continue
     }
-    if (pending.length > 0) joinPending(owners, pending)
+    // A comment line between continuation rows does not end them.
+    if (pending.length > 0 && row.kind === ROW) joinPending(owners, pending)
     kept.push(row)
     if (row.kind !== ROW) continue
     // C2-B-174: no span crosses from the head into the body, from one body into the next or from the body into the foot.

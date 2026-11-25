@@ -44,4 +44,8 @@ describe('continuation fragments under a spanned cell (carve#6691)', () => {
     const node = parsed.layout.nodes.find((entry) => entry.wraps !== undefined)!
     expect([node.startByte, node.endByte]).toEqual([1, 24])
   })
+
+  it('keeps the column order across a comment line between continuation rows', () => {
+    expect(cell('| a | < |\n+ b | c |\n%% hi\n+ d | e |\n')).toBe('a b d c e')
+  })
 })
