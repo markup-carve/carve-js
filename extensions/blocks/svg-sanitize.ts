@@ -62,7 +62,8 @@ const ALLOWED_TAGS = new Set([
 
 // Elements permitted only when the matching option is set.
 const LINK_TAGS = new Set(['a'])
-const ANIMATION_TAGS = new Set(['animate', 'animateTransform', 'animateMotion', 'set', 'mpath'])
+// Lower case: tagAllowed looks names up lowered (carve#6765).
+const ANIMATION_TAGS = new Set(['animate', 'animatetransform', 'animatemotion', 'set', 'mpath'])
 const EXTERNAL_IMAGE_TAGS = new Set(['image'])
 
 // Attribute-name allowlist (case-insensitive). Geometry + presentation only.

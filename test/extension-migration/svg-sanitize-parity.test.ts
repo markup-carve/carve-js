@@ -239,3 +239,27 @@ describe('sanitizeSvg XML characters (carve#6764)', () => {
     }
   })
 })
+
+describe('sanitizeSvg animateTransform and animateMotion (carve#6765)', () => {
+  const opts = { allowAnimation: true }
+  it('keeps both under allowAnimation', () => {
+    const transform = '<svg xmlns="http://www.w3.org/2000/svg"><rect><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1s"/></rect></svg>'
+    expect(sanitizeSvg('<svg><rect><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1s"/></rect></svg>', opts).svg).toBe(transform)
+    expect(sanitizeSvg('<svg><path id="p"/><circle><animateMotion dur="2s"><mpath href="#p"/></animateMotion></circle></svg>', opts).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><path id="p"/><circle><animateMotion dur="2s"><mpath href="#p"/></animateMotion></circle></svg>')
+    expect(sanitizeSvg('<svg><rect><animateTransform attributeName="transform"/></rect></svg>').svg).toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>')
+  })
+
+  const TAGS = ['animateTransform', 'animatetransform', 'ANIMATEMOTION', 'animateMotion', 'set', 'animate']
+  const ATTRS = ['attributeName="href"', 'attributeName="transform"', 'attributeName="xlink:href"', 'onbegin="alert(1)"', 'href="evil.svg#x"',
+    'xlink:href="javascript:alert(1)"', 'values="#a;evil.svg"', 'from="0"', 'to="url(https://e.example/x)"', 'by="1"', 'type="scale"',
+    'style="fill:url(https://e.example)"', 'path="M0 0"', 'values="0;1"']
+  sweep('animateTransform and animateMotion', () => {
+    const tag = pick(TAGS)
+    const attrs = Array.from({ length: 1 + Math.floor(rnd() * 4) }, () => pick(ATTRS)).join(' ')
+    const kid = rnd() < 0.3 ? `<mpath href=${quoted(pick(['#p', 'evil.svg#p', 'javascript:x']))}/>` : ''
+    return { src: `<svg><use href="#x"><${tag} ${attrs}>${kid}</${tag}></use></svg>`, opts: pick([opts, { allowAnimation: true, allowStyle: true }]) }
+  }, (svg, src) => {
+    expect(svg, src).toContain(`<${/<use href="#x"><(\w+)/.exec(src)![1]!}`)
+  })
+})
