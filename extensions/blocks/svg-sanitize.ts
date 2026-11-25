@@ -16,6 +16,7 @@
 
 import { isUrlAllowed } from '../../src/html-attributes.ts'
 import type { UrlPolicy } from '../../src/index.ts'
+import { STYLE_PATTERNS } from '../../src/render-tables.ts'
 
 /** Options gate the small set of constructs that are safe only in some
  *  contexts. All default OFF. */
@@ -155,21 +156,14 @@ function normalizeForCheck(value: string): string {
   return decodeCssEscapes(decodeEntities(value))
 }
 
-// Blank a style value that can fetch or execute. Mirrors the core renderer's
-// hasDangerousCss: whole-value rejection, not CSS surgery. CSS escapes are
-// decoded first so `u\72l(` folds to `url(`.
+// Blank a style value that can fetch or execute: the core renderer's STYLE_PATTERNS
+// (C2-H-162, CSS image functions included) plus `javascript:`. Whole-value rejection,
+// not CSS surgery. CSS escapes are decoded first so `u\72l(` folds to `url(`.
 export function styleIsDangerous(value: string): boolean {
   const compact = normalizeForCheck(value.replace(/\/\*[\s\S]*?\*\//g, ''))
     .toLowerCase()
     .replace(/\s+/g, '')
-  return (
-    compact.includes('expression(') ||
-    compact.includes('url(') ||
-    compact.includes('@import') ||
-    compact.includes('behavior:') ||
-    compact.includes('-moz-binding') ||
-    compact.includes('javascript:')
-  )
+  return compact.includes('javascript:') || STYLE_PATTERNS.some((pattern) => compact.includes(pattern))
 }
 
 // A `url(...)` whose content does not begin with `#` is a NON-LOCAL reference.
@@ -309,17 +303,41 @@ function sanitizeUrlAttribute(name: string, value: string | null, opts: Sanitize
   return ` ${name}="${escapeAttr(value)}"`
 }
 
-function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string): string {
+const ANIMATION_VALUE_ATTRS = new Set(['values', 'from', 'to', 'by'])
+
+function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string, isRoot: boolean): string {
   const t = tag.toLowerCase()
   const allowExternalHref = (opts.allowLinks === true && t === 'a') || (opts.allowExternalImages === true && t === 'image')
+  const attrs = parseAttrs(raw)
+  const hrefAnimation = animatesHref(attrs)
   let out = ''
   const seen = new Set<string>()
-  for (const { name, value } of parseAttrs(raw)) {
+  for (const { name, value } of attrs) {
     if (seen.has(name)) continue
     seen.add(name)
+    const n = name.toLowerCase()
+    // carve#6755: the root's own xmlns is replaced by name, never by searching the written attributes.
+    if (isRoot && n === 'xmlns') continue
+    if (hrefAnimation && value !== null && ANIMATION_VALUE_ATTRS.has(n) && !localRefs(value)) continue
     out += sanitizeAttribute(name, value, opts, allowExternalHref)
   }
   return out
+}
+
+// carve#6761: an animation of `href` may only write `#id` entries, like the `href` it changes.
+function animatesHref(attrs: ParsedAttr[]): boolean {
+  return attrs.some(({ name, value }) => {
+    if (name.toLowerCase() !== 'attributename' || value === null) return false
+    const target = normalizeForCheck(value).trim().toLowerCase()
+    return target === 'href' || target === 'xlink:href'
+  })
+}
+
+function localRefs(value: string): boolean {
+  return normalizeForCheck(value).split(';').every((segment) => {
+    const s = segment.trim()
+    return s === '' || s.startsWith('#')
+  })
 }
 
 function tokenEnd(source: string, start: number): number {
@@ -371,8 +389,8 @@ function openTag(name: string, raw: string, selfClose: boolean, state: SvgState,
     return true
   }
   if (isRoot) markRoot(state, selfClose)
-  let attrs = sanitizeAttrs(raw, opts, name)
-  if (isRoot) attrs = rootAttrs(attrs)
+  let attrs = sanitizeAttrs(raw, opts, name, isRoot)
+  if (isRoot) attrs = ` xmlns="${SVG_NS}"` + attrs
   state.out.push(`<${name}${attrs}${selfClose ? '/>' : '>'}`)
   if (!selfClose) state.kept.push({ name, contentStart: state.out.length })
   return true
@@ -385,10 +403,6 @@ function rootInvalid(name: string, isRoot: boolean, state: SvgState): boolean {
 function markRoot(state: SvgState, selfClose: boolean): void {
   state.sawRoot = true
   state.rootSelfClosed = selfClose
-}
-
-function rootAttrs(attrs: string): string {
-  return ` xmlns="${SVG_NS}"` + attrs.replace(/\s+xmlns\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
 }
 
 function consumeToken(token: string, state: SvgState, opts: SanitizeSvgOptions): boolean {
