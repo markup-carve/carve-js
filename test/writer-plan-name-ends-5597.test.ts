@@ -31,7 +31,8 @@ describe('planned C2-W-125 backslashes of carve-js#5597', () => {
     // beside the stretch reports nothing, so its closing brace stays bare (carve#6687).
     expect(format('x{#a\\_--} *s*\n')).toBe('x{#a\\_--} *s*\n')
     expect(format('x{ #a\\_}\n')).toBe('x\\{ #a\\_}\n')
-    expect(planned('x{#a\\_--} *s*\n').repaired).toBe(1)
+    // carve-js#5603: the plan decides that stretch beside the strong, as the repair writes it.
+    expect(planned('x{#a\\_--} *s*\n')).toEqual({ written: 'x{#a\\_--} *s*\n', parses: 0, repaired: 0 })
   })
 
   it('the tag and underline pages take no parse at any size', () => {
