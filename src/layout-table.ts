@@ -59,6 +59,8 @@ interface CellWalk {
   home: number
   spanning: boolean
   spans: number[]
+  /** C2-L-020: the covered column of each pair of `spans`, for a cell over several columns. */
+  columns: number[] | undefined
   spanAt: number
   row: number
   line: number
@@ -82,9 +84,17 @@ function addWrap(walk: CellWalk, fragment: number, path: string, offset: number)
   while (walk.line < lines.length && lines[walk.line + 1]! < fragment) walk.line += 2
   if (walk.line >= lines.length || lines[walk.line]! > fragment) return
   const wrap: Wrap = { line: walk.line / 2 + 1, path, offset }
-  // C2-L-020: the rows below the cell's own row.
+  // C2-L-020: the rows below the cell's own row, and the covered column counted from the cell's own.
   if (walk.spanning) wrap.row = row - walk.home
+  if (walk.columns !== undefined) wrap.col = columnOf(walk, fragment)
   walk.wraps.push(wrap)
+}
+
+/** The fragments come in the order of `spans`, so the pair that starts at `fragment` is found moving forward. */
+function columnOf(walk: CellWalk, fragment: number): number {
+  const spans = walk.spans
+  while (walk.spanAt < spans.length && spans[walk.spanAt] !== fragment) walk.spanAt += 2
+  return walk.columns![walk.spanAt / 2] ?? 0
 }
 
 /** C2-L-021: a joining space is the character before the offset, which counts UTF-8 bytes of the value. */
@@ -112,7 +122,8 @@ export function cellWraps(
   src: string, trace: LayoutTrace, table: TableRows, home: number, node: TableCellNode, cell: BlockNode, path: string,
 ): Wrap[] {
   const walk: CellWalk = {
-    src, trace, table, home, spanning: (node.rowspan ?? 1) > 1, spans: cell.spans!, spanAt: 2, row: home, line: 0, wraps: [],
+    src, trace, table, home, spanning: (node.rowspan ?? 1) > 1, spans: cell.spans!,
+    columns: (node.colspan ?? 1) > 1 ? cell.spanColumns ?? [] : undefined, spanAt: 0, row: home, line: 0, wraps: [],
   }
   const paragraph = node.children[0]
   const content = paragraph !== undefined && isInlineParent(paragraph) ? paragraph.children : []
@@ -122,7 +133,9 @@ export function cellWraps(
     addWrap(walk, cell.spans![0]!, `${base}/0`, 0)
   }
   walkList(walk, content, base)
-  // The clause sorts by line alone; the walk gives them by row, then line, and a wide cell by column.
-  if (walk.spanning || (node.colspan ?? 1) > 1) walk.wraps.sort((a, b) => a.line - b.line)
+  // C2-L-048: the walk gives them by row, then line, and a wide cell by column; the clause sorts by line, row, col.
+  if (walk.spanning || walk.columns !== undefined) {
+    walk.wraps.sort((a, b) => a.line - b.line || (a.row ?? 0) - (b.row ?? 0) || (a.col ?? 0) - (b.col ?? 0))
+  }
   return walk.wraps
 }

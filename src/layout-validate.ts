@@ -26,7 +26,7 @@ const LINE_ENDINGS = ['none', 'lf', 'crlf', 'cr', 'mixed']
 const ENCODINGS = ['utf-8', 'base64']
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
-const WRAP_FIELDS = ['line', 'path', 'offset', 'row']
+const WRAP_FIELDS = ['line', 'path', 'offset', 'row', 'col']
 
 function fail(path: string, reason: string): never {
   throw new CarveLayoutError(path, reason)
@@ -60,20 +60,27 @@ const checkPointer: Check = (value, path) => {
   }
 }
 
-/** C2-L-020: `line`, `path` and `offset`, an optional `row`, and the list sorted by `line`. */
+/** C2-L-020, C2-L-048: `line`, `path` and `offset`, an optional `row` and `col`, and the list sorted by `line`, `row`, `col`. */
 const checkWraps: Check = (value, path) => {
   if (!Array.isArray(value)) fail(path, 'is not a list')
   let line = 0
+  let row = 0
+  let col = 0
   value.forEach((wrap: unknown, index) => {
     const at = `${path}/${index}`
     if (!isRecord(wrap)) fail(at, 'is not an object')
     for (const key of Object.keys(wrap)) if (!WRAP_FIELDS.includes(key)) fail(`${at}/${key}`, 'is not a field of a wrap')
     const own = checkCount(wrap['line'], `${at}/line`, 1)
     if (own < line) fail(`${at}/line`, 'is not sorted by line')
-    line = own
     checkPointer(wrap['path'], `${at}/path`)
     checkCount(wrap['offset'], `${at}/offset`)
-    if (wrap['row'] !== undefined) checkCount(wrap['row'], `${at}/row`)
+    const ownRow = wrap['row'] === undefined ? 0 : checkCount(wrap['row'], `${at}/row`)
+    const ownCol = wrap['col'] === undefined ? 0 : checkCount(wrap['col'], `${at}/col`)
+    if (own === line && ownRow < row) fail(`${at}/row`, 'is not sorted by row')
+    if (own === line && ownRow === row && ownCol < col) fail(`${at}/col`, 'is not sorted by col')
+    line = own
+    row = ownRow
+    col = ownCol
   })
 }
 

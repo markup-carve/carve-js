@@ -14,7 +14,7 @@ import {
   blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, joinsIndentedRun, topPredecessors, writeBlocks,
 } from './write-blocks.ts'
 import { addSpanMarks } from './write-spans.ts'
-import { tableFormat } from './write-table.ts'
+import { contentOrder, tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
 import { escapeKinds, escapePartnerClosers, leavesKindBare, locateTexts, type TextStarts } from './write-kinds.ts'
@@ -180,7 +180,7 @@ function readWraps(w: Writer, facts: Map<Node, WriterFacts>, document: DocumentN
   const starts = new Set<Node>()
   let path = ''
   let node: Node | null = null
-  for (const wrap of entry.wraps ?? []) {
+  for (const wrap of contentOrder(entry.wraps ?? [])) {
     // The wraps of one cell mostly name one text node, so its pointer is resolved once.
     if (wrap.path !== path || node === null) node = nodeAt(document, wrap.path)
     path = wrap.path

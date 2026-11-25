@@ -19,6 +19,7 @@ export interface Wrap {
   path: string
   offset: number
   row?: number
+  col?: number
 }
 
 /** C2-L-009: the entry of one node. Every fact is optional, and an absent fact means unknown (C2-L-014). */

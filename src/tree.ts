@@ -31,6 +31,8 @@ export interface BlockNode {
   attributes: number[] | null
   /** C2-B-024: the indexes in `spans` of the lazy comment-only lines of a line block. */
   lazyComments?: number[]
+  /** C2-L-020: for a cell over several columns, the covered column of each pair in `spans`, its own being 0. */
+  spanColumns?: number[]
 }
 
 /** Builds the block tree from the first `length` ints of an event array. */
@@ -229,9 +231,11 @@ function bodyBoundaries(attributes: Attributes | null, headRows: number, footSta
  */
 function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode | null)[], pending: number[][]): void {
   const fragments = row.children!
+  let home = 0
   for (let column = 0; column < fragments.length; column++) {
     const fragment = fragments[column]!
     const fragmentSpans = spansOf(fragment)
+    if (column < owners.length && (column === 0 || owners[column - 1] !== owners[column])) home = column
     if (column >= owners.length) {
       above.children!.push(fragment)
       owners.push(fragment)
@@ -239,7 +243,7 @@ function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode |
       const owner = owners[column]!
       if (owner.facts > 1) {
         while (pending.length <= column) pending.push([])
-        pending[column]!.push(fragmentSpans[0]!, fragmentSpans[1]!)
+        pending[column]!.push(fragmentSpans[0]!, fragmentSpans[1]!, column - home)
       } else {
         joinSpans(owner, fragmentSpans[0]!, fragmentSpans[1]!)
       }
@@ -248,10 +252,11 @@ function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode |
   above.end = row.end
 }
 
-function joinSpans(owner: BlockNode, start: number, end: number): void {
+function joinSpans(owner: BlockNode, start: number, end: number, column = -1): void {
   const spans = spansOf(owner)
   // C2-B-184, C2-L-021: the space stands between the text of the cell and the fragment, so an empty cell takes none.
   if (spans.length === 2 && spans[0] === spans[1]) spans.length = 0
+  if (column >= 0) (owner.spanColumns ??= new Array<number>(spans.length / 2).fill(0)).push(column)
   spans.push(start, end)
 }
 
@@ -262,7 +267,7 @@ function joinSpans(owner: BlockNode, start: number, end: number): void {
 function joinPending(owners: (BlockNode | null)[], pending: number[][]): void {
   for (let column = 0; column < pending.length; column++) {
     const fragments = pending[column]!
-    for (let at = 0; at < fragments.length; at += 2) joinSpans(owners[column]!, fragments[at]!, fragments[at + 1]!)
+    for (let at = 0; at < fragments.length; at += 3) joinSpans(owners[column]!, fragments[at]!, fragments[at + 1]!, fragments[at + 2]!)
   }
   pending.length = 0
 }
