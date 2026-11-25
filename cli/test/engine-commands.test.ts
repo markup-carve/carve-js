@@ -5,7 +5,6 @@ import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FIXES, fixSource } from '../fix.ts'
 import { parseArgs } from '../flags.ts'
-import { PENDING } from '../standard-extensions.ts'
 import { lint } from '../../lint/lint.ts'
 import { CATALOG } from '../../lint/catalog.ts'
 
@@ -169,7 +168,7 @@ describe('--extensions and --extension-options (C2-T-010)', () => {
   it('registers every standard extension of the catalog on render, fmt, lint and ast', () => {
     const dir = temp({ 'a.crv': tabs })
     const catalog = JSON.parse(readFileSync(join(root, 'data/extensions.json'), 'utf8')) as { extensions: { name: string }[] }
-    const names = JSON.stringify(catalog.extensions.map((entry) => entry.name).filter((name) => !PENDING.has(name)))
+    const names = JSON.stringify(catalog.extensions.map((entry) => entry.name))
     for (const command of ['render', 'fmt', 'lint', 'ast']) {
       const result = cli([command, '--extensions', names, 'a.crv'], '', dir)
       expect([command, result.status, result.stderr]).toEqual([command, 0, ''])
@@ -195,9 +194,32 @@ describe('--extensions and --extension-options (C2-T-010)', () => {
     ].join('\n\n') })
     const catalog = JSON.parse(readFileSync(join(root, 'data/extensions.json'), 'utf8')) as { extensions: { name: string }[] }
     // A tab renders through its group's renderer.
-    for (const name of new Set(catalog.extensions.map((entry) => entry.name).filter((name) => name !== 'carve.tab' && !PENDING.has(name)))) {
+    for (const name of new Set(catalog.extensions.map((entry) => entry.name).filter((name) => name !== 'carve.tab'))) {
       const result = cli(['render', '--extensions', JSON.stringify([name]), 'a.crv'], '', dir)
       expect([name, result.status, result.stderr.includes(`"${name}"`)]).toEqual([name, 0, false])
+    }
+  })
+
+  it('renders each 0.1 CLI name of the catalog, never as the core render (carve#6766, C2-X-071 to C2-X-075)', () => {
+    const fence = (word: string, body: string): string => '```' + `${word}\n${body}\n` + '```'
+    const doc: Record<string, string> = {
+      'carve.autolink': 'see https://e.com', 'carve.codeCallouts': `${fence('js', 'a <1>')}\n<1> one`,
+      'carve.colorSwatch': ':color[red]', 'carve.externalLinks': '[a](https://x.org)',
+      'carve.glossary': ':term[A]\n\n::: glossary\n:: A\n: a\n:::', 'carve.headingNumbers': '= A',
+      'carve.headingPermalinks': '= A', 'carve.headingReference': '= A\n\n[A][]', 'carve.index': ':index[a]\n\n::: index\n:::',
+      'carve.indexTerm': ':index[a]', 'carve.listTable': '::: list-table\n- - a\n:::', 'carve.semanticSpan': '[x]{samp}',
+      'carve.smartQuotes': '"a"', 'carve.tabNormalize': '`a\tb`', 'carve.term': ':term[A]', 'carve.toc': '= A',
+      'carve.tocPlacement': '::: toc\n:::\n\n= A',
+      ...Object.fromEntries(['abc', 'chart', 'd2', 'dot', 'graphviz', 'plantuml', 'puml', 'vega-lite', 'wavedrom']
+        .map((word) => [`carve.fencedRender.${word}`, fence(word, '{}')])),
+    }
+    const locale = '{"carve.smartQuotes":{"locale":"de"}}'
+    for (const [name, text] of Object.entries(doc)) {
+      const dir = temp({ 'a.crv': `${text}\n` })
+      const extra = name === 'carve.smartQuotes' ? ['--smart-typography', '--extension-options', locale] : []
+      const core = cli(['render', ...extra.slice(0, 1), 'a.crv'], '', dir)
+      const result = cli(['render', ...extra, '--extensions', JSON.stringify([name]), 'a.crv'], '', dir)
+      expect([name, result.status, result.stderr, result.stdout === core.stdout]).toEqual([name, 0, '', false])
     }
   })
 

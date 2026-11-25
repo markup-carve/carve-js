@@ -6,11 +6,7 @@
  * clause-correct result, in the spec gap report for the pin; the field must keep failing until the
  * corpus is corrected, and every other field of the example is still checked.
  */
-export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  // Engine lag, not a corpus defect: the CLI does not register the carve#6766 catalog rows yet (cli/standard-extensions.ts PENDING).
-  ['CC-2146', { fields: ['status', 'stdout', 'stderrCategory'], fix: 'carve#6766 (carve-js): register the new catalog rows' }],
-  ['CC-2147', { fields: ['status', 'stdout', 'stderrCategory'], fix: 'carve#6766 (carve-js): register carve.smartQuotes' }],
-])
+export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
 export const REFUSED_AT: ReadonlyMap<string, string> = new Map([

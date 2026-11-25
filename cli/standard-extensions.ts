@@ -3,16 +3,27 @@ import catalog from '../data/extensions.json' with { type: 'json' }
 import { type DocumentTransform, type ExtensionDefinition, type ExtensionRenderer } from '../src/index.ts'
 import { type ExtensionBundle } from '../src/extensions/standard/bundle.ts'
 import { type CitationsOptions, citations, citeExtension } from '../src/extensions/citations.ts'
+import { glossary, termExtension, termRenderer } from '../src/extensions/glossary.ts'
+import { index, indexTermExtension, indexTermRenderer } from '../src/extensions/index-terms.ts'
+import { headingNumbers, headingPermalinks, headingReference } from '../src/extensions/navigation/headings.ts'
+import { autolink, externalLinks } from '../src/extensions/navigation/links.ts'
+import { tableOfContents, tocPlacement, tocRenderers } from '../src/extensions/navigation/toc.ts'
+import { codeCallouts } from '../src/extensions/standard/code-callouts.ts'
 import { codeGroup } from '../src/extensions/standard/code-group.ts'
 import { detailsExtension, spoilerExtensions } from '../src/extensions/standard/details.ts'
-import { mermaid } from '../src/extensions/standard/fenced-render.ts'
+import { abc, chart, d2, graphviz, mermaid, plantuml, vegaLite, wavedrom } from '../src/extensions/standard/fenced-render.ts'
 import { mathBlock } from '../src/extensions/standard/math-block.ts'
 import { standardTabsRenderer, tabsExtensions } from '../src/extensions/tabs.ts'
 import { wikiExtension } from '../src/extensions/wiki-cite.ts'
 import { details } from '../extensions/blocks/details.ts'
 import { createImgFence } from '../extensions/blocks/img-fence.ts'
+import { listTable } from '../extensions/blocks/list-table.ts'
 import { spoiler } from '../extensions/blocks/spoiler.ts'
+import { colorSwatch } from '../extensions/inline/color-swatch.ts'
+import { semanticSpan } from '../extensions/inline/semantic-span.ts'
+import { smartQuotes } from '../extensions/inline/smart-quotes.ts'
 import { wikilinks } from '../extensions/inline/wikilinks.ts'
+import { tabNormalize } from '../extensions/transforms/tab-normalize.ts'
 import { UsageError } from './flags.ts'
 
 type Options = Record<string, unknown>
@@ -33,29 +44,77 @@ function rendered(definitions: readonly ExtensionDefinition[], bundle: () => Ext
   return { definitions, render: () => ({ extensions: definitions, renderers: bundle().renderers }) }
 }
 
-function imgFence(name: string): Standard {
-  const pick = (bundle: ExtensionBundle): ExtensionBundle => ({
+/** A bundle built with the command's options on `render`, its definitions on every command. */
+function bundled(make: (options: Options) => ExtensionBundle): Standard {
+  return { definitions: make({}).extensions, render: make }
+}
+
+/** A definition with its renderer, if any; a document transform in the definition runs on `render` (C2-X-072). */
+function single(definition: ExtensionDefinition, renderer?: ExtensionRenderer): Standard {
+  const renderers = renderer === undefined ? {} : { [definition.name]: renderer }
+  return { definitions: [definition], render: () => ({ extensions: [definition], renderers }) }
+}
+
+/** The one extension `name` of a bundle that claims several. */
+function pick(bundle: ExtensionBundle, name: string): ExtensionBundle {
+  return {
     extensions: bundle.extensions.filter((entry) => entry.name === name),
     renderers: Object.fromEntries(Object.entries(bundle.renderers).filter(([key]) => key === name)),
-  })
-  return { definitions: pick(createImgFence()).extensions, render: () => pick(createImgFence({}, true)) }
+  }
+}
+
+/** One fence word of a diagram preset (C2-X-071). */
+function fence(preset: () => ExtensionBundle, word: string): Standard {
+  const name = `carve.fencedRender.${word}`
+  return { definitions: pick(preset(), name).extensions, render: () => pick(preset(), name) }
+}
+
+function imgFence(name: string): Standard {
+  return { definitions: pick(createImgFence(), name).extensions, render: () => pick(createImgFence({}, true), name) }
 }
 
 const STANDARD: ReadonlyMap<string, Standard> = new Map<string, Standard>([
+  ['carve.autolink', single(autolink())],
   ['carve.cite', { definitions: [citeExtension], render: (options) => citations(options as CitationsOptions) }],
+  ['carve.codeCallouts', bundled(codeCallouts)],
   ['carve.codeGroup', { definitions: codeGroup().extensions, render: () => codeGroup() }],
+  ['carve.colorSwatch', bundled(() => colorSwatch())],
   ['carve.details', rendered([detailsExtension], details)],
+  ['carve.externalLinks', single(externalLinks())],
+  ['carve.fencedRender.abc', fence(abc, 'abc')],
+  ['carve.fencedRender.chart', fence(chart, 'chart')],
+  ['carve.fencedRender.d2', fence(d2, 'd2')],
+  ['carve.fencedRender.dot', fence(graphviz, 'dot')],
+  ['carve.fencedRender.graphviz', fence(graphviz, 'graphviz')],
   ['carve.fencedRender.mermaid', { definitions: mermaid().extensions, render: () => mermaid() }],
+  ['carve.fencedRender.plantuml', fence(plantuml, 'plantuml')],
+  ['carve.fencedRender.puml', fence(plantuml, 'puml')],
+  ['carve.fencedRender.vega-lite', fence(vegaLite, 'vega-lite')],
+  ['carve.fencedRender.wavedrom', fence(wavedrom, 'wavedrom')],
+  // C2-X-072: a glossary brings its terms, an index its markers.
+  ['carve.glossary', bundled(glossary)],
+  ['carve.headingNumbers', single(headingNumbers())],
+  ['carve.headingPermalinks', single(headingPermalinks())],
+  ['carve.headingReference', single(headingReference())],
   ['carve.imgFence.image', imgFence('carve.imgFence.image')],
   ['carve.imgFence.img', imgFence('carve.imgFence.img')],
+  ['carve.index', bundled(() => index())],
+  ['carve.indexTerm', single(indexTermExtension, indexTermRenderer)],
+  ['carve.listTable', bundled(listTable)],
   ['carve.mathBlock', { definitions: mathBlock().extensions, render: () => mathBlock() }],
+  ['carve.semanticSpan', bundled(semanticSpan)],
+  ['carve.smartQuotes', bundled((options) => smartQuotes(options))],
   ['carve.spoiler', rendered(spoilerExtensions, spoiler)],
   ['carve.spoilerBlock', rendered(spoilerExtensions, spoiler)],
   ['carve.tab', definitionsOnly(tabsExtensions)],
+  ['carve.tabNormalize', bundled(() => tabNormalize())],
   ['carve.tabs', {
     definitions: tabsExtensions,
     render: (options) => ({ extensions: tabsExtensions, renderers: { 'carve.tabs': standardTabsRenderer(options) } }),
   }],
+  ['carve.term', single(termExtension, termRenderer)],
+  ['carve.toc', single(tableOfContents(), tocRenderers['carve.toc'])],
+  ['carve.tocPlacement', single(tocPlacement(), tocRenderers['carve.tocPlacement'])],
   ['carve.wiki', rendered([wikiExtension], wikilinks)],
 ])
 
@@ -63,25 +122,9 @@ const STANDARD: ReadonlyMap<string, Standard> = new Map<string, Standard>([
 const RENDERER_OPTIONS: ReadonlyMap<string, Readonly<Record<string, { values: readonly string[] }>>> = new Map(
   catalog.extensions.map((entry) => [entry.name, 'rendererOptions' in entry ? entry.rendererOptions : {}]))
 
-/**
- * Catalog rows of carve#6766 the table above does not register yet: `--extensions` refuses them as before the pin.
- * Each leaves this list when it gets its entry in STANDARD.
- */
-export const PENDING: ReadonlySet<string> = new Set([
-  'carve.autolink', 'carve.codeCallouts', 'carve.colorSwatch', 'carve.externalLinks', 'carve.fencedRender.abc',
-  'carve.fencedRender.chart', 'carve.fencedRender.d2', 'carve.fencedRender.dot', 'carve.fencedRender.graphviz',
-  'carve.fencedRender.plantuml', 'carve.fencedRender.puml', 'carve.fencedRender.vega-lite', 'carve.fencedRender.wavedrom',
-  'carve.glossary', 'carve.headingNumbers', 'carve.headingPermalinks', 'carve.headingReference', 'carve.index',
-  'carve.indexTerm', 'carve.listTable', 'carve.semanticSpan', 'carve.smartQuotes', 'carve.tabNormalize', 'carve.term',
-  'carve.toc', 'carve.tocPlacement',
-])
-
 // The catalog and the table above name the same extensions; a pin that adds one fails here, not at a user's command.
-for (const name of new Set([...STANDARD.keys(), ...RENDERER_OPTIONS.keys(), ...PENDING])) {
-  const pending = PENDING.has(name)
-  if (pending ? STANDARD.has(name) || !RENDERER_OPTIONS.has(name) : !STANDARD.has(name) || !RENDERER_OPTIONS.has(name)) {
-    throw new Error(pending ? `${name} is pending but in the CLI table or not in the catalog` : `${name} is not in both the catalog and the CLI table`)
-  }
+for (const name of new Set([...STANDARD.keys(), ...RENDERER_OPTIONS.keys()])) {
+  if (!STANDARD.has(name) || !RENDERER_OPTIONS.has(name)) throw new Error(`${name} is not in both the catalog and the CLI table`)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
