@@ -10,6 +10,10 @@ import { STYLE_PATTERNS } from '../../src/render-tables.ts'
 // write the same bytes for each of them.
 interface Row { from: string, src: string, opts: SanitizeSvgOptions, svg: string, ok: boolean }
 const ROWS: Row[] = JSON.parse(readFileSync(new URL('../fixtures/svg-sanitize/parity.json', import.meta.url), 'utf8')) as Row[]
+// Rows whose bytes a js-first ruling changed before carve-php ports it; each names its ticket.
+interface Delta { index: number, tickets: string[], src: string, svg: string, ok: boolean }
+const DELTAS: Delta[] = JSON.parse(readFileSync(new URL('../fixtures/svg-sanitize/parity-js-first.json', import.meta.url), 'utf8')) as Delta[]
+const DELTA_AT = new Map(DELTAS.map((delta) => [delta.index, delta]))
 
 interface Node { nodeName: string, attrs?: { name: string, value: string }[], childNodes?: Node[], content?: Node }
 
@@ -79,12 +83,22 @@ function sweep(name: string, make: () => { src: string, opts: SanitizeSvgOptions
 
 describe('sanitizeSvg parity with carve-php', () => {
   it('writes the pinned bytes for every row', () => {
-    const differ = ROWS.filter((row) => {
+    const differ = ROWS.filter((row, index) => {
+      const want = DELTA_AT.get(index) ?? row
       const got = sanitizeSvg(row.src, row.opts)
-      return got.svg !== row.svg || got.ok !== row.ok
+      return got.svg !== want.svg || got.ok !== want.ok
     }).map((row) => row.src)
     expect(differ).toEqual([])
     expect(ROWS.length).toBe(770)
+  })
+
+  it('records only real deltas, each with its ticket', () => {
+    for (const delta of DELTAS) {
+      const row = ROWS[delta.index]!
+      expect(delta.src).toBe(row.src)
+      expect(delta.svg === row.svg && delta.ok === row.ok, row.src).toBe(false)
+      expect(delta.tickets.every((ticket) => ['carve#6763', 'carve#6764', 'carve#6765'].includes(ticket))).toBe(true)
+    }
   })
 
   it('keeps every accepted row inert in an HTML parser', () => {
@@ -169,4 +183,83 @@ describe('sanitizeSvg href animation (carve#6761)', () => {
     const values = Array.from({ length: 1 + Math.floor(rnd() * 3) }, () => pick(ENTRIES)).join(';')
     return { src: `<svg><use href="#x"><${tag} attributeName=${quoted(pick(NAMES))} ${pick([...ANIMATION_VALUES])}=${quoted(values)}/></use></svg>`, opts }
   }, () => undefined)
+})
+
+describe('sanitizeSvg quoted local url() (carve#6763)', () => {
+  it('keeps quoted and spaced local references', () => {
+    expect(sanitizeSvg(`<svg><rect fill="url('#g')"/><rect fill='url("#g")'/><rect fill="url( #g)"/></svg>`).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect fill="url(\'#g\')"/><rect fill="url(&quot;#g&quot;)"/><rect fill="url( #g)"/></svg>')
+  })
+
+  const LOCAL = ['url(#g)', "url('#g')", 'url("#g")', 'url( #g)', "url( ' #g' )", 'URL(#g)', "url(\t'#g')", 'url(&quot;#g&quot;)']
+  const REMOTE = ["url('https://e.example/p#g')", 'url( "//e.example/x")', "url('x.svg#g')", "url(' x#g')", 'url( "")', "url('#g') url(x)",
+    "url('#g'),url('//e')", 'u\\72l("x#g")', "url(\"'#g')"]
+  sweep('quoted url() references', () => {
+    const remote = rnd() < 0.5
+    const value = remote ? pick(REMOTE) : pick(LOCAL)
+    const attr = pick(['fill', 'stroke', 'mask', 'clip-path', 'marker-end', 'class', 'id'])
+    return { src: `<svg><rect ${attr}=${quoted(value)}/></svg>`, opts: pick([{}, { allowStyle: true }]) }
+  }, (svg, src) => {
+    const kept = /<rect [^>]*=/.test(svg)
+    const remote = REMOTE.some((value) => src.includes(value.replace(/"/g, '&quot;')) || src.includes(value.replace(/'/g, '&apos;')) || src.includes(value))
+    expect(kept, src).toBe(!remote)
+  })
+})
+
+const NON_XML_CHAR = /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/
+const isXmlChar = (cp: number): boolean =>
+  cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff)
+
+describe('sanitizeSvg XML characters (carve#6764)', () => {
+  it('escapes a numeric reference outside XML Char', () => {
+    expect(sanitizeSvg('<svg><text>&#0;</text><text>a&#x1;b</text></svg>').svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><text>&amp;#0;</text><text>a&amp;#x1;b</text></svg>')
+    expect(sanitizeSvg('<svg><text>&#9;&#x20;&#xD7FF;&#xFFFD;&#x10FFFF;</text></svg>').svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><text>&#9;&#x20;&#xD7FF;&#xFFFD;&#x10FFFF;</text></svg>')
+  })
+
+  it('drops a raw character outside XML Char before any check', () => {
+    expect(sanitizeSvg('<svg id="a\u0001b"><text>x\u0000y\uFFFE\uD800z</text></svg>').svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg" id="ab"><text>xyz</text></svg>')
+    expect(sanitizeSvg('<svg style="background:ur\u0001l(https://e.example/p)"/>', { allowStyle: true }).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"/>')
+  })
+
+  const BAD = ['&#0;', '&#x1;', '&#8;', '&#xB;', '&#12;', '&#x1F;', '&#xD800;', '&#xDFFF;', '&#xFFFE;', '&#65535;', '&#x110000;', '&#99999999;',
+    '\u0000', '\u0001', '\u000B', '\u001F', '\uFFFE', '\uFFFF', '\uD800', '\uDC00']
+  const GOOD = ['&#9;', '&#xA;', '&#13;', '&#32;', '&#xE000;', '&#x1F600;', '\uD83D\uDE00', 'a', '&amp;', '&lt;']
+  sweep('XML characters', () => {
+    const text = Array.from({ length: 1 + Math.floor(rnd() * 4) }, () => (rnd() < 0.5 ? pick(BAD) : pick(GOOD))).join('')
+    return { src: rnd() < 0.5 ? `<svg><text>${text}</text></svg>` : `<svg><rect id=${quoted(text)}/></svg>`, opts: {} }
+  }, (svg, src) => {
+    expect(svg, src).not.toMatch(NON_XML_CHAR)
+    for (const ref of svg.matchAll(/&#(x[0-9a-f]+|\d+);/gi)) {
+      const cp = ref[1]![0]!.toLowerCase() === 'x' ? Number.parseInt(ref[1]!.slice(1), 16) : Number.parseInt(ref[1]!, 10)
+      expect(isXmlChar(cp), src).toBe(true)
+    }
+  })
+})
+
+describe('sanitizeSvg animateTransform and animateMotion (carve#6765)', () => {
+  const opts = { allowAnimation: true }
+  it('keeps both under allowAnimation', () => {
+    const transform = '<svg xmlns="http://www.w3.org/2000/svg"><rect><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1s"/></rect></svg>'
+    expect(sanitizeSvg('<svg><rect><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1s"/></rect></svg>', opts).svg).toBe(transform)
+    expect(sanitizeSvg('<svg><path id="p"/><circle><animateMotion dur="2s"><mpath href="#p"/></animateMotion></circle></svg>', opts).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><path id="p"/><circle><animateMotion dur="2s"><mpath href="#p"/></animateMotion></circle></svg>')
+    expect(sanitizeSvg('<svg><rect><animateTransform attributeName="transform"/></rect></svg>').svg).toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>')
+  })
+
+  const TAGS = ['animateTransform', 'animatetransform', 'ANIMATEMOTION', 'animateMotion', 'set', 'animate']
+  const ATTRS = ['attributeName="href"', 'attributeName="transform"', 'attributeName="xlink:href"', 'onbegin="alert(1)"', 'href="evil.svg#x"',
+    'xlink:href="javascript:alert(1)"', 'values="#a;evil.svg"', 'from="0"', 'to="url(https://e.example/x)"', 'by="1"', 'type="scale"',
+    'style="fill:url(https://e.example)"', 'path="M0 0"', 'values="0;1"']
+  sweep('animateTransform and animateMotion', () => {
+    const tag = pick(TAGS)
+    const attrs = Array.from({ length: 1 + Math.floor(rnd() * 4) }, () => pick(ATTRS)).join(' ')
+    const kid = rnd() < 0.3 ? `<mpath href=${quoted(pick(['#p', 'evil.svg#p', 'javascript:x']))}/>` : ''
+    return { src: `<svg><use href="#x"><${tag} ${attrs}>${kid}</${tag}></use></svg>`, opts: pick([opts, { allowAnimation: true, allowStyle: true }]) }
+  }, (svg, src) => {
+    expect(svg, src).toContain(`<${/<use href="#x"><(\w+)/.exec(src)![1]!}`)
+  })
 })
