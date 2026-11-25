@@ -342,7 +342,9 @@ function escapeLineStart(c: Check, nodes: readonly Node[], from: number, owner: 
 
 function hasOtherForm(c: Check, node: Node): boolean {
   if ((c.w.forms.get(node) ?? 0) > 0 || c.respelled.has(node)) return false
-  if (node.type === 'emphasis' || node.type === 'strong' || node.type === 'comment') return true
+  // C2-W-069: a pair braced for its content or place has no bare form; asking for one would only restart the rounds.
+  if (node.type === 'emphasis' || node.type === 'strong') return !c.w.bracedAnyway.has(node)
+  if (node.type === 'comment') return true
   return 'key' in node && node.key !== undefined && c.w.facts?.get(node)?.rawRef !== undefined
 }
 

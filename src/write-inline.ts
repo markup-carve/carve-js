@@ -1163,11 +1163,12 @@ function spanClosingBracket(w: Writer, node: TextNode, before: Node | undefined)
 
 function braceBesidePair(w: Writer, node: TextNode, next: Node | undefined, after: Node | undefined, atEnd: boolean,
   flags: number): void {
+  if (!node.value.endsWith('{')) return
   // C2-W-069: the text behind the pair can brace it (`markForm`), and a brace before a braced pair opens nothing more.
   const pairedNext = next?.type === 'strong' ? !bracedPair(w, next, flags, 2, IN_STRONG) && !bracedBy(after, '*')
     : next?.type === 'emphasis' && !bracedPair(w, next, flags, 1, IN_EMPHASIS) && !bracedBy(after, '/')
   const pairedEnd = atEnd && (flags & (IN_STRONG | IN_EMPHASIS)) !== 0
-  if (!node.value.endsWith('{') || (!pairedNext && !pairedEnd)) return
+  if (!pairedNext && !pairedEnd) return
   const at = node.value.length - 1
   const escapes = w.escapes.get(node) ?? []
   if (!escapes.includes(at)) w.escapes.set(node, [...escapes, at].sort((a, b) => a - b))

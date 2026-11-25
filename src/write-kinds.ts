@@ -37,6 +37,19 @@ function kindBlocks(group: readonly Node[]): Map<TextNode, KindBlock> {
   return owners
 }
 
+const kindBlockCache = new WeakMap<Check['w'], { group: readonly Node[], owners: Map<TextNode, KindBlock> }>()
+
+/** `kindBlocks` of a group, kept while the rounds of the same writer repair the same blocks. */
+function groupKindBlocks(check: Check, group: readonly Node[]): Map<TextNode, KindBlock> {
+  const known = kindBlockCache.get(check.w)
+  if (known !== undefined && known.group.length === group.length && known.group.every((node, at) => node === group[at])) {
+    return known.owners
+  }
+  const owners = kindBlocks(group)
+  kindBlockCache.set(check.w, { group, owners })
+  return owners
+}
+
 function flatten(nodes: readonly Node[], out: Leaf[]): void {
   for (const node of nodes) {
     if (node.type === 'text') {
@@ -212,14 +225,15 @@ function edge(block: KindBlock, index: number, step: number): number {
  * the kinds, not by the escapes. A C2-W-125 trial, an escape among `noKind` or `lengthening` and a block opener inside
  * a line give no kind.
  */
-export function escapeKinds(check: Check, group: readonly Node[], noKind: ReadonlySet<[TextNode, number]> = new Set()): void {
+export function escapeKinds(check: Check, group: readonly Node[], noKind: ReadonlySet<[TextNode, number]> = new Set(),
+  starts?: TextStarts): void {
   const trials = new Set(check.trials)
   const candidates = check.escapes.filter((escape) => check.ownEscapes.get(escape[0])?.has(escape[1]) !== true &&
     !trials.has(escape) && !noKind.has(escape) && !check.lengthening.has(escape))
-  const braces = candidates.some(([node, at]) => node.value[at] === '{') ? braceContext(check, group) : null
+  const braces = candidates.some(([node, at]) => node.value[at] === '{') ? braceContext(check, group, starts) : null
   const reported = candidates.filter(([node, at]) => reportedBrace(braces, node, at))
   if (reported.length === 0) return
-  const owners = kindBlocks(group)
+  const owners = groupKindBlocks(check, group)
   const done = new Map<KindBlock, Set<string>>()
   for (const [node, at] of reported) {
     const block = owners.get(node)
@@ -253,18 +267,26 @@ interface BraceContext {
 }
 
 /** Locate each written text leaf and each parsed text range once for the round. */
-function braceContext(check: Check, group: readonly Node[]): BraceContext | null {
+function braceContext(check: Check, group: readonly Node[], located?: TextStarts): BraceContext | null {
   const source = check.source
   const parsed = check.w.parsed
   if (source === null || parsed === null) return null
   const comments = new Set<number>()
-  return {
-    bytes: byteOffsets(source), ranges: parsedTextRanges(parsed.children, comments),
-    starts: writtenTextStarts(check, group, source), comments,
-  }
+  const { bytes, starts } = located ?? locateTexts(check, group, source)
+  return { bytes, ranges: parsedTextRanges(parsed.children, comments), starts, comments }
+}
+
+/** Where each text leaf of a group stands in its written source, with the byte offset of each UTF-16 unit. */
+export interface TextStarts {
+  bytes: Uint32Array
+  starts: Map<TextNode, [number, readonly number[]]>
 }
 
 export function writtenTextStarts(check: Check, group: readonly Node[], source: string): Map<TextNode, [number, readonly number[]]> {
+  return locateTexts(check, group, source).starts
+}
+
+export function locateTexts(check: Check, group: readonly Node[], source: string): TextStarts {
   const starts = new Map<TextNode, [number, readonly number[]]>()
   const bytes = byteOffsets(source)
   const inert = inertRanges(check.w.parsed?.children ?? [])
@@ -278,11 +300,14 @@ export function writtenTextStarts(check: Check, group: readonly Node[], source: 
     }
     const escapes = escapeOffsets(check.w, node, entry.inCell ? IN_CELL : 0)
     let written = ''
-    let next = 0
-    for (let at = 0; at < node.value.length; at++) {
-      if (escapes[next] === at) { written += '\\'; next++ }
-      written += node.value[at]
+    let from = 0
+    let last = -1
+    for (const at of escapes) {
+      if (at <= last || at >= node.value.length) break
+      written += node.value.slice(from, at) + '\\'
+      from = last = at
     }
+    written += node.value.slice(from)
     let start = nextTextPlace(source, written, cursor, bytes, inert)
     let length = written.length
     if (start < 0) { start = nextTextPlace(source, node.value, cursor, bytes, inert); length = node.value.length }
@@ -290,7 +315,7 @@ export function writtenTextStarts(check: Check, group: readonly Node[], source: 
     starts.set(node, [start, escapes])
     cursor = start + length
   }
-  return starts
+  return { bytes, starts }
 }
 
 /** Text in a code, literal, or math span cannot be the source of a text leaf. */
