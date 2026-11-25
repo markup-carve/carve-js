@@ -708,7 +708,7 @@ function openBulletItem(state: BlockState, end: number): boolean {
   // C2-B-046: `X` is read as `x`.
   const box = boxEnd < 0 ? 0 : src.charCodeAt(markerEnd + 1) === UPPER_X ? LOWER_X : src.charCodeAt(markerEnd + 1)
   if (!openItem(state, BULLET_LIST, style, 0, 0, box, pos + 1)) return false
-  moveTo(state, boxEnd >= 0 ? boxEnd : markerEnd, end)
+  moveToContent(state, markerEnd, boxEnd, end)
   return true
 }
 
@@ -749,7 +749,7 @@ function openOrderedItem(state: BlockState, end: number): boolean {
   }
   const auto = start < 0
   if (!openItem(state, ORDERED_LIST, style, auto ? FLAG_AUTO : 0, auto ? 0 : start, box, delimiter + 1)) return false
-  moveTo(state, boxEnd >= 0 ? boxEnd : markerEnd, end)
+  moveToContent(state, markerEnd, boxEnd, end)
   return true
 }
 
@@ -767,8 +767,24 @@ function siblingStyle(state: BlockState, style: number, single: boolean, roman: 
   return (open & FLAG_ALPHA) !== 0 && single ? FLAG_ALPHA : 0
 }
 
+/** C2-B-027, C2-L-051: a task box does not move the content column, which stays at the task mark. */
+function moveToContent(state: BlockState, markerEnd: number, boxEnd: number, end: number): void {
+  advanceTo(state, markerEnd)
+  if (boxEnd >= 0) {
+    const containers = state.containers
+    containers.content[containers.depth - 1] = state.cursor.column - state.cursor.origin
+    advanceTo(state, boxEnd)
+  }
+  skipIndent(state, end)
+}
+
 /** Moves the cursor from a marker to `pos` and on to the content column. A marker holds no tab. */
 function moveTo(state: BlockState, pos: number, end: number): void {
+  advanceTo(state, pos)
+  skipIndent(state, end)
+}
+
+function advanceTo(state: BlockState, pos: number): void {
   const cursor = state.cursor
   for (let at = cursor.pos; at < pos;) {
     const code = state.src.codePointAt(at)!
@@ -776,7 +792,6 @@ function moveTo(state: BlockState, pos: number, end: number): void {
     at += code > 0xffff ? 2 : 1
   }
   cursor.pos = pos
-  skipIndent(state, end)
 }
 
 /**
