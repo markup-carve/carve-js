@@ -49,7 +49,7 @@ export function cellRange(src: string, table: TableRows, row: number, cell: Bloc
   return [formed ? cell.start : cell.start + 1, Math.max(cell.end, skipSpaces(src, last, lineEndOf(src, last)))]
 }
 
-/** A walk over the content of one cell in source order. The fragments it meets only move forward. */
+/** A walk over the content of one cell. The fragments it meets move forward, except where a wide cell starts its next column. */
 interface CellWalk {
   src: string
   trace: LayoutTrace
@@ -66,6 +66,11 @@ interface CellWalk {
 /** Adds the wrap of the fragment that starts at the source offset `fragment`. */
 function addWrap(walk: CellWalk, fragment: number, path: string, offset: number): void {
   const rows = walk.table.rows
+  // carve#6691: a cell over several columns holds them in column order, so a fragment can lie before the last one.
+  if (rows[walk.row]!.start > fragment || (walk.line > 0 && continuationRows(walk.src, walk.table, walk.row)[walk.line]! > fragment)) {
+    walk.row = walk.home
+    walk.line = 0
+  }
   let row = walk.row
   while (row < rows.length && rows[row]!.end < fragment) row++
   if (row >= rows.length || rows[row]!.start > fragment) return
@@ -115,7 +120,7 @@ export function cellWraps(
     addWrap(walk, cell.spans![0]!, `${base}/0`, 0)
   }
   walkList(walk, content, base)
-  // The clause sorts by line alone; the walk gives them by row, then line.
-  if (walk.spanning) walk.wraps.sort((a, b) => a.line - b.line)
+  // The clause sorts by line alone; the walk gives them by row, then line, and a wide cell by column.
+  if (walk.spanning || (node.colspan ?? 1) > 1) walk.wraps.sort((a, b) => a.line - b.line)
   return walk.wraps
 }

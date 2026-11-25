@@ -182,11 +182,13 @@ function resolveTable(table: BlockNode, src: string): number {
   let owners: (BlockNode | null)[] = []
   let last: BlockNode | null = null
   let rowIndex = 0
+  const pending: number[][] = []
   for (const row of table.children!) {
     if (row.kind === ROW && (row.flags & FLAG_CONTINUATION) !== 0) {
-      joinContinuation(row, last!, owners)
+      joinContinuation(row, last!, owners, pending)
       continue
     }
+    if (pending.length > 0) joinPending(owners, pending)
     kept.push(row)
     if (row.kind !== ROW) continue
     // C2-B-174: no span crosses from the head into the body, from one body into the next or from the body into the foot.
@@ -194,6 +196,7 @@ function resolveTable(table: BlockNode, src: string): number {
     last = row
     rowIndex++
   }
+  if (pending.length > 0) joinPending(owners, pending)
   table.children = kept
   return rowIndex
 }
@@ -221,8 +224,9 @@ function bodyBoundaries(attributes: Attributes | null, headRows: number, footSta
  * C2-B-184: each fragment of a continuation row joins the cell that covers its column in the row
  * above, after the span marks of that row are resolved; an empty fragment adds nothing.
  * C2-B-176: a fragment past the last column forms a new cell.
+ * The fragments of a cell over several columns wait in `pending`, per column, until the rows below the row above end.
  */
-function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode | null)[]): void {
+function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode | null)[], pending: number[][]): void {
   const fragments = row.children!
   for (let column = 0; column < fragments.length; column++) {
     const fragment = fragments[column]!
@@ -231,13 +235,35 @@ function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode |
       above.children!.push(fragment)
       owners.push(fragment)
     } else if (fragmentSpans[0] !== fragmentSpans[1]) {
-      const spans = spansOf(owners[column]!)
-      // C2-B-184, C2-L-021: the space stands between the text of the cell and the fragment, so an empty cell takes none.
-      if (spans.length === 2 && spans[0] === spans[1]) spans.length = 0
-      spans.push(fragmentSpans[0]!, fragmentSpans[1]!)
+      const owner = owners[column]!
+      if (owner.facts > 1) {
+        while (pending.length <= column) pending.push([])
+        pending[column]!.push(fragmentSpans[0]!, fragmentSpans[1]!)
+      } else {
+        joinSpans(owner, fragmentSpans[0]!, fragmentSpans[1]!)
+      }
     }
   }
   above.end = row.end
+}
+
+function joinSpans(owner: BlockNode, start: number, end: number): void {
+  const spans = spansOf(owner)
+  // C2-B-184, C2-L-021: the space stands between the text of the cell and the fragment, so an empty cell takes none.
+  if (spans.length === 2 && spans[0] === spans[1]) spans.length = 0
+  spans.push(start, end)
+}
+
+/**
+ * carve#6691 (PART 9 §5 T6 of 0.1): a cell holds its fragments position by position, its columns in
+ * order and the fragments of one column in the order of their rows.
+ */
+function joinPending(owners: (BlockNode | null)[], pending: number[][]): void {
+  for (let column = 0; column < pending.length; column++) {
+    const fragments = pending[column]!
+    for (let at = 0; at < fragments.length; at += 2) joinSpans(owners[column]!, fragments[at]!, fragments[at + 1]!)
+  }
+  pending.length = 0
 }
 
 function markSpan(row: BlockNode, cell: BlockNode): void {
