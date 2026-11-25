@@ -570,25 +570,27 @@ function isBlock(node: DocumentChild): node is Block {
 }
 
 /**
- * C2-A-082, C2-A-183: the block above takes the caption in its own slot and keeps its attributes. A table or a figure
- * group takes the comments between it and the caption as its last children; behind a code block, which holds no
- * children, they stay its siblings after it, inside its span (C2-A-145). `list` holds blocks, and at the top level
- * also definitions, to which no caption attaches (C2-B-147).
+ * C2-A-082, C2-A-183: the block above takes the caption in its own slot and keeps its attributes. A pipe table or a
+ * figure group takes the comments between it and the caption as its last children; behind a code block or a delimited
+ * table, whose fence has closed (C2-B-138, C2-W-066), they stay its siblings after it, inside its span (C2-A-145).
+ * `list` holds blocks, and at the top level also definitions, to which no caption attaches (C2-B-147).
  */
-function attachCaption(list: DocumentChild[], caption: CaptionNode): void {
+function attachCaption(list: DocumentChild[], caption: CaptionNode, fenced: boolean): void {
   let at = list.length - 1
   while (at >= 0 && list[at]!.type === 'comment') at--
   const target = list[at]
-  if (target === undefined || !isBlock(target)) return
-  if (target.type === 'table' || target.type === 'figure_group') {
+  if (target === undefined || !isBlock(target) || !takesCaption(target)) return
+  if ((target.type === 'table' && !fenced) || target.type === 'figure_group') {
     for (const node of list.splice(at + 1)) if (node.type === 'comment') target.children.push(node)
-    takeCaption(target, caption)
-  } else if (target.type === 'paragraph' || target.type === 'code_block' || target.type === 'block_quote') {
-    takeCaption(target, caption)
-  } else if (target.type === 'include' && target.options?.code !== undefined) {
-    // C2-B-147, C2-N-073: a code include takes a caption, which its expansion gives to its child.
-    takeCaption(target, caption)
   }
+  takeCaption(target, caption)
+}
+
+/** C2-B-147: the blocks that take a caption; a code include gives it to the block it expands to (C2-N-073). */
+function takesCaption(node: Block): node is CaptionedBlock {
+  if (node.type === 'include') return node.options?.code !== undefined
+  return node.type === 'table' || node.type === 'figure_group' || node.type === 'paragraph' || node.type === 'code_block' ||
+    node.type === 'block_quote'
 }
 
 /** The nodes of `nodes`, each made by its builder in `builders`, with each caption attached to the block above it. */
@@ -596,9 +598,14 @@ function buildChildren<N extends DocumentChild>(
   ctx: TreeContext, nodes: BlockNode[], flow: number, builders: ReadonlyMap<number, BlockBuilder<N>>,
 ): N[] {
   const list: N[] = []
+  let host: BlockNode | undefined
   for (const node of nodes) {
-    if (node.kind === CAPTION) attachCaption(list, captionNode(ctx, node, flow))
-    else list.push(blockNode(ctx, node, flow, builders.get(node.kind)!))
+    if (node.kind === CAPTION) {
+      attachCaption(list, captionNode(ctx, node, flow), host?.kind === CODE && (host.flags & FLAG_DELIMITED) !== 0)
+      continue
+    }
+    if (node.kind !== COMMENT && node.kind !== COMMENT_BLOCK) host = node
+    list.push(blockNode(ctx, node, flow, builders.get(node.kind)!))
   }
   return list
 }
