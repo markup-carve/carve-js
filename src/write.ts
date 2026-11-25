@@ -744,11 +744,13 @@ function dropIdleTrials(w: Writer, check: Check, group: readonly Node[], first: 
     return all
   }
   let dropped = false
+  // The tree with every escape of the round changes only where a trial is taken out, and then into the tree without it.
+  let all = groupTree(w, group, first, withEscapes(check.escapes))
   // The later trial goes first, so the earlier one, which the rounds of C2-W-088 reach first, is kept.
   for (const trial of [...check.trials].reverse()) {
-    const others = check.escapes.filter((escape) => escape !== trial)
-    const without = groupTree(w, group, first, withEscapes(others))
-    if (!treesEqual(groupTree(w, group, first, withEscapes([...others, trial])), without)) continue
+    const without = groupTree(w, group, first, withEscapes(check.escapes.filter((escape) => escape !== trial)))
+    if (!treesEqual(all, without)) continue
+    all = without
     check.escapes.splice(check.escapes.indexOf(trial), 1)
     check.marks.get(trial[0])?.delete(trial[1])
     check.trials = check.trials.filter((other) => other !== trial)
