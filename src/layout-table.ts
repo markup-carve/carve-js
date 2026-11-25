@@ -45,7 +45,9 @@ export function cellRange(src: string, table: TableRows, row: number, cell: Bloc
   const spans = cell.spans!
   // A cell that a continuation row formed starts behind its pipe; any other starts at it (C2-B-176).
   const formed = cell.start >= lineEndOf(src, table.rows[row]!.start)
-  const last = spans.length === 0 ? cell.end : spans[spans.length - 1]!
+  // carve#6691: a cell over several columns holds its pieces in column order, so the last piece in the source can be any of them.
+  let last = spans.length === 0 ? cell.end : spans[1]!
+  for (let at = 3; at < spans.length; at += 2) if (spans[at]! > last) last = spans[at]!
   return [formed ? cell.start : cell.start + 1, Math.max(cell.end, skipSpaces(src, last, lineEndOf(src, last)))]
 }
 

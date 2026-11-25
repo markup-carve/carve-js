@@ -38,4 +38,10 @@ describe('continuation fragments under a spanned cell (carve#6691)', () => {
     const node = parsed.layout.nodes.find((entry) => entry.wraps !== undefined)!
     expect(node.wraps!.map((wrap) => [wrap.line, wrap.offset])).toEqual([[1, 2], [1, 6], [2, 4], [2, 8]])
   })
+
+  it('ends the range of a wide cell at its last piece in the source, whatever its column', () => {
+    const parsed = parseWithLayout('| a | < |\n+ b | c |\n+ d |   |\n')
+    const node = parsed.layout.nodes.find((entry) => entry.wraps !== undefined)!
+    expect([node.startByte, node.endByte]).toEqual([1, 24])
+  })
 })
