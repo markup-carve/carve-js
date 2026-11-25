@@ -49,6 +49,19 @@ describe('C2-W-145: a span count that no mark cell covers is written with span m
       .toEqual({ source: '| a | r |\n| b | ^ |\n| w | < |\n', codes: [rowspan] })
   })
 
+  it('C2-M-039: counts the columns with the slots row spans from above take (CC-2109, CC-2110)', () => {
+    const columns = (html: string): number => (importDocument(html, { from: 'html' }).document.children[0] as TableNode).columns.length
+    const pushed = '<table><tr><td rowspan="2">r</td></tr><tr><td colspan="2">w</td></tr></table>'
+    expect(imported(pushed)).toEqual({ source: '| r |\n| ^ | w | < |\n', codes: [] })
+    expect(columns(pushed)).toBe(3)
+    const single = '<table><tr><td rowspan="2">r</td></tr><tr><td>w</td></tr></table>'
+    expect(imported(single)).toEqual({ source: '| r |\n| ^ | w |\n', codes: [] })
+    expect(columns(single)).toBe(2)
+    const third = '<table><tr><td>a</td><td rowspan="3">r</td></tr><tr><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>'
+    expect(imported(third)).toEqual({ source: '| a | r |\n| b | ^ |\n| c | ^ | d |\n', codes: [] })
+    expect(columns(third)).toBe(3)
+  })
+
   it('reads back as the supplied tree with the marks added, renders the same grid and leaves the tree as it was', () => {
     const cell = (value: string, extra: Partial<TableCellNode> = {}): TableCellNode =>
       ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [{ type: 'text', value }] }], ...extra })
