@@ -97,7 +97,7 @@ describe('sanitizeSvg parity with carve-php', () => {
       const row = ROWS[delta.index]!
       expect(delta.src).toBe(row.src)
       expect(delta.svg === row.svg && delta.ok === row.ok, row.src).toBe(false)
-      expect(delta.tickets.every((ticket) => ['carve#6763', 'carve#6764', 'carve#6765'].includes(ticket))).toBe(true)
+      expect(delta.tickets.every((ticket) => ['carve#6763', 'carve#6764', 'carve#6765', 'carve#6774'].includes(ticket))).toBe(true)
     }
   })
 
@@ -282,5 +282,82 @@ describe('sanitizeSvg animateTransform and animateMotion (carve#6765)', () => {
     return { src: `<svg><use href="#x"><${tag} ${attrs}>${kid}</${tag}></use></svg>`, opts: pick([opts, { allowAnimation: true, allowStyle: true }]) }
   }, (svg, src) => {
     expect(svg, src).toContain(`<${/<use href="#x"><(\w+)/.exec(src)![1]!}`)
+  })
+})
+
+const XML_REF = /&(#\d+|#x[0-9a-fA-F]+|amp|lt|gt|quot|apos);/y
+function refProblems(text: string): string[] {
+  const problems: string[] = []
+  for (let at = text.indexOf('&'); at >= 0; at = text.indexOf('&', at + 1)) {
+    XML_REF.lastIndex = at
+    if (!XML_REF.test(text)) problems.push(`reference at ${text.slice(at, at + 8)}`)
+  }
+  if (text.includes('<')) problems.push('raw <')
+  return problems
+}
+
+function tagProblems(name: string, attrs: string): string[] {
+  const problems: string[] = []
+  const names = [...attrs.matchAll(/([^\s=/>]+)\s*=\s*"([^"]*)"/g)].map((a) => {
+    problems.push(...refProblems(a[2]!))
+    return a[1]!
+  })
+  if (new Set(names).size !== names.length) problems.push(`duplicate attribute on ${name}`)
+  return problems
+}
+
+/** What an XML parser would refuse in a kept output: unquoted or valueless attributes, duplicates, unbalanced tags, bad references. */
+function xmlProblems(svg: string): string[] {
+  const problems: string[] = []
+  const stack: string[] = []
+  const token = /<(\/?)([A-Za-z_:][\w:.-]*)((?:\s+[^\s=/>]+\s*=\s*"[^"]*")*)\s*(\/?)>|<|[^<]+/g
+  for (const [text, close, name, attrs, self] of svg.matchAll(token)) {
+    if (name === undefined) problems.push(...(text === '<' ? ['unparsed tag'] : refProblems(text)))
+    else if (close === '/') {
+      if (stack.pop() !== name) problems.push(`close ${name}`)
+    } else {
+      problems.push(...tagProblems(name, attrs!))
+      if (self !== '/') stack.push(name)
+    }
+  }
+  if (stack.length > 0) problems.push(`unclosed ${stack.join(',')}`)
+  return problems
+}
+
+describe('sanitizeSvg valueless attributes (carve#6774)', () => {
+  it('drops an attribute without a value', () => {
+    expect(sanitizeSvg('<svg id/>')).toEqual({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>', ok: true })
+    expect(sanitizeSvg('<svg><rect width fill/></svg>')).toEqual({ svg: '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>', ok: true })
+    expect(sanitizeSvg('<svg xml:space aria-hidden data-x ID><text x="1" role>a</text></svg>').svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><text x="1">a</text></svg>')
+    expect(sanitizeSvg('<svg><rect><animate attributeName="x" to from/></rect></svg>', { allowAnimation: true }).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect><animate attributeName="x"/></rect></svg>')
+    expect(sanitizeSvg('<svg width = height="2"/>').svg).toBe('<svg xmlns="http://www.w3.org/2000/svg" width="height=&quot;2&quot;"/>')
+  })
+
+  const BARE = ['id', 'ID', 'width', 'fill', 'stroke', 'xml:space', 'xmlns', 'xmlns:xlink', 'XMLNS', 'class', 'role', 'aria-hidden', 'data-x',
+    'style', 'href', 'xlink:href', 'onload', 'values', 'to', 'from', 'attributeName', 'stop-color', 'version', 'viewBox', 'x']
+  const VALUED = ['id="a"', 'width="1"', 'fill="url(#g)"', "fill=\"url('#g')\"", 'fill="url( #g)"', 'style="fill:red"',
+    'style="cursor:image-set(&quot;https://e.example/p.png&quot; 1x)"', 'class="a xmlns=b"', 'xmlns="x"', 'id="a&#1;b"', 'id="&#9;x"',
+    'attributeName="href"', 'values="#a;evil.svg"', 'to="#b"', 'href="#x"', 'href="https://e.example/x"', 'onload="alert(1)"', 'id="x\u0001y"']
+  const attrs = (): string => Array.from({ length: 1 + Math.floor(rnd() * 5) }, () => (rnd() < 0.5 ? pick(BARE) : pick(VALUED)))
+    .join(pick([' ', '\n', '\t', '  ']))
+  it('keeps every accepted parity row well-formed XML', () => {
+    for (const row of ROWS) {
+      const { svg, ok } = sanitizeSvg(row.src, row.opts)
+      if (ok) expect(xmlProblems(svg), row.src).toEqual([])
+    }
+  })
+
+  sweep('valueless attributes', () => {
+    const kids = Array.from({ length: Math.floor(rnd() * 3) }, () => {
+      const tag = pick(['rect', 'g', 'text', 'use', 'a', 'image', 'animate', 'set', 'animateTransform', 'animateMotion', 'stop'])
+      return rnd() < 0.5 ? `<${tag} ${attrs()}/>` : `<${tag} ${attrs()}>${pick(['', 'x', '&#0;', '&amp;'])}</${tag}>`
+    })
+    const opts = pick([{}, { allowStyle: true }, { allowAnimation: true }, { allowLinks: true, allowExternalImages: true },
+      { allowLinks: true, allowStyle: true, allowAnimation: true, allowExternalImages: true }])
+    return { src: `<svg ${attrs()}>${kids.join('')}</svg>`, opts }
+  }, (svg, src) => {
+    expect(xmlProblems(svg), src).toEqual([])
   })
 })

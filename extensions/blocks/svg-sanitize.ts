@@ -301,17 +301,16 @@ function readAttrEnd(raw: string, start: number, quote: string | null): number {
 
 function sanitizeAttribute(name: string, value: string | null, opts: SanitizeSvgOptions, allowExternalHref: boolean): string {
   const n = name.toLowerCase()
-  if (n.startsWith('on')) return ''
+  // XML has no valueless attributes, and none on the allowlist is boolean (carve#6774).
+  if (value === null || n.startsWith('on')) return ''
   if (URL_ATTRS.has(n)) return sanitizeUrlAttribute(name, value, opts, allowExternalHref)
-  if (n === 'style') return opts.allowStyle && value !== null && !styleIsDangerous(value) ?
-    ` ${name}="${escapeAttr(value)}"` : ''
+  if (n === 'style') return opts.allowStyle && !styleIsDangerous(value) ? ` ${name}="${escapeAttr(value)}"` : ''
   if (!n.startsWith('aria-') && !n.startsWith('data-') && !ALLOWED_ATTRS.has(n)) return ''
-  if (value !== null && (REF_VALUE_ATTRS.has(n) ? refAttrUnsafe(value) : valueHasExternalRef(value))) return ''
-  return value === null ? ` ${name}` : ` ${name}="${escapeAttr(value)}"`
+  if (REF_VALUE_ATTRS.has(n) ? refAttrUnsafe(value) : valueHasExternalRef(value)) return ''
+  return ` ${name}="${escapeAttr(value)}"`
 }
 
-function sanitizeUrlAttribute(name: string, value: string | null, opts: SanitizeSvgOptions, allowExternalHref: boolean): string {
-  if (value === null) return ''
+function sanitizeUrlAttribute(name: string, value: string, opts: SanitizeSvgOptions, allowExternalHref: boolean): string {
   const decoded = normalizeForCheck(value)
   if (!decoded.startsWith('#') && !allowExternalHref) return ''
   if (!schemeIsSafe(decoded) || !isUrlAllowed(decoded, opts.urlPolicy)) return ''
