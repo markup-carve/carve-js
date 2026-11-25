@@ -1912,7 +1912,7 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   if (escapedDash < 0 || escapedDash > close) return true
   // C2-W-125: a round that reports a construct keeps the case backslash it placed beside it (C2-W-091).
   return close - at <= LONGEST_TAG_BRACE && !inHyphenRun(source, escapedDash) &&
-    otherBackslashes(scan, source) === bracedNameEscapes(source, at, close) + 1
+    otherBackslashes(w, scan, source) === bracedNameEscapes(source, at, close) + 1
 }
 
 /** The case-six escapes behind a name between the brace at `at` and its closer. */
@@ -1924,13 +1924,26 @@ function bracedNameEscapes(source: string, at: number, close: number): number {
   return count
 }
 
-/** The backslashes of `source` that escape a construct: the brace being pruned and those of other kinds. */
-function otherBackslashes(scan: PruneScan, source: string): number {
+/**
+ * The backslashes of `source` that escape a construct: the brace being pruned and those of other kinds. Only those in
+ * text count; a code span, a destination or an attribute value holds its backslashes as they are.
+ */
+function otherBackslashes(w: Writer, scan: PruneScan, source: string): number {
   if (scan.others !== null) return scan.others
+  const ranges: [number, number][] = []
+  const pending: Node[] = [...parseChunk(w, source).children]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'text' && node.pos !== undefined) ranges.push([node.pos.startOffset, node.pos.endOffset])
+    pushAll(pending, childNodes(node))
+  }
+  ranges.sort((a, b) => a[0] - b[0])
+  const bytes = new TextEncoder().encode(source)
   let count = 0
-  for (let at = source.indexOf('\\'); at >= 0; at = source.indexOf('\\', at + 2)) {
-    const next = source.charCodeAt(at + 1)
-    if (next !== 92 && isAsciiPunctuation(next)) count++
+  let range = 0
+  for (let at = bytes.indexOf(92); at >= 0; at = bytes.indexOf(92, at + 2)) {
+    while (range < ranges.length && ranges[range]![1] <= at) range++
+    const inText = range < ranges.length && ranges[range]![0] <= at
+    if (inText && bytes[at + 1] !== 92 && isAsciiPunctuation(bytes[at + 1]!)) count++
   }
   return scan.others = count
 }
@@ -1949,7 +1962,8 @@ function behindName(source: string, at: number): boolean {
   return start < at && (source[start - 1] === '#' || source[start - 1] === '@')
 }
 
-const NAME_CHARACTER = /^[\p{L}\p{N}]$/u
+// The characters a tag or mention name can hold before its end (C2-I-090, C2-I-092).
+const NAME_CHARACTER = /^[\p{L}\p{N}_-]$/u
 // A longer brace keeps its backslash, so the scan of each candidate stays short.
 const LONGEST_TAG_BRACE = 256
 

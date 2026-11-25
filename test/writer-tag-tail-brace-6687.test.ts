@@ -47,8 +47,13 @@ describe('C2-W-125: the brace keeps its backslash beside another escaped constru
     ['x{@a\\-w} y{#b\\-w}', 'x{@a\\-w} y\\{#b\\-w}\n'],
   ])('writes %j as %j', checkWrites)
 
-  // A backslash before a letter is text, not an escape.
+  // A backslash before a letter is text, not an escape, and a code span or a destination holds its backslashes as
+  // they are. A name can hold `-` and `_`.
   it.each([
     ['x{#a\\-w} c\\\\d', 'x{#a\\-w} c\\d\n'],
+    ['x{#a\\-w} `\\*`', 'x{#a\\-w} `\\*`\n'],
+    ['x{#a\\-w} [u](/a\\*b)', 'x{#a\\-w} [u](/a\\*b)\n'],
+    ['x{#ab-c\\-w} *s*', 'x{#ab-c\\-w} *s*\n'],
+    ['x{#ab_c\\-w}', 'x{#ab_c\\-w}\n'],
   ])('prunes the brace of %j', checkWrites)
 })
