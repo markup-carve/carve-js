@@ -90,6 +90,8 @@ interface Walk {
   xrefs: XrefNode[]
   captions: CaptionUse[]
   identified: Node[]
+  /** C2-H-024: the authored ids in footnote definitions that are not written, which generated ids still avoid. */
+  unwrittenIds: string[]
   noteRefs: { node: FootnoteRefNode | InlineFootnoteNode, note: Note, ordinal: number, authored: boolean }[]
   /** C2-H-156: the titled admonitions and the titled top-level `footnotes` directives, in the order of the walk. */
   titled: (AdmonitionNode | DirectiveNode)[]
@@ -748,6 +750,7 @@ export function resolve(
   visitUnwritten(walk, document.children, top)
   const targets = findTargets(walk, mode)
   const taken = reserveIds(walk)
+  for (const id of walk.unwrittenIds) taken.add(id)
   generateIds(walk, mode, taken)
   generateLabelIds(walk, taken)
   generateNoteIds(walk, taken)
@@ -761,7 +764,7 @@ export function resolve(
 
 /**
  * C2-A-109: a reference in a footnote definition that no reference uses, or that a duplicate lost to (C2-B-085), still
- * resolves, although the note is not written. Only its references are read: it takes no number and no id.
+ * resolves, although the note is not written. Only its references and authored ids are read: it takes no number and no id.
  */
 function resolveUnwrittenFootnote(walk: Walk, footnote: FootnoteNode, scope: Scope): void {
   walk.scope = walk.scopes.get(footnote) ?? scope
@@ -770,6 +773,7 @@ function resolveUnwrittenFootnote(walk: Walk, footnote: FootnoteNode, scope: Sco
     if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
     if (node.type === 'xref') walk.xrefs.push(node)
     if (node.type === 'table') alignColumns(node)
+    if (node.attrs?.id !== undefined && attributesAct(node)) walk.unwrittenIds.push(node.attrs.id)
     forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
   }
 }
@@ -795,7 +799,7 @@ function newWalk(
   return {
     declarations: document.extensions ?? [], resolution, footnotes,
     scope: { outer: null, definitions: resolution.definitions, footnotes, abbreviations: new Map() }, scopes: new Map(),
-    headings: [], references: [], xrefs: [], captions: [], identified: [], noteRefs: [], titled: [],
+    headings: [], references: [], xrefs: [], captions: [], identified: [], unwrittenIds: [], noteRefs: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
     markupLine: facts?.markupLine ?? null, renderers, admitted, rendered: false, extensionDepth: 0,
   }
