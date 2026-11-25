@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AST_VERSION, type DocumentNode, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree } from '../src/index.ts'
+import { AST_VERSION, type DocumentNode, format, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree } from '../src/index.ts'
 
 const FENCE = '```'
 
@@ -480,5 +480,32 @@ describe('C2-H-121: the profile changes no tree', () => {
     expect(render('a[^n]\n\n[^n]: note', { profile: 'comment' })).toBe('<p>a[^n]</p>')
     const both = render('a[^n] *b*[^m]\n\n[^n]: x\n\n[^m]: y', { profile: 'comment' })
     expect(both).not.toContain('<section')
+  })
+})
+
+describe('carve#6702: a comment between a delimited table and its caption', () => {
+  const csv = `{table}\n${FENCE}csv\nName\nAda\n${FENCE}\n`
+  it('C2-B-138: the fence has closed, so the comment is a sibling after the captioned table', () => {
+    const tree = parse(`${csv}%% source: survey\n^ Members\n`)
+    expect(tree.children.map((node) => node.type)).toEqual(['table', 'comment'])
+    const table = tree.children[0] as unknown as { children: { type: string }[], caption?: unknown }
+    expect(table.children.map((node) => node.type)).toEqual(['table_head', 'table_body'])
+    expect(table.caption).toBeDefined()
+    expect(tree.children[1]).toMatchObject({ type: 'comment', form: 'line', value: 'source: survey' })
+  })
+  it('C2-W-066: fmt keeps the delimited table and writes the comment below the caption', () => {
+    expect(format(`${csv}%% source: survey\n^ Members\n`))
+      .toBe(`${csv}^ Members\n\n%% source: survey\n`)
+    expect(format(`{table}\n${FENCE}tsv\nName\tAge\n${FENCE}\n%% a\n%% b\n^ Members\n`))
+      .toBe(`{table}\n${FENCE}tsv\nName\tAge\n${FENCE}\n^ Members\n\n%% a\n%% b\n`)
+  })
+  it('C2-B-138: the comment stays in the container that holds the table', () => {
+    const quote = parse(`> {table}\n> ${FENCE}csv\n> Name\n> ${FENCE}\n> %% c\n> ^ Members\n`).children[0] as unknown as
+      { children: { type: string }[] }
+    expect(quote.children.map((node) => node.type)).toEqual(['table', 'comment'])
+  })
+  it('C2-A-082: a pipe table is still open, so it keeps the comment as its last child', () => {
+    const table = parse('|= Name |\n| Ada |\n%% c\n^ Members\n').children[0] as unknown as { children: { type: string }[] }
+    expect(table.children.map((node) => node.type)).toEqual(['table_head', 'table_body', 'comment'])
   })
 })
