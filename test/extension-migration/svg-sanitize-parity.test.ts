@@ -150,3 +150,23 @@ describe('sanitizeSvg style (carve#6760)', () => {
     expect(svg, src).not.toContain('style=')
   })
 })
+
+describe('sanitizeSvg href animation (carve#6761)', () => {
+  const opts = { allowAnimation: true }
+  it('keeps only local entries in an href animation', () => {
+    expect(sanitizeSvg('<svg><use href="#x"><set attributeName="href" to="evil.svg#x"/></use></svg>', opts).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><use href="#x"><set attributeName="href"/></use></svg>')
+    expect(sanitizeSvg('<svg><use href="#x"><animate attributeName="xlink:href" values="#a;evil.svg#x" dur="1s"/></use></svg>', opts).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><use href="#x"><animate attributeName="xlink:href" dur="1s"/></use></svg>')
+    const local = '<svg xmlns="http://www.w3.org/2000/svg"><use href="#x"><animate attributeName="HREF" values="#a;#b;"/></use></svg>'
+    expect(sanitizeSvg(local, opts).svg).toBe(local)
+  })
+
+  const NAMES = ['href', 'HREF', 'xlink:href', 'XLink:Href', ' href ', '&#104;ref', 'xlink&#58;href', 'h\\72 ef']
+  const ENTRIES = ['#a', '#b', 'evil.svg#x', 'x.svg', '../a#b', ' #c', 'a#b', '%23x', '&#35;x', 'x&#35;y', '']
+  sweep('href animation values', () => {
+    const tag = pick(['set', 'animate'])
+    const values = Array.from({ length: 1 + Math.floor(rnd() * 3) }, () => pick(ENTRIES)).join(';')
+    return { src: `<svg><use href="#x"><${tag} attributeName=${quoted(pick(NAMES))} ${pick([...ANIMATION_VALUES])}=${quoted(values)}/></use></svg>`, opts }
+  }, () => undefined)
+})

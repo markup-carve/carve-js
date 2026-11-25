@@ -303,19 +303,41 @@ function sanitizeUrlAttribute(name: string, value: string | null, opts: Sanitize
   return ` ${name}="${escapeAttr(value)}"`
 }
 
+const ANIMATION_VALUE_ATTRS = new Set(['values', 'from', 'to', 'by'])
+
 function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string, isRoot: boolean): string {
   const t = tag.toLowerCase()
   const allowExternalHref = (opts.allowLinks === true && t === 'a') || (opts.allowExternalImages === true && t === 'image')
+  const attrs = parseAttrs(raw)
+  const hrefAnimation = animatesHref(attrs)
   let out = ''
   const seen = new Set<string>()
-  for (const { name, value } of parseAttrs(raw)) {
+  for (const { name, value } of attrs) {
     if (seen.has(name)) continue
     seen.add(name)
+    const n = name.toLowerCase()
     // carve#6755: the root's own xmlns is replaced by name, never by searching the written attributes.
-    if (isRoot && name.toLowerCase() === 'xmlns') continue
+    if (isRoot && n === 'xmlns') continue
+    if (hrefAnimation && value !== null && ANIMATION_VALUE_ATTRS.has(n) && !localRefs(value)) continue
     out += sanitizeAttribute(name, value, opts, allowExternalHref)
   }
   return out
+}
+
+// carve#6761: an animation of `href` may only write `#id` entries, like the `href` it changes.
+function animatesHref(attrs: ParsedAttr[]): boolean {
+  return attrs.some(({ name, value }) => {
+    if (name.toLowerCase() !== 'attributename' || value === null) return false
+    const target = normalizeForCheck(value).trim().toLowerCase()
+    return target === 'href' || target === 'xlink:href'
+  })
+}
+
+function localRefs(value: string): boolean {
+  return normalizeForCheck(value).split(';').every((segment) => {
+    const s = segment.trim()
+    return s === '' || s.startsWith('#')
+  })
 }
 
 function tokenEnd(source: string, start: number): number {
