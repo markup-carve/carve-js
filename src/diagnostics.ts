@@ -190,7 +190,8 @@ export function placeFindings(findings: Findings, found: ReadonlyMap<Node, Place
   entries.forEach((entry, at) => {
     const node = nodes[at] ?? null
     const place = node === null ? undefined : found.get(node)
-    record?.(entry, placeAt(entry, node, place, findings.steps?.get(entry) ?? ''))
+    const located = placeAt(entry, node, place, findings.steps?.get(entry) ?? '')
+    record?.(entry, located)
   })
   return entries
 }
@@ -313,17 +314,24 @@ export function inDocumentOrder(document: DocumentNode, entries: Diagnostic[], o
   return inPlacedOrder(document, entries, order === undefined ? undefined : entries.map((entry) => order.get(entry)))
 }
 
+/** `entries` in document order of the places beside them, or null where a place does not decide an entry's order. */
+export function byPlaces(document: DocumentNode, entries: Diagnostic[],
+  places: readonly (FindingPlace | undefined)[]): Diagnostic[] | null {
+  if (entries.length < 2) return entries
+  const placed = placedKeys(document, entries, places, document.extensions ?? [])
+  if (placed === null) return null
+  const at = entries.map((_, index) => index)
+  at.sort((a, b) => placed[a]! - placed[b]! || a - b)
+  return at.map((index) => entries[index]!)
+}
+
 /** `inDocumentOrder` with the place of each entry beside it, undefined for one that has none. */
 export function inPlacedOrder(document: DocumentNode, entries: Diagnostic[],
   places?: readonly (FindingPlace | undefined)[]): Diagnostic[] {
   if (entries.length < 2) return entries
   const declarations = document.extensions ?? []
-  const placed = places === undefined ? null : placedKeys(document, entries, places, declarations)
-  if (placed !== null) {
-    const at = entries.map((_, index) => index)
-    at.sort((a, b) => placed[a]! - placed[b]! || a - b)
-    return at.map((index) => entries[index]!)
-  }
+  const placed = places === undefined ? null : byPlaces(document, entries, places)
+  if (placed !== null) return placed
   const keyed = entries.map((entry, at) => ({ entry, at, key: pathKey(document, entry.path ?? '', declarations) }))
   keyed.sort((a, b) => compareKeys(a.key, b.key) || a.at - b.at)
   return keyed.map(({ entry }) => entry)

@@ -247,9 +247,11 @@ function isPair(value: Value): boolean {
 }
 
 function checkPairs(value: Value, path: string): void {
-  requireArray(value, path).forEach((pair, index) => {
-    if (!isPair(pair)) fail(`${path}/${index}`, 'not a pair of two strings')
-  })
+  const pairs = requireArray(value, path)
+  for (let index = 0; index < pairs.length; index++) {
+    // As `forEach` reads a list, a hole is no entry.
+    if (index in pairs && !isPair(pairs[index])) fail(`${path}/${index}`, 'not a pair of two strings')
+  }
 }
 
 const MAX_SHIFT = 999_999_999
@@ -310,9 +312,10 @@ function checkOptions(value: Value, path: string): void {
 /** C2-A-032, C2-A-034: an optional id, a list of classes and a list of pairs; `id` and `class` are no keys. */
 function checkAttrs(value: Value, path: string, span = false): void {
   if (!isRecord(value)) fail(path, 'attrs is not an object')
+  const names = Object.keys(value)
   // C2-A-058: absent attributes have one encoding, so an empty object or list is refused.
-  if (Object.keys(value).length === 0) fail(path, 'an empty attrs')
-  for (const name of Object.keys(value)) {
+  if (names.length === 0) fail(path, 'an empty attrs')
+  for (const name of names) {
     if (name !== 'id' && name !== 'classes' && name !== 'keyValues') fail(`${path}/${name}`, 'unknown field of attrs')
   }
   if (value['id'] !== undefined) requireString(value['id'], `${path}/id`)
@@ -328,15 +331,17 @@ function checkKeyValues(value: Value, path: string, span: boolean): void {
   checkPairs(value, path)
   const pairs = value as [string, string][]
   if (pairs.length === 0) fail(path, 'an empty list of key-value pairs')
-  const seen = new Set<string>()
-  pairs.forEach(([key], index) => {
+  const seen = pairs.length > 1 ? new Set<string>() : null
+  for (let index = 0; index < pairs.length; index++) {
+    if (!(index in pairs)) continue
+    const key = pairs[index]![0]
     // C2-A-035: a key occurs once, compared without ASCII letter case, and is a key by C2-I-030.
     if (!isAttributeKey(key)) fail(`${path}/${index}/0`, `${JSON.stringify(key)} is no key`)
     const name = keyIdentity(key, span)
-    if (seen.has(name)) fail(path, `the key ${key} occurs twice`)
-    seen.add(name)
+    if (seen?.has(name) === true) fail(path, `the key ${key} occurs twice`)
+    seen?.add(name)
     if (name === 'ordinary:id' || name === 'ordinary:class') fail(path, `the key ${key} folds into the id or the classes`)
-  })
+  }
 }
 
 /** C2-A-139, C2-A-140: six integers, never null, with the start not behind the end. */

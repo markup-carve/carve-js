@@ -95,10 +95,11 @@ function idPart(id: string | undefined, parts: string[], pipes: boolean): void {
 
 /** C2-W-048: the brace block of `node`, or the empty string when it has nothing to write. */
 export function braceBlock(node: Node, extra?: BlockParts): string {
+  return extra === undefined && keysOnly(node) ? keysBlock(node.attrs?.keyValues ?? NONE) : partsBlock(node, extra)
+}
+
+function partsBlock(node: Node, extra: BlockParts | undefined): string {
   const attrs = node.attrs
-  if (extra === undefined && node.lang === undefined && attrs?.id === undefined && attrs?.classes === undefined) {
-    return keysBlock(attrs?.keyValues ?? NONE)
-  }
   const parts: string[] = []
   if (attrs !== undefined) idPart(attrs.id, parts, extra?.pipes === true)
   classParts(attrs?.classes ?? NONE, parts, extra)
@@ -110,6 +111,10 @@ export function braceBlock(node: Node, extra?: BlockParts): string {
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`
 }
 
+function keysOnly(node: Node): boolean {
+  return node.lang === undefined && node.attrs?.id === undefined && node.attrs?.classes === undefined
+}
+
 /** `braceBlock` of a node with keys only. */
 function keysBlock(keyValues: readonly [string, string][]): string {
   let block = ''
@@ -117,8 +122,15 @@ function keysBlock(keyValues: readonly [string, string][]): string {
   return block === '' ? '' : `${block}}`
 }
 
+/** Whether a value of `keyValues` holds a line feed (C2-W-050). */
+export function holdsLineFeed(keyValues: readonly (readonly [string, string])[] | undefined): boolean {
+  if (keyValues === undefined) return false
+  for (let at = 0; at < keyValues.length; at++) if (keyValues[at]![1].includes('\n')) return true
+  return false
+}
+
 export function holdsLineFeedValue(item: Node): boolean {
-  if (item.attrs?.keyValues?.some(([, value]) => value.includes('\n')) === true) return true
+  if (holdsLineFeed(item.attrs?.keyValues)) return true
   let found = false
   forEachSlot(item, (children) => { found ||= children.some(holdsLineFeedValue) })
   return found

@@ -9,10 +9,11 @@ import {
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import {
-  addFinding, type Diagnostic, type FindingOrder, type FindingPlace, inDocumentOrder, inPlacedOrder, locateFindings, type Place,
+  addFinding, byPlaces, type Diagnostic, type FindingOrder, type FindingPlace, type Frame, inDocumentOrder, inPlacedOrder,
+  locateFindings, type Place,
   placeAt, placeFindings, placeOf, walkPlaces,
 } from './diagnostics.ts'
-import { holdsLineFeedValue, isKey, withSpelledValues } from './write-attributes.ts'
+import { holdsLineFeed, holdsLineFeedValue, isKey, withSpelledValues } from './write-attributes.ts'
 import {
   blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, joinsIndentedRun, topPredecessors, writeBlocks,
 } from './write-blocks.ts'
@@ -71,6 +72,15 @@ export interface WriterStats {
   parses: number
   /** The characters of each repaired group and the characters its repair parsed. */
   work: [number, number][]
+  /** The line-feed losses a `LossBudget` left out. */
+  droppedLosses?: number
+}
+
+/** What an import keeps of the writer's losses (C2-H-204, C2-H-205): the codes it leaves out, and how many it keeps. */
+export interface LossBudget {
+  allowed: ReadonlySet<string>
+  /** How many more losses the import keeps; the line-feed losses behind them are counted, not spelled. */
+  keep: number
 }
 
 interface WriterRun {
@@ -2676,58 +2686,97 @@ function asksCandidates(w: Writer): boolean {
  * loss where it meets its node, so no loss is looked up by its node or entry. Null where the walk could place an entry
  * elsewhere: the losses ask for the line-feed candidates, a line-feed loss is about a comment, or a node with a loss or
  * a line feed in a value stands in the tree twice.
+ *
+ * With `budget`, the line-feed losses come in document order, so those behind the first `keep` are only counted in
+ * `stats`, and none is spelled when the import leaves their code out.
  */
-function placedLineFeedLosses(document: DocumentNode, w: Writer): Diagnostic[] | null {
+function placedLineFeedLosses(document: DocumentNode, w: Writer, stats: WriterStats, budget?: LossBudget):
+  Diagnostic[] | null {
   if (asksCandidates(w)) return null
-  const findings = w.losses
-  const wanted = new Set<Node>()
-  for (const node of findings.nodes) if (node !== null) wanted.add(node)
-  const found = new Map<Node, Place>()
-  const added: Diagnostic[] = []
-  const addedPlaces: FindingPlace[] = []
-  const met = new Set<Node>()
-  let refused = false
+  const walk: LineFeedWalk = { w, budget, dropsAll: budget?.allowed.has('field-unspellable') === true, dropped: 0,
+    wanted: new Set(), found: new Map(), added: [], places: [], met: new Set(), refused: false }
+  for (const node of w.losses.nodes) if (node !== null) walk.wanted.add(node)
   walkPlaces(document, (frame, ordinal) => {
-    if (refused) return
-    const node = frame.node
-    if (wanted.size > 0 && wanted.has(node)) {
-      if (found.has(node)) refused = true
-      else found.set(node, placeOf(frame, ordinal))
-    }
+    if (walk.refused) return
+    if (walk.wanted.size > 0 && walk.wanted.has(frame.node)) meetWanted(walk, frame, ordinal)
     const above = frame.above
     frame.mark = above === null || (above.mark && keepsLineFeedLosses(w, above.node, frame.step))
-    const keyValues = node.attrs?.keyValues
-    if (keyValues === undefined || !keyValues.some(([, value]) => value.includes('\n'))) return
-    const before = met.size
-    if (met.add(node).size === before) refused = true
-    if (refused || !frame.mark || w.lost.has(node)) return
-    const lostKeys = w.lostKeys.get(node)
-    let place: Place | undefined
-    for (let index = 0; index < keyValues.length; index++) {
-      const [key, value] = keyValues[index]!
-      if (!value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) continue
-      if (node.type === 'comment') refused = true
-      place ??= placeOf(frame, ordinal)
-      const entry = lineFeedLoss(key, node)
-      added.push(entry)
-      addedPlaces.push(placeAt(entry, node, place, keyValueStep(index)))
-    }
+    const keyValues = frame.node.attrs?.keyValues
+    if (keyValues !== undefined && holdsLineFeed(keyValues)) meetLineFeeds(walk, frame, ordinal, keyValues)
   })
-  if (refused) return null
+  if (walk.refused) return null
   const places: (FindingPlace | undefined)[] = []
-  const entries = placeFindings(findings, found, (_, place) => { places.push(place) })
-  for (let at = 0; at < added.length; at++) {
-    entries.push(added[at]!)
-    places.push(addedPlaces[at])
+  const entries = [...placeFindings(w.losses, walk.found, (_, place) => { places.push(place) })]
+  for (let at = 0; at < walk.added.length; at++) {
+    entries.push(walk.added[at]!)
+    places.push(walk.places[at])
   }
   rootMetadataLosses(document, entries)
-  return inPlacedOrder(document, entries, places)
+  if (budget === undefined || (walk.dropped === 0 && !walk.dropsAll)) return inPlacedOrder(document, entries, places)
+  // Only an order the places decide keeps the dropped losses behind the kept ones.
+  const ordered = byPlaces(document, entries, places)
+  if (ordered === null) return placedLineFeedLosses(document, w, stats)
+  stats.droppedLosses = walk.dropped
+  return ordered
+}
+
+/** The state of the walk of `placedLineFeedLosses`. */
+interface LineFeedWalk {
+  w: Writer
+  budget: LossBudget | undefined
+  /** The import leaves the code of the line-feed losses out, so none is spelled or counted. */
+  dropsAll: boolean
+  dropped: number
+  /** The nodes of the writer's own losses, and their places. */
+  wanted: Set<Node>
+  found: Map<Node, Place>
+  /** The line-feed losses, with their places. */
+  added: Diagnostic[]
+  places: FindingPlace[]
+  /** The nodes met with a line feed in a value. */
+  met: Set<Node>
+  refused: boolean
+}
+
+function meetWanted(walk: LineFeedWalk, frame: Frame, ordinal: number): void {
+  if (walk.found.has(frame.node)) walk.refused = true
+  else walk.found.set(frame.node, placeOf(frame, ordinal))
+}
+
+/** Whether the budget leaves the next line-feed loss out, which it counts unless the import leaves its code out. */
+function dropsLoss(walk: LineFeedWalk): boolean {
+  // As the import counts them (C2-H-205): `keep` may be any number.
+  if (walk.budget === undefined || (!walk.dropsAll && !(walk.added.length >= walk.budget.keep))) return false
+  if (!walk.dropsAll) walk.dropped++
+  return true
+}
+
+/** The line-feed losses of the node of `frame`, as `attributeValueLosses` reports them. */
+function meetLineFeeds(walk: LineFeedWalk, frame: Frame, ordinal: number, keyValues: readonly [string, string][]): void {
+  const w = walk.w
+  const node = frame.node
+  const before = walk.met.size
+  if (walk.met.add(node).size === before) walk.refused = true
+  if (walk.refused || !frame.mark || w.lost.has(node)) return
+  const lostKeys = w.lostKeys.get(node)
+  let place: Place | undefined
+  for (let index = 0; index < keyValues.length; index++) {
+    const pair = keyValues[index]!
+    const key = pair[0]
+    if (!pair[1].includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) continue
+    if (node.type === 'comment') walk.refused = true
+    if (dropsLoss(walk)) continue
+    place ??= placeOf(frame, ordinal)
+    const entry = lineFeedLoss(key, node)
+    walk.added.push(entry)
+    walk.places.push(placeAt(entry, node, place, keyValueStep(index)))
+  }
 }
 
 /** Locate writer losses, moving a line-feed mismatch from a wrapper to its written leaf. */
-function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
+function writerDiagnostics(document: DocumentNode, w: Writer, stats: WriterStats, budget?: LossBudget): Diagnostic[] {
   if (w.lineFeedValues) {
-    const placed = placedLineFeedLosses(document, w)
+    const placed = placedLineFeedLosses(document, w, stats, budget)
     if (placed !== null) return placed
     attributeValueLosses(document, w)
   }
@@ -2765,7 +2814,7 @@ function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteO
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout),
-  verifiedSourceBytes?: Uint8Array):
+  verifiedSourceBytes?: Uint8Array, budget?: LossBudget):
   { output: WriteOutput, stats: WriterStats } {
   const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), samples: new Map(), parses: 0, work: [] }
   const run: WriterRun = { path, check, stats }
@@ -2777,7 +2826,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   if (linkKeys !== undefined) w.linkKeys = linkKeys
   w.work.source = original?.length ?? 0
   const source = writeTrimmed(w, run, document, original)
-  const diagnostics = writerDiagnostics(document, w)
+  const diagnostics = writerDiagnostics(document, w, stats, budget)
   stats.parses = w.parses
   return { output: { source, diagnostics }, stats }
 }
@@ -2794,6 +2843,16 @@ export function writeTree(document: DocumentNode, options: WriteOptions | undefi
 export function writeWithDiagnostics(document: DocumentNode, options?: WriteOptions): WriteOutput {
   validateTree(document, undefined, undefined, options?.extensions)
   return writeTree(document, options)
+}
+
+/**
+ * `writeWithDiagnostics` for an import that keeps `budget` of the losses, with the number of line-feed losses it left
+ * out: those the import would leave out or count past its limit (C2-H-204, C2-H-205).
+ */
+export function writeWithLossBudget(document: DocumentNode, budget: LossBudget): { output: WriteOutput, dropped: number } {
+  validateTree(document)
+  const { output, stats } = writeTreeWithStats(document, undefined, 'plan', true, undefined, undefined, undefined, budget)
+  return { output, dropped: stats.droppedLosses ?? 0 }
 }
 
 /**

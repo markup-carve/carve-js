@@ -3,6 +3,7 @@ import {
   type Attrs, type Block, type Diagnostic, type DocumentNode,
   type Inline, type ListNode, type TableCellNode, type TableRowNode,
 } from '../../src/index.ts'
+import { writeWithLossBudget } from '../../src/write.ts'
 
 import type { ImportConstruct } from './hub-constructs.ts'
 
@@ -37,7 +38,8 @@ function applyLossSettings(result: ImportResult, settings: LossSettings): Import
   const max = settings.maxLosses ?? 100
   const kept: ImportDiagnostic[] = []
   let losses = 0
-  let suppressed = 0
+  // The line-feed losses the writer only counted, as `complete` kept fewer than all (`writeWithLossBudget`).
+  let suppressed = DROPPED.get(result) ?? 0
   for (const entry of result.diagnostics) {
     if (entry.channel !== 'render-loss') kept.push(entry)
     else if (allowed.has(entry.code)) continue
@@ -96,6 +98,8 @@ export interface Context {
   /** C2-M-065, C2-M-066: comments and raw elements are kept only with `rawHtml` on. */
   rawHtml?: boolean
   diagnostics: ImportDiagnostic[]
+  /** The loss settings `runImport` applies to the result as it is, which the writer may then spell fewer losses for. */
+  losses?: LossSettings
   deferred?: DocumentNode['children']
   rootLang?: string
   rootDir?: 'ltr' | 'rtl' | 'auto'
@@ -160,10 +164,23 @@ export function documentOf(context: Context, children: DocumentNode['children'])
 
 export function complete(context: Context, children: DocumentNode['children']): ImportResult {
   const document = documentOf(context, children)
-  // writeWithDiagnostics validates the document before writing it.
-  const written = writeWithDiagnostics(document)
-  return { document, source: written.source, diagnostics: [...context.diagnostics, ...written.diagnostics] }
+  const settings = context.losses
+  if (settings === undefined) {
+    // writeWithDiagnostics validates the document before writing it.
+    const written = writeWithDiagnostics(document)
+    return { document, source: written.source, diagnostics: [...context.diagnostics, ...written.diagnostics] }
+  }
+  // C2-H-204, C2-H-205: what `applyLossSettings` keeps of the writer's losses behind those of the import.
+  const allowed = new Set(settings.allowLosses ?? [])
+  let counted = 0
+  for (const entry of context.diagnostics) if (entry.channel === 'render-loss' && !allowed.has(entry.code)) counted++
+  const { output, dropped } = writeWithLossBudget(document, { allowed, keep: (settings.maxLosses ?? 100) - counted })
+  const result: ImportResult = { document, source: output.source, diagnostics: [...context.diagnostics, ...output.diagnostics] }
+  if (dropped > 0) DROPPED.set(result, dropped)
+  return result
 }
+
+const DROPPED = new WeakMap<ImportResult, number>()
 
 export function attrsOf(entries: Iterable<readonly [string, string]>): Attrs | undefined {
   const attrs: Attrs = {}
