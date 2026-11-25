@@ -887,10 +887,39 @@ function tableGroups(node: Html.Element, context: HtmlContext): TableChildren {
     }
   }
   if (direct.length) children.unshift({ type: 'table_body', children: direct })
-  if (head !== undefined) children.unshift({ type: 'table_head', children: rows(head, context, true), ...attrs(context, head) })
+  if (head !== undefined) children.unshift({ type: 'table_head', children: headCells(head, context), ...attrs(context, head) })
   else if (headRows.length) children.unshift({ type: 'table_head', children: headRows })
-  if (foot !== undefined) children.push({ type: 'table_foot', children: rows(foot, context, false), ...attrs(context, foot) })
+  if (foot !== undefined) footGroup(foot, children, context)
   return children
+}
+
+/** carve#6664: with no head and no body row, the leading column-heading rows of the foot are the head. */
+function footGroup(foot: Html.Element, children: TableChildren, context: HtmlContext): void {
+  const footRows = groupRows(foot, context)
+  let lead = 0
+  if (children.every(group => group.type === 'table_body' && group.children.length === 0)) {
+    while (lead < footRows.length && headsColumns(footRows[lead] as Html.Element)) lead++
+  }
+  if (lead > 0) children.unshift({ type: 'table_head', children: rowsOf(footRows.slice(0, lead), context, true) })
+  const footAttrs = attrs(context, foot)
+  if (lead < footRows.length) {
+    children.push({ type: 'table_foot', children: rowsOf(footRows.slice(lead), context, false), ...footAttrs })
+  } else if (Object.keys(footAttrs).length) {
+    report(context, foot, 'import-attribute-dropped', 'The attributes of a foot its head rows left empty dropped')
+  }
+}
+
+/** carve#6663: a head holds header cells only (C2-B-178), so each `<td>` of the `<thead>` is one, reported once. */
+function headCells(head: Html.Element, context: HtmlContext): TableRowNode[] {
+  const result = rows(head, context, true)
+  let changed = false
+  for (const tableRow of result) {
+    for (const entry of tableRow.children) {
+      if (!entry.header) { entry.header = true; changed = true }
+    }
+  }
+  if (changed) report(context, head, 'import-structure-repaired', 'The data cells of a table head read as header cells')
+  return result
 }
 
 /** C2-H-152: the widths of a column group, a percent each. */
