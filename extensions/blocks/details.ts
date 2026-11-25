@@ -32,6 +32,11 @@ export function container(head: string, inner: string, body: string, tail: strin
     `\n${indent}${tail}`
 }
 
+/** The title of a titled div: `summary` in this bundle's nodes, `title` in the catalog's (C2-X-065). */
+export function disclosureTitle(node: BlockExtensionNode): NonNullable<BlockExtensionNode['slots']>[string] {
+  return node.slots?.['summary'] ?? node.slots?.['title'] ?? []
+}
+
 function nodeAttrs(node: BlockExtensionNode, host: ExtensionRenderHost, base?: string): string {
   return authorAttrs(base === undefined ? node.attrs : withClass(node.attrs, base), host) +
     host.attributes(node, { block: true, bare: true })
@@ -39,7 +44,7 @@ function nodeAttrs(node: BlockExtensionNode, host: ExtensionRenderHost, base?: s
 
 /** The disclosure element of a titled div; `open` is added in static mode unless authored. */
 export function renderDisclosure(node: BlockExtensionNode, host: ExtensionRenderHost, label: string, base?: string): string {
-  const summary = node.slots?.['summary'] ?? []
+  const summary = disclosureTitle(node)
   const text = summary.length === 0 ? '' : host.inlines(summary).trim()
   const authoredOpen = node.attrs?.keyValues?.some(([key]) => key.toLowerCase() === 'open') === true
   const open = host.mode === 'static' && !authoredOpen ? ' open' : ''
