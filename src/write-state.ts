@@ -24,7 +24,7 @@ export interface WriterFacts {
   fenced?: boolean
   hardBreakOpener?: boolean
   continuationLines?: number
-  wraps?: readonly { line: number, path: string, offset: number, row?: number }[]
+  wraps?: readonly { line: number, path: string, offset: number, row?: number, col?: number }[]
   rawRef?: string
   optionSpelling?: Record<string, string>
   sourceFormat?: string

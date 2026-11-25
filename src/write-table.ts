@@ -172,29 +172,49 @@ function segment(prefix: string, content: string): string {
   return content === '' ? `${prefix} ` : `${prefix} ${content} `
 }
 
-/** The number of continuation rows below `row`, and for each cell the line of each of its fragments. */
-/** C2-L-006: a wrap past the continuation rows of its row, or not behind the wrap before it, contradicts the record. */
-function contradicts(wrap: Wrap, below: number, previous: number): boolean {
-  return (wrap.row ?? 0) !== 0 || wrap.line < 1 || wrap.line > below || wrap.line <= previous
+/**
+ * C2-B-184, carve#6691: the fragments of a cell stand in its content by row, then by covered column, then by line, the
+ * order the reader joins them in; the list is sorted by line (C2-L-048).
+ */
+export function contentOrder<T extends Wrap>(wraps: readonly T[]): readonly T[] {
+  if (wraps.every((wrap) => wrap.row === undefined && wrap.col === undefined)) return wraps
+  return [...wraps].sort((a, b) => (a.row ?? 0) - (b.row ?? 0) || (a.col ?? 0) - (b.col ?? 0) || a.line - b.line)
 }
 
-function fragmentLines(w: Writer, row: TableRowNode, cell: TableCellNode, count: number): number[] | null {
+/** Where a fragment of a cell is written: its continuation row and its covered column, counted from the cell's own. */
+interface Place {
+  line: number
+  col: number
+}
+
+/**
+ * C2-L-006: a wrap past the continuation rows of its row or the columns of its cell, or not behind the wrap before it
+ * in the order the reader joins fragments (C2-B-184), contradicts the record.
+ */
+function contradicts(wrap: Wrap, below: number, columns: number, previous: Place): boolean {
+  const col = wrap.col ?? 0
+  return (wrap.row ?? 0) !== 0 || wrap.line < 1 || wrap.line > below || col >= columns ||
+    col < previous.col || (col === previous.col && wrap.line <= previous.line)
+}
+
+/** For each fragment of `cell` behind the first, in content order, the place the record gives it (C2-W-067). */
+function fragmentPlaces(w: Writer, row: TableRowNode, cell: TableCellNode, count: number): Place[] | null {
   const wraps = w.facts?.get(cell)?.wraps
   const below = w.facts?.get(row)?.continuationLines ?? 0
   if (wraps === undefined || wraps.length !== count) return null
-  const lines: number[] = []
-  for (const wrap of wraps) {
-    if (contradicts(wrap, below, lines[lines.length - 1] ?? 0)) return null
-    lines.push(wrap.line)
+  const places: Place[] = []
+  for (const wrap of contentOrder(wraps)) {
+    if (contradicts(wrap, below, cell.colspan ?? 1, places[places.length - 1] ?? { line: 0, col: 0 })) return null
+    places.push({ line: wrap.line, col: wrap.col ?? 0 })
   }
-  return lines
+  return places
 }
 
-/** One cell as written: its prefix, the parts of its content, and the line of each part behind the first. */
+/** One cell as written: its prefix, the parts of its content, and the place of each part behind the first. */
 interface WrittenCell {
   prefix: string
   parts: string[]
-  places: number[]
+  places: Place[]
 }
 
 /** C2-W-136: `bare` writes a header cell of a body header row without its mark, which the key makes a header cell. */
@@ -204,7 +224,7 @@ function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: n
   // C2-W-063, C2-B-174: in the head the mark carries the header mark, so that a row of marks stays a head row.
   if (span !== undefined) return { prefix: head ? '=' : '', parts: [span], places: [] }
   const parts = cellContent(w, cell, flags).split('\n')
-  const recorded = fragmentLines(w, row, cell, parts.length - 1)
+  const recorded = fragmentPlaces(w, row, cell, parts.length - 1)
   if (recorded !== null) {
     // C2-W-063, C2-B-184: span marks are read from the row line, so a first line that is only a mark takes the escape.
     if (parts.length > 1 && (parts[0] === '^' || parts[0] === '<')) parts[0] = `\\${parts[0]}`
@@ -220,12 +240,13 @@ function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: n
 function writtenRow(w: Writer, row: TableRowNode, flags: number, head: boolean, bare = false): WrittenRow {
   const cells = row.children.map((cell) => writtenCell(w, row, cell, flags, head, bare))
   let below = w.facts?.get(row)?.continuationLines ?? 0
-  for (const cell of cells) below = Math.max(below, cell.places[cell.places.length - 1] ?? 0)
+  for (const cell of cells) for (const place of cell.places) below = Math.max(below, place.line)
   const lines: string[][] = []
   for (let line = 0; line <= below; line++) lines.push(new Array<string>(cells.length).fill(' '))
   cells.forEach((cell, column) => {
     lines[0]![column] = segment(cell.prefix, cell.parts[0]!)
-    cell.places.forEach((line, at) => (lines[line]![column] = segment('', cell.parts[at + 1]!)))
+    // C2-W-067: the covered columns of a wide cell are the span cells written behind it.
+    cell.places.forEach((place, at) => (lines[place.line]![column + place.col] = segment('', cell.parts[at + 1]!)))
   })
   return { lines, attribute: braceBlock(row) }
 }

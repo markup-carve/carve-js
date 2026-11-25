@@ -166,8 +166,19 @@ export function layoutMismatches(entry: LayoutFixture): Mismatch[] {
   const input = entry.input === undefined ? source : hexBytes(entry.input)
   if (typeof input !== 'string' && !(input instanceof Uint8Array)) return []
   const layout = outcome(() => parseWithLayout(input).layout)
-  // C2-L-014: every fact is optional, so a sidecar that omits facts is the engine's where every fact it states is.
-  return holdsFacts(layout, entry.layout) ? [] : [{ field: 'layout', actual: layout, expected: entry.layout }]
+  // C2-L-014: every fact is optional, so a sidecar that omits facts or entries is the engine's where every fact it states is.
+  return holdsLayout(layout, entry.layout) ? [] : [{ field: 'layout', actual: layout, expected: entry.layout }]
+}
+
+/** Whether `actual` holds every stated fact, each entry of `nodes` matched by its path as the clause cases match it. */
+function holdsLayout(actual: unknown, stated: Record<string, unknown>): boolean {
+  if (!isRecord(actual)) return false
+  return Object.entries(stated).every(([key, value]) => {
+    if (key !== 'nodes' || !Array.isArray(value) || !Array.isArray(actual['nodes'])) return holdsFacts(actual[key], value)
+    const entries = actual['nodes'] as unknown[]
+    const at = (path: unknown) => entries.find((entry) => isRecord(entry) && entry['path'] === path)
+    return value.every((node) => isRecord(node) && holdsFacts(at(node['path']), node))
+  })
 }
 
 /** Whether `actual` states every fact of `stated` with the same value, in the same lists. */
