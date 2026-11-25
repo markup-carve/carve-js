@@ -17,7 +17,7 @@ import { addSpanMarks } from './write-spans.ts'
 import { tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
-import { escapeKinds, escapePartnerClosers, leavesKindBare, writtenTextStarts } from './write-kinds.ts'
+import { escapeKinds, escapePartnerClosers, leavesKindBare, locateTexts, type TextStarts } from './write-kinds.ts'
 import { BRACED_MARKS, BRACED_NODES } from './inline-tables.ts'
 import {
   type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets,
@@ -521,15 +521,13 @@ function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): v
   // The comparison can reach a missing tree node before it reaches a construct in that
   // node's text. If the read-back parse opened a construct on the trial's text brace,
   // it is a reported opener rather than a C2-W-125 trial.
-  const starts = check.source === null || check.trials.length === 0 ? new Map() : writtenTextStarts(check, group, check.source)
-  check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, starts))
-  escapeKinds(check, group, w.closerKinds ? undefined : new Set([...check.closers, ...check.readOn]))
+  const located = check.source === null || check.trials.length === 0 ? undefined : locateTexts(check, group, check.source)
+  if (located !== undefined) check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, located))
+  escapeKinds(check, group, w.closerKinds ? undefined : new Set([...check.closers, ...check.readOn]), located)
   escapePartnerClosers(check, group)
 }
 
-function trialOpensBracedConstruct(
-  check: Check, text: TextNode, at: number, starts: ReadonlyMap<TextNode, [number, readonly number[]]>,
-): boolean {
+function trialOpensBracedConstruct(check: Check, text: TextNode, at: number, { bytes, starts }: TextStarts): boolean {
   const kind = BRACED_MARKS.indexOf(text.value[at + 1] ?? '')
   const type = kind < 0 ? undefined : BRACED_NODES[kind]
   const source = check.source
@@ -542,7 +540,7 @@ function trialOpensBracedConstruct(
   while (escapes[before] !== undefined && escapes[before]! < at) before++
   const sourceAt = start + at + before
   if (source[sourceAt] !== '{') return false
-  const byte = utf8Length(source.slice(0, sourceAt))
+  const byte = bytes[sourceAt]!
   const pending: Node[] = [...parsed.children]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if (node.type === type && node.pos?.startOffset === byte) return true
@@ -826,7 +824,7 @@ function extendForms(w: Writer, check: Check, group: readonly Node[]): void {
  */
 function extendClosers(w: Writer, check: Check, group: readonly Node[]): void {
   if (check.earlyClosers.length === 0) return
-  const keys = new Map<Node, string>()
+  const keys = w.contentKeys
   const asked = new Map<string, [Node, number[], number]>()
   const shapes = new Set<string>()
   for (const [owner, [text, at]] of check.earlyClosers) {
@@ -908,20 +906,34 @@ function nodeId(ids: Map<Node, number>, node: Node): number {
   return id
 }
 
-/** C2-W-133: the repair state of this group, including attempts that can change its next round. */
-function repairKey(w: Writer, ids: Map<Node, number>, group: readonly Node[]): string {
-  const states: unknown[] = []
+/** The nodes of `group` and of everything below them, in a fixed order. */
+function groupNodes(group: readonly Node[]): Node[] {
+  const nodes: Node[] = []
   const pending = [...group]
-  for (;;) {
-    const node = pending.pop()
-    if (node === undefined) break
-    const attempt = w.attempts.get(node)
-    states.push([nodeId(ids, node), node.type === 'text' ? w.escapes.get(node) : undefined,
-      w.forms.get(node), attempt?.step,
-      attempt?.escapes.map(([text, at]) => [nodeId(ids, text), at]), w.lost.has(node)])
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    nodes.push(node)
     forEachSlot(node, (children) => { for (const child of children) pending.push(child) })
   }
-  return JSON.stringify([w.lines, w.blankFirst, w.losses.entries.length, states])
+  return nodes
+}
+
+/**
+ * C2-W-133: the repair state of this group, including attempts that can change its next round. A node without
+ * escapes, form, attempt or loss adds nothing; the ids keep the records of the others apart.
+ */
+function repairKey(w: Writer, ids: Map<Node, number>, nodes: readonly Node[]): string {
+  let states = ''
+  for (const node of nodes) {
+    const escapes = node.type === 'text' ? w.escapes.get(node) : undefined
+    const form = w.forms.get(node)
+    const attempt = w.attempts.get(node)
+    const lost = w.lost.has(node)
+    if (escapes === undefined && form === undefined && attempt === undefined && !lost) continue
+    let tried = ''
+    if (attempt !== undefined) for (const [text, at] of attempt.escapes) tried += `${nodeId(ids, text)}.${at},`
+    states += `${nodeId(ids, node)}:${escapes?.join(',') ?? '-'}:${form ?? '-'}:${attempt?.step ?? '-'}:${tried}:${lost ? 1 : 0};`
+  }
+  return `${JSON.stringify([w.lines, w.blankFirst, w.losses.entries.length])}${states}`
 }
 
 /** C2-W-133: report a repair loop or exhausted search as a refusal, with the group's path. */
@@ -934,6 +946,10 @@ function refuseRepair(w: Writer, node: Node): void {
 
 interface RepairHistory {
   ids: Map<Node, number>
+  /** The end of the group that `nodes` and `deep` were taken for. */
+  end: number
+  nodes: Node[]
+  deep: boolean
   recent: string[]
   seen: Set<string>
   rounds: number
@@ -964,7 +980,7 @@ function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistor
     if (host !== undefined) refuseRepair(w, host)
     return true
   }
-  const key = repairKey(w, history.ids, group)
+  const key = repairKey(w, history.ids, history.nodes)
   if (history.seen.has(key)) {
     const host = group[0]
     if (host !== undefined) refuseRepair(w, host)
@@ -1586,7 +1602,8 @@ function repairOnce(w: Writer, document: DocumentNode, from: number, first: bool
 function repairRounds(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
   const nodes = document.children
   w.cappedRuns = []
-  const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0, budget: 0 }
+  w.contentKeys.clear()
+  const history: RepairHistory = { ids: new Map(), end: -1, nodes: [], deep: false, recent: [], seen: new Set(), rounds: 0, budget: 0 }
   w.linkFallback = false
   w.sawLink = false
   try {
@@ -1596,7 +1613,11 @@ function repairRounds(w: Writer, document: DocumentNode, from: number, first: bo
       resetLines(w)
       writeBlocks(w, group, '', 0, false)
       if (w.lines.length === 0) return end
-      if (refuseDeepGroup(w, group)) return end
+      takeGroupFacts(history, group, end)
+      if (history.deep) {
+        refuseDeepGroup(w, group)
+        return end
+      }
       if (repeatedRepair(w, group, history)) return end
       if (!settle(w, document, group, first && !w.blankFirst, round === 0) && !exhausted(w)) {
         finishRounds(w, group, first && !w.blankFirst, reported)
@@ -1606,6 +1627,14 @@ function repairRounds(w: Writer, document: DocumentNode, from: number, first: bo
   } finally {
     w.linkFallback = true
   }
+}
+
+/** The tree does not change between rounds, so the depth and nodes of a group are taken once. */
+function takeGroupFacts(history: RepairHistory, group: readonly Node[], end: number): void {
+  if (history.end === end) return
+  history.end = end
+  history.deep = beyondSourceDepth(group)
+  history.nodes = history.deep ? [] : groupNodes(group)
 }
 
 /** The group reads back or asks for no more change: the escapes the rounds placed are cut to those it needs. */
@@ -1674,11 +1703,9 @@ function dropEscapes(w: Writer, dropped: readonly [TextNode, number][]): void {
 }
 
 /** C2-W-011: a group beyond the parser's nesting limit has no spelling. */
-function refuseDeepGroup(w: Writer, group: readonly Node[]): boolean {
-  if (!beyondSourceDepth(group)) return false
+function refuseDeepGroup(w: Writer, group: readonly Node[]): void {
   const host = group[0]
   if (host !== undefined) lose(w, host, null)
-  return true
 }
 
 /**

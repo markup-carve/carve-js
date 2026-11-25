@@ -89,6 +89,8 @@ export interface Writer {
   colonRuns: Map<Node, number>
   /** Whether emphasis (1) and strong (2) occur below a node (C2-W-070). */
   kindsBelow: Map<Node, number>
+  /** The content key of each node `extendClosers` compared, kept for the rounds of one group. */
+  contentKeys: Map<Node, string>
   /** C2-I-098: the expansion of each term the document defines. */
   abbreviations: Map<string, string>
   /** Definition keys of the whole document, used while reparsing one written block. */
@@ -174,7 +176,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(), readComments: new Set(),
     lostKeys: new Map(), lineFeedValues: false,
-    lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
+    lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), contentKeys: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
     prewrittenAttributes: null, bareAlts: false, cappedRuns: [], kindRounds: true, closerKinds: false,
     linkFallback: true, sawLink: false, linkPlaced: new Map(), wholeTrials: false,
