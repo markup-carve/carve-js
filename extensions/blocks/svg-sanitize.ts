@@ -309,7 +309,7 @@ function sanitizeUrlAttribute(name: string, value: string | null, opts: Sanitize
   return ` ${name}="${escapeAttr(value)}"`
 }
 
-function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string): string {
+function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string, isRoot: boolean): string {
   const t = tag.toLowerCase()
   const allowExternalHref = (opts.allowLinks === true && t === 'a') || (opts.allowExternalImages === true && t === 'image')
   let out = ''
@@ -317,6 +317,8 @@ function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string): stri
   for (const { name, value } of parseAttrs(raw)) {
     if (seen.has(name)) continue
     seen.add(name)
+    // carve#6755: the root's own xmlns is replaced by name, never by searching the written attributes.
+    if (isRoot && name.toLowerCase() === 'xmlns') continue
     out += sanitizeAttribute(name, value, opts, allowExternalHref)
   }
   return out
@@ -371,8 +373,8 @@ function openTag(name: string, raw: string, selfClose: boolean, state: SvgState,
     return true
   }
   if (isRoot) markRoot(state, selfClose)
-  let attrs = sanitizeAttrs(raw, opts, name)
-  if (isRoot) attrs = rootAttrs(attrs)
+  let attrs = sanitizeAttrs(raw, opts, name, isRoot)
+  if (isRoot) attrs = ` xmlns="${SVG_NS}"` + attrs
   state.out.push(`<${name}${attrs}${selfClose ? '/>' : '>'}`)
   if (!selfClose) state.kept.push({ name, contentStart: state.out.length })
   return true
@@ -385,10 +387,6 @@ function rootInvalid(name: string, isRoot: boolean, state: SvgState): boolean {
 function markRoot(state: SvgState, selfClose: boolean): void {
   state.sawRoot = true
   state.rootSelfClosed = selfClose
-}
-
-function rootAttrs(attrs: string): string {
-  return ` xmlns="${SVG_NS}"` + attrs.replace(/\s+xmlns\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
 }
 
 function consumeToken(token: string, state: SvgState, opts: SanitizeSvgOptions): boolean {
