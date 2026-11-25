@@ -68,6 +68,9 @@ The hub step adds what library HTML cannot carry on its own:
   (`> [!NOTE]`) become frontmatter, math, admonitions and divs.
 - A Djot list that starts at `0` keeps its start, and the section ids djot.js generates are left to the
   Carve renderer.
+- Djot reads with the parser fixes of djot.js main that 0.3.2 lacks: a blank line detaches block attributes, an
+  escaped `$` before a code span is text, brackets before an invalid attribute block stay text, a task list ends
+  where its bullet changes, and a delimiter inside a link destination closes no emphasis outside the link.
 
 The libraries' own line breaks around tags are not reported as whitespace normalization, and the diagnostics of
 the HTML importer name no byte range, since the HTML they point into is not the caller's input.

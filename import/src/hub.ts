@@ -18,6 +18,7 @@ import { commentEmptyItems, ensureForeignDepth, ImportInputError, type ImportRes
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { ADMONITION_KINDS, importHtml } from './html.ts'
 import { constructRecords, djotConstructs, markdownConstructs } from './hub-constructs.ts'
+import { installDjotUpstreamFixes } from './djot-upstream.ts'
 
 export type HubFormat = 'markdown' | 'gfm' | 'djot'
 
@@ -413,6 +414,7 @@ function patchDjotImageMarker(): void {
 }
 
 patchDjotImageMarker()
+installDjotUpstreamFixes()
 
 /**
  * micromark-util-edit-map 1.0.0 rebuilds the whole event list on every `consume`, and micromark's document tokenizer
