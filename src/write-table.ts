@@ -109,10 +109,15 @@ function partitioned(bodies: readonly TableBodyNode[]): boolean {
     leadingHeaderRows(body) > 0 || body.rowHeadColumns !== undefined)
 }
 
+/** C2-B-178: a head row is written with header marks only; a row of span marks continues the head. */
+function isHeadRow(row: TableRowNode): boolean {
+  return row.children.every((cell) => cell.header || cell.span !== undefined)
+}
+
 function headEndsAboveFoot(table: TableNode): boolean {
   const head = rowsOf(table, 'table_head')
   const foot = rowsOf(table, 'table_foot')
-  return head.length > 0 && head.every(isHeaderRow) && foot.length > 0 && isHeaderRow(foot[0]!)
+  return head.length > 0 && head.every(isHeadRow) && foot.length > 0 && isHeaderRow(foot[0]!)
 }
 
 /** C2-W-136, C2-B-230: `body-rows`, and `body-header-rows` and `body-header-cols` where a body needs them. */

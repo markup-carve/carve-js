@@ -46,6 +46,7 @@ describe('carve#6637: the writer and the HTML import spell a head and a header-c
     ['{footer-rows=1 body-rows}\n|= A |\n|= F |\n'],
     ['{footer-rows=2 body-rows}\n|= A |\n|= B |\n|= F |\n| G |\n'],
     ['{.t footer-rows=1 body-rows}\n|= A |= B |\n|= F |= G |\n^ Cap\n'],
+    ['{footer-rows=1 body-rows}\n|= A |\n|= ^ |\n|= F |\n'],
   ])('writes %j and reads it back', (source) => {
     const tree = parse(source, { positions: false })
     const written = writeWithDiagnostics(tree)
