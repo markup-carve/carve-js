@@ -39,6 +39,16 @@ describe('C2-W-145: a span count that no mark cell covers is written with span m
     })
   })
 
+  it('reports a rowspan that a column span of a later row runs into (CC-2107, CC-2108)', () => {
+    const rowspan = 'field-unspellable /children/0/children/0/children/0/children/1/rowspan'
+    expect(imported('<table><tr><td>a</td><td rowspan="2">r</td></tr><tr><td colspan="2">w</td></tr></table>'))
+      .toEqual({ source: '| a | r |\n| w | < |\n', codes: [rowspan] })
+    expect(imported('<table><thead><tr><th>a</th><th rowspan="2">r</th></tr><tr><th colspan="2">w</th></tr></thead></table>'))
+      .toEqual({ source: '|= a |= r |\n|= w |= < |\n', codes: [rowspan] })
+    expect(imported('<table><tr><td>a</td><td rowspan="3">r</td></tr><tr><td>b</td></tr><tr><td colspan="2">w</td></tr></table>'))
+      .toEqual({ source: '| a | r |\n| b | ^ |\n| w | < |\n', codes: [rowspan] })
+  })
+
   it('reads back as the supplied tree with the marks added, renders the same grid and leaves the tree as it was', () => {
     const cell = (value: string, extra: Partial<TableCellNode> = {}): TableCellNode =>
       ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [{ type: 'text', value }] }], ...extra })
