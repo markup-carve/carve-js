@@ -9,7 +9,10 @@ import { mermaid } from '../src/extensions/standard/fenced-render.ts'
 import { mathBlock } from '../src/extensions/standard/math-block.ts'
 import { standardTabsRenderer, tabsExtensions } from '../src/extensions/tabs.ts'
 import { wikiExtension } from '../src/extensions/wiki-cite.ts'
+import { details } from '../extensions/blocks/details.ts'
 import { createImgFence } from '../extensions/blocks/img-fence.ts'
+import { spoiler } from '../extensions/blocks/spoiler.ts'
+import { wikilinks } from '../extensions/inline/wikilinks.ts'
 import { UsageError } from './flags.ts'
 
 type Options = Record<string, unknown>
@@ -36,19 +39,19 @@ function imgFence(name: string): Standard {
 const STANDARD: ReadonlyMap<string, Standard> = new Map<string, Standard>([
   ['carve.cite', { definitions: [citeExtension], render: () => citations() }],
   ['carve.codeGroup', { definitions: codeGroup().extensions, render: () => codeGroup() }],
-  ['carve.details', definitionsOnly([detailsExtension])],
+  ['carve.details', { definitions: [detailsExtension], render: () => details() }],
   ['carve.fencedRender.mermaid', { definitions: mermaid().extensions, render: () => mermaid() }],
   ['carve.imgFence.image', imgFence('carve.imgFence.image')],
   ['carve.imgFence.img', imgFence('carve.imgFence.img')],
   ['carve.mathBlock', { definitions: mathBlock().extensions, render: () => mathBlock() }],
-  ['carve.spoiler', definitionsOnly(spoilerExtensions)],
-  ['carve.spoilerBlock', definitionsOnly(spoilerExtensions)],
+  ['carve.spoiler', { definitions: spoilerExtensions, render: () => spoiler() }],
+  ['carve.spoilerBlock', { definitions: spoilerExtensions, render: () => spoiler() }],
   ['carve.tab', definitionsOnly(tabsExtensions)],
   ['carve.tabs', {
     definitions: tabsExtensions,
     render: (options) => ({ extensions: tabsExtensions, renderers: { 'carve.tabs': standardTabsRenderer(options) } }),
   }],
-  ['carve.wiki', definitionsOnly([wikiExtension])],
+  ['carve.wiki', { definitions: [wikiExtension], render: () => wikilinks() }],
 ])
 
 /** The renderer options each standard extension takes: the `rendererOptions` of its row, each with its values. */

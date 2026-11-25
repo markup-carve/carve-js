@@ -184,6 +184,37 @@ describe('--extensions and --extension-options (C2-T-010)', () => {
     expect([spoiler.children[0]?.children[0]?.name, spoiler.children[1]?.name]).toEqual(['carve.spoiler', 'carve.spoilerBlock'])
   })
 
+  it('renders each catalog name with its renderer, never the fallback (carve#6750)', () => {
+    const fence = (language: string, body: string): string => ['```' + ` ${language}`, body, '```'].join('\n')
+    const svg = '<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>'
+    const dir = temp({ 'a.crv': [
+      'See :cite[doe] and :wiki[Main Page|home] and :spoiler[s].', `::: code-group\n${fence('js', 'a')}\n:::`,
+      '::: details "T"\nb\n:::', '::: spoiler "P"\nc\n:::', fence('mermaid', 'graph A'), fence('math', 'x'),
+      fence('img', svg), fence('image', svg), tabs,
+    ].join('\n\n') })
+    const catalog = JSON.parse(readFileSync(join(root, 'data/extensions.json'), 'utf8')) as { extensions: { name: string }[] }
+    // A tab renders through its group's renderer.
+    for (const name of new Set(catalog.extensions.map((entry) => entry.name).filter((name) => name !== 'carve.tab'))) {
+      const result = cli(['render', '--extensions', JSON.stringify([name]), 'a.crv'], '', dir)
+      expect([name, result.status, result.stderr.includes(`"${name}"`)]).toEqual([name, 0, false])
+    }
+  })
+
+  it('renders details, spoilers and wiki links as carve-php and carve-rs do (carve#6750)', () => {
+    const dir = temp({ 'a.crv': '::: details "More *info*"\nBody.\n:::\n\nSome :spoiler[secret] and :wiki[Main Page|home].\n\n::: spoiler\nHidden.\n:::\n' })
+    const names = '["carve.details","carve.spoiler","carve.spoilerBlock","carve.wiki"]'
+    const html = [
+      '<details>', '  <summary>More <strong>info</strong></summary>', '  <p>Body.</p>', '</details>',
+      '<p>Some <span class="spoiler">secret</span> and <a href="main-page" class="wikilink" data-wikilink="Main Page">home</a>.</p>',
+      '<details class="spoiler">', '  <summary>Spoiler</summary>', '  <p>Hidden.</p>', '</details>', '',
+    ].join('\n')
+    expect(cli(['render', '--extensions', names, 'a.crv'], '', dir)).toEqual({ status: 0, stdout: html, stderr: '' })
+    const revealed = cli(['render', '--mode', 'static', '--extensions', names, 'a.crv'], '', dir).stdout
+    expect(revealed).toContain('<details open>')
+    expect(revealed).toContain('<span class="spoiler spoiler-revealed">secret</span>')
+    expect(revealed).toContain('<section class="spoiler spoiler-revealed">\n  <h3 class="spoiler-title">Spoiler</h3>')
+  })
+
   it('registers them for render --to markdown as well', () => {
     const dir = temp({ 'a.crv': tabs })
     const core = cli(['render', '--to', 'markdown', 'a.crv'], '', dir)
