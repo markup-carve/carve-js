@@ -31,7 +31,9 @@ import {
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { isAsciiPunctuation } from './unicode.ts'
-import { createWriter, type LossMark, lose, markLosses, rollBackLosses, type Writer, type WriterFacts } from './write-state.ts'
+import {
+  createWriter, type LossMark, lose, markLosses, recordedRaw, rollBackLosses, type Writer, type WriterFacts,
+} from './write-state.ts'
 import { createPlan, notePlaces, type Plan } from './write-plan.ts'
 import { plainParagraph } from './write-plain.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
@@ -913,7 +915,7 @@ function follow(from: Node, path: readonly number[]): TextNode | null {
 }
 
 function recordedReference(w: Writer, node: Node): string | undefined {
-  return 'key' in node && node.key !== undefined ? w.facts?.get(node)?.rawRef : undefined
+  return recordedRaw(w, node)
 }
 
 /**
@@ -1411,8 +1413,105 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   // A blank line separates groups, so earlier escape and form choices no longer affect readback.
   if (from > 0) clearGroupChoices(w)
   const group = document.children.slice(from, groupEnd(w, document.children, from))
+  const references = verbatimReferences(w, group)
+  if (references.length === 0) return writeGroupEscapes(w, run, document, from, first, group)
+  w.verbatimRefs = false
+  let end: number
+  try {
+    end = writeGroupEscapes(w, run, document, from, first, group)
+  } finally {
+    w.verbatimRefs = true
+  }
+  takeVerbatimReferences(w, run, document.children.slice(from, end), first, references)
+  return end
+}
+
+function writeGroupEscapes(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,
+  group: readonly Node[]): number {
   if (writeSimpleSpanForest(w, run, group)) return from + group.length
   return writeOrdinaryGroup(w, run, document, from, first, group)
+}
+
+/** The references of the group whose sidecar holds their verbatim text (C2-W-075), in document order. */
+function verbatimReferences(w: Writer, group: readonly Node[]): Node[] {
+  const found: Node[] = []
+  if (w.facts === null || w.facts.size === 0) return found
+  const pending: Node[] = [...group].reverse()
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if ((node.type === 'link' || node.type === 'image') && recordedRaw(w, node) !== undefined) found.push(node)
+    const children = childNodes(node)
+    for (let at = children.length - 1; at >= 0; at--) pending.push(children[at]!)
+  }
+  return found
+}
+
+function sameLines(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((line, at) => line === b[at])
+}
+
+// Past this many references a group whose verbatim texts do not read back together keeps the rest from the tree.
+const MAX_VERBATIM_TRIALS = 32
+
+/**
+ * C2-W-088, C2-W-075 (carve-js#5201): the rounds wrote every reference from the tree, so the escapes outside a
+ * reference never depend on its authored spelling, and a second `fmt` finds the same ones. The references then take
+ * their verbatim text together where the group reads back with it, and otherwise one by one in document order.
+ */
+function takeVerbatimReferences(w: Writer, run: WriterRun, group: readonly Node[], first: boolean,
+  references: readonly Node[]): void {
+  const tree = w.lines
+  const lossy = w.lost.size > 0 && groupNodes(group).some((node) => w.lost.has(node))
+  const rewrite = (planned = false): boolean => {
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    // The same lines as the rounds wrote read back as they did; a planned group is checked where the run checks.
+    if (lossy || sameLines(w.lines, tree)) return true
+    return planned && !run.check ? true : readsBack(w, group, first)
+  }
+  w.treeReferences.clear()
+  if (rewrite(plannedVerbatim(w, group, first, references))) return
+  for (const node of references) w.treeReferences.add(node)
+  let read = false
+  for (const node of references.slice(0, MAX_VERBATIM_TRIALS)) {
+    w.treeReferences.delete(node)
+    read = rewrite()
+    if (!read) w.treeReferences.add(node)
+  }
+  if (w.treeReferences.size === references.length) w.lines = tree
+  else if (!read) rewrite()
+  w.treeReferences.clear()
+}
+
+/**
+ * C2-W-089: where the plan of the bare group with the verbatim texts decides it and places the very escapes the rounds
+ * placed outside the references, the group is written so without a parse, as a planned group is.
+ */
+function plannedVerbatim(w: Writer, group: readonly Node[], first: boolean, references: readonly Node[]): boolean {
+  const inside = new Set<Node>()
+  for (const node of references) for (const below of groupNodes([node])) inside.add(below)
+  const placed = w.escapes
+  const reported = w.losses.entries.length
+  w.escapes = new Map()
+  let decided = false
+  try {
+    const plan = planWrite(w, group, first)
+    decided = planReason(w, group, plan, reported) === null && plan.respell.length === 0 &&
+      sameOutside(plan.escapes, placed, inside) && sameOutside(placed, plan.escapes, inside)
+  } finally {
+    w.escapes = placed
+  }
+  return decided
+}
+
+/** Whether every escape of `a` on a text node outside `inside` is in `b`. */
+function sameOutside(a: ReadonlyMap<TextNode, readonly number[]>, b: ReadonlyMap<TextNode, readonly number[]>,
+  inside: ReadonlySet<Node>): boolean {
+  for (const [node, offsets] of a) {
+    if (inside.has(node) || offsets.length === 0) continue
+    const other = b.get(node) ?? []
+    if (!offsets.every((at) => other.includes(at))) return false
+  }
+  return true
 }
 
 function writeOrdinaryGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,

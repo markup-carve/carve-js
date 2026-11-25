@@ -69,6 +69,12 @@ export interface Writer {
   /** What the reparse has tried for a node that did not form: the step it is at, and the escapes of that step. */
   attempts: Map<Node, Attempt>
   facts: Map<Node, WriterFacts> | null
+  /**
+   * C2-W-088, C2-W-075: the rounds read every reference from the tree, so this is false while they run; afterwards
+   * a reference takes its verbatim text unless it is in `treeReferences`.
+   */
+  verbatimRefs: boolean
+  treeReferences: Set<Node>
   /** C2-L-020: the offsets in the value of a text node at which the fragment of a continuation row starts. */
   wrapPoints: Map<TextNode, number[]> | null
   /** C2-L-021: the nodes of a cell whose start is the start of the fragment of a continuation row. */
@@ -175,7 +181,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     forms: new Map(), glued: new Set(),
     bracedAnyway: new Set(), caseEightLinks: new Set(),
     openColons: new Set(), starts: new Map(),
-    attempts: new Map(), facts, wrapPoints: null,
+    attempts: new Map(), facts, verbatimRefs: true, treeReferences: new Set(), wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(), readComments: new Set(),
     lostKeys: new Map(), lineFeedValues: false,
     lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), contentKeys: new Map(), abbreviations: new Map(), linkKeys: new Set(),
@@ -254,6 +260,12 @@ export function loseKey(w: Writer, node: Node, index: number, key: string): void
   addFinding(w.losses, node, entry)
   w.losses.steps ??= new Map()
   w.losses.steps.set(entry, `/attrs/keyValues/${index}`)
+}
+
+/** C2-W-075: the verbatim text of a reference as the sidecar records it, where the writer may take it now. */
+export function recordedRaw(w: Writer, node: Node): string | undefined {
+  if (!w.verbatimRefs || !('key' in node) || node.key === undefined || w.treeReferences.has(node)) return undefined
+  return w.facts?.get(node)?.rawRef
 }
 
 export function lose(w: Writer, node: Node, field: string | null): void {
