@@ -129,6 +129,7 @@ function patchInline(parser: Inline): void {
   const prototype = Object.getPrototypeOf(parser) as Inline
   const matchers = parser.matchers
   escapedDollarIsText(matchers)
+  escapedBackslashKeepsDisplayMath(matchers)
   spanNeedsAttributes(matchers, prototype)
   for (const [c, fallback] of DELIMITERS) {
     const code = c.codePointAt(0)!
@@ -185,6 +186,29 @@ function escapedDollarIsText(matchers: Record<number, Matcher>): void {
     if (escaped && last?.annot === '+inline_math' && last.startpos === pos - 1) {
       self.matches.splice(-1, 1, { startpos: pos - 1, endpos: pos - 1, annot: 'str' }, { ...last, startpos: pos, annot: '+verbatim' })
       self.verbatimType = 'verbatim'
+    }
+    return result
+  }
+}
+
+/**
+ * carve-js#5590, not upstream: djot.js (0.3.2 and main) refuses `$$` display math whenever the byte before it is a
+ * backslash, so an escaped one (`\\$$`) refused it too. Only an `escape` match right before the `$$` refuses it.
+ */
+function escapedBackslashKeepsDisplayMath(matchers: Record<number, Matcher>): void {
+  const backtick = matchers[0x60]
+  if (backtick === undefined) return
+  matchers[0x60] = (self, pos, endpos) => {
+    const before = self.matches.at(-3)
+    const refused = self.subject.startsWith('$$', pos - 2) && self.subject[pos - 3] === '\\'
+      && !(before?.annot === 'escape' && before.endpos === pos - 3)
+    const result = backtick(self, pos, endpos)
+    const dollar = self.matches.at(-2)
+    const last = self.matches.at(-1)
+    if (refused && last?.annot === '+inline_math' && last.startpos === pos - 1
+      && dollar?.annot === 'str' && dollar.startpos === pos - 2 && dollar.endpos === pos - 2) {
+      self.matches.splice(-2, 2, { ...last, startpos: pos - 2, annot: '+display_math' })
+      self.verbatimType = 'display_math'
     }
     return result
   }
