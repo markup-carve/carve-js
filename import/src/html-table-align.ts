@@ -1,5 +1,5 @@
 // C2-B-213 read backwards: a render writes on every cell the alignment it resolves from the cell, the head and the column.
-import type { TableCellNode, TableColumnNode, TableNode } from '../../src/index.ts'
+import type { TableCellNode, TableNode } from '../../src/index.ts'
 
 interface Placed { cell: TableCellNode, column: number, head: boolean }
 
@@ -45,8 +45,9 @@ function sharedMark(cells: Placed[], axis: Axis): string | undefined {
 
 /**
  * A head cell keeps the alignment it shows as its own mark. A cell outside the head that shows the mark of its
- * column's head cell takes it from there. Without a head mark, a column whose cells all show one alignment has it
- * as its `aligns` or `valigns` entry; any other cell keeps its own (_SPEC_GAPS.md G4). Each axis on its own (C2-M-040).
+ * column's head cell takes it from there. In a table with no head, a column whose cells all show one alignment has it
+ * as its `aligns` or `valigns` entry, but only while every column before it has one too, as the list has no empty
+ * entry (C2-B-211); any other cell keeps its own. Each axis on its own (C2-M-040).
  */
 export function resolveAlignments(table: TableNode): void {
   const cells = placed(table)
@@ -69,13 +70,13 @@ function resolveAxis(table: TableNode, cells: Placed[], axis: Axis): void {
     if (mark !== undefined && entry.cell[axis] === mark) delete entry.cell[axis]
     else if (mark === undefined) addEntry(byColumn, entry)
   }
-  const hasHead = cells.some(entry => entry.head)
-  for (const [index, entries] of byColumn) {
-    const column: TableColumnNode | undefined = table.columns[index]
-    const value = hasHead ? undefined : sharedMark(entries, axis)
-    // `baseline` has no `valigns` entry (C2-B-211), so its cells keep it.
-    if (column === undefined || value === undefined || value === 'baseline') continue
-    Object.assign(column, { [axis]: value })
+  if (cells.some(entry => entry.head)) return
+  for (let index = 0; index < table.columns.length; index++) {
+    const entries = byColumn.get(index) ?? []
+    const value = sharedMark(entries, axis)
+    // `baseline` has no `valigns` entry (C2-B-211), so its cells keep it, and so do the cells of every later column.
+    if (value === undefined || value === 'baseline') return
+    Object.assign(table.columns[index]!, { [axis]: value })
     for (const entry of entries) delete entry.cell[axis]
   }
 }
