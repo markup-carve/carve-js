@@ -902,7 +902,7 @@ function footGroup(foot: Html.Element, children: TableChildren, context: HtmlCon
   }
   if (lead > 0) children.unshift({ type: 'table_head', children: rowsOf(footRows.slice(0, lead), context, true) })
   const footAttrs = attrs(context, foot)
-  if (lead < footRows.length) {
+  if (lead === 0 || lead < footRows.length) {
     children.push({ type: 'table_foot', children: rowsOf(footRows.slice(lead), context, false), ...footAttrs })
   } else if (Object.keys(footAttrs).length) {
     report(context, foot, 'import-attribute-dropped', 'The attributes of a foot its head rows left empty dropped')

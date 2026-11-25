@@ -386,6 +386,8 @@ describe('C2-M-037: leading column-heading rows of a table with no thead (carve#
 })
 
 describe('C2-M-037: the data cells of a thead and a foot-only table (carve#6663, carve#6664, pending ruling)', () => {
+  const groups = (html: string): string[] =>
+    (children(html) as { children: { type: string }[] }[])[0]?.children.map(group => group.type) ?? []
   const head = (html: string): { source: string, codes: string[] } => ({ source: source(html), codes: codes(html) })
 
   it('a td of the thead is a header cell, reported once at the thead', () => {
@@ -413,6 +415,12 @@ describe('C2-M-037: the data cells of a thead and a foot-only table (carve#6663,
   it('a foot the move empties drops its attributes, reported at the tfoot', () => {
     expect(head('<table><tfoot class="k"><tr><th>F</th></tr></tfoot></table>'))
       .toEqual({ source: '|= F |\n', codes: ['import-attribute-dropped'] })
+  })
+
+  it('an empty tfoot stays a foot', () => {
+    for (const html of ['<table><tr><td>1</td></tr><tfoot class="k"></tfoot></table>', '<table><tfoot class="k"></tfoot></table>']) {
+      expect(groups(html)).toContain('table_foot')
+    }
   })
 
   it('a foot after a body row, or led by a scope row th, keeps its rows', () => {
