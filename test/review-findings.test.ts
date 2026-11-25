@@ -381,10 +381,11 @@ describe('writer output that read back as another tree', () => {
       expect(referenceForm(`${source}\n`, parse(source)), source).toEqual({ form: `${source}\n` })
     }
     // carve-js#5371, C2-W-088: bare, the run before the span pairs with the lengthened closer into a code span the
-    // tree does not hold, so every text backtick run takes a backslash; the slow reference leaves that kind out.
+    // tree does not hold, so every text backtick run takes a backslash, beside the case-six one (carve#6656).
     const lengthened = `x${BACKTICK}${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}`
-    expect(format(lengthened)).toBe(`x${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}\n`)
-    expect(referenceForm(`${lengthened}\n`, parse(lengthened))).toEqual({ form: `${lengthened}\n` })
+    const canonical = `x${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}\n`
+    expect(format(lengthened)).toBe(canonical)
+    expect(referenceForm(`${lengthened}\n`, parse(lengthened))).toEqual({ form: canonical })
   })
 
   it('C2-W-112: a code span with an attribute block is not joined to the code span behind it', () => {

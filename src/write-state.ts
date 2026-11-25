@@ -104,6 +104,15 @@ export interface Writer {
   kindRounds: boolean
   /** C2-W-088, C2-W-005: true while a group whose closer repairs gave no kind lost a node is written again with them. */
   closerKinds: boolean
+  /**
+   * C2-W-088, C2-W-125 case five: false while the rounds write the brackets of link text bare. The first round turns it
+   * on where its parse asks for a change inside a link; the bare text reports its kinds otherwise (carve#6656).
+   */
+  linkFallback: boolean
+  /** Whether a write of the rounds since `linkFallback` was turned off wrote a link. */
+  sawLink: boolean
+  /** The backslashes `linkFallback` added, which a repair that starts bare takes out first. */
+  linkPlaced: Map<TextNode, Set<number>>
   /** C2-W-125: true while a group that every other form lost is written again keeping a trial that gives the tree. */
   wholeTrials: boolean
   /** C2-W-125: the trials of a `wholeTrials` pass, tested again together once the escapes behind them are placed. */
@@ -167,7 +176,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     lostKeys: new Map(), lineFeedValues: false,
     lossLog: [], colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(),
     parsed: null,
-    prewrittenAttributes: null, bareAlts: false, cappedRuns: [], kindRounds: true, closerKinds: false, wholeTrials: false,
+    prewrittenAttributes: null, bareAlts: false, cappedRuns: [], kindRounds: true, closerKinds: false,
+    linkFallback: true, sawLink: false, linkPlaced: new Map(), wholeTrials: false,
     trialLog: null, trialsRetested: false,
     topBlocks: new Map(),
     openerRuns: null, planKinds: false, planWhy: null, plan: null,

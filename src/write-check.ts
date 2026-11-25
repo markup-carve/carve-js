@@ -1497,7 +1497,7 @@ function unpairedCloser(c: Check, text: TextNode, from: number, open: { depth: n
  * Whether `node` or a node below it is link or span text starting with a caret, the bracket of which forms `[^`. One
  * inside an inline footnote opens nothing there (C2-I-089), so it does not count.
  */
-function holdsCaretPair(node: Node): boolean {
+export function holdsCaretPair(node: Node): boolean {
   return leadingCaret(node) || (node.type !== 'inline_footnote' && childNodes(node).some(holdsCaretPair))
 }
 
