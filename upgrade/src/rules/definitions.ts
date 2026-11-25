@@ -2,7 +2,7 @@
 // (C2-B-081) and the first definition of a key wins (C2-B-085).
 import { ancestor } from '../blocks.ts'
 import { change, type Context } from '../context.ts'
-import { type Node01, type Pos } from '../engines.ts'
+import { abbreviationDefs02, type Node01, type Pos } from '../engines.ts'
 import { indentOf, isBlank, lineStart, lineText } from '../source.ts'
 import { emptyQuoteChain, quotePrefix } from './blank-lines.ts'
 import { insideQuotes, isBlankInQuotes, isGap, lastLine, quoteDepth, removeLine } from './lines.ts'
@@ -415,4 +415,23 @@ export function definitionsKept(ctx: Context): void {
 export function definitionsKeptAfter(ctx: Context): void {
   top = 'keptAfter'
   try { definitions(ctx) } finally { top = false }
+}
+
+/**
+ * U-443: 0.2 joins the text lines indented below a top-level abbreviation definition to its expansion
+ * (C2-B-084); 0.1 read them as a paragraph, which a blank line above them keeps.
+ */
+export function abbreviationContinuation(ctx: Context): void {
+  const candidates = new Set<number>()
+  for (const { node } of ctx.visits) {
+    if (node.type !== 'abbreviation_def' || node.pos === undefined) continue
+    const line = node.pos.startLine
+    if (node.pos.startOffset === lineStart(ctx.lines, line) && !isBlank(lineText(ctx.lines, line + 1))) candidates.add(line)
+  }
+  if (candidates.size === 0) return
+  for (const [first, last] of abbreviationDefs02(ctx.src)) {
+    if (last <= first || !candidates.has(first)) continue
+    const at = lineStart(ctx.lines, first + 1)
+    change(ctx, 'U-443', at, at, '\n', 'blank line keeps the indented line below the abbreviation definition a paragraph')
+  }
 }
