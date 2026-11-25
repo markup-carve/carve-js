@@ -723,11 +723,12 @@ function dropIdleLeads(w: Writer, group: readonly Node[], first: boolean, check:
 /**
  * C2-W-125: a round can place trials for several nodes of one stretch, where the first one already forms the others
  * (the brace before the tag of `x{#a\_--}` forms the dash behind it). A trial that changes nothing beside the other
- * escapes of the round is no backslash of a case and is taken out. Only where the parse reads no construct: one it reads
- * reports its kind (C2-W-088), and the rounds after it decide those trials.
+ * escapes of the round is no backslash of a case and is taken out. Only where the parse reads no node the tree lacks,
+ * as a strong of the tree beside the stretch (carve#6687): a construct it reports gives its kind (C2-W-088), and the
+ * rounds after it decide those trials.
  */
 function dropIdleTrials(w: Writer, check: Check, group: readonly Node[], first: boolean): boolean {
-  if (check.trials.length < 2 || check.trials.length > MAX_RETESTED_TRIALS || !readsOnlyText(check.w.parsed)) return false
+  if (check.trials.length < 2 || check.trials.length > MAX_RETESTED_TRIALS || !readsNoOtherNode(check.w.parsed, group)) return false
   const placed = w.escapes
   const lines = w.lines
   const lead = w.lead
@@ -762,18 +763,25 @@ function dropIdleTrials(w: Writer, check: Check, group: readonly Node[], first: 
   return dropped
 }
 
-/** Whether the inline content of every leaf block of `parsed` is text and line breaks only. */
-function readsOnlyText(parsed: DocumentNode | null): boolean {
+/**
+ * Whether each leaf block of `parsed` holds, beside text and breaks, only inline nodes that equal nodes of the same leaf
+ * of the tree, in their order: a node read elsewhere, as a span on another bracket, is a construct the tree lacks.
+ */
+function readsNoOtherNode(parsed: DocumentNode | null, group: readonly Node[]): boolean {
   if (parsed === null) return false
-  const pending: Node[] = [...parsed.children]
-  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-    if (!isInlineParent(node)) {
-      pushAll(pending, childNodes(node))
-      continue
+  const read = leafBlocks(parsed.children)
+  const tree = leafBlocks(group)
+  if (read.length !== tree.length) return false
+  return read.every((leaf, index) => {
+    const held = childNodes(tree[index]!)
+    let at = 0
+    for (const node of childNodes(leaf)) {
+      if (node.type === 'text' || isBreak(node)) continue
+      while (at < held.length && !treesEqual(held[at]!, node)) at++
+      if (at++ === held.length) return false
     }
-    if (!childNodes(node).every((child) => child.type === 'text' || isBreak(child))) return false
-  }
-  return true
+    return true
+  })
 }
 
 /** C2-W-125, case eight: the trials of a round that escaped an early note closer read the note it undoes. */
@@ -1896,7 +1904,16 @@ function prunableOpener(w: Writer, source: string, at: number, scan: PruneScan):
   if (source[at + 2] !== '#') return false
   const close = nextIndex(scan, source, '}', at + 3)
   const escapedDash = nextIndex(scan, source, '\\-', at + 3)
-  return close >= 0 && (escapedDash < 0 || escapedDash > close)
+  return close >= 0 && (escapedDash < 0 || escapedDash > close || !inHyphenRun(source, escapedDash))
+}
+
+/**
+ * C2-W-090, C2-W-099: the `\-` at `at` escapes a hyphen run, a kind of a later round that keeps the brace escape of
+ * an earlier one (C2-W-091). Otherwise it is the case-six backslash behind the name, which gives the tree alone, so
+ * the brace escape of case one goes (C2-W-125, carve#6687): `x{#a\-w}`, `x{#a\--w}`, but `x\{#a\---}`.
+ */
+function inHyphenRun(source: string, at: number): boolean {
+  return source[at - 1] === '-' || (source[at + 2] === '-' && source[at + 3] === '-')
 }
 
 /**
