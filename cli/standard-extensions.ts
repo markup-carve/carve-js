@@ -2,7 +2,7 @@
 import catalog from '../data/extensions.json' with { type: 'json' }
 import { type DocumentTransform, type ExtensionDefinition, type ExtensionRenderer } from '../src/index.ts'
 import { type ExtensionBundle } from '../src/extensions/standard/bundle.ts'
-import { citations, citeExtension } from '../src/extensions/citations.ts'
+import { type CitationsOptions, citations, citeExtension } from '../src/extensions/citations.ts'
 import { codeGroup } from '../src/extensions/standard/code-group.ts'
 import { detailsExtension, spoilerExtensions } from '../src/extensions/standard/details.ts'
 import { mermaid } from '../src/extensions/standard/fenced-render.ts'
@@ -42,7 +42,7 @@ function imgFence(name: string): Standard {
 }
 
 const STANDARD: ReadonlyMap<string, Standard> = new Map<string, Standard>([
-  ['carve.cite', { definitions: [citeExtension], render: () => citations() }],
+  ['carve.cite', { definitions: [citeExtension], render: (options) => citations(options as CitationsOptions) }],
   ['carve.codeGroup', { definitions: codeGroup().extensions, render: () => codeGroup() }],
   ['carve.details', rendered([detailsExtension], details)],
   ['carve.fencedRender.mermaid', { definitions: mermaid().extensions, render: () => mermaid() }],

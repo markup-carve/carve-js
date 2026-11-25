@@ -343,6 +343,9 @@ export const referencesRenderer: ExtensionRenderer = slotRenderer('body')
 
 /** The provisional standard citations extension. */
 export function citations(options: CitationsOptions = {}): ExtensionBundle {
+  if (options.mode !== undefined && options.mode !== 'numbered' && options.mode !== 'author-date') {
+    throw new Error('invalid citations mode')
+  }
   const render = (node: BlockExtensionNode | InlineExtensionNode, host: ExtensionRenderHost): string =>
     renderCitation(node, host, options.mode)
   return {
