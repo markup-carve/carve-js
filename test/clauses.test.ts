@@ -984,8 +984,11 @@ describe('boundaries pinned by the mutation check', () => {
       .toBe(inQuotes(MAX_DEPTH - 4, 'ul(-)[li[p"a" ul(-)[li[p"b"]]]]'))
     expect(blocks(`${quotes(MAX_DEPTH - 3)}- a`, `${quotes(MAX_DEPTH - 3)}  - b`))
       .toBe(inQuotes(MAX_DEPTH - 3, 'ul(-)[li[p"a|- b"]]'))
+    // carve#6610 (ruled B): every block open before the line counts, also the quote the marker would close.
+    expect(blocks(`${quotes(MAX_DEPTH - 5)}- > q`, `${quotes(MAX_DEPTH - 5)}  - b`))
+      .toBe(inQuotes(MAX_DEPTH - 5, 'ul(-)[li[quote[p"q"] ul(-)[li[p"b"]]]]'))
     expect(blocks(`${quotes(MAX_DEPTH - 4)}- > q`, `${quotes(MAX_DEPTH - 4)}  - b`))
-      .toBe(inQuotes(MAX_DEPTH - 4, 'ul(-)[li[quote[p"q"] ul(-)[li[p"b"]]]]'))
+      .toBe(inQuotes(MAX_DEPTH - 4, 'ul(-)[li[quote[p"q|- b"]]]'))
     expect(blocks(`${quotes(MAX_DEPTH - 3)}- > q`, `${quotes(MAX_DEPTH - 3)}  - b`))
       .toBe(inQuotes(MAX_DEPTH - 3, 'ul(-)[li[quote[p"q|- b"]]]'))
   })
