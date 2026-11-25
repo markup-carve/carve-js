@@ -1165,10 +1165,7 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   if (plan === null) return false
   const replaced = addPlanned(w, plan)
   if (leavesKind(w, run, group, plan, replaced)) return false
-  if (replaced.length > 0) {
-    resetLines(w)
-    writeBlocks(w, group, '', 0, false)
-  }
+  if (!writePlanned(w, run, group, plan, replaced)) return false
   // C2-W-016: a CR at a line end has no spelling; the group is reported and does not read back.
   for (const node of plan.lost) lose(w, node, 'value')
   const checked = run.check && plan.lost.length === 0 && w.lines.length > 0
@@ -1189,6 +1186,19 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   // The pair rules asked nothing of the planned spelling, so the test after the write would find nothing either.
   if (placed === NONE_ASKED) pairs.settled = true
   return true
+}
+
+/** Writes the group with the planned escapes; false, with the escapes taken back, where the repair decides a tag brace. */
+function writePlanned(w: Writer, run: WriterRun, group: readonly Node[], plan: Plan,
+  replaced: readonly [TextNode, number[] | undefined][]): boolean {
+  if (replaced.length > 0) {
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+  }
+  if (!keepsNameBrace(w, plan)) return true
+  restoreEscapes(w, replaced)
+  noteReason(run, 'sigil end', '')
+  return false
 }
 
 /** C2-W-088: a round escapes every opener of a kind its parse reports; a plan that leaves one bare goes to the rounds. */
@@ -1234,6 +1244,27 @@ function placeLatePairs(w: Writer, group: readonly Node[], first: boolean): numb
   resetLines(w)
   writeBlocks(w, group, '', 0, false)
   return REFUSED
+}
+
+/**
+ * C2-W-125 six, C2-W-091: the repair keeps a backslash its rounds placed beside another construct. A bare brace before a
+ * tag whose stretch holds the plan's `\-` behind the name stays bare only as `prunableOpener` takes its backslash: no
+ * other text backslash in the group. Names beside a mark of the tree need the same. Otherwise the repair decides.
+ */
+function keepsNameBrace(w: Writer, plan: Plan): boolean {
+  if (plan.nameEscapes === 0) return false
+  let escapes = 0
+  for (const list of plan.escapes.values()) escapes += list.length
+  if (plan.namesBesideMarks && escapes !== plan.nameEscapes) return true
+  for (const line of w.lines) {
+    for (let at = line.indexOf('{#'); at >= 0; at = line.indexOf('{#', at + 2)) {
+      const close = line.indexOf('}', at + 2)
+      const dash = line.indexOf('\\-', at + 2)
+      if (line[at - 1] === '\\' || close < 0 || dash < 0 || dash > close) continue
+      if (inHyphenRun(line, dash) || escapes !== bracedNameEscapes(line, at - 1, close)) return true
+    }
+  }
+  return false
 }
 
 /** Whether the written group holds a backslash that `prunableOpener` can take, which only the repair prunes. */

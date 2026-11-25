@@ -21,7 +21,8 @@ import { type Writer } from './write-state.ts'
 import { MAX_DEPTH } from './state.ts'
 import { plainLeaf } from './write-plain.ts'
 import { braceBlock } from './write-attributes.ts'
-import { BRACED_MARKS, CHARACTER_CLASSES, CLASS_KEY_REST } from './inline-tables.ts'
+import { BRACED_MARKS, CHARACTER_CLASSES, CLASS_KEY_REST, CLASS_MENTION } from './inline-tables.ts'
+import { plainNameEnd } from './inline-atoms.ts'
 
 /** What one planned write of a group collects. */
 export interface Plan {
@@ -41,12 +42,15 @@ export interface Plan {
   leaves: number
   /** C2-W-016: the nodes whose value no spelling keeps, which the write reports. */
   lost: Node[]
+  /** C2-W-125 six: the backslashes behind names the plan placed, and whether a mark of the tree stands beside them. */
+  nameEscapes: number
+  namesBesideMarks: boolean
 }
 
 export function createPlan(): Plan {
   return {
     undecided: null, detail: '', covered: new Set(), opaqueBlocks: new Set(), escapes: new Map(), respell: [],
-    places: new Map(), leaves: 0, lost: [],
+    places: new Map(), leaves: 0, lost: [], nameEscapes: 0, namesBesideMarks: false,
   }
 }
 
@@ -91,6 +95,8 @@ function undecidedIf(condition: boolean, leaf: Leaf, why: string): void {
 
 /** C2-W-099: a run of hyphens of text takes a backslash before every second hyphen. */
 function hyphen(leaf: Leaf, at: number, escaped: Uint8Array): void {
+  // C2-W-125 six: the backslash behind a name makes a lone hyphen text; a run behind it is left to the repair.
+  if (escaped[at] !== 0 && startsName(leaf, atomStart(leaf, at - 1))) return undecidedIf(code(leaf, at + 1) === 45, leaf, 'hyphen run')
   if (code(leaf, at - 1) === 45) return undecidedIf(leaf.kinds[at - 1] !== TEXT, leaf, 'hyphen neighbor')
   let end = at
   while (code(leaf, end) === 45) {
@@ -876,24 +882,60 @@ function writtenText(leaf: Leaf, at: number, end: number, escaped: Uint8Array): 
 }
 
 /**
- * C2-I-092, C2-W-125 six: a `_` of text behind a mention or a tag would lengthen its name, and the backslash alone
- * keeps it. It is placed before the scan, so a brace before the atom reads the text as the reader reads it. The repair
- * keeps a backslash its first round placed for another construct (C2-W-091), so the plan places these only where the
- * rest of the leaf opens nothing: no mark, no atom but smart punctuation, no brace before the sigil but the one right
- * before it, and at most MAX_NAME_ENDS of them, which the repair tries one by one.
+ * C2-I-092, C2-W-125 six: a `_`, `-` or `.` of text behind a mention or a tag that would lengthen its name, or make its
+ * sigil start no form, takes the backslash, which alone keeps the name. It is placed before the scan, so a brace before
+ * the atom reads the text as the reader reads it. The repair keeps a backslash its first round placed for another
+ * construct (C2-W-091), so the plan places these only where the rest of the leaf opens nothing but marks of the tree,
+ * no atom but smart punctuation, no brace before the sigil but the one right before it, and at most MAX_NAME_ENDS of
+ * them, which the repair tries one by one. Beside a mark, the group must place no other backslash (`keepsNameBrace`).
  */
-function nameEndEscapes(leaf: Leaf, escaped: Uint8Array): void {
+function nameEndEscapes(w: Writer, leaf: Leaf, escaped: Uint8Array): void {
   let placed = 0
   for (let at = 0; at < leaf.codes.length; at++) {
     if (!startsName(leaf, at)) continue
     const end = atomEnd(leaf, at)
-    if (leaf.kinds[end] === TEXT && leaf.codes[end] === 95 && escaped[end] === 0) {
-      escaped[end] = 1
-      placed++
+    const next = code(leaf, end)
+    if (leaf.kinds[end] === TEXT && escaped[end] === 0 && (next === 95 || next === 45 || next === 46)) {
+      const lengthens = next === 95 || lengthensName(leaf, at, end)
+      if (lengthens === null) return undecide(leaf, 'sigil end')
+      if (lengthens) {
+        escaped[end] = 1
+        placed++
+      }
     }
     at = end - 1
   }
-  if (placed > 0 && (placed > MAX_NAME_ENDS || opensBesideNames(leaf))) undecide(leaf, 'sigil end')
+  if (placed === 0) return
+  const beside = opensBesideNames(leaf)
+  if (placed > MAX_NAME_ENDS || beside === OPENS) return undecide(leaf, 'sigil end')
+  w.plan!.nameEscapes += placed
+  if (beside === MARKS) w.plan!.namesBesideMarks = true
+}
+
+/**
+ * Whether the text behind the name atom from `at` to `end`, read bare, gives the reader another name or none (C2-I-092),
+ * or null where the run of name characters reaches a unit that is no text.
+ */
+function lengthensName(leaf: Leaf, at: number, end: number): boolean | null {
+  let stop = end
+  while (stop < leaf.codes.length && leaf.kinds[stop] === TEXT && leaf.codes[stop] !== LF) stop++
+  const text = charsText(leaf.codes, at + 1, stop)
+  let run = end - at - 1
+  while (run < text.length && (isNameUnit(text.charCodeAt(run)))) run++
+  if (run === text.length && stop < leaf.codes.length && leaf.codes[stop] !== LF) return null
+  return plainNameEnd(text, 0) !== end - at - 1
+}
+
+function isNameUnit(value: number): boolean {
+  return value === 46 || (value < 128 && (CHARACTER_CLASSES[value]! & CLASS_MENTION) !== 0)
+}
+
+/** The first unit of the atom whose unit is `at`, or -1 where `at` is no atom. */
+function atomStart(leaf: Leaf, at: number): number {
+  if (at < 0 || leaf.kinds[at] !== ATOM) return -1
+  let start = at
+  while (continuesAtom(leaf, start)) start--
+  return start
 }
 
 function startsName(leaf: Leaf, at: number): boolean {
@@ -902,17 +944,25 @@ function startsName(leaf: Leaf, at: number): boolean {
   return type === 'mention' || type === 'tag'
 }
 
-/** A mark, an atom other than a name or smart punctuation, or a text brace not right before an atom. */
-function opensBesideNames(leaf: Leaf): boolean {
+const NOTHING = 0
+const MARKS = 1
+const OPENS = 2
+
+/**
+ * Beside the names: an atom other than a name or smart punctuation, or a text brace not right before an atom (OPENS),
+ * else a mark (MARKS).
+ */
+function opensBesideNames(leaf: Leaf): number {
+  let found = NOTHING
   for (let at = 0; at < leaf.codes.length; at++) {
     const kind = leaf.kinds[at]
-    if (kind === OPEN || kind === CLOSE) return true
-    if (kind === TEXT && leaf.codes[at] === 123 && leaf.kinds[at + 1] !== ATOM) return true
+    if (kind === OPEN || kind === CLOSE) found = MARKS
+    else if (kind === TEXT && leaf.codes[at] === 123 && leaf.kinds[at + 1] !== ATOM) return OPENS
     if (kind !== ATOM || continuesAtom(leaf, at)) continue
     const type = leaf.owners[at]!.type
-    if (type !== 'mention' && type !== 'tag' && type !== 'smart_punctuation') return true
+    if (type !== 'mention' && type !== 'tag' && type !== 'smart_punctuation') return OPENS
   }
-  return false
+  return found
 }
 
 const MAX_NAME_ENDS = 4
@@ -1093,7 +1143,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   leaf.inLine = place?.line === true
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
-  if (leaf.undecided === null) nameEndEscapes(leaf, escaped)
+  if (leaf.undecided === null) nameEndEscapes(w, leaf, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) bracesBeforeMarks(leaf, escaped)

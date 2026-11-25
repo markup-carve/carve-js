@@ -357,6 +357,14 @@ function endsAtWordEdge(state: InlineState, pos: number): boolean {
   return !isWordCharacter(next) && !isMark(next)
 }
 
+/** C2-I-092 on plain text: the end of the name behind a sigil at `pos - 1`, or NONE where the sigil starts no form. */
+export function plainNameEnd(text: string, pos: number): number {
+  let p = pos
+  while (p < text.length && (inClass(text.charCodeAt(p), CLASS_MENTION) || text.charCodeAt(p) === DOT)) p++
+  const next = codePointAt(text, p, text.length)
+  return isWordCharacter(next) || isMark(next) ? NONE : dottedNameEnd(text, pos, text.length)
+}
+
 function mentionOrTag(state: InlineState, pos: number, kind: number): number {
   if (!atSigilBoundary(state, pos) || !endsAtWordEdge(state, pos + 1)) return pos + 1
   const end = dottedNameEnd(state.text, pos + 1, state.end)
