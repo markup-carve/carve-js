@@ -16,6 +16,15 @@ describe('Djot import reads with the upstream djot.js fixes that 0.3.2 lacks', (
     expect(source('$`x`\n')).toBe('$`x`\n')
   })
 
+  it('opens display math after an even backslash run (carve-js#5590)', () => {
+    expect(source('\\\\$$`e=mc^2`\n')).toBe('\\\\$$`e=mc^2`\n')
+    expect(source('a \\\\\\\\$$`x` b\n')).toBe('a \\\\\\\\$$`x` b\n')
+    expect(source('_a \\\\$$`x`_\n')).toBe('/a \\\\$$`x`/\n')
+    expect(source('\\\\\\$$`e=mc^2`\n')).toBe('\\\\\\$$`e=mc^2`\n')
+    expect(source('\\$$`x`\n')).toBe('\\$$`x`\n')
+    expect(source('$$`x`\n')).toBe('$$`x`\n')
+  })
+
   it('keeps brackets as text before an invalid attribute block (carve#6643, djot.js 00eb258)', () => {
     expect(source('[not a span]{#a<b}\n')).toBe('[not a span]{\\#a<b}\n')
     expect(source('[*not* a span]{#a<b}\n')).toBe('[*not* a span]{\\#a<b}\n')
