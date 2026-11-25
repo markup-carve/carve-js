@@ -218,8 +218,19 @@ function valueHasExternalRef(value: string): boolean {
 // XML, so a `data:image/svg+xml` parse would fail on them — escape their `&`
 // (`&nbsp;` → `&amp;nbsp;`) so the output stays well-formed. Existing predefined
 // entities are preserved, so reserialization stays idempotent and un-double-escaped.
+// A numeric reference survives only when it names an XML 1.0 `Char`; any other
+// keeps no parser happy, so its `&` is escaped (carve#6764).
 function escapeAmp(s: string): string {
-  return s.replace(/&(?!#\d+;|#x[0-9a-fA-F]+;|(?:amp|lt|gt|quot|apos);)/g, '&amp;')
+  return s.replace(/&(#\d+;|#x[0-9a-fA-F]+;|(?:amp|lt|gt|quot|apos);)?/g, (m, ref: string | undefined) => {
+    if (ref === undefined) return '&amp;'
+    if (ref[0] !== '#') return m
+    const cp = ref[1] === 'x' ? Number.parseInt(ref.slice(2, -1), 16) : Number.parseInt(ref.slice(1, -1), 10)
+    return isXmlChar(cp) ? m : `&amp;${ref}`
+  })
+}
+function isXmlChar(cp: number): boolean {
+  return cp === 0x9 || cp === 0xa || cp === 0xd || (cp >= 0x20 && cp <= 0xd7ff) ||
+    (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff)
 }
 function escapeText(s: string): string {
   return escapeAmp(s).replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -425,11 +436,16 @@ function consumeText(src: string, start: number, end: number, state: SvgState): 
   return true
 }
 
+// Raw characters outside the XML 1.0 `Char` production: C0 controls other than tab,
+// LF and CR, U+FFFE, U+FFFF and unpaired surrogates (carve#6764). Dropped from the
+// source before any check, so a check never sees a value the output does not hold.
+const NON_XML_CHAR_RE = /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g
+
 /**
  * Sanitize an SVG source string. See the module docblock for the guarantees.
  */
 export function sanitizeSvg(source: string, opts: SanitizeSvgOptions = {}): SanitizeResult {
-  const src = source.trim()
+  const src = source.replace(NON_XML_CHAR_RE, '').trim()
   let cursor = 0
   const state: SvgState = { out: [], dropStack: [], kept: [], sawRoot: false, rootSelfClosed: false }
   while (cursor < src.length) {

@@ -205,3 +205,37 @@ describe('sanitizeSvg quoted local url() (carve#6763)', () => {
     expect(kept, src).toBe(!remote)
   })
 })
+
+const NON_XML_CHAR = /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/
+const isXmlChar = (cp: number): boolean =>
+  cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff)
+
+describe('sanitizeSvg XML characters (carve#6764)', () => {
+  it('escapes a numeric reference outside XML Char', () => {
+    expect(sanitizeSvg('<svg><text>&#0;</text><text>a&#x1;b</text></svg>').svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><text>&amp;#0;</text><text>a&amp;#x1;b</text></svg>')
+    expect(sanitizeSvg('<svg><text>&#9;&#x20;&#xD7FF;&#xFFFD;&#x10FFFF;</text></svg>').svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><text>&#9;&#x20;&#xD7FF;&#xFFFD;&#x10FFFF;</text></svg>')
+  })
+
+  it('drops a raw character outside XML Char before any check', () => {
+    expect(sanitizeSvg('<svg id="a\u0001b"><text>x\u0000y\uFFFE\uD800z</text></svg>').svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg" id="ab"><text>xyz</text></svg>')
+    expect(sanitizeSvg('<svg style="background:ur\u0001l(https://e.example/p)"/>', { allowStyle: true }).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"/>')
+  })
+
+  const BAD = ['&#0;', '&#x1;', '&#8;', '&#xB;', '&#12;', '&#x1F;', '&#xD800;', '&#xDFFF;', '&#xFFFE;', '&#65535;', '&#x110000;', '&#99999999;',
+    '\u0000', '\u0001', '\u000B', '\u001F', '\uFFFE', '\uFFFF', '\uD800', '\uDC00']
+  const GOOD = ['&#9;', '&#xA;', '&#13;', '&#32;', '&#xE000;', '&#x1F600;', '\uD83D\uDE00', 'a', '&amp;', '&lt;']
+  sweep('XML characters', () => {
+    const text = Array.from({ length: 1 + Math.floor(rnd() * 4) }, () => (rnd() < 0.5 ? pick(BAD) : pick(GOOD))).join('')
+    return { src: rnd() < 0.5 ? `<svg><text>${text}</text></svg>` : `<svg><rect id=${quoted(text)}/></svg>`, opts: {} }
+  }, (svg, src) => {
+    expect(svg, src).not.toMatch(NON_XML_CHAR)
+    for (const ref of svg.matchAll(/&#(x[0-9a-f]+|\d+);/gi)) {
+      const cp = ref[1]![0]!.toLowerCase() === 'x' ? Number.parseInt(ref[1]!.slice(1), 16) : Number.parseInt(ref[1]!, 10)
+      expect(isXmlChar(cp), src).toBe(true)
+    }
+  })
+})
