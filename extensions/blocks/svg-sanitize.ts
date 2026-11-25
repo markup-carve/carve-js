@@ -303,6 +303,8 @@ function sanitizeAttribute(name: string, value: string | null, opts: SanitizeSvg
   const n = name.toLowerCase()
   // XML has no valueless attributes, and none on the allowlist is boolean (carve#6774).
   if (value === null || n.startsWith('on')) return ''
+  // Namespaces in XML forbids undeclaring a prefix (carve#6779).
+  if (value === '' && n.startsWith('xmlns:')) return ''
   if (URL_ATTRS.has(n)) return sanitizeUrlAttribute(name, value, opts, allowExternalHref)
   if (n === 'style') return opts.allowStyle && !styleIsDangerous(value) ? ` ${name}="${escapeAttr(value)}"` : ''
   if (!n.startsWith('aria-') && !n.startsWith('data-') && !ALLOWED_ATTRS.has(n)) return ''
