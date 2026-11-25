@@ -4,7 +4,7 @@
 import { charsText } from './arrays.ts'
 import { emptyBlockEnd, emptyMemo, readAttributeBlock } from './attributes.ts'
 import { DEPTH_CAP } from './inline-tables.ts'
-import { CLOSE, ESCAPE, inNote, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
+import { ATOM, CLOSE, ESCAPE, inNote, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
 
 const OPENING = 91
 const CLOSING = 93
@@ -155,7 +155,7 @@ export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean)
     if (leaf.kinds[at] === OPEN) nodes++
     else if (leaf.kinds[at] === CLOSE) nodes--
     const value = codes[at]
-    undecideBareCloser(scan, at)
+    decideBareCloser(scan, at)
     if ((value !== OPENING && value !== CLOSING) || !isBracket(leaf, at, escaped)) continue
     leaf.cursor = at
     // C2-I-118, C2-B-190: an opening bracket is text where the open nodes and the open brackets of the content reach the
@@ -170,18 +170,60 @@ export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean)
 }
 
 /**
- * C2-W-088, C2-W-125 case five: a backslash on a `]` of link text keeps the link's opener from closing there. The first
- * round reads that `]` bare, and the link's closer then pairs with the text `[` below it, whose construct reports its
- * kind beside the case backslash (carve#6656). The repair reads that round.
+ * C2-W-088, C2-W-125 case five: a backslash on a `]` of link text keeps the link's opener from closing there. Read
+ * bare, that `]` closes the link's opener, and the link's closer then pairs with the text `[` below it, whose construct
+ * reports its kind beside the case backslash (carve#6656); each such `[` in turn. Where that is all the bare `]` does,
+ * the plan escapes those openers; other shapes are left to the repair.
  */
-function undecideBareCloser(scan: Scan, at: number): void {
+function decideBareCloser(scan: Scan, at: number): void {
   const { leaf, openers } = scan
   if (leaf.codes[at] !== CLOSING || leaf.kinds[at] !== TEXT || leaf.kinds[at - 1] !== ESCAPE) return
   const top = openers[openers.length - 1]
   if (top === undefined || leaf.kinds[top] !== OPEN || leaf.owners[top]?.type !== 'link') return
-  for (let below = openers.length - 2; below >= 0; below--) {
-    if (leaf.kinds[openers[below]!] === TEXT) return undecide(leaf, 'case-five closer')
+  if (!openers.some((opener) => leaf.kinds[opener] === TEXT)) return
+  if (!escapesOpenersBelow(scan, top, at)) undecide(leaf, 'case-five closer')
+}
+
+/** Escapes the text openers below the link opener `top` where the bare closer `at` lets each form an inline link. */
+function escapesOpenersBelow(scan: Scan, top: number, at: number): boolean {
+  const { leaf, openers, escaped } = scan
+  if (scan.hasKeys || leaf.codes[top + 1] === 94) return false
+  const next = leaf.codes[at + 1]
+  if (next === OPENING || next === 123 || !onlyBareCloser(leaf, top, at)) return false
+  const below = openers.slice(0, -1)
+  if (!plainTextBetween(leaf, below[0]!, top) || !below.every((opener) => plainOpener(leaf, opener))) return false
+  for (const opener of below) escaped[opener] = 1
+  openers.splice(0, below.length)
+  return true
+}
+
+/** Whether `at` is the only bracket of the text of the inline link that opens at `top`. */
+function onlyBareCloser(leaf: Leaf, top: number, at: number): boolean {
+  for (let unit = top + 1; unit < at; unit++) if (isTextBracket(leaf, unit)) return false
+  let close = at + 1
+  for (; close < leaf.codes.length && leaf.kinds[close] !== CLOSE; close++) {
+    if (leaf.kinds[close] !== TEXT || isTextBracket(leaf, close)) return false
   }
+  return leaf.owners[close] === leaf.owners[top] && leaf.codes[close + 1] === 40 && leaf.kinds[close + 1] === ATOM
+}
+
+function isTextBracket(leaf: Leaf, at: number): boolean {
+  const value = leaf.codes[at]
+  return (value === OPENING || value === CLOSING) && leaf.kinds[at] === TEXT
+}
+
+/** Whether only unescaped text without a closing bracket stands from the first opener `from` to the link opener `top`. */
+function plainTextBetween(leaf: Leaf, from: number, top: number): boolean {
+  for (let unit = from; unit < top; unit++) {
+    if (leaf.kinds[unit] !== TEXT || leaf.codes[unit] === CLOSING) return false
+  }
+  return true
+}
+
+/** A text opener that no caret, `!`, backslash, inline extension or note turns into another construct. */
+function plainOpener(leaf: Leaf, opener: number): boolean {
+  const before = leaf.codes[opener - 1]
+  return before !== 94 && before !== 33 && before !== 92 && !leaf.extensions.has(opener) && !inNote(leaf, opener)
 }
 
 function checkSourceLinkBoundary(scan: Scan): void {
