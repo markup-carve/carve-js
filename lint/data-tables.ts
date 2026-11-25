@@ -490,11 +490,11 @@ const K192 = new RegExp("^#(?:end)?region(?:[^A-Za-z0-9_]|$)", "i")
 const K193 = new RegExp("^#(?:end)?region(?:[^A-Za-z0-9_]|$)", "")
 const K194 = new RegExp("^[ \\t]*(?<m>(?:(?://|--|/\\*|<!--)[ \\t]*)?#(?:end)?region(?:[^A-Za-z0-9_]|$))", "i")
 const K195 = new RegExp("^[ \\t]*(?<m>(?:(?://|--|/\\*|<!--)[ \\t]*)?#(?:end)?region(?:[^A-Za-z0-9_]|$))", "id")
-const K196 = new RegExp("(?<bs>\\\\*)(?<use>\\{\\{ +#[A-Za-z0-9_][A-Za-z0-9_-]* +\\}\\})", "gd")
-const K197 = new RegExp("^(?:\\\\\\\\)*$", "")
-const K198 = (item: unknown): unknown => (!isAttributeLine(str(obj(item)?.["raw_body"]), 0, str(obj(item)?.["raw_body"]).length) ? obj(item)?.["leaf_id"] : false)
-const K199 = new RegExp("^(?<def>\\{#[A-Za-z0-9_][A-Za-z0-9_-]*\\}:) .*[^ \\t]", "")
-const K200 = new RegExp("^(?<def>\\{#[A-Za-z0-9_][A-Za-z0-9_-]*\\}:) .*[^ \\t]", "d")
+const K196 = new RegExp("(?<use>\\{\\{ +#[A-Za-z0-9_][A-Za-z0-9_-]* +\\}\\})", "gd")
+const K197 = new RegExp("(?:^|[^\\\\])(?:\\\\\\\\)*$", "")
+const K198 = new RegExp("^(?<def>\\{#[A-Za-z0-9_][A-Za-z0-9_-]*\\}:) .*[^ \\t]", "")
+const K199 = new RegExp("^(?<def>\\{#[A-Za-z0-9_][A-Za-z0-9_-]*\\}:) .*[^ \\t]", "d")
+const K200 = (item: unknown): unknown => (!isAttributeLine(str(obj(item)?.["raw_body"]), 0, str(obj(item)?.["raw_body"]).length) ? obj(item)?.["leaf_id"] : false)
 const K201 = new RegExp("^[ \\t]*(?:>[ \\t]+)*(?<run>={3,}|-{3,})[ \\t]*$", "")
 const K202 = new RegExp("^[ \\t]*(?:>[ \\t]+)*(?<run>={3,}|-{3,})[ \\t]*$", "d")
 const K203 = new RegExp("[@#]", "")
@@ -1662,7 +1662,7 @@ function rule92(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
   if (!contains(self.text, "{{")) return
   const one = (): void => {
-    if (test(K197, str(self.text).slice((num(group("bs", 0)) - num(self.start)), (num(group("bs", 1)) - num(self.start))))) {
+    if (test(K197, str(self.text).slice(0, (num(group("use", 0)) - num(self.start))))) {
       context.report("reserved-syntax", num(group("use", 0)), num(group("use", 1)), path, { "text": String(str(self.text).slice((num(group("use", 0)) - num(self.start)), (num(group("use", 1)) - num(self.start)))) }, 0)
       return
     }
@@ -1678,10 +1678,7 @@ function rule92(self: ModelInline, path: string, context: LintContext): void {
 
 function rule93(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  let v_text_above: unknown = UNSET
-  let g_text_above: Record<string, [number, number]> | undefined
-  let b_text_above = 0
-  if (!(same(self.leaf, "paragraph") && same(self.ancestors?.[0], "document") && !(num((v_text_above === UNSET ? (g_text_above = groups, b_text_above = base, v_text_above = (obj(lookupAt(24, "line", undefined, K198, self.leaf_id, self.start, -1, undefined))?.["number"]), groups = g_text_above, base = b_text_above, v_text_above) : v_text_above)) >= 1) && (hit(K199, K200, self.text) && mark(num(self.start))))) return
+  if (!((hit(K198, K199, self.text) && mark(num(self.start))) && same(self.leaf, "paragraph") && same(self.ancestors?.[0], "document") && !(num(obj(lookupAt(24, "line", undefined, K200, self.leaf_id, self.start, -1, undefined))?.["number"]) >= 1))) return
   context.report("reserved-syntax", num(group("def", 0)), num(group("def", 1)), path, { "text": String(str(self.text).slice((num(group("def", 0)) - num(self.start)), (num(group("def", 1)) - num(self.start)))) }, 1)
   return
 }
