@@ -467,7 +467,8 @@ function divElement(node: Html.Element, context: HtmlContext): Block {
   return { type: 'div', ...head, children: flow(parts.rest, node, context), ...mapped }
 }
 
-const NBSP_RUN = /\u00a0{2,}/g
+// carve#6777: C2-H-043 writes the whole run of spaces and tabs, so a U+00A0 run beside a space or tab was authored.
+const NBSP_RUN = /(?<![ \t\u00a0])\u00a0{2,}(?![ \t\u00a0])/g
 
 /** C2-H-043: one paragraph per stanza, a line per `<br>`, and the no-break spaces of whitespace runs as spaces. */
 function lineBlock(node: Html.Element, context: HtmlContext): Block {
@@ -495,8 +496,11 @@ function lineInline(nodes: Html.ChildNode[], host: Html.Element, context: HtmlCo
   if (lead?.type === 'text' && lead.value.startsWith('\u00a0')) {
     let count = 0
     while (lead.value[count] === '\u00a0') count++
-    spaces += ' '.repeat(count)
-    lead.value = lead.value.slice(count)
+    const next = lead.value[count]
+    if (next !== ' ' && next !== '\t') {
+      spaces += ' '.repeat(count)
+      lead.value = lead.value.slice(count)
+    }
   }
   if (spaces !== '') {
     if (lead?.type === 'text') lead.value = spaces + lead.value

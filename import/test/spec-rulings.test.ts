@@ -87,4 +87,13 @@ describe('line block whitespace', () => {
   it('C2-H-043: a lone no-break space inside a line is no run the renderer writes, so it stays U+00A0', () => {
     expect(imported('a&nbsp;b c&nbsp; d')).toBe('::: |\na b c  d\n:::\n')
   })
+
+  it('carve#6777: a no-break space run beside a space or tab was authored, so it stays U+00A0', () => {
+    expect(imported('a&nbsp;&nbsp; b')).toBe('::: |\na\u00a0\u00a0 b\n:::\n')
+    expect(importDocument(lineBlock('a&nbsp;&nbsp; b'), { from: 'html' }).document.children[0])
+      .toMatchObject({ children: [{ children: [{ type: 'text', value: 'a\u00a0\u00a0 b' }] }] })
+    expect(imported('&nbsp; x<br>\n&nbsp;&nbsp;\tx<br>\na &nbsp;&nbsp;b<br>\na\t&nbsp;&nbsp;&nbsp;b'))
+      .toBe('::: |\n\u00a0 x\n\u00a0\u00a0\tx\na \u00a0\u00a0b\na\t\u00a0\u00a0\u00a0b\n:::\n')
+    expect(imported('&nbsp;x<br>\na&nbsp;&nbsp;b')).toBe('::: |\n x\na  b\n:::\n')
+  })
 })
