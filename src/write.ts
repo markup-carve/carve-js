@@ -1416,13 +1416,14 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   const references = verbatimReferences(w, group)
   if (references.length === 0) return writeGroupEscapes(w, run, document, from, first, group)
   w.verbatimRefs = false
+  const planned = run.stats.planned
   let end: number
   try {
     end = writeGroupEscapes(w, run, document, from, first, group)
   } finally {
     w.verbatimRefs = true
   }
-  takeVerbatimReferences(w, run, document.children.slice(from, end), first, references)
+  takeVerbatimReferences(w, run, document.children.slice(from, end), first, references, run.stats.planned > planned)
   return end
 }
 
@@ -1458,23 +1459,27 @@ const MAX_VERBATIM_TRIALS = 32
  * their verbatim text together where the group reads back with it, and otherwise one by one in document order.
  */
 function takeVerbatimReferences(w: Writer, run: WriterRun, group: readonly Node[], first: boolean,
-  references: readonly Node[]): void {
+  references: readonly Node[], planned: boolean): void {
   const tree = w.lines
-  const lossy = w.lost.size > 0 && groupNodes(group).some((node) => w.lost.has(node))
-  const rewrite = (planned = false): boolean => {
+  // A group with a loss does not read back, so no verbatim text can be checked there: its references stay from the tree.
+  if (w.lost.size > 0 && groupNodes(group).some((node) => w.lost.has(node))) return
+  const rewrite = (): boolean => {
     resetLines(w)
     writeBlocks(w, group, '', 0, false)
-    // The same lines as the rounds wrote read back as they did; a planned group is checked where the run checks.
-    if (lossy || sameLines(w.lines, tree)) return true
-    return planned && !run.check ? true : readsBack(w, group, first)
+    // The same lines as the rounds wrote read back as they did.
+    return sameLines(w.lines, tree)
   }
   w.treeReferences.clear()
-  if (rewrite(plannedVerbatim(w, group, first, references))) return
+  if (rewrite()) return
+  // A group the plan decided from the tree is checked by its plan with the verbatim texts, and parsed where the run checks.
+  const decided = planned && plannedVerbatim(w, group, first, references)
+  if (planned) rewrite()
+  if ((decided && !run.check) || readsBack(w, group, first)) return
   for (const node of references) w.treeReferences.add(node)
   let read = false
   for (const node of references.slice(0, MAX_VERBATIM_TRIALS)) {
     w.treeReferences.delete(node)
-    read = rewrite()
+    read = rewrite() || readsBack(w, group, first)
     if (!read) w.treeReferences.add(node)
   }
   if (w.treeReferences.size === references.length) w.lines = tree
