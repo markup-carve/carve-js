@@ -21,7 +21,7 @@ import { escapeKinds, escapePartnerClosers, leavesKindBare, writtenTextStarts } 
 import { BRACED_MARKS, BRACED_NODES } from './inline-tables.ts'
 import {
   type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets,
-  simpleSpanForest, earlyLoneNoteBrackets, earlyTextNoteClosers,
+  simpleSpanForest, earlyLoneNoteBrackets, earlyTextNoteClosers, holdsCaretPair,
   parseChunk, parseWritten,
 } from './write-check.ts'
 import { type Wrap } from './layout.ts'
@@ -555,8 +555,8 @@ function trialOpensBracedConstruct(
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
  * false when the group reads back as its blocks. C2-W-088 places all escapes reported by the same read-back parse.
  */
-function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): boolean {
-  const check = compareGroup(w, document, group, first)
+function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean, initial: boolean): boolean {
+  const check = compareWithLinkFallback(w, document, group, first, initial)
   // C2-W-125 tries to form a missing node separately from the constructs C2-W-088 found in the
   // read-back parse. A lone ineffective trial takes no escape. Multiple trials can work together.
   dropEarlyTrials(check)
@@ -584,6 +584,66 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     if (w.blankFirst) return true
   }
   return applyChanges(w, check)
+}
+
+/**
+ * C2-W-088, C2-W-125 case five: the first round writes the brackets of link text bare. A bare closer there can let a
+ * construct form, as the link's closer taking a text `[` below it; where the round reports one, it escapes its kind
+ * beside the case backslash (carve#6656) and the rounds go on from the bare text. Otherwise, or where the round asks
+ * for a change inside a link, the brackets of link text without a partner take their backslash (`linkFallback`) and
+ * the round is compared again.
+ */
+function compareWithLinkFallback(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean, initial: boolean): Check {
+  const attempts = initial && w.sawLink && !w.linkFallback ? copyAttempts(w.attempts) : null
+  const check = compareGroup(w, document, group, first)
+  if (attempts === null || (reportsConstruct(check, group) && !linkRepairRequested(group, check))) return check
+  w.attempts = attempts
+  w.linkFallback = true
+  resetLines(w)
+  writeBlocks(w, group, '', 0, false)
+  return compareGroup(w, document, group, first)
+}
+
+/**
+ * Whether the parse holds a construct the tree does not hold. In a group with a caret pair, case eight can keep a text
+ * `^[` bare, so there only a construct on another text `[` counts.
+ */
+function reportsConstruct(check: Check, group: readonly Node[]): boolean {
+  if (check.constructs.size === 0) return false
+  if (!group.some(holdsCaretPair)) return true
+  for (const [node, at] of check.constructs) if (node.value[at] === '[' && node.value[at - 1] !== '^') return true
+  return false
+}
+
+function copyAttempts(attempts: Writer['attempts']): Writer['attempts'] {
+  const copy: Writer['attempts'] = new Map()
+  for (const [node, attempt] of attempts) copy.set(node, { step: attempt.step, escapes: [...attempt.escapes] })
+  return copy
+}
+
+/** The rounds start from the bare brackets of link text, so the backslashes an earlier write of them added go. */
+function dropLinkFallback(w: Writer): void {
+  for (const [node, placed] of w.linkPlaced) {
+    const current = w.escapes.get(node)
+    if (current !== undefined && current.some((at) => placed.has(at))) w.escapes.set(node, current.filter((at) => !placed.has(at)))
+  }
+  w.linkPlaced.clear()
+}
+
+/** Whether the round asks for an escape, a form or a loss in a link or below one. */
+function linkRepairRequested(group: readonly Node[], check: Check): boolean {
+  const asked = new Set<Node>()
+  for (const [node] of check.escapes) asked.add(node)
+  for (const [node] of check.losses) asked.add(node)
+  for (const node of check.forms) asked.add(node)
+  if (asked.size === 0) return false
+  const pending: [Node, boolean][] = group.map((node) => [node, false])
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
+    const inside = item[1] || item[0].type === 'link'
+    if (inside && asked.has(item[0])) return true
+    for (const child of childNodes(item[0])) pending.push([child, inside])
+  }
+  return false
 }
 
 /** A reported construct's opener can settle the tree before repairs beside its marks are needed. */
@@ -1403,6 +1463,7 @@ function repairBareAlts(w: Writer, document: DocumentNode, from: number, first: 
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
 function repairGroup(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+  dropLinkFallback(w)
   // A bracket left open in a bracketed node's content would consume that node's closer.
   // Collect these independent escapes before the readback instead of discovering one nest per parse.
   const group = document.children.slice(from, groupEnd(w, document.children, from))
@@ -1480,18 +1541,24 @@ function repairRounds(w: Writer, document: DocumentNode, from: number, first: bo
   const nodes = document.children
   w.cappedRuns = []
   const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0, budget: 0 }
-  for (;;) {
-    const end = groupEnd(w, nodes, from)
-    const group = nodes.slice(from, end)
-    resetLines(w)
-    writeBlocks(w, group, '', 0, false)
-    if (w.lines.length === 0) return end
-    if (refuseDeepGroup(w, group)) return end
-    if (repeatedRepair(w, group, history)) return end
-    if (!settle(w, document, group, first && !w.blankFirst) && !exhausted(w)) {
-      finishRounds(w, group, first && !w.blankFirst, reported)
-      return end
+  w.linkFallback = false
+  w.sawLink = false
+  try {
+    for (let round = 0; ; round++) {
+      const end = groupEnd(w, nodes, from)
+      const group = nodes.slice(from, end)
+      resetLines(w)
+      writeBlocks(w, group, '', 0, false)
+      if (w.lines.length === 0) return end
+      if (refuseDeepGroup(w, group)) return end
+      if (repeatedRepair(w, group, history)) return end
+      if (!settle(w, document, group, first && !w.blankFirst, round === 0) && !exhausted(w)) {
+        finishRounds(w, group, first && !w.blankFirst, reported)
+        return end
+      }
     }
+  } finally {
+    w.linkFallback = true
   }
 }
 

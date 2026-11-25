@@ -155,6 +155,7 @@ export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean)
     if (leaf.kinds[at] === OPEN) nodes++
     else if (leaf.kinds[at] === CLOSE) nodes--
     const value = codes[at]
+    undecideBareCloser(scan, at)
     if ((value !== OPENING && value !== CLOSING) || !isBracket(leaf, at, escaped)) continue
     leaf.cursor = at
     // C2-I-118, C2-B-190: an opening bracket is text where the open nodes and the open brackets of the content reach the
@@ -166,6 +167,21 @@ export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean)
   // An unmatched text opener can turn the preceding source-spelled reference into a full reference.
   // Its spelling is an atom here, so the pair scan cannot see that link's own brackets.
   checkSourceLinkBoundary(scan)
+}
+
+/**
+ * C2-W-088, C2-W-125 case five: a backslash on a `]` of link text keeps the link's opener from closing there. The first
+ * round reads that `]` bare, and the link's closer then pairs with the text `[` below it, whose construct reports its
+ * kind beside the case backslash (carve#6656). The repair reads that round.
+ */
+function undecideBareCloser(scan: Scan, at: number): void {
+  const { leaf, openers } = scan
+  if (leaf.codes[at] !== CLOSING || leaf.kinds[at] !== TEXT || leaf.kinds[at - 1] !== ESCAPE) return
+  const top = openers[openers.length - 1]
+  if (top === undefined || leaf.kinds[top] !== OPEN || leaf.owners[top]?.type !== 'link') return
+  for (let below = openers.length - 2; below >= 0; below--) {
+    if (leaf.kinds[openers[below]!] === TEXT) return undecide(leaf, 'case-five closer')
+  }
 }
 
 function checkSourceLinkBoundary(scan: Scan): void {

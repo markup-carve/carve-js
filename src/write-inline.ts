@@ -576,7 +576,11 @@ export function mergeLinkEscapes(escapes: number[], positions: readonly number[]
   return merged
 }
 
-/** C2-W-125 case five: a bracket without a partner in link text would take the link's own closer. */
+/**
+ * C2-W-125 case five: a bracket without a partner in link text would take the link's own closer. The rounds write these
+ * brackets bare until their first parse asks for a change inside a link (`linkFallback`), so a bare closer reports the
+ * kinds of what it lets form (C2-W-088, carve#6656).
+ */
 function escapeLoneLinkBrackets(w: Writer, link: LinkNode): void {
   let cache = linkEscapePositions.get(w)
   if (cache === undefined) linkEscapePositions.set(w, cache = new Map<LinkNode, Map<TextNode, number[]>>())
@@ -593,11 +597,23 @@ function escapeLoneLinkBrackets(w: Writer, link: LinkNode): void {
     }
     cache.set(link, byNode)
   }
+  if (byNode.size > 0) w.sawLink = true
+  if (!w.linkFallback) return
   for (const [node, positions] of byNode) {
     const current = w.escapes.get(node) ?? []
     const merged = mergeLinkEscapes(current, positions)
-    if (merged !== current) w.escapes.set(node, merged)
+    if (merged === current) continue
+    w.escapes.set(node, merged)
+    notePlaced(w, node, current, positions)
   }
+}
+
+/** The backslashes of `positions` that `current` did not hold, which a repair that starts bare takes out again. */
+function notePlaced(w: Writer, node: TextNode, current: readonly number[], positions: readonly number[]): void {
+  const had = new Set(current)
+  const placed = w.linkPlaced.get(node) ?? new Set<number>()
+  for (const at of positions) if (!had.has(at)) placed.add(at)
+  w.linkPlaced.set(node, placed)
 }
 
 function linkNode(w: Writer, node: LinkNode, flags: number): string {
