@@ -169,6 +169,8 @@ function quoteMark(leaf: Leaf, at: number): number {
 
 /** C2-B-043: a bare dot opens an item where its content does not start with a dot and a blank. */
 function bareDot(leaf: Leaf, at: number): number {
+  // C2-B-101: the attributes of an item abut its marker.
+  if (code(leaf, at + 1) === BRACE_OPEN) return markerBlock(leaf, at + 1)
   if (!hasContentBehind(leaf, at + 1)) return NO_ESCAPE
   let content = at + 1
   while (isBlank(code(leaf, content))) content++
@@ -337,7 +339,7 @@ const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
 function otherLine(leaf: Leaf, at: number, value: number, place: LeafPlace, first: boolean): number {
   const rule = OTHER_RULES.get(value)
   if (rule !== undefined) return rule(leaf, at, place, first)
-  return decidedIf(letterMarker(leaf, at))
+  return letterMarker(leaf, at)
 }
 
 /**
@@ -519,16 +521,21 @@ function isLetter(value: number): boolean {
   return (value >= 65 && value <= 90) || (value >= 97 && value <= 122)
 }
 
-/** C2-B-036, data/ordered-styles.json: one letter, or two or more roman letters of one case, before `.` or `)` and a blank. */
-function letterMarker(leaf: Leaf, at: number): boolean {
+/**
+ * C2-B-036, data/ordered-styles.json: one letter, or two or more roman letters of one case, before `.` or `)` and a
+ * blank, or before the attributes of the item (C2-B-101), is left to the repair.
+ */
+function letterMarker(leaf: Leaf, at: number): number {
   let end = at
   while (end - at < 10 && isLetter(code(leaf, end))) end++
   const after = code(leaf, end)
-  if (end === at || end - at > 9 || (after !== 46 && after !== 41)) return false
-  if (!isBlank(code(leaf, end + 1)) && !isLineEnd(code(leaf, end + 1))) return false
-  if (end - at === 1) return true
+  if (end === at || end - at > 9 || (after !== 46 && after !== 41)) return NO_ESCAPE
+  const glued = code(leaf, end + 1) === BRACE_OPEN
+  if (!glued && !isBlank(code(leaf, end + 1)) && !isLineEnd(code(leaf, end + 1))) return NO_ESCAPE
   const letters = charsText(leaf.codes, at, end)
-  return [...letters].every((char) => ROMAN_LOWER.includes(char)) || [...letters].every((char) => ROMAN_UPPER.includes(char))
+  const roman = [...letters].every((char) => ROMAN_LOWER.includes(char)) || [...letters].every((char) => ROMAN_UPPER.includes(char))
+  if (end - at > 1 && !roman) return NO_ESCAPE
+  return glued ? markerBlock(leaf, end + 1) : UNDECIDED
 }
 
 // C2-W-016: the atoms whose value the reader takes as it stands over a line end, `%%` lines included.
