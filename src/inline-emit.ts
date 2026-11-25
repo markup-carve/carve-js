@@ -3,7 +3,7 @@
 import { BRACE_CLOSE, LF, LOWER_A, SPACE } from './chars.ts'
 import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import {
-  ATTRIBUTE_BLOCK, BRACED_KINDS, BRACKET_SPAN, DESTINATION, EMPHASIS, ESCAPE, FLAG_BRACED, FLAG_COLLAPSED,
+  ATTRIBUTE_BLOCK, BRACED_KINDS, BRACKET_SPAN, DESTINATION, EMPHASIS, ESCAPE, FLAG_ATOM, FLAG_BRACED, FLAG_COLLAPSED,
   FLAG_REFERENCE, FLAG_SHORTCUT, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION, isHost, LABEL, NBSP,
   RAW_INLINE, SMART, SOFT_BREAK, STRONG, TITLE,
 } from './inline-kinds.ts'
@@ -31,11 +31,12 @@ function lineBreakFrom(state: InlineState, pos: number): number {
 }
 
 /** Writes `[start, end)` of the content as source spans, one per line, also for a line that holds nothing. */
-function writePieces(state: InlineState, start: number, end: number): void {
+function writePieces(state: InlineState, start: number, end: number, flags = 0): void {
+  const tag = eventTag(SPAN, 0, flags)
   while (start < end) {
     const lineEnd = Math.min(lineBreakFrom(state, start), end)
-    writeInlineEvent(state, eventTag(SPAN, 0, 0), toSource(state, start), toSource(state, lineEnd))
-    if (lineEnd + 1 === end) writeInlineEvent(state, eventTag(SPAN, 0, 0), toSource(state, end), toSource(state, end))
+    writeInlineEvent(state, tag, toSource(state, start), toSource(state, lineEnd))
+    if (lineEnd + 1 === end) writeInlineEvent(state, tag, toSource(state, end), toSource(state, end))
     start = lineEnd + 1
   }
 }
@@ -167,7 +168,7 @@ function writeAtom(state: InlineState, at: number): number {
   const end = tokens[at + TOKEN_END]!
   if (kind === ATTRIBUTE_BLOCK || kind === TOKEN_LITERAL) {
     // C2-I-035: a block that attaches to nothing is printed as written.
-    writePieces(state, start, end)
+    writePieces(state, start, end, FLAG_ATOM)
     state.previous = BRACE_CLOSE
     state.textRun = end
     return at + TOKEN_WIDTH
