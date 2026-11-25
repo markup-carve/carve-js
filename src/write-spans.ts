@@ -48,6 +48,8 @@ class GroupMarks {
   private out: TableCellNode[] = []
   private column = 0
   private added = false
+  /** The cells of this group already in `unspelled`; a cell belongs to one group only. */
+  private readonly lost = new Set<TableCellNode>()
 
   private readonly covering: Map<Node, TableCellNode>
   private readonly unspelled: TableCellNode[]
@@ -66,8 +68,24 @@ class GroupMarks {
     for (let at = 0; at < cells.length; at++) this.place(cells, at)
     this.takePending(undefined)
     // A row span that no cell of this row reaches has no place in it.
-    for (let at = this.column; at < this.pending.length; at++) if ((this.pending[at]?.rows ?? 0) > 0) this.pending[at]!.rows--
+    for (let at = this.column; at < this.pending.length; at++) {
+      const held = this.pending[at]
+      if (held === undefined || held.rows <= 0) continue
+      held.rows--
+      this.lose(held.cell)
+    }
     return this.added ? this.out : null
+  }
+
+  /** Reports every row span with rows left at the end of its group: a cell of a later row took its slot (carve#6737). */
+  finish(): void {
+    for (const held of this.pending) if (held !== undefined && held.rows > 0) this.lose(held.cell)
+  }
+
+  private lose(cell: TableCellNode): void {
+    if (this.lost.has(cell)) return
+    this.lost.add(cell)
+    this.unspelled.push(cell)
   }
 
   private place(cells: readonly TableCellNode[], at: number): void {
@@ -96,7 +114,7 @@ class GroupMarks {
       if (held.width === 1) {
         this.out.push(mark('rowspan', held.cell, this.covering))
         this.added = true
-      } else if (!this.unspelled.includes(held.cell)) this.unspelled.push(held.cell)
+      } else this.lose(held.cell)
       held.rows--
       this.column += held.width
     }
@@ -114,6 +132,7 @@ function markTable(table: TableNode, covering: Map<Node, TableCellNode>, unspell
       undo.push([row, row.children])
       row.children = cells
     }
+    marks.finish()
   }
 }
 
