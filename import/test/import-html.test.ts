@@ -384,3 +384,33 @@ describe('C2-M-037: leading column-heading rows of a table with no thead (carve#
     expect(result.diagnostics.map(entry => entry.code)).toContain('import-structure-repaired')
   })
 })
+
+describe('C2-M-037: the data cells of a thead (carve#6663)', () => {
+  const head = (html: string): { source: string, codes: string[] } => ({ source: source(html), codes: codes(html) })
+
+  it('a td of the thead is a header cell, reported once at the thead', () => {
+    expect(head('<table><thead><tr><td>a</td><td>b</td></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>'))
+      .toEqual({ source: '|= a |= b |\n| 1 | 2 |\n', codes: ['import-structure-repaired'] })
+    expect(head('<table><thead><tr><th>a</th><td>b</td></tr><tr><td>c</td></tr></thead></table>'))
+      .toEqual({ source: '|= a |= b |\n|= c |\n', codes: ['import-structure-repaired'] })
+    expect(head('<table><thead><tr><th>a</th></tr></thead><tr><td>1</td></tr></table>'))
+      .toEqual({ source: '|= a |\n| 1 |\n', codes: [] })
+  })
+
+  it('an empty corner td of the thead is an empty header cell', () => {
+    const html = '<table><thead><tr><td></td><td>Q1</td><td>Q2</td></tr></thead>'
+      + '<tbody><tr><th>North</th><td>1</td><td>2</td></tr></tbody></table>'
+    expect(head(html))
+      .toEqual({ source: '|= |= Q1 |= Q2 |\n|= North | 1 | 2 |\n', codes: ['import-structure-repaired'] })
+  })
+
+  it('a thead of td rows above a header-cell foot reads back as head and foot', () => {
+    expect(source('<table><thead><tr><td>a</td></tr></thead><tfoot><tr><th>F</th></tr></tfoot></table>'))
+      .toBe('{footer-rows=1 body-rows}\n|= a |\n|= F |\n')
+  })
+
+  it('a foot keeps its rows and cell kinds', () => {
+    expect(source('<table><tr><td>1</td></tr><tfoot><tr><th>F</th></tr></tfoot></table>')).toBe('{footer-rows=1}\n| 1 |\n|= F |\n')
+    expect(codes('<table><tfoot><tr><th scope="row">F</th></tr></tfoot></table>')).toContain('structure-unspellable')
+  })
+})
