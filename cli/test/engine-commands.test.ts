@@ -209,6 +209,9 @@ describe('--extensions and --extension-options (C2-T-010)', () => {
       '<details class="spoiler">', '  <summary>Spoiler</summary>', '  <p>Hidden.</p>', '</details>', '',
     ].join('\n')
     expect(cli(['render', '--extensions', names, 'a.crv'], '', dir)).toEqual({ status: 0, stdout: html, stderr: '' })
+    // The tree of `ast` renders the same: its title slot and spoiler content are the catalog's.
+    writeFileSync(join(dir, 'a.json'), cli(['ast', '--extensions', names, 'a.crv'], '', dir).stdout)
+    expect(cli(['render', '--from-ast', '--extensions', names, 'a.json'], '', dir)).toEqual({ status: 0, stdout: html, stderr: '' })
     const revealed = cli(['render', '--mode', 'static', '--extensions', names, 'a.crv'], '', dir).stdout
     expect(revealed).toContain('<details open>')
     expect(revealed).toContain('<span class="spoiler spoiler-revealed">secret</span>')

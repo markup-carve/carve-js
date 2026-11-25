@@ -28,6 +28,11 @@ function definitionsOnly(definitions: readonly ExtensionDefinition[]): Standard 
   return { definitions, render: () => ({ extensions: definitions, renderers: {} }) }
 }
 
+/** The catalog's definitions on every command, so `ast` and `render --from-ast` read one tree; the bundle gives the renderers. */
+function rendered(definitions: readonly ExtensionDefinition[], bundle: () => ExtensionBundle): Standard {
+  return { definitions, render: () => ({ extensions: definitions, renderers: bundle().renderers }) }
+}
+
 function imgFence(name: string): Standard {
   const pick = (bundle: ExtensionBundle): ExtensionBundle => ({
     extensions: bundle.extensions.filter((entry) => entry.name === name),
@@ -39,19 +44,19 @@ function imgFence(name: string): Standard {
 const STANDARD: ReadonlyMap<string, Standard> = new Map<string, Standard>([
   ['carve.cite', { definitions: [citeExtension], render: () => citations() }],
   ['carve.codeGroup', { definitions: codeGroup().extensions, render: () => codeGroup() }],
-  ['carve.details', { definitions: [detailsExtension], render: () => details() }],
+  ['carve.details', rendered([detailsExtension], details)],
   ['carve.fencedRender.mermaid', { definitions: mermaid().extensions, render: () => mermaid() }],
   ['carve.imgFence.image', imgFence('carve.imgFence.image')],
   ['carve.imgFence.img', imgFence('carve.imgFence.img')],
   ['carve.mathBlock', { definitions: mathBlock().extensions, render: () => mathBlock() }],
-  ['carve.spoiler', { definitions: spoilerExtensions, render: () => spoiler() }],
-  ['carve.spoilerBlock', { definitions: spoilerExtensions, render: () => spoiler() }],
+  ['carve.spoiler', rendered(spoilerExtensions, spoiler)],
+  ['carve.spoilerBlock', rendered(spoilerExtensions, spoiler)],
   ['carve.tab', definitionsOnly(tabsExtensions)],
   ['carve.tabs', {
     definitions: tabsExtensions,
     render: (options) => ({ extensions: tabsExtensions, renderers: { 'carve.tabs': standardTabsRenderer(options) } }),
   }],
-  ['carve.wiki', { definitions: [wikiExtension], render: () => wikilinks() }],
+  ['carve.wiki', rendered([wikiExtension], wikilinks)],
 ])
 
 /** The renderer options each standard extension takes: the `rendererOptions` of its row, each with its values. */
