@@ -18,7 +18,7 @@ interface Family {
 
 const FAMILIES: Family[] = [
   { name: 'tab report', entry: 'U-415', source: '[Label]\n:::: tabs\n::: tab\nx\n:::\n::::\n', construct: '::: tab\nx\n:::', line: 3 },
-  { name: 'line block report', entry: 'U-130', source: '::: |\n😀\tx\n:::\n', construct: '::: |\n😀\tx\n:::', line: 1 },
+  { name: 'line block report', entry: 'U-130', source: '::: |\n😀\tx  \n:::\n', construct: '::: |\n😀\tx  \n:::', line: 1 },
   { name: 'table metadata line', entry: 'U-150', source: '{valigns=top,bottom widths=40}\n| a | b | c |\n',
     construct: '{valigns=top,bottom widths=40}', line: 1 },
   { name: 'empty class node', entry: 'U-282', source: '[x]{class=""}\n', construct: '[x]{class=""}', line: 1 },
@@ -79,7 +79,7 @@ describe('carve-js#5510: upgrade record positions are UTF-16 offsets and input l
   it.each([
     ['a tab whose label holds astral characters', 'U-415',
       '😀\n\n[😀 Label 😀]\n:::: tabs\n::: tab\n😀 x 😀\n:::\n::::\n', '::: tab\n😀 x 😀\n:::', 5],
-    ['a line block that holds astral characters', 'U-130', '😀\n\n::: |\n😀😀\tx 😀\n:::\n', '::: |\n😀😀\tx 😀\n:::', 3],
+    ['a line block that holds astral characters', 'U-130', '😀\n\n::: |\n😀😀\tx 😀  \n:::\n', '::: |\n😀😀\tx 😀  \n:::', 3],
     ['an empty class span around astral text', 'U-282', '😀 a\n\n[😀 x 😀]{class=""}\n', '[😀 x 😀]{class=""}', 3],
   ] as const)('covers %s', (_name, entry, source, construct, line) => {
     expectAt(source, { name: '', entry, source, construct, line }, construct, line)
@@ -93,9 +93,9 @@ describe('carve-js#5510: upgrade record positions are UTF-16 offsets and input l
 
 describe('carve-js#5510: ranges point into the input when the upgrade normalizes it', () => {
   it.each([
-    ['a BOM', '﻿😀\n\n::: |\n😀\tx\n:::\n', '::: |\n😀\tx\n:::'],
-    ['a BOM and CRLF', '﻿😀\r\n\r\n::: |\r\n😀\tx\r\n:::\r\n', '::: |\r\n😀\tx\r\n:::'],
-    ['CRLF with the construct at the end of the text', '😀\r\n\r\n::: |\r\n😀\tx\r\n:::', '::: |\r\n😀\tx\r\n:::'],
+    ['a BOM', '﻿😀\n\n::: |\n😀\tx  \n:::\n', '::: |\n😀\tx  \n:::'],
+    ['a BOM and CRLF', '﻿😀\r\n\r\n::: |\r\n😀\tx  \r\n:::\r\n', '::: |\r\n😀\tx  \r\n:::'],
+    ['CRLF with the construct at the end of the text', '😀\r\n\r\n::: |\r\n😀\tx  \r\n:::', '::: |\r\n😀\tx  \r\n:::'],
   ])('%s', (_name, source, construct) => {
     const record = upgrade(source).records.find((found) => found.entry === 'U-130')
     expect(record?.line).toBe(3)

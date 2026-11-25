@@ -3,12 +3,13 @@ import { upgrade } from '../src/upgrade.ts'
 
 describe('U-130 line block report range', () => {
   it('covers the parsed block that owns the differing whitespace', () => {
-    const source = '::: |\n😀\tx\n:::\n'
+    // C2-B-007: the item strip straddles the leading tab, which 0.2 writes as four columns and 0.1 as the two it left.
+    const source = '- ::: |\n\t😀\tx\n'
     const result = upgrade(source)
     const report = result.records.find((record) => record.entry === 'U-130')
     const mismatch = result.records.find((record) => record.entry === 'upgrade-mismatch')
     expect(result.check).toBe('mismatch')
-    expect(report?.range).toEqual({ startOffset: 0, endOffset: 14 })
+    expect(report?.range).toEqual({ startOffset: 2, endOffset: 13 })
     expect(mismatch?.range).toEqual(report?.range)
   })
 

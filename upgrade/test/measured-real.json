@@ -1928,10 +1928,8 @@
     "path": "resources/examples/edge-cases/0346-a-line-block-s-last-body-line-keeps-its-backslash.md",
     "line": 42,
     "input": "::: |\na  \\\n:::\n",
-    "check": "mismatch",
-    "entries": [
-      "U-130"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C70",
@@ -1950,10 +1948,8 @@
     "path": "resources/examples/edge-cases/1077-a-column-after-an-astral-character-is-one-code-point.md",
     "line": 56,
     "input": "::: |\n😀\tx\n:::\n",
-    "check": "mismatch",
-    "entries": [
-      "U-130"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C70",

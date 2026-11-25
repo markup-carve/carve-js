@@ -63,9 +63,25 @@ const STANDARD: ReadonlyMap<string, Standard> = new Map<string, Standard>([
 const RENDERER_OPTIONS: ReadonlyMap<string, Readonly<Record<string, { values: readonly string[] }>>> = new Map(
   catalog.extensions.map((entry) => [entry.name, 'rendererOptions' in entry ? entry.rendererOptions : {}]))
 
+/**
+ * Catalog rows of carve#6766 the table above does not register yet: `--extensions` refuses them as before the pin.
+ * Each leaves this list when it gets its entry in STANDARD.
+ */
+export const PENDING: ReadonlySet<string> = new Set([
+  'carve.autolink', 'carve.codeCallouts', 'carve.colorSwatch', 'carve.externalLinks', 'carve.fencedRender.abc',
+  'carve.fencedRender.chart', 'carve.fencedRender.d2', 'carve.fencedRender.dot', 'carve.fencedRender.graphviz',
+  'carve.fencedRender.plantuml', 'carve.fencedRender.puml', 'carve.fencedRender.vega-lite', 'carve.fencedRender.wavedrom',
+  'carve.glossary', 'carve.headingNumbers', 'carve.headingPermalinks', 'carve.headingReference', 'carve.index',
+  'carve.indexTerm', 'carve.listTable', 'carve.semanticSpan', 'carve.smartQuotes', 'carve.tabNormalize', 'carve.term',
+  'carve.toc', 'carve.tocPlacement',
+])
+
 // The catalog and the table above name the same extensions; a pin that adds one fails here, not at a user's command.
-for (const name of new Set([...STANDARD.keys(), ...RENDERER_OPTIONS.keys()])) {
-  if (!STANDARD.has(name) || !RENDERER_OPTIONS.has(name)) throw new Error(`${name} is not in both the catalog and the CLI table`)
+for (const name of new Set([...STANDARD.keys(), ...RENDERER_OPTIONS.keys(), ...PENDING])) {
+  const pending = PENDING.has(name)
+  if (pending ? STANDARD.has(name) || !RENDERER_OPTIONS.has(name) : !STANDARD.has(name) || !RENDERER_OPTIONS.has(name)) {
+    throw new Error(pending ? `${name} is pending but in the CLI table or not in the catalog` : `${name} is not in both the catalog and the CLI table`)
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

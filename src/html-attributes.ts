@@ -51,6 +51,8 @@ export interface Render {
   xrefTextCache: Map<string, { escaped: string, bytes: number }>
   /** C2-H-019: the paragraphs a profile left writing nothing, whose refused destinations are reported once. */
   silenced: Set<Node>
+  /** C2-H-043: whether a line of a line block is written, whose text keeps its whitespace columns. */
+  verse: boolean
 }
 
 /** An attribute name and its value. A null value writes the bare name (C2-H-117). */

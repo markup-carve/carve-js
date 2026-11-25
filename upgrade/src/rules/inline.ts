@@ -429,30 +429,3 @@ export function unclosedRuns(ctx: Context): void {
   for (const visit of ctx.visits) unclosedRun(ctx, visit)
 }
 
-function lineBlockVisibleEnds(ctx: Context): Map<number, number> {
-  const ends = new Map<number, number>()
-  for (const visit of ctx.visits) {
-    const node = visit.node
-    if (node.pos === undefined || ancestor(visit, 'line_block') === null || Array.isArray(node.children)) continue
-    if (node.type === 'non_breaking_space' || node.type === 'hard_break' || node.type === 'comment') continue
-    ends.set(node.pos.startLine, Math.max(ends.get(node.pos.startLine) ?? 0, node.pos.endOffset))
-  }
-  return ends
-}
-
-export function lineBlockSpaces(ctx: Context): void {
-  const visibleEnds = lineBlockVisibleEnds(ctx)
-  let line = 0
-  let seenVisible = false
-  for (const visit of ctx.visits) {
-    const node = visit.node
-    if (node.pos === undefined || ancestor(visit, 'line_block') === null || Array.isArray(node.children)) continue
-    if (node.pos.startLine !== line) { line = node.pos.startLine; seenVisible = false }
-    if (node.type === 'non_breaking_space' && seenVisible && ctx.src[node.pos.startOffset] === ' '
-      && node.pos.startOffset < (visibleEnds.get(line) ?? 0)) {
-      change(ctx, 'U-265', node.pos.startOffset, node.pos.startOffset, '\\', 'interior line block space kept as nonbreaking')
-    } else if (node.type !== 'non_breaking_space' && node.type !== 'hard_break' && node.type !== 'comment') {
-      seenVisible = true
-    }
-  }
-}

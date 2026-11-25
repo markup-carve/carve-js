@@ -11,7 +11,7 @@ import {
 } from './definitions.ts'
 import { escapes } from './escapes.ts'
 import { fences } from './fences.ts'
-import { inline, inlineBraced, lineBlockSpaces, unclosedRuns } from './inline.ts'
+import { inline, inlineBraced, unclosedRuns } from './inline.ts'
 import { captionContinuation, termDescriptionMarks } from './labels.ts'
 import { lists } from './lists.ts'
 import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
@@ -40,7 +40,7 @@ function repairs(ctx: Context): void {
 
 /** Every rule, in the order of the contract's groups. The order does not decide which edit wins. */
 export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks, taskBoxSpacing, attributeLines, openers, definitions,
-  fences, tables, inline, lineBlockSpaces, escapes, shortcuts, unclosedRuns, captionContinuation,
+  fences, tables, inline, escapes, shortcuts, unclosedRuns, captionContinuation,
   abbreviationContinuation]
 
 /** Rules that run only when the first pass leaves a difference, so a source that already upgrades keeps its result. */
