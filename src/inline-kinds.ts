@@ -66,6 +66,8 @@ export const FLAG_COLLAPSED = 2
 export const FLAG_SHORTCUT = 4
 export const FLAG_DISPLAY = 1
 export const FLAG_EMAIL = 1
+// Flag of a span event: text the inline pass prints as written, an atom no term matches in (C2-I-035, C2-I-100).
+export const FLAG_ATOM = 1
 
 const HOSTS = [
   EMPHASIS, STRONG, UNDERLINE, STRIKE, HIGHLIGHT, SUPERSCRIPT, SUBSCRIPT, INSERT, DELETE, BRACKET_SPAN, LINK,

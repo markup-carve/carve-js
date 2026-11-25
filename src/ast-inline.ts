@@ -9,8 +9,9 @@ import { type Attributes, attributeSink, cellKeySource, emptyAttributes, foldLab
 import { emptyMemo, readAttributeBlock, unescape } from './attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
-  ATTRIBUTE_BLOCK, AUTOLINK, BRACKET_SPAN, CODE_SPAN, DELETE, DESTINATION, EDITORIAL, EMPHASIS, ESCAPE, FLAG_BRACED,
-  FLAG_COLLAPSED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_REFERENCE, FLAG_SHORTCUT, FOOTNOTE_REF, HARD_BREAK, HIGHLIGHT, IMAGE, INLINE_COMMENT,
+  ATTRIBUTE_BLOCK, AUTOLINK, BRACKET_SPAN, CODE_SPAN, DELETE, DESTINATION, EDITORIAL, EMPHASIS, ESCAPE, FLAG_ATOM,
+  FLAG_BRACED, FLAG_COLLAPSED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_REFERENCE, FLAG_SHORTCUT, FOOTNOTE_REF, HARD_BREAK, HIGHLIGHT,
+  IMAGE, INLINE_COMMENT,
   INLINE_EXTENSION, INLINE_FOOTNOTE, INSERT, isInlineContainer, LABEL, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE,
   SMART, SOFT_BREAK, STRIKE, STRONG, SUBSCRIPT, SUPERSCRIPT, SYMBOL, TAG, TITLE, UNDERLINE, XREF,
 } from './inline-kinds.ts'
@@ -66,6 +67,8 @@ export interface TreeContext {
   abbreviationBytesLeft: number
   /** The UTF-8 cost of each term's expansion, computed once even when it has many uses. */
   abbreviationCosts: Map<string, number>
+  /** C2-I-100: the `[start, end)` ranges of each text node's value that are atoms, where no term matches. */
+  atoms: Map<TextNode, number[]>
   /** The lines from the first attribute line of each block that took attribute lines to its own markup (C2-A-148). */
   markup: Map<Node, number>
   /**
@@ -245,6 +248,8 @@ export function joinFragment(ctx: TreeContext, list: Inline[], nodes: Inline[], 
   }
   const first = nodes[0]
   if (first?.type === 'text' && text.type === 'text') {
+    const atoms = ctx.atoms.get(first)
+    if (atoms !== undefined) markAtoms(ctx, text, atoms, text.value.length)
     text.value += first.value
     nodes = nodes.slice(1)
   }
@@ -402,15 +407,31 @@ function closeFrame(ctx: TreeContext, spans: number[], node: InlineFrame, host: 
   else addNode(ctx, spans, list, node, flow)
 }
 
+/** Records that `ranges`, shifted by `shift`, of the value of `node` are atoms. */
+function markAtoms(ctx: TreeContext, node: TextNode, ranges: number[], shift: number): void {
+  let own = ctx.atoms.get(node)
+  if (own === undefined) ctx.atoms.set(node, own = [])
+  for (const at of ranges) own.push(at + shift)
+}
+
 /** Adds the source `[start, end)` to the open leaf `top`, or as a run of text to the list it belongs to. */
 function addSpan(
   ctx: TreeContext, spans: number[], root: Inline[], top: InlineFrame | null, start: number, end: number, flow: number,
+  flags: number,
 ): void {
   const text = ctx.src.slice(start, end)
-  if (top === null) return addRun(ctx, root, text, runStart(spans, flow, start, end), end)
-  if (top.children !== null) return addRun(ctx, top.children, text, runStart(spans, flow, start, end), end)
-  top.value = top.spanned ? `${top.value}\n${text}` : text
-  top.spanned = true
+  const list = top === null ? root : top.children
+  if (list !== null) {
+    addRun(ctx, list, text, runStart(spans, flow, start, end), end)
+    if ((flags & FLAG_ATOM) !== 0 && text.length > 0) {
+      const node = list[list.length - 1] as TextNode
+      markAtoms(ctx, node, [node.value.length - text.length, node.value.length], 0)
+    }
+    return
+  }
+  const leaf = top!
+  leaf.value = leaf.spanned ? `${leaf.value}\n${text}` : text
+  leaf.spanned = true
 }
 
 /** Builds the public nodes of one content from the events of its inline pass. */
@@ -425,7 +446,7 @@ function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): Inlin
       top = openFrame(event.kind(), event.start(), event.flags(), event.aux())
       open.push(top)
     } else if (type === SPAN) {
-      addSpan(ctx, spans, root, top, event.start(), event.end(), flow)
+      addSpan(ctx, spans, root, top, event.start(), event.end(), flow, event.flags())
     } else {
       const node = open.pop()!
       node.end = event.end()

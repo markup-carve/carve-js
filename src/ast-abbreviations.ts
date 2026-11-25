@@ -70,6 +70,9 @@ interface Split {
   // The last index whose source offset was asked for, and that offset: indexes only grow, so no index is walked twice.
   seen: number
   seenOffset: number
+  // C2-I-100: the atom ranges of the value, in order, and the first one not yet behind the words read.
+  atoms: number[] | undefined
+  atom: number
 }
 
 /** The source offset of index `index` of the value: an escape is two characters of source. */
@@ -115,14 +118,26 @@ function standsAlone(value: string, at: number, end: number, before: number, aft
   return !isWordCharacter(left) && !isWordCharacter(right)
 }
 
+/** C2-I-100: whether the word `[at, end)` lies outside every atom. Words come in order, so the cursor only moves on. */
+function outsideAtoms(split: Split, at: number, end: number): boolean {
+  const atoms = split.atoms
+  if (atoms === undefined) return true
+  while (split.atom < atoms.length && atoms[split.atom + 1]! <= at) split.atom += 2
+  return split.atom >= atoms.length || atoms[split.atom]! >= end
+}
+
 function splitText(ctx: TreeContext, node: TextNode, before: number, after: number): Inline[] | null {
   const value = node.value
   const start = node.pos?.startOffset ?? -1
-  const split: Split = { ctx, node, value, start, parts: [], done: 0, seen: 0, seenOffset: start }
+  const split: Split = {
+    ctx, node, value, start, parts: [], done: 0, seen: 0, seenOffset: start, atoms: ctx.atoms.get(node), atom: 0,
+  }
   for (let at = 0; at < value.length;) {
     const end = wordEnd(value, at)
     const expansion = end === at ? undefined : ctx.abbreviations.get(value.slice(at, end))
-    if (expansion !== undefined && standsAlone(value, at, end, before, after)) addTerm(split, at, end, expansion)
+    if (expansion !== undefined && standsAlone(value, at, end, before, after) && outsideAtoms(split, at, end)) {
+      addTerm(split, at, end, expansion)
+    }
     at = Math.max(end, at + 1)
   }
   if (split.parts.length === 0) return null

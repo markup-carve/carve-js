@@ -697,7 +697,7 @@ export function inlineContent(text: string): Inline[] {
   try {
     const ctx: TreeContext = {
       src: text, positions: false, inline, abbreviations: new Map(), abbreviationBytesLeft: 0,
-      abbreviationCosts: new Map(), markup: new Map(), resolvable: false,
+      abbreviationCosts: new Map(), atoms: new Map(), markup: new Map(), resolvable: false,
       resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null, includes: [],
     }
     return contentNodes(ctx, [0, text.length], 0, 2, true, FLOW_PLAIN)
@@ -768,7 +768,7 @@ export function buildSource(
     const ctx: TreeContext = {
       src: text, positions, inline, abbreviations: terms,
       abbreviationBytesLeft: Math.max(DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR * sourceByteLength),
-      abbreviationCosts: new Map(), markup: new Map(),
+      abbreviationCosts: new Map(), atoms: new Map(), markup: new Map(),
       resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
       sourceNames: collectSourceNames ? new Map() : null, includes: [],
     }
