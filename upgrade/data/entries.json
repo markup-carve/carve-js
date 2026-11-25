@@ -2176,6 +2176,14 @@
       "lint": [
         "code-span-padding-kept"
       ]
+    },
+    {
+      "id": "U-442",
+      "name": "line 0.1 joined to a caption",
+      "class": "rewrite",
+      "lint": [
+        "continuation-reading-changed"
+      ]
     }
   ],
   "extensions": [

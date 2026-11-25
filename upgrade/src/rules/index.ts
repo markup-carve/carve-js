@@ -10,6 +10,7 @@ import { definitions, definitionsAtTop, definitionsKept, definitionsKeptAfter, d
 import { escapes } from './escapes.ts'
 import { fences } from './fences.ts'
 import { inline, inlineBraced, lineBlockSpaces, unclosedRuns } from './inline.ts'
+import { captionContinuation, termDescriptionMarks } from './labels.ts'
 import { lists } from './lists.ts'
 import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
@@ -37,10 +38,23 @@ function repairs(ctx: Context): void {
 
 /** Every rule, in the order of the contract's groups. The order does not decide which edit wins. */
 export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks, taskBoxSpacing, attributeLines, openers, definitions,
-  fences, tables, inline, lineBlockSpaces, escapes, shortcuts, unclosedRuns]
+  fences, tables, inline, lineBlockSpaces, escapes, shortcuts, unclosedRuns, captionContinuation]
 
 /** Rules that run only when the first pass leaves a difference, so a source that already upgrades keeps its result. */
 export const LATE_RULES: readonly Rule[] = [lineComments, typedQuotes]
+
+const REPAIRS: readonly Rule[] = [repairs,
+  ...RULES.map((rule) => rule === inline ? inlineBraced : rule === tables ? tablesHeadStyles : rule),
+  ...LATE_RULES, descriptionColumns, flippedStrong, crossLineStrong, literalTableHeader, duplicateItemDefinitions,
+  itemNoteDefinitions, literalLinkBeforeCode,
+  wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary, literalQuoteAfterAttributes, innerFenceRun,
+  siblingHeadingBoundary, emptyAttributeItemAfterDescription, emptyColonDiv, continuedHeaderRow,
+  descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
+  footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
+  literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
+  markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows,
+  attributeAcrossFootnoteDefinition, siblingQuoteParagraphs, attributeLinkQuotes, repeatedIndentedNote,
+  outerAdmonitionAroundDiv, quotedPlusNestedList, nestedColonRuns]
 
 /** Each late variant replaces first-pass rules with the late rules in their place, tried in order. */
 export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
@@ -57,15 +71,9 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
   [...RULES, ...LATE_RULES, nestedOrderedBreaks],
   [...RULES.map((rule) => rule === tables ? tablesHeadStyles : rule), ...LATE_RULES],
   [...RULES.map((rule) => rule === definitions ? definitionsKeptAfter : rule), ...LATE_RULES],
-  [repairs, ...RULES.map((rule) => rule === inline ? inlineBraced : rule === tables ? tablesHeadStyles : rule),
-    ...LATE_RULES, descriptionColumns, flippedStrong, crossLineStrong, literalTableHeader, duplicateItemDefinitions,
-    itemNoteDefinitions, literalLinkBeforeCode,
-    wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary, literalQuoteAfterAttributes, innerFenceRun,
-    siblingHeadingBoundary, emptyAttributeItemAfterDescription, emptyColonDiv, continuedHeaderRow,
-    descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
-    footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
-    literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
-    markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows,
-    attributeAcrossFootnoteDefinition, siblingQuoteParagraphs, attributeLinkQuotes, repeatedIndentedNote,
-    outerAdmonitionAroundDiv, quotedPlusNestedList, nestedColonRuns],
+  REPAIRS,
+  [...RULES, ...LATE_RULES, termDescriptionMarks],
 ]
+
+/** The repairs variant, which a fused comment block opener tries first. */
+export const REPAIRS_VARIANT = LATE_VARIANTS.indexOf(REPAIRS)
