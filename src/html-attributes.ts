@@ -51,6 +51,8 @@ export interface Render {
   xrefTextCache: Map<string, { escaped: string, bytes: number }>
   /** C2-H-019: the paragraphs a profile left writing nothing, whose refused destinations are reported once. */
   silenced: Set<Node>
+  /** C2-H-043: 0 outside a line of a line block, 2 before its first leaf is written, 1 after. */
+  verse: 0 | 1 | 2
 }
 
 /** An attribute name and its value. A null value writes the bare name (C2-H-117). */

@@ -1485,8 +1485,8 @@
     },
     {
       "id": "U-265",
-      "name": "<div class=\"line-block\">\n  <p>Roses  are red</p>\n</div> C2-H-043 writes only ...",
-      "class": "rewrite",
+      "name": "interior space runs of a line block",
+      "class": "none",
       "lint": []
     },
     {

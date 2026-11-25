@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
 describe('measured reports use the 0.1 parse', () => {
-  it('reports U-130 for a line block with retained tabs', () => {
-    const result = upgrade('::: |\n\tx\n:::')
+  it('reports U-130 for a line block whose leading tab the item strip straddles', () => {
+    const result = upgrade('- ::: |\n\tx\n')
     expect(result.records.map((record) => record.entry)).toContain('U-130')
   })
 

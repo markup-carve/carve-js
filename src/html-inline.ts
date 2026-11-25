@@ -65,12 +65,47 @@ function inlineList(r: Render, nodes: readonly Inline[], nested: boolean): strin
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     // Most nodes are text, which needs no writer.
-    if (node.type === 'text') out += escapeTextNode(r, node.value)
+    if (node.type === 'text') out += r.verse === 0 ? escapeTextNode(r, node.value) : verseText(r, node.value, r.verse === 2)
     else if (r.settings.quotes !== null && node.type === 'smart_punctuation' && r.settings.smartTypography &&
       isApostrophe(node, nodes[at - 1], nodes[at + 1])) out += escapeText(smartGlyph(node))
     else if (!isBreak(node) || !isSkippedBreak(nodes, at, nested)) out += writeOwn(r, node.type, node) ?? ''
+    if (r.verse === 2) r.verse = 1
   }
   return out
+}
+
+const TAB_STOP = 4
+
+const VERSE_RUN = /[ \t]+/g
+const HIGH_SURROGATE = /[\uD800-\uDBFF]/g
+
+/** The columns of `text` with no space or tab in it: one per code point. */
+function verseColumns(text: string): number {
+  return text.length - (text.match(HIGH_SURROGATE)?.length ?? 0)
+}
+
+/**
+ * C2-H-043: the text of a line of a line block. Each run of spaces and tabs is written as one `&nbsp;` per column
+ * when it leads the line (`lead` and at offset 0) or covers two or more columns, and as one space otherwise.
+ * Columns count code points from the start of the text node; a tab advances to the next multiple of 4.
+ */
+function verseText(r: Render, text: string, lead: boolean): string {
+  const leads = lead && (text[0] === ' ' || text[0] === '\t')
+  if (!leads && !text.includes('\t') && !text.includes('  ')) return escapeTextNode(r, text)
+  let out = ''
+  let column = 0
+  let from = 0
+  VERSE_RUN.lastIndex = 0
+  for (let match = VERSE_RUN.exec(text); match !== null; match = VERSE_RUN.exec(text)) {
+    const word = text.slice(from, match.index)
+    out += escapeTextNode(r, word)
+    column += verseColumns(word)
+    const start = column
+    for (const char of match[0]) column = char === '\t' ? column + TAB_STOP - column % TAB_STOP : column + 1
+    out += (leads && match.index === 0) || column - start >= 2 ? '&nbsp;'.repeat(column - start) : ' '
+    from = VERSE_RUN.lastIndex
+  }
+  return out + escapeTextNode(r, text.slice(from))
 }
 
 export function inlineHtml(r: Render, nodes: readonly Inline[]): string {

@@ -2563,14 +2563,12 @@
   },
   {
     "id": "U-265",
-    "title": "<div class=\"line-block\">\n  <p>Roses  are red</p>\n</div> C2-H-043 writes only ...",
+    "title": "interior space runs of a line block",
     "inputs": [
       "::: |\nRoses  are red\n:::\n"
     ],
-    "outputs": [
-      "::: |\nRoses\\ \\ are red\n:::\n"
-    ],
-    "class": "rewrite"
+    "outputs": [],
+    "class": "none"
   },
   {
     "id": "U-267",

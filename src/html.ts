@@ -481,19 +481,14 @@ function rawBlock(r: Render, node: RawBlockNode, level: number): void {
   rawLine(r, value.endsWith('\n') ? value.slice(0, -1) : value)
 }
 
-function leadingSpaces(text: string): number {
-  let count = 0
-  while (text[count] === ' ') count++
-  return count
-}
-
-/** C2-H-043: the leading spaces of a line are written as `&nbsp;`, one per space. */
+/** C2-H-043: a line writes the spaces and tabs of its text nodes with their columns (see `verseText`). */
 function lineHtml(r: Render, node: LineNode): string {
-  const children = node.children
-  const first = children[0]
-  if (first?.type !== 'text') return inlineHtml(r, children)
-  const spaces = leadingSpaces(first.value)
-  return '&nbsp;'.repeat(spaces) + inlineHtml(r, [{ ...first, value: first.value.slice(spaces) }, ...children.slice(1)])
+  r.verse = 2
+  try {
+    return inlineHtml(r, node.children)
+  } finally {
+    r.verse = 0
+  }
 }
 
 /** C2-H-043: a hard break that ends a line followed by a line of the same stanza writes nothing; the line end writes the `<br>`. */
@@ -1018,7 +1013,7 @@ export function renderDocument(
     settings, resolution, taskLabels, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
-    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),
+    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(), verse: 0,
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }

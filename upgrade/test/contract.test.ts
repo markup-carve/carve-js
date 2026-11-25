@@ -68,6 +68,8 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   // carve#6508 (C2-B-234, C2-B-149): an unindented line ends a caption or a term in 0.2 too, so these inputs already
   // keep the 0.1 HTML and the blank line of the contract changes nothing.
   'U-010#0': { check: 'pass' }, 'U-106#0': { check: 'pass' }, 'U-106#1': { check: 'pass' }, 'U-107#0': { check: 'pass' },
+  // carve#6762 (C2-H-043): 0.2 writes a leading tab of a line block as four `&nbsp;`, as 0.1 did, so nothing is reported.
+  'U-130#0': { check: 'pass' },
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
