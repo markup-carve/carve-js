@@ -13,7 +13,7 @@ function hasClosingRun(src: string, openerEnd: number, end: number, width: numbe
     if (src[at] !== '`') continue
     let run = 0
     while (src[at + run] === '`') run++
-    if (run === width && src[at - 1] !== '\\') return true
+    if (run === width) return true
     at += run - 1
   }
   return false
