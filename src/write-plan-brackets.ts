@@ -192,7 +192,10 @@ function escapesOpenersBelow(scan: Scan, top: number, at: number): boolean {
   if (next === OPENING || next === 123 || !onlyBareCloser(leaf, top, at)) return false
   const below = openers.slice(0, -1)
   if (!plainTextBetween(leaf, below[0]!, top) || !below.every((opener) => plainOpener(leaf, opener))) return false
-  for (const opener of below) escaped[opener] = 1
+  // C2-W-088: the closer reports only the nearest opener; of the others only the first bracket of a run is a potential opener.
+  below.forEach((opener, k) => {
+    if (k === below.length - 1 || !runContinues(leaf, opener)) escaped[opener] = 1
+  })
   openers.splice(0, below.length)
   return true
 }
@@ -205,6 +208,11 @@ function onlyBareCloser(leaf: Leaf, top: number, at: number): boolean {
     if (leaf.kinds[close] !== TEXT || isTextBracket(leaf, close)) return false
   }
   return leaf.owners[close] === leaf.owners[top] && leaf.codes[close + 1] === 40 && leaf.kinds[close + 1] === ATOM
+}
+
+/** Whether the text opener `at` stands right behind a bare text `[`, so it starts no run. */
+function runContinues(leaf: Leaf, at: number): boolean {
+  return leaf.codes[at - 1] === OPENING && leaf.kinds[at - 1] === TEXT && leaf.kinds[at - 2] !== ESCAPE
 }
 
 function isTextBracket(leaf: Leaf, at: number): boolean {

@@ -8,7 +8,8 @@ describe('C2-W-125: the plan decides the kind beside a case-five link closer', (
   it.each([
     ['[x [a\\]b](u)', '\\[x [a\\]b](u)\n'],
     ['[foo[https://e.com/?q=\\](uri)](https://e.com/x)', '\\[foo[https://e.com/?q=\\](uri)](https://e.com/x)\n'],
-    ['[[a [a [b\\] c](/u)', '\\[\\[a \\[a [b\\] c](/u)\n'],
+    // C2-W-088: the closer reports the nearest opener; of the others only the first bracket of a run (carve#6681).
+    ['[[a [a [b\\] c](/u)', '\\[[a \\[a [b\\] c](/u)\n'],
     ['See [x [a\\]b](u) and *em* text.', 'See \\[x [a\\]b](u) and *em* text.\n'],
   ])('plans %j', (source, expected) => {
     const tree = parse(source)

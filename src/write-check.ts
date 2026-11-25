@@ -1503,15 +1503,15 @@ export function holdsCaretPair(node: Node): boolean {
 
 /**
  * Whether the construct `a` forms from a bracket whatever lies between it and its closer: an inline
- * link, image, span or inline footnote, and a full or collapsed reference, all of which a closer
- * takes from the nearest bare bracket before it, and a footnote reference, whose label any later
- * `[^` before the closer also gives (C2-I-076, C2-I-087).
+ * link, image, span or inline footnote, which a closer takes from the nearest bare bracket before it,
+ * and a footnote reference, whose label any later `[^` before the closer also gives (C2-I-076,
+ * C2-I-087). A reference does not: the escaped bracket changes its label, or the bracket of a full
+ * reference's label starts a run the round escapes (carve#6681).
  */
 function isChainOpener(a: Node): boolean {
   if (a.type === 'footnote_ref') return true
   if (a.type !== 'link' && a.type !== 'image' && a.type !== 'span' && a.type !== 'inline_footnote') return false
-  return !('key' in a && a.key !== undefined) ||
-    ('refForm' in a && (a.refForm === 'full' || a.refForm === 'collapsed' || a.refForm === 'shortcut'))
+  return !('key' in a && a.key !== undefined)
 }
 
 /** Whether the content of `node`, its text or the alternative text of an image, holds `]`, which may close a bracket of it. */
@@ -1536,6 +1536,8 @@ function escapeBrackets(c: Check, node: TextNode, at: number, a: Node): void {
   if (!value.includes(']', end)) return
   if (a.type === 'footnote_ref') return escapeLabels(c, node, at, end)
   // Only a bracket with the sigil of this one opens the same construct, and a bare `[^` opens no bracket pair (C2-I-087).
+  // A `]` of the content pairs with a bracket the round escapes, and the freed `]` takes the next bracket (carve#6681).
+  if (holdsCloser(a)) return
   const sigil = sigilOf(value, at)
   const opens = (k: number): boolean => sigilOf(value, k) === sigil && (sigil === '^' || value[k + 1] !== '^')
   for (let k = at - 1; k >= start; k--) {
@@ -1543,8 +1545,6 @@ function escapeBrackets(c: Check, node: TextNode, at: number, a: Node): void {
     if (!opens(k)) break
     escapeAt(c, node, k)
   }
-  // Behind it, a bracket that the content closes stops the run.
-  if (holdsCloser(a)) return
   for (let k = at + 1; k < end; k++) {
     if (value[k] !== '[') continue
     if (!opens(k)) return

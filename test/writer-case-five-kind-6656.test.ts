@@ -16,7 +16,8 @@ describe('C2-W-125: a case-five backslash does not cancel a reported kind (carve
     ['[m [x [a\\][r]](/u)](v)', '\\[m [x [a\\]\\[r\\]](/u)](v)\n'],
     // A text `^[` that no caret pair keeps bare (case eight) reports its kind too.
     ['^[n [a\\]b](/u)', '^\\[n [a\\]b](/u)\n'],
-    [':ext[[a\\]b](/u)', '\\:ext\\[[a\\]b](/u)\n'],
+    // The case backslash stands in the round that escapes `:`, so no round reports the text `[` (carve#6681).
+    [':ext[[a\\]b](/u)', '\\:ext[[a\\]b](/u)\n'],
   ])('formats %j as a fixed point with the kind escaped', (source, expected) => {
     expect(format(source)).toBe(expected)
     expect(format(expected)).toBe(expected)
