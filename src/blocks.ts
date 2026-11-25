@@ -570,7 +570,11 @@ function markerInterrupts(state: BlockState, matched: number, end: number): bool
   return opens && kind === DESCRIPTION && column < containers.column[matched]! && isIndentContainer(containers.kind[matched - 2]!)
 }
 
-/** A term is a leaf, but its following marker can interrupt an enclosing item. */
+/**
+ * C2-B-015: past the marker of the item, description or footnote body the leaf sits in, a nested list opens.
+ * C2-B-234, C2-B-070: a term is a label that owns no lines, so below one the marker is tested in the
+ * description list's container, as below a heading there.
+ */
 function nestedMarkerInterrupts(state: BlockState): boolean {
   const containers = state.containers
   const depth = containers.depth
@@ -579,7 +583,10 @@ function nestedMarkerInterrupts(state: BlockState): boolean {
   // Closing the description list frees its slot before the new list and item open.
   if (depth + 1 > MAX_DEPTH + 1) return false
   const column = state.cursor.column - state.cursor.origin
-  if (column >= containers.column[depth - 1]!) return false
+  const listColumn = containers.column[depth - 1]!
+  // C2-B-022: at the column of the description list a list marker is a lazy line.
+  if (column === listColumn) return false
+  if (column > listColumn) return isIndentContainer(containers.kind[depth - 2]!)
   // matchContainers has already established that every enclosing item or
   // description owns this line, including when a quote changes the origin.
   for (let at = depth - 2; at > 0; at--) {
