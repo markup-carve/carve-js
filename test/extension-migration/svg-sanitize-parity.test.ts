@@ -206,6 +206,27 @@ describe('sanitizeSvg quoted local url() (carve#6763)', () => {
   })
 })
 
+describe('sanitizeSvg url() skips only CSS whitespace (carve#6773)', () => {
+  it('drops a reference with a no-break space before #', () => {
+    expect(sanitizeSvg('<svg><rect fill="url(\u00a0#g)"/><rect fill="url(\'\u00a0#g\')"/></svg>').svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect/><rect/></svg>')
+  })
+
+  const NON_CSS_SPACE = ['\u00a0', '\u1680', '\u2000', '\u2009', '\u200a', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000', '\ufeff']
+  const CSS_SPACE = [' ', '\t', '\n', '\r', '\f', '']
+  sweep('non-CSS whitespace around the url() quote', () => {
+    const before = pick(CSS_SPACE) + (rnd() < 0.5 ? pick(NON_CSS_SPACE) : '') + pick(CSS_SPACE)
+    const after = pick(CSS_SPACE) + (rnd() < 0.5 ? pick(NON_CSS_SPACE) : '') + pick(CSS_SPACE)
+    const quote = pick(['', "'", '"'])
+    const value = `${pick(['url', 'URL'])}(${before}${quote}${after}#g${quote})`
+    const attr = pick(['fill', 'stroke', 'mask', 'clip-path', 'class', 'values'])
+    return { src: `<svg><rect ${attr}=${quoted(value)}/></svg>`, opts: pick([{}, { allowStyle: true }]) }
+  }, (svg, src) => {
+    const kept = /<rect [^>]*=/.test(svg)
+    expect(kept, src.replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)).toBe(!NON_CSS_SPACE.some((space) => src.includes(space)))
+  })
+})
+
 const NON_XML_CHAR = /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/
 const isXmlChar = (cp: number): boolean =>
   cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff)
