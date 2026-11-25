@@ -551,9 +551,12 @@ function markerInterrupts(state: BlockState, matched: number, end: number): bool
   }
   const kind = containers.kind[matched]
   const column = cursor.column - cursor.origin
+  // C2-B-190, C2-B-228: the test runs before the containers that do not own the line close, so every open block
+  // counts. An item joins an open list; any other marker opens a list and its item.
+  if (depth + (kind === ITEM ? 1 : 2) > MAX_DEPTH + 1) return false
   if (kind === QUOTE) {
     // C2-B-021: without the mark of a quote that sits in an item, the marker closes the quote.
-    return opens && isIndentContainer(containers.kind[matched - 1]!) && matched + 2 <= MAX_DEPTH + 1
+    return opens && isIndentContainer(containers.kind[matched - 1]!)
   }
   if (kind === ITEM) {
     // The line is not indented past this item. C2-B-015: at its column the marker is a sibling.

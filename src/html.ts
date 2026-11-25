@@ -854,7 +854,21 @@ function noteCarriers(r: Render, note: Note): string {
 /** The body of a note. C2-H-090: that of an inline footnote is one paragraph. */
 function noteBlocks(note: Note): Block[] {
   if (note.definition !== null) return note.definition.children
-  return note.inline === null ? [] : [{ type: 'paragraph', children: [...note.inline.children] }]
+  if (note.inline === null || commentsAndBreaks(note.inline.children)) return []
+  return [{ type: 'paragraph', children: [...note.inline.children] }]
+}
+
+/**
+ * C2-H-019: an inline footnote body of comments and line breaks alone writes nothing; the breaks around its comment
+ * lines are those of the note's own markup lines.
+ */
+function commentsAndBreaks(nodes: readonly Node[]): boolean {
+  let comment = false
+  for (const child of nodes) {
+    if (child.type === 'comment') comment = true
+    else if (!isBreak(child)) return false
+  }
+  return comment
 }
 
 /** C2-H-091: a raw block of another format writes nothing (C2-H-054), so it is not the last block that renders. */
