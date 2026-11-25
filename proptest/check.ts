@@ -34,8 +34,9 @@ function timed<T>(work: () => T): { value: T, ms: number } {
   return { value: work(), ms: (cpuMicros() - start) / 1000 }
 }
 
+// Main thread only: background compiler and GC threads add bursts that do not follow the input size.
 function cpuMicros(): number {
-  const usage = process.cpuUsage()
+  const usage = process.threadCpuUsage?.() ?? process.cpuUsage()
   return usage.user + usage.system
 }
 

@@ -129,8 +129,10 @@ const OPERATIONS: Operation[] = [
   ['lint', (source) => lint(source)],
 ]
 
+// The process clock also counts V8's background compiler and GC threads, whose bursts do not follow the input size
+// (carve-js#5201: a linear render read 0.9, 1.8, 3.7, 27.0 ms); the engine itself runs on the main thread.
 function cpuMs(): number {
-  const usage = process.cpuUsage()
+  const usage = process.threadCpuUsage?.() ?? process.cpuUsage()
   return (usage.user + usage.system) / 1000
 }
 
