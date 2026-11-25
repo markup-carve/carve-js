@@ -1475,6 +1475,13 @@ function takeVerbatimReferences(w: Writer, run: WriterRun, group: readonly Node[
   const decided = planned && plannedVerbatim(w, group, first, references)
   if (planned) rewrite()
   if ((decided && !run.check) || readsBack(w, group, first)) return
+  // As with a loss above: where the tree spelling itself does not read back, no trial can check a verbatim text.
+  w.lines = tree
+  if (readsBack(w, group, first)) takeOneByOne(w, group, first, references, tree, rewrite)
+}
+
+function takeOneByOne(w: Writer, group: readonly Node[], first: boolean, references: readonly Node[],
+  tree: string[], rewrite: () => boolean): void {
   for (const node of references) w.treeReferences.add(node)
   let read = false
   for (const node of references.slice(0, MAX_VERBATIM_TRIALS)) {
