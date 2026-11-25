@@ -329,6 +329,7 @@ function escapeLeadingOpener(c: Check, texts: readonly TextNode[]): boolean {
 /** The line that starts at `nodes[from]` opened a block: escapes its opener (C2-W-090, C2-W-092). */
 function escapeLineStart(c: Check, nodes: readonly Node[], from: number, owner: Node): void {
   c.misaligned = true
+  if (escapeAttributeLinesAbove(c, nodes, from, owner)) return
   const first = nodes[from]
   if (escapeLeadingOpener(c, leadingTexts(nodes, from))) return
   for (let at = from + 1; at < nodes.length && !isBreak(nodes[at]); at++) {
@@ -338,6 +339,26 @@ function escapeLineStart(c: Check, nodes: readonly Node[], from: number, owner: 
   // The markup of the first node of the line reads as a block opener: its other spelling may not (C2-W-005).
   if (first !== undefined && hasOtherForm(c, first)) changeForm(c, first)
   else c.losses.push([first ?? owner, null])
+}
+
+/**
+ * C2-I-028: where every line of the block above `nodes[from]` is a whole attribute block, they read as attribute lines
+ * and the line at `from` starts a block of its own; the first brace takes the backslash (C2-W-125 case one).
+ */
+function escapeAttributeLinesAbove(c: Check, nodes: readonly Node[], from: number, owner: Node): boolean {
+  const first = nodes[0]
+  if (first?.type !== 'text' || from === 0 || !isBreak(nodes[from - 1]) || childNodes(owner)[0] !== first) return false
+  let line = ''
+  for (let at = 0; at < from; at++) {
+    const node = nodes[at]!
+    if (isBreak(node)) {
+      const text = line.replace(/[ \t]+$/u, '')
+      if (text[0] !== '{' || readAttributeBlock(text, 0, text.length, emptyMemo(), null) !== text.length) return false
+      line = ''
+    } else if (node.type === 'text') line += node.value
+    else return false
+  }
+  return escapeAt(c, first, 0)
 }
 
 function hasOtherForm(c: Check, node: Node): boolean {
