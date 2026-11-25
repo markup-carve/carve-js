@@ -10,6 +10,10 @@ import { STYLE_PATTERNS } from '../../src/render-tables.ts'
 // write the same bytes for each of them.
 interface Row { from: string, src: string, opts: SanitizeSvgOptions, svg: string, ok: boolean }
 const ROWS: Row[] = JSON.parse(readFileSync(new URL('../fixtures/svg-sanitize/parity.json', import.meta.url), 'utf8')) as Row[]
+// Rows whose bytes a js-first ruling changed before carve-php ports it; each names its ticket.
+interface Delta { index: number, tickets: string[], src: string, svg: string, ok: boolean }
+const DELTAS: Delta[] = JSON.parse(readFileSync(new URL('../fixtures/svg-sanitize/parity-js-first.json', import.meta.url), 'utf8')) as Delta[]
+const DELTA_AT = new Map(DELTAS.map((delta) => [delta.index, delta]))
 
 interface Node { nodeName: string, attrs?: { name: string, value: string }[], childNodes?: Node[], content?: Node }
 
@@ -79,12 +83,22 @@ function sweep(name: string, make: () => { src: string, opts: SanitizeSvgOptions
 
 describe('sanitizeSvg parity with carve-php', () => {
   it('writes the pinned bytes for every row', () => {
-    const differ = ROWS.filter((row) => {
+    const differ = ROWS.filter((row, index) => {
+      const want = DELTA_AT.get(index) ?? row
       const got = sanitizeSvg(row.src, row.opts)
-      return got.svg !== row.svg || got.ok !== row.ok
+      return got.svg !== want.svg || got.ok !== want.ok
     }).map((row) => row.src)
     expect(differ).toEqual([])
     expect(ROWS.length).toBe(770)
+  })
+
+  it('records only real deltas, each with its ticket', () => {
+    for (const delta of DELTAS) {
+      const row = ROWS[delta.index]!
+      expect(delta.src).toBe(row.src)
+      expect(delta.svg === row.svg && delta.ok === row.ok, row.src).toBe(false)
+      expect(delta.tickets.every((ticket) => ['carve#6763', 'carve#6764', 'carve#6765'].includes(ticket))).toBe(true)
+    }
   })
 
   it('keeps every accepted row inert in an HTML parser', () => {
@@ -169,4 +183,25 @@ describe('sanitizeSvg href animation (carve#6761)', () => {
     const values = Array.from({ length: 1 + Math.floor(rnd() * 3) }, () => pick(ENTRIES)).join(';')
     return { src: `<svg><use href="#x"><${tag} attributeName=${quoted(pick(NAMES))} ${pick([...ANIMATION_VALUES])}=${quoted(values)}/></use></svg>`, opts }
   }, () => undefined)
+})
+
+describe('sanitizeSvg quoted local url() (carve#6763)', () => {
+  it('keeps quoted and spaced local references', () => {
+    expect(sanitizeSvg(`<svg><rect fill="url('#g')"/><rect fill='url("#g")'/><rect fill="url( #g)"/></svg>`).svg)
+      .toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect fill="url(\'#g\')"/><rect fill="url(&quot;#g&quot;)"/><rect fill="url( #g)"/></svg>')
+  })
+
+  const LOCAL = ['url(#g)', "url('#g')", 'url("#g")', 'url( #g)', "url( ' #g' )", 'URL(#g)', "url(\t'#g')", 'url(&quot;#g&quot;)']
+  const REMOTE = ["url('https://e.example/p#g')", 'url( "//e.example/x")', "url('x.svg#g')", "url(' x#g')", 'url( "")', "url('#g') url(x)",
+    "url('#g'),url('//e')", 'u\\72l("x#g")', "url(\"'#g')"]
+  sweep('quoted url() references', () => {
+    const remote = rnd() < 0.5
+    const value = remote ? pick(REMOTE) : pick(LOCAL)
+    const attr = pick(['fill', 'stroke', 'mask', 'clip-path', 'marker-end', 'class', 'id'])
+    return { src: `<svg><rect ${attr}=${quoted(value)}/></svg>`, opts: pick([{}, { allowStyle: true }]) }
+  }, (svg, src) => {
+    const kept = /<rect [^>]*=/.test(svg)
+    const remote = REMOTE.some((value) => src.includes(value.replace(/"/g, '&quot;')) || src.includes(value.replace(/'/g, '&apos;')) || src.includes(value))
+    expect(kept, src).toBe(!remote)
+  })
 })

@@ -169,8 +169,10 @@ export function styleIsDangerous(value: string): boolean {
 // A `url(...)` whose content does not begin with `#` is a NON-LOCAL reference.
 // Anchoring on the START of the url content (after optional quote/space) sidesteps
 // quoting and internal `)` — `url("https://a)b#x")` still matches because the char
-// right after `url("` is not `#`. Local `url(#id)` refs never match.
-const NONLOCAL_URL_RE = /url\(\s*['"]?\s*(?!#)/i
+// right after `url("` is not `#`. Local `url(#id)` refs never match. The lookahead
+// group reads the space and quote atomically: a backtracking `\s*['"]?` let `(?!#)`
+// pass one character early on `url('#g')` (carve#6763).
+const NONLOCAL_URL_RE = /url\((?=(\s*['"]?\s*))\1(?!#)/i
 // Any absolute-URL scheme (`https:`, `ms-msdt:`, …). Used to reject URLs inside
 // reference/animation values, which the plain scheme *denylist* would wave through
 // (e.g. an external `https:` retargeting an animated `href`).
