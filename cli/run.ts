@@ -571,7 +571,8 @@ function importFile(display: string, bytes: Uint8Array, args: ParsedArgs): FileR
   const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
   const file: FileResult = { status: 0, losses: { file: display, diagnostics: located(html, retained), suppressed } }
   const others = result.diagnostics.filter((entry) => entry.channel !== 'render-loss')
-  const failure = strict && losses.length > 0 ? 'render-loss' : writerHasLoss(result.diagnostics) ? 'writer-refused' : null
+  // An allowed code is no loss (C2-T-025), so only the writer entries left after --allow-loss refuse the file.
+  const failure = strict && losses.length > 0 ? 'render-loss' : writerHasLoss(losses) ? 'writer-refused' : null
   if (failure !== null) process.stderr.write(`carve[${failure}]: ${display}: the import lost content\n`)
   process.stderr.write(lines(display, html, [...others, ...retained]))
   if (failure !== null) return { ...file, status: 1 }
