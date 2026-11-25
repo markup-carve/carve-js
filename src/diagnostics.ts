@@ -77,13 +77,15 @@ function pushSlots(stack: Frame[], frame: Frame, declarations: readonly Extensio
   // C2-L-011: the last slot goes on the stack first, so the walk visits the nodes in document order.
   for (let at = count - 1; at >= 0; at--) {
     const nodes = slotLists[at]!
+    slotLists[at] = NO_NODES
     const step = slotNames[at]!
     if (slotSingle[at]) stack.push({ node: nodes[0]!, above: frame, step, file: frame.file, include, pointer: undefined })
     else pushList(stack, nodes, frame, step, step === 'children' ? file : frame.file, include)
   }
 }
 
-// The slots of the node `pushSlots` is at; reused, as the walk visits one node at a time.
+// The slots of the node `pushSlots` is at; reused, as the walk visits one node at a time, and emptied so no tree is kept.
+const NO_NODES: readonly Node[] = []
 const slotLists: (readonly Node[])[] = []
 const slotNames: string[] = []
 const slotSingle: boolean[] = []
