@@ -809,7 +809,11 @@ function newWalk(
 export function headingIdsAlone(document: DocumentNode, mode: HeadingIds): Map<Node, string> {
   const walk = newWalk(document, null, {})
   visit(walk, document, null)
-  generateIds(walk, mode, reserveIds(walk))
+  // No note is resolved here, so every footnote definition is read as unwritten and its ids are reserved (C2-H-024).
+  visitUnwritten(walk, document.children, walk.scope)
+  const taken = reserveIds(walk)
+  for (const id of walk.unwrittenIds) taken.add(id)
+  generateIds(walk, mode, taken)
   const ids = new Map<Node, string>()
   for (const heading of walk.headings) {
     const id = headingId(heading)
