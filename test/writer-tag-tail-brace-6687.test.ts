@@ -25,6 +25,7 @@ describe('C2-W-125: a brace around a tag tail stays bare beside another node (ca
     ['x{#a\\-w} *s*', 'x{#a\\-w} *s*\n'],
     ['x{#a\\--w}', 'x{#a\\--w}\n'],
     ['x {#a1\\-w}x /e/', 'x {#a1\\-w}x /e/\n'],
+    [`x{#${'a'.repeat(80)}\\-w} *s*`, `x{#${'a'.repeat(80)}\\-w} *s*\n`],
   ])('writes %j as %j', checkWrites)
 
   // A `\-` of a hyphen run is a kind of a later round, which keeps the brace backslash of the earlier one (C2-W-091).

@@ -1939,10 +1939,17 @@ function otherBackslashes(scan: PruneScan, source: string): number {
 function behindName(source: string, at: number): boolean {
   const next = source[at + 1]
   if (next !== '_' && next !== '.' && (next !== '-' || inHyphenRun(source, at))) return false
-  return NAME_BEFORE.test(source.slice(Math.max(0, at - 64), at))
+  let start = at
+  for (;;) {
+    const low = source.charCodeAt(start - 1)
+    const width = low >= 0xdc00 && low <= 0xdfff && start >= 2 ? 2 : 1
+    if (start - width < 0 || !NAME_CHARACTER.test(source.slice(start - width, start))) break
+    start -= width
+  }
+  return start < at && (source[start - 1] === '#' || source[start - 1] === '@')
 }
 
-const NAME_BEFORE = /[#@][\p{L}\p{N}]+$/u
+const NAME_CHARACTER = /^[\p{L}\p{N}]$/u
 // A longer brace keeps its backslash, so the scan of each candidate stays short.
 const LONGEST_TAG_BRACE = 256
 
