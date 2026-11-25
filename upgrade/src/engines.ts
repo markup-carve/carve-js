@@ -128,3 +128,13 @@ export function blocks02(src: string): [number, number][] {
   for (const child of tree.children) if (child.pos !== undefined) out.push([child.pos.startLine, child.pos.endLine])
   return out
 }
+
+/** The first and last source line of every top-level abbreviation definition the 0.2 engine reads in `src`. */
+export function abbreviationDefs02(src: string): [number, number][] {
+  const tree = parse02(src, { positions: true }) as { children: { type: string; pos?: { startLine: number; endLine: number } }[] }
+  const out: [number, number][] = []
+  for (const child of tree.children) {
+    if (child.type === 'abbreviation_def' && child.pos !== undefined) out.push([child.pos.startLine, child.pos.endLine])
+  }
+  return out
+}

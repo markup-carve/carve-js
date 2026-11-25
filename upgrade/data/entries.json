@@ -2184,6 +2184,14 @@
       "lint": [
         "continuation-reading-changed"
       ]
+    },
+    {
+      "id": "U-443",
+      "name": "line 0.1 read below an abbreviation definition",
+      "class": "rewrite",
+      "lint": [
+        "continuation-reading-changed"
+      ]
     }
   ],
   "extensions": [
