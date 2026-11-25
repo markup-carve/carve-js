@@ -8,7 +8,10 @@ import {
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
-import { addFinding, type Diagnostic, type FindingOrder, inDocumentOrder, locateFindings } from './diagnostics.ts'
+import {
+  addFinding, type Diagnostic, type FindingOrder, type FindingPlace, inDocumentOrder, inPlacedOrder, locateFindings, type Place,
+  placeAt, placeFindings, placeOf, walkPlaces,
+} from './diagnostics.ts'
 import { holdsLineFeedValue, isKey, withSpelledValues } from './write-attributes.ts'
 import {
   blankLinesBetween, commentLinesEnd, followingAttributes, followsContainerDirectly, joinsIndentedRun, topPredecessors, writeBlocks,
@@ -2624,15 +2627,18 @@ function attributeValueLosses(document: DocumentNode, w: Writer): void {
     // A lost node has its one report (`lose`); an extension written as its fallback writes none of its other slots.
     const lost = w.lost.has(node)
     const fallbackOnly = lost && (node.type === 'block_extension' || node.type === 'inline_extension')
-    const lostKeys = w.lostKeys.get(node)
-    node.attrs?.keyValues?.forEach(([key, value], index) => {
-      if (lost || !value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) return
-      const entry: Diagnostic = { code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
-        message: `Carve source cannot spell the line feed in the value of the key ${key} of a ${node.type} node` }
-      addFinding(w.losses, node, entry)
-      w.losses.steps ??= new Map()
-      w.losses.steps.set(entry, `/attrs/keyValues/${index}/1`)
-    })
+    const keyValues = lost ? undefined : node.attrs?.keyValues
+    if (keyValues !== undefined) {
+      const lostKeys = w.lostKeys.get(node)
+      for (let index = 0; index < keyValues.length; index++) {
+        const [key, value] = keyValues[index]!
+        if (!value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) continue
+        const entry = lineFeedLoss(key, node)
+        addFinding(w.losses, node, entry)
+        w.losses.steps ??= new Map()
+        w.losses.steps.set(entry, keyValueStep(index))
+      }
+    }
     if (node.type === 'include') continue
     forEachSlot(node, (children, step) => {
       if (step.startsWith('metadata/') || (fallbackOnly && step !== 'fallback')) return
@@ -2641,16 +2647,96 @@ function attributeValueLosses(document: DocumentNode, w: Writer): void {
   }
 }
 
+function lineFeedLoss(key: string, node: Node): Diagnostic {
+  return { code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
+    message: `Carve source cannot spell the line feed in the value of the key ${key} of a ${node.type} node` }
+}
+
+const KEY_VALUE_STEPS: string[] = []
+
+function keyValueStep(index: number): string {
+  return KEY_VALUE_STEPS[index] ??= `/attrs/keyValues/${index}/1`
+}
+
+/** Whether `attributeValueLosses` walks the slot `step` of `parent`, a node it walks. */
+function keepsLineFeedLosses(w: Writer, parent: Node, step: string): boolean {
+  if (parent.type === 'include' || step.startsWith('metadata/')) return false
+  const fallbackOnly = (parent.type === 'block_extension' || parent.type === 'inline_extension') && w.lost.has(parent)
+  return !fallbackOnly || step === 'fallback' || step.startsWith('fallback/')
+}
+
+/** Whether the losses ask `locatedLosses` for the line-feed candidates of the tree. */
+function asksCandidates(w: Writer): boolean {
+  return w.losses.entries.some((entry, at) => entry.code === 'structure-unspellable' ||
+    (entry.code === 'field-unspellable' && w.losses.nodes[at]?.type === 'comment'))
+}
+
+/**
+ * `attributeValueLosses`, then `locatedLosses` and `inDocumentOrder`, in one walk of the tree that places each line-feed
+ * loss where it meets its node, so no loss is looked up by its node or entry. Null where the walk could place an entry
+ * elsewhere: the losses ask for the line-feed candidates, a line-feed loss is about a comment, or a node with a loss or
+ * a line feed in a value stands in the tree twice.
+ */
+function placedLineFeedLosses(document: DocumentNode, w: Writer): Diagnostic[] | null {
+  if (asksCandidates(w)) return null
+  const findings = w.losses
+  const wanted = new Set<Node>()
+  for (const node of findings.nodes) if (node !== null) wanted.add(node)
+  const found = new Map<Node, Place>()
+  const added: Diagnostic[] = []
+  const addedPlaces: FindingPlace[] = []
+  const met = new Set<Node>()
+  let refused = false
+  walkPlaces(document, (frame, ordinal) => {
+    if (refused) return
+    const node = frame.node
+    if (wanted.size > 0 && wanted.has(node)) {
+      if (found.has(node)) refused = true
+      else found.set(node, placeOf(frame, ordinal))
+    }
+    const above = frame.above
+    frame.mark = above === null || (above.mark && keepsLineFeedLosses(w, above.node, frame.step))
+    const keyValues = node.attrs?.keyValues
+    if (keyValues === undefined || !keyValues.some(([, value]) => value.includes('\n'))) return
+    const before = met.size
+    if (met.add(node).size === before) refused = true
+    if (refused || !frame.mark || w.lost.has(node)) return
+    const lostKeys = w.lostKeys.get(node)
+    let place: Place | undefined
+    for (let index = 0; index < keyValues.length; index++) {
+      const [key, value] = keyValues[index]!
+      if (!value.includes('\n') || !isKey(key) || lostKeys?.includes(key) === true) continue
+      if (node.type === 'comment') refused = true
+      place ??= placeOf(frame, ordinal)
+      const entry = lineFeedLoss(key, node)
+      added.push(entry)
+      addedPlaces.push(placeAt(entry, node, place, keyValueStep(index)))
+    }
+  })
+  if (refused) return null
+  const places: (FindingPlace | undefined)[] = []
+  const entries = placeFindings(findings, found, (_, place) => { places.push(place) })
+  for (let at = 0; at < added.length; at++) {
+    entries.push(added[at]!)
+    places.push(addedPlaces[at])
+  }
+  rootMetadataLosses(document, entries)
+  return inPlacedOrder(document, entries, places)
+}
+
 /** Locate writer losses, moving a line-feed mismatch from a wrapper to its written leaf. */
 function writerDiagnostics(document: DocumentNode, w: Writer): Diagnostic[] {
-  if (w.lineFeedValues) attributeValueLosses(document, w)
+  if (w.lineFeedValues) {
+    const placed = placedLineFeedLosses(document, w)
+    if (placed !== null) return placed
+    attributeValueLosses(document, w)
+  }
   const order: FindingOrder = new Map()
   return inDocumentOrder(document, locatedLosses(document, w, order), order)
 }
 
 function locatedLosses(document: DocumentNode, w: Writer, order: FindingOrder): Diagnostic[] {
-  if (!w.losses.entries.some((entry, at) => entry.code === 'structure-unspellable' ||
-    (entry.code === 'field-unspellable' && w.losses.nodes[at]?.type === 'comment'))) {
+  if (!asksCandidates(w)) {
     const diagnostics = locateFindings(document, w.losses, order)
     rootMetadataLosses(document, diagnostics)
     return diagnostics

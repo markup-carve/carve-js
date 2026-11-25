@@ -34,7 +34,7 @@ export function addFinding(findings: Findings, node: Node | null, entry: Diagnos
 /** The node each located entry is about, its pointer, and its place in document order (C2-L-011). */
 export type FindingOrder = Map<Diagnostic, FindingPlace>
 
-interface FindingPlace {
+export interface FindingPlace {
   node: Node | null
   pointer: string
   ordinal: number
@@ -44,7 +44,7 @@ interface FindingPlace {
 }
 
 /** A node on the way down, with the step that leads to it from the node above. The pointer is spelled only for a node that is wanted. */
-interface Frame {
+export interface Frame {
   node: Node
   above: Frame | null
   step: string
@@ -53,13 +53,15 @@ interface Frame {
   /** The nearest frame above of an expanded include with a position, which `includedBy` names. */
   include: Frame | null
   pointer: string | undefined
+  /** Free for the visitor of `walkPlaces`, which sets it before it meets the nodes below. */
+  mark: boolean
 }
 
 function pushList(stack: Frame[], list: readonly Node[] | undefined, above: Frame, slot: string, file: string | undefined,
   include: Frame | null): void {
   if (list === undefined) return
   for (let at = list.length - 1; at >= 0; at--) {
-    stack.push({ node: list[at]!, above, step: `${slot}/${at}`, file, include, pointer: undefined })
+    stack.push({ node: list[at]!, above, step: `${slot}/${at}`, file, include, pointer: undefined, mark: false })
   }
 }
 
@@ -79,7 +81,7 @@ function pushSlots(stack: Frame[], frame: Frame, declarations: readonly Extensio
     const nodes = slotLists[at]!
     slotLists[at] = NO_NODES
     const step = slotNames[at]!
-    if (slotSingle[at]) stack.push({ node: nodes[0]!, above: frame, step, file: frame.file, include, pointer: undefined })
+    if (slotSingle[at]) stack.push({ node: nodes[0]!, above: frame, step, file: frame.file, include, pointer: undefined, mark: false })
     else pushList(stack, nodes, frame, step, step === 'children' ? file : frame.file, include)
   }
 }
@@ -107,7 +109,7 @@ function pointerOf(frame: Frame): string {
   return pointer
 }
 
-interface Place {
+export interface Place {
   pointer: string
   /** C2-L-011: the place of the node in document order. */
   ordinal: number
@@ -115,9 +117,13 @@ interface Place {
   includedBy: NonNullable<Diagnostic['includedBy']>
 }
 
+const NOT_INCLUDED: NonNullable<Diagnostic['includedBy']> = []
+
 function inclusionOf(frame: Frame): NonNullable<Diagnostic['includedBy']> {
+  // Read only for its length when empty (placeEntry), so the nodes outside an include share one list.
+  if (frame.include === null) return NOT_INCLUDED
   const chain: NonNullable<Diagnostic['includedBy']> = []
-  for (let at = frame.include; at !== null; at = at.include) {
+  for (let at: Frame | null = frame.include; at !== null; at = at.include) {
     const pos = at.node.pos!
     chain.push({ ...(at.file === undefined ? {} : { file: at.file }),
       range: { startOffset: pos.startOffset, endOffset: pos.endOffset } })
@@ -125,19 +131,41 @@ function inclusionOf(frame: Frame): NonNullable<Diagnostic['includedBy']> {
   return chain.reverse()
 }
 
+/** The place of the node of `frame`, the `ordinal`th of the walk. */
+export function placeOf(frame: Frame, ordinal: number): Place {
+  return { pointer: pointerOf(frame), ordinal, file: frame.file, includedBy: inclusionOf(frame) }
+}
+
+function rootFrame(document: DocumentNode): Frame {
+  return { node: document, above: null, step: '', file: undefined, include: null, pointer: undefined, mark: false }
+}
+
 /** The pointer and the file of each node of `wanted` that stands in the tree below `document`. */
 function pointers(document: DocumentNode, wanted: Set<Node>): Map<Node, Place> {
   const found = new Map<Node, Place>()
-  const stack: Frame[] = [{ node: document, above: null, step: '', file: undefined, include: null, pointer: undefined }]
+  const stack: Frame[] = [rootFrame(document)]
   let ordinal = 0
   while (stack.length > 0 && found.size < wanted.size) {
     const frame = stack.pop()!
-    if (wanted.has(frame.node)) found.set(frame.node, { pointer: pointerOf(frame), ordinal, file: frame.file,
-      includedBy: inclusionOf(frame) })
+    if (wanted.has(frame.node)) found.set(frame.node, placeOf(frame, ordinal))
     ordinal++
     pushSlots(stack, frame, document.extensions ?? [])
   }
   return found
+}
+
+/**
+ * Visits every node below `document` in the order in which `locateFindings` walks them, each with its ordinal: the
+ * frame of a node is visited before the frames of the nodes below it.
+ */
+export function walkPlaces(document: DocumentNode, visit: (frame: Frame, ordinal: number) => void): void {
+  const declarations = document.extensions ?? []
+  const stack: Frame[] = [rootFrame(document)]
+  for (let ordinal = 0; stack.length > 0; ordinal++) {
+    const frame = stack.pop()!
+    visit(frame, ordinal)
+    pushSlots(stack, frame, declarations)
+  }
 }
 
 /**
@@ -150,17 +178,29 @@ export function locateFindings(document: DocumentNode, findings: Findings, order
   if (entries.length === 0) return entries
   const wanted = new Set<Node>()
   for (const node of nodes) if (node !== null) wanted.add(node)
-  const found = pointers(document, wanted)
+  return placeFindings(findings, pointers(document, wanted), order === undefined ? undefined : (entry, place) => {
+    order.set(entry, place)
+  })
+}
+
+/** `locateFindings` with the places of the nodes of `findings` found already. */
+export function placeFindings(findings: Findings, found: ReadonlyMap<Node, Place>,
+  record?: (entry: Diagnostic, place: FindingPlace) => void): Diagnostic[] {
+  const { entries, nodes } = findings
   entries.forEach((entry, at) => {
     const node = nodes[at] ?? null
     const place = node === null ? undefined : found.get(node)
-    const step = findings.steps?.get(entry) ?? ''
-    entry.path = (place?.pointer ?? '') + step
-    if (place !== undefined) placeEntry(entry, node!, place)
-    order?.set(entry, place === undefined ? { node: null, pointer: '', ordinal: 0, path: entry.path, step }
-      : { node, pointer: place.pointer, ordinal: place.ordinal, path: entry.path, step })
+    record?.(entry, placeAt(entry, node, place, findings.steps?.get(entry) ?? ''))
   })
   return entries
+}
+
+/** Gives `entry` the position of `node` at `place`, or of the document without one, and `step` below it. */
+export function placeAt(entry: Diagnostic, node: Node | null, place: Place | undefined, step: string): FindingPlace {
+  entry.path = (place?.pointer ?? '') + step
+  if (place === undefined) return { node: null, pointer: '', ordinal: 0, path: entry.path, step }
+  placeEntry(entry, node!, place)
+  return { node, pointer: place.pointer, ordinal: place.ordinal, path: entry.path, step }
 }
 
 function placeEntry(entry: Diagnostic, node: Node, place: Place): void {
@@ -217,11 +257,11 @@ function slotStep(node: Node, segments: readonly string[], at: number, declarati
  * The document-order keys of `entries` from the places their nodes were located at: twice the place, plus one
  * for a field of the node. Null when a path is not its node's pointer, or that pointer and a field of the node.
  */
-function placedKeys(document: DocumentNode, entries: readonly Diagnostic[], order: FindingOrder,
-  declarations: readonly ExtensionDeclaration[]): number[] | null {
+function placedKeys(document: DocumentNode, entries: readonly Diagnostic[],
+  places: readonly (FindingPlace | undefined)[], declarations: readonly ExtensionDeclaration[]): number[] | null {
   const keys: number[] = []
-  for (const entry of entries) {
-    const key = placedKey(document, entry, order.get(entry), declarations)
+  for (let at = 0; at < entries.length; at++) {
+    const key = placedKey(document, entries[at]!, places[at], declarations)
     if (key === null) return null
     keys.push(key)
   }
@@ -270,8 +310,15 @@ function compareKeys(a: readonly number[], b: readonly number[]): number {
  */
 export function inDocumentOrder(document: DocumentNode, entries: Diagnostic[], order?: FindingOrder): Diagnostic[] {
   if (entries.length < 2) return entries
+  return inPlacedOrder(document, entries, order === undefined ? undefined : entries.map((entry) => order.get(entry)))
+}
+
+/** `inDocumentOrder` with the place of each entry beside it, undefined for one that has none. */
+export function inPlacedOrder(document: DocumentNode, entries: Diagnostic[],
+  places?: readonly (FindingPlace | undefined)[]): Diagnostic[] {
+  if (entries.length < 2) return entries
   const declarations = document.extensions ?? []
-  const placed = order === undefined ? null : placedKeys(document, entries, order, declarations)
+  const placed = places === undefined ? null : placedKeys(document, entries, places, declarations)
   if (placed !== null) {
     const at = entries.map((_, index) => index)
     at.sort((a, b) => placed[a]! - placed[b]! || a - b)

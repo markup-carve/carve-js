@@ -1137,9 +1137,7 @@ function unformable(node: Node, flags: number): boolean {
 /** Text of a simple span forest, with its potential openers. */
 function forestText(node: TextNode, inside: boolean, escapes: Map<TextNode, number[]>): boolean {
   if (!inside || node.value !== '[ ') return false
-  const offsets: number[] = []
-  for (let at = node.value.indexOf('['); at >= 0; at = node.value.indexOf('[', at + 1)) offsets.push(at)
-  escapes.set(node, offsets)
+  escapes.set(node, [0])
   return true
 }
 
@@ -1162,8 +1160,12 @@ function forestKeyCanForm(key: string): boolean {
   return isKey(key) && key === key.toLowerCase() && !['id', 'class', 'lang', 'dir'].includes(key)
 }
 
+/**
+ * The block holds only keys, so it has a line break (C2-I-028) or a bracket the forest cannot write exactly where a
+ * value does.
+ */
 function forestValueCanForm(value: string): boolean {
-  return !value.includes('\0') && !/[\uD800-\uDFFF]/u.test(value)
+  return !/[\0\r[\]\uD800-\uDFFF]/u.test(value)
 }
 
 function forestSpanAttrsCanForm(node: Node): boolean {
@@ -1171,6 +1173,7 @@ function forestSpanAttrsCanForm(node: Node): boolean {
   const attrs = node.attrs
   const pairs = attrs?.keyValues
   if (attrs?.id !== undefined || attrs?.classes !== undefined || pairs === undefined || pairs.length === 0) return false
+  if (pairs.length === 1) return forestKeyCanForm(pairs[0]![0]) && forestValueCanForm(pairs[0]![1])
   const seen = new Set<string>()
   for (const [key, value] of pairs) {
     if (!forestKeyCanForm(key) || !forestValueCanForm(value) || seen.has(key)) return false
@@ -1181,7 +1184,7 @@ function forestSpanAttrsCanForm(node: Node): boolean {
 
 function forestNodeCanForm(node: Node, inside: boolean, escapes: Map<TextNode, number[]>): boolean {
   if (!forestFieldsCanForm(node)) return false
-  if (node.type === 'span') return !unformable(node, 0) && !/[\[\]]/u.test(braceBlock(node))
+  if (node.type === 'span') return true
   if (node.type === 'text') return forestText(node, inside, escapes)
   return forestWrapper(node, inside)
 }
