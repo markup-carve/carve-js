@@ -51,4 +51,11 @@ describe('carve#6716: a description mark indented past its term mark (U-180)', (
     expect(result.check).toBe('pass')
     expect(entries(':: a\n : b\n>   :: c\n    %% note\n    more\n')).toContain('U-180')
   })
+
+  it('moves a description mark indented with a tab', () => {
+    const input = ':: a\n\t: b\n>   :: c\n    %% note\n    more\n'
+    const result = upgrade(input)
+    expect(result.output).toBe(':: a\n: b\n\n>   :: c\n    %% note\n    more\n')
+    expect(result.check).toBe('pass')
+  })
 })

@@ -79,7 +79,7 @@ function descriptionMarks(ctx: Context, list: Node01): void {
     for (const line of (item.definitionLines ?? []) as number[]) {
       const text = lineText(ctx.lines, line)
       if (!text.startsWith(termLead)) continue
-      const mark = /^ +:(?=[ \t]|$)/u.exec(text.slice(term))
+      const mark = /^[ \t]+:(?=[ \t]|$)/u.exec(text.slice(term))
       if (mark === null) continue
       const start = lineStart(ctx.lines, line) + term
       change(ctx, 'U-180', start, start + mark[0].length - 1, '',
