@@ -1,5 +1,7 @@
 // What the corpus runner holds: the example and clause case fields whose stated result departs from its clause, and the
-// field each refused tree is refused at.
+// field each refused tree is refused at. Every other gate a pin move can turn red has its own hold list here, judged by
+// scripts/holds.ts.
+import type { Holds } from './holds.ts'
 
 // Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
 const TABLE_HEAD = 'carve#6663 a head of data cells (C2-M-037, C2-B-186; spec carve#6816)'
@@ -182,10 +184,19 @@ export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
   ['snippet-use-mode-mismatch', '/children/0/children/0'],
 ])
 
-/** The rows of the pinned lint catalog this engine does not implement yet, each with its ticket; one it implements is a stale hold. */
-export const HELD_RULES: ReadonlyMap<string, string> = new Map([
+/**
+ * The rows of the pinned lint catalog this engine does not register or does not pass the catalog check of yet, each with
+ * its ticket; one that passes is a stale hold.
+ */
+export const HELD_RULES: Holds = new Map([
   ['snippet-definition-id', SNIPPETS], ['unused-snippet', SNIPPETS],
 ])
 
 /** The supplied trees of trees/nodes.json the reader still refuses, each with its ticket; one that is accepted is a stale hold. */
-export const HELD_SUPPLIED: ReadonlyMap<string, string> = new Map([['snippets', SNIPPETS]])
+export const HELD_SUPPLIED: Holds = new Map([['snippets', SNIPPETS]])
+
+/** The refused trees the reader does not refuse at their `REFUSED_AT` field yet, each with its ticket. */
+export const HELD_REFUSED: Holds = new Map()
+
+/** The example inputs the planned writer (C2-W-010, C2-W-089 in test/writer-plan.test.ts) does not pass yet, each with its ticket. */
+export const WRITER_PLAN_HELD: Holds = new Map()
