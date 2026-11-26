@@ -10,7 +10,6 @@ const UNSCOPED_TH = 'carve#6623 an unscoped th of a leading th row (C2-M-037; sp
 const COL_WIDTH = 'carve-js#5574 the width a col style gives (C2-M-041; spec carve#6816)'
 const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute beside the key (C2-M-047; spec carve#6814)'
 const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
-const LINE_OPTIONS = 'carve#6791 the line options of a captioned code block stay on its pre (C2-H-211; spec carve#6803)'
 const METADATA_FIELDS = 'carve#3598 root metadata fields beside a frontmatter node (C2-A-193, C2-W-011; spec carve#6815)'
 const REGION_MARKER = 'carve#6727 a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815)'
 const DJOT_GATE = 'carve#6499 the djot- rules default to off (C2-T-031, C2-T-049; spec carve#6824)'
@@ -57,9 +56,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2234', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
   ['CC-2235', { fields: ['diagnostics:import-element-dropped', 'diagnosticsComplete'], fix: NOTE_COMMENTS }],
   ['CC-2236', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
-  ['CC-2218', { fields: ['html'], fix: LINE_OPTIONS }],
-  ['CC-2227', { fields: ['html'], fix: LINE_OPTIONS }],
-  ['CC-2228', { fields: ['html'], fix: LINE_OPTIONS }],
   ['CC-501', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: METADATA_FIELDS }],
   ['CC-2265', { fields: ['carve'], fix: REGION_MARKER }],
   ['CC-2266', { fields: ['carve'], fix: REGION_MARKER }],

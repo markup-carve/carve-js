@@ -1,7 +1,7 @@
 // The block elements of spec/0.2/html.md, the sections of C2-H-026 and the footnote section.
 import { SNIPPET_BUDGETS } from './snippet-marks.ts'
 import {
-  type AdmonitionNode, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
+  type AdmonitionNode, type Attrs, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
   type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
   cloneTree, forEachSlot, isBreak,
   type FigureGroupNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
@@ -41,6 +41,8 @@ const ALPHA_STYLES = ['a', 'A', 'i', 'I']
 const NO_CLASSES: readonly string[] = []
 const GROUP_CLASSES: readonly string[] = ['carve-figure-group']
 const PANEL_CLASSES: readonly string[] = ['carve-figure-panel']
+const LINE_NUMBERS = 'line-numbers'
+const LINE_KEYS: ReadonlySet<string> = new Set(['data-line-start', 'data-highlight'])
 
 const CACHED_LEVELS = 64
 // C2-H-005: a line break and two spaces per level, for the levels a document usually has.
@@ -429,18 +431,49 @@ function isCaptionedBlock(node: Node): node is CaptionedBlock {
  * line of its own markup.
  */
 function captioned(r: Render, node: CaptionedBlock, level: number, base: readonly string[]): void {
-  line(r, level, `<figure${tag(r, node, { base })}>`)
+  const [outer, kept] = node.type === 'code_block' ? splitLineOptions(node.attrs) : [node.attrs, undefined]
+  const figure = outer === node.attrs ? node : withAttrs(node, outer)
+  line(r, level, `<figure${tag(r, figure, { base, origin: node })}>`)
   const inner: ParagraphNode | CodeBlockNode | BlockQuoteNode = { ...node }
   delete inner.caption
   delete inner.attrs
   delete inner.lang
   delete inner.dir
+  if (kept !== undefined) inner.attrs = kept
   const pos = node.pos
   const markup = r.resolution.markupLines.get(node)
   if (pos !== undefined && markup !== undefined) inner.pos = { ...pos, startLine: markup }
   writeBlock(r, inner.type, inner, level + 1)
   captionLine(r, node.caption, 'figcaption', level + 1)
   line(r, level, '</figure>')
+}
+
+/** C2-H-063: the line options of a captioned code block (C2-H-211) stay on its `<pre>`; the rest go on the figure. */
+function splitLineOptions(attrs: Attrs | undefined): [Attrs | undefined, Attrs | undefined] {
+  if (attrs === undefined) return [undefined, undefined]
+  const classes = attrs.classes ?? []
+  const keyValues = attrs.keyValues ?? []
+  // C2-H-013: attribute names compare without regard to ASCII letter case.
+  const isLineKey = ([key]: readonly [string, string]): boolean => LINE_KEYS.has(key.replace(/[A-Z]/g, (c) => c.toLowerCase()))
+  if (!classes.includes(LINE_NUMBERS) && !keyValues.some(isLineKey)) return [attrs, undefined]
+  const outer: Attrs = {}
+  const kept: Attrs = {}
+  if (attrs.id !== undefined) outer.id = attrs.id
+  const outerClasses = classes.filter((name) => name !== LINE_NUMBERS)
+  if (outerClasses.length > 0) outer.classes = outerClasses
+  if (outerClasses.length < classes.length) kept.classes = [LINE_NUMBERS]
+  const outerKeys = keyValues.filter((pair) => !isLineKey(pair))
+  const keptKeys = keyValues.filter(isLineKey)
+  if (outerKeys.length > 0) outer.keyValues = outerKeys
+  if (keptKeys.length > 0) kept.keyValues = keptKeys
+  return [Object.keys(outer).length === 0 ? undefined : outer, kept]
+}
+
+function withAttrs<T extends Node>(node: T, attrs: Attrs | undefined): T {
+  const copy = { ...node }
+  if (attrs === undefined) delete copy.attrs
+  else copy.attrs = attrs
+  return copy
 }
 
 /**
