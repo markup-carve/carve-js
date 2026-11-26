@@ -172,24 +172,28 @@ function treated(node: Html.Element, context: HtmlContext): Inline[] | undefined
   // C2-M-014: a block element in inline content is a span of its inline content.
   if (kind === 'map' && !isBlockElement(node)) return undefined
   report(context, node, 'import-element-mapped', `HTML ${node.tagName} read as a span`)
-  return nonEmpty([{ type: 'span', children: inlineChildren(node, context), ...attrs(context, node) }], node, context)
+  return [{ type: 'span', children: inlineChildren(node, context), ...attrs(context, node) }]
 }
 
 function inlineElement(node: Html.Element, context: HtmlContext): Inline[] {
   const use = inlineSnippet(node, context)
   if (use !== undefined) return use
+  return nonEmpty(elementInline(node, context), node, context)
+}
+
+function elementInline(node: Html.Element, context: HtmlContext): Inline[] {
   const own = carveInline(node, context)
   if (own !== undefined) return own
   const kept = treated(node, context) ?? leafInline(node, context)
   if (kept !== undefined) return kept
   const children = inlineChildren(node, context)
   const formatted = formatInline(node, children, context)
-  if (formatted !== undefined) return nonEmpty(formatted, node, context)
+  if (formatted !== undefined) return formatted
   switch (node.tagName) {
-    case 'a': return nonEmpty(htmlLink(node, children, context), node, context)
+    case 'a': return htmlLink(node, children, context)
     case 'abbr': return htmlAbbreviation(node, children, context)
     case 'time': case 'kbd': return [semanticSpan(node, children, context)]
-    default: return nonEmpty([{ type: 'span', children, ...attrs(context, node) }], node, context)
+    default: return [{ type: 'span', children, ...attrs(context, node) }]
   }
 }
 
@@ -208,13 +212,21 @@ function leafInline(node: Html.Element, context: HtmlContext): Inline[] | undefi
 const NEEDS_CONTENT: ReadonlySet<string> = new Set(['emphasis', 'strong', 'strike', 'delete', 'insert', 'highlight', 'underline',
   'subscript', 'superscript', 'span', 'link'])
 
+/** The nodes whose content is their value, which Carve cannot spell empty (C2-W-077, C2-W-116). */
+const NEEDS_VALUE: ReadonlySet<string> = new Set(['code', 'math', 'raw_inline', 'critic_comment'])
+
+function isEmpty(item: Inline): boolean {
+  if (NEEDS_VALUE.has(item.type)) return 'value' in item && item.value === ''
+  return NEEDS_CONTENT.has(item.type) && 'children' in item && item.children.length === 0
+}
+
 /**
  * C2-M-069: an inline node that needs content and has none is dropped, except a span with attributes; a drop that loses
  * an attribute is reported.
  */
 function nonEmpty(nodes: Inline[], node: Html.Element, context: HtmlContext): Inline[] {
   return nodes.filter(item => {
-    if (!NEEDS_CONTENT.has(item.type) || !('children' in item) || item.children.length > 0) return true
+    if (!isEmpty(item)) return true
     const kept = 'attrs' in item && item.attrs !== undefined
     if (item.type === 'span' && (kept || item.lang !== undefined || item.dir !== undefined)) return true
     if (kept) report(context, node, 'import-structure-repaired', `Empty HTML ${node.tagName} with attributes dropped`)
