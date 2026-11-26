@@ -96,4 +96,30 @@ describe('line block whitespace', () => {
       .toBe('::: |\n\u00a0 x\n\u00a0\u00a0\tx\na \u00a0\u00a0b\na\t\u00a0\u00a0\u00a0b\n:::\n')
     expect(imported('&nbsp;x<br>\na&nbsp;&nbsp;b')).toBe('::: |\n x\na  b\n:::\n')
   })
+
+  it('carve#6786, C2-H-195 row 18: an empty line or one ending in a space or tab keeps its hard break (CC-2167 to 2171)', () => {
+    expect(imported('a <br>\nb')).toBe('::: |\na \\\nb\n:::\n')
+    expect(imported('a<br>\n<br>\nb')).toBe('::: |\na\n\\\nb\n:::\n')
+    expect(imported('a <code>x</code> <br>\nb')).toBe('::: |\na `x` \\\nb\n:::\n')
+    expect(imported('a&nbsp;&nbsp;&nbsp;<br>\nb')).toBe('::: |\na   \\\nb\n:::\n')
+    expect(imported('a<br>\nb')).toBe('::: |\na\nb\n:::\n')
+    expect(importDocument(lineBlock('a<br>\n<br>\nb'), { from: 'html' }).document.children[0]).toMatchObject({
+      children: [
+        { children: [{ type: 'text', value: 'a' }] }, { children: [{ type: 'hard_break' }] }, { children: [{ type: 'text', value: 'b' }] },
+      ],
+    })
+  })
+
+  it('carve#6785: a `<br>` with only whitespace after it is the hard break of the stanza\'s last line (CC-160)', () => {
+    const html = '<div class="line-block" data-carve-line-block>\n  <p>a<br>\n</p>\n  <p>b</p>\n</div>\n'
+    const result = importDocument(html, { from: 'html', rawHtml: true })
+    expect(result.source).toBe('::: |\na\\\n\nb\n:::\n')
+    expect(result.document.children[0]).toMatchObject({
+      children: [
+        { children: [{ type: 'text', value: 'a' }, { type: 'hard_break' }] },
+        { children: [] }, { children: [{ type: 'text', value: 'b' }] },
+      ],
+    })
+    expect(imported('a<br>\n')).toBe('::: |\na\\\n:::\n')
+  })
 })
