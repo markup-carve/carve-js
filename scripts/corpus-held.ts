@@ -12,10 +12,12 @@ const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute besid
 const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
 const METADATA_FIELDS = 'carve#3598 root metadata fields beside a frontmatter node (C2-A-193, C2-W-011; spec carve#6815)'
 const REGION_MARKER = 'carve#6727 a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815)'
-const DJOT_GATE = 'carve#6499 the djot- rules default to off (C2-T-031, C2-T-049; spec carve#6824)'
 const QUOTE_LOCALE = 'carve-rs#4838 a smart quotes locale outside its row falls back (C2-X-075; spec carve#6824)'
-const SNIPPET_SPAN = 'carve#6395 an ignored snippet carrier leaves a plain span (C2-H-185, C2-M-044; spec carve#6847)'
+const DJOT_STATUS = 'carve#6833 CC-1354 keeps the status 1 of the djot- gate that carve#6499 turned off (C2-T-049, C2-T-050)'
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
+const NOTE_CONDITIONALS = 'carve#6850 the Word conditional comments of a dropped note wrapper (C2-M-109; spec carve#6851)'
+const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under normalize too (C2-W-088, C2-W-127; spec carve#6849)'
+const EMPTY_LIST_ROW = 'carve#6853 a list-table row with no cell is dropped and the counts skip it (C2-M-112; spec carve#6855)'
 
 /**
  * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
@@ -60,11 +62,10 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2265', { fields: ['carve'], fix: REGION_MARKER }],
   ['CC-2266', { fields: ['carve'], fix: REGION_MARKER }],
   ['CC-2267', { fields: ['carve'], fix: REGION_MARKER }],
-  ['CC-1354', { fields: ['status'], fix: DJOT_GATE }],
+  ['CC-1354', { fields: ['status'], fix: DJOT_STATUS }],
   ['CC-2148', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2298', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2299', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
-  ['CC-2395', { fields: ['children'], fix: SNIPPET_SPAN }],
   ['CC-2398', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2399', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2402', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
@@ -74,6 +75,11 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2409', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2410', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2412', { fields: ['children'], fix: IMAGE_PARAGRAPH }],
+  ['CC-1425', { fields: ['diagnostics:import-element-dropped'], fix: NOTE_CONDITIONALS }],
+  ['CC-2428', { fields: ['carve', 'diagnosticsComplete'], fix: AUTHORED_FALLBACK }],
+  ['CC-2433', { fields: ['children', 'carve'], fix: EMPTY_LIST_ROW }],
+  ['CC-2434', { fields: ['children', 'carve'], fix: EMPTY_LIST_ROW }],
+  ['CC-2435', { fields: ['children', 'carve'], fix: EMPTY_LIST_ROW }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */

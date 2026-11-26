@@ -62489,8 +62489,11 @@
     }
    ],
    "carve": "{.MsoNormal}\nStatic typing[^1] matters.\n\n[^1]: {.MsoFootnoteText}\n  Static Object Orient Languages\n",
-   "notReported": [
+   "diagnostics": [
     "import-element-dropped",
+    "import-element-dropped"
+   ],
+   "notReported": [
     "import-attribute-dropped"
    ]
   },
@@ -92587,12 +92590,13 @@
     "C2-W-075",
     "C2-W-088"
    ],
-   "why": "C2-W-075: A reference whose key differs only in a temporary form read by C2-W-088 incurs no loss if, after that procedure including its fallback and this clause's verbatim restoration, the emitted whole output reads back as the tree.",
-   "summary": "collapsed references past the depth cap whose key the escape rounds cannot spell are no loss where the output with their verbatim text reads back",
+   "why": "C2-W-075: A key difference seen only in a temporary C2-W-088 form is not a loss by itself. C2-W-088: Replace its spelling with its authored source from the sidecar's `source` and byte range (C2-L-007, C2-L-012), keeping every earlier replacement, and take the first cumulative state whose emitted whole output reads back as the tree.",
+   "summary": "122 lines of collapsed references past the depth cap: no output of the rounds reads back, so the paragraph is written as authored and the output is the input",
    "kind": "format",
    "input": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
    "options": {},
    "expected": {
+    "carve": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
     "diagnostics": [],
     "diagnosticsComplete": true
    },
@@ -92604,7 +92608,7 @@
     "C2-W-075",
     "C2-W-088"
    ],
-   "why": "C2-W-075: A reference whose key differs only in a temporary form read by C2-W-088 incurs no loss if, after that procedure including its fallback and this clause's verbatim restoration, the emitted whole output reads back as the tree.",
+   "why": "C2-W-075: A key difference seen only in a temporary C2-W-088 form is not a loss by itself.",
    "summary": "121 lines of collapsed references past the depth cap: the rounds brace the emphasis on lines 115, 116 and 119, the references take their verbatim text, and the output reads back with no loss",
    "kind": "format",
    "input": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
@@ -94752,7 +94756,7 @@
    "C2-M-009"
   ],
   "why": "C2-H-185: A carrier whose value is malformed, which contradicts the HTML around it or which contradicts another carrier of its element is ignored.",
-  "summary": "import: an ordinal with a leading zero is ignored and the span reads as content",
+  "summary": "import: an ordinal with a leading zero is ignored and the element reads as a plain span",
   "kind": "import",
   "html": "<p><span data-carve-snippet=\"01:inline:$v\">X</span></p>",
   "options": {},
@@ -94762,8 +94766,13 @@
      "type": "paragraph",
      "children": [
       {
-       "type": "text",
-       "value": "X"
+       "type": "span",
+       "children": [
+        {
+         "type": "text",
+         "value": "X"
+        }
+       ]
       }
      ]
     }
@@ -95676,6 +95685,705 @@
    "html": "<table>\n  <tbody>\n    <tr><td>a</td></tr>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>"
   },
   "from": []
- }
+ },
+ {
+  "id": "CC-2426",
+  "clauses": [
+   "C2-W-088"
+  ],
+  "why": "C2-W-088: Replace its spelling with its authored source from the sidecar's `source` and byte range (C2-L-007, C2-L-012), keeping every earlier replacement, and take the first cumulative state whose emitted whole output reads back as the tree.",
+  "summary": "two paragraphs of 122 collapsed references each past the depth cap: the fallback keeps the first paragraph as authored while it takes the second, so the output is the input (carve#6846)",
+  "kind": "format",
+  "input": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+  "options": {},
+  "expected": {
+   "carve": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+   "diagnostics": [],
+   "diagnosticsComplete": true
+  },
+  "from": []
+ },
+ {
+  "id": "CC-2427",
+  "clauses": [
+   "C2-W-088",
+   "C2-W-035"
+  ],
+  "why": "C2-W-088: A block that reads back keeps its canonical spelling otherwise (C2-W-005, C2-W-035).",
+  "summary": "a heading written with `#` above the 122-line paragraph of CC-2323: the heading reads back, so only the paragraph is written as authored and the heading takes `=` (carve#6848)",
+  "kind": "format",
+  "input": "# h\n\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+  "options": {},
+  "expected": {
+   "carve": "= h\n\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+   "diagnostics": [],
+   "diagnosticsComplete": true
+  },
+  "from": []
+ },
+ {
+  "id": "CC-2428",
+  "clauses": [
+   "C2-W-088",
+   "C2-W-127"
+  ],
+  "why": "C2-W-088: The fallback applies under `normalize` too (C2-W-127). C2-W-127: so the authored-block fallback of C2-W-088 still reads the sidecar's `source` and byte ranges under it",
+  "summary": "the paragraph of CC-2323 under `normalize`: the fallback still writes it as authored, with no loss (carve#6848)",
+  "kind": "format",
+  "input": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+  "options": {
+   "normalize": true
+  },
+  "expected": {
+   "carve": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+   "diagnostics": [],
+   "diagnosticsComplete": true
+  },
+  "from": []
+ },
+ {
+  "id": "CC-2429",
+  "clauses": [
+   "C2-W-088"
+  ],
+  "why": "C2-W-088: The authored source is written with each CR directly before an LF dropped (C2-B-010, C2-W-016); a lone CR keeps its treatment under C2-W-016.",
+  "summary": "the paragraph of CC-2323 with CR LF line endings: the authored slice is written with LF only (carve#6848)",
+  "kind": "format",
+  "input": "[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n[a *[a][]*[x]: /u\r\n",
+  "options": {},
+  "expected": {
+   "carve": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+   "diagnostics": [],
+   "diagnosticsComplete": true
+  },
+  "from": []
+ },
+ {
+  "id": "CC-2430",
+  "clauses": [
+   "C2-W-088"
+  ],
+  "why": "C2-W-088: a space or tab at the end of a line that is no content is not written, and the output ends with one LF (C2-W-016).",
+  "summary": "the paragraph of CC-2323 with spaces and a tab at the end of two lines: the authored slice is written without them (carve#6848)",
+  "kind": "format",
+  "input": "[a *[a][]*[x]: /u  \n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u \t\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+  "options": {},
+  "expected": {
+   "carve": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+   "diagnostics": [],
+   "diagnosticsComplete": true
+  },
+  "from": []
+ },
+ {
+  "id": "CC-2431",
+  "clauses": [
+   "C2-W-088"
+  ],
+  "why": "C2-W-088: A hard break keeps the canonical spelling of C2-W-079.",
+  "summary": "the paragraph of CC-2323 with a hard break authored as a backslash and a space: the authored slice writes the backslash alone (carve#6848)",
+  "kind": "format",
+  "input": "[a *[a][]*[x]: /u\\ \n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+  "options": {},
+  "expected": {
+   "carve": "[a *[a][]*[x]: /u\\\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+   "diagnostics": [],
+   "diagnosticsComplete": true
+  },
+  "from": []
+ },
+ {
+  "id": "CC-2432",
+  "clauses": [
+   "C2-W-088"
+  ],
+  "why": "C2-W-088: a space or tab at the end of a line that is no content is not written, and the output ends with one LF (C2-W-016).",
+  "summary": "the paragraph of CC-2323 with no final line feed: the authored slice is written with one (carve#6848)",
+  "kind": "format",
+  "input": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u",
+  "options": {},
+  "expected": {
+   "carve": "[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n[a *[a][]*[x]: /u\n",
+   "diagnostics": [],
+   "diagnosticsComplete": true
+  },
+  "from": []
+ },
+  {
+   "id": "CC-2433",
+   "clauses": [
+    "C2-M-112"
+   ],
+   "why": "C2-M-112: A row that has no cell and no slot a row span covers gives no item: it is dropped and reported with `import-structure-repaired`, and the counts below are taken over the rows that give an item.",
+   "summary": "an empty row of the foot gives no item and footer-rows counts the rows that give one (carve#6853)",
+   "kind": "import",
+   "html": "<table><tbody><tr><td><ul><li>a</li></ul></td></tr><tr><td>b</td></tr></tbody><tfoot><tr></tr><tr><td>f</td></tr></tfoot></table>",
+   "options": {
+    "listTable": true
+   },
+   "expected": {
+    "children": [
+     {
+      "type": "div",
+      "children": [
+       {
+        "type": "list",
+        "marker": {
+         "kind": "bullet",
+         "char": "-"
+        },
+        "spacing": "tight",
+        "children": [
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "list",
+                "children": [
+                 {
+                  "type": "list_item",
+                  "children": [
+                   {
+                    "type": "paragraph",
+                    "children": [
+                     {
+                      "type": "text",
+                      "value": "a"
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ],
+                "marker": {
+                 "kind": "bullet",
+                 "char": "-"
+                },
+                "spacing": "tight"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "b"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "f"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "classes": [
+        "list-table"
+       ],
+       "keyValues": [
+        [
+         "footer-rows",
+         "1"
+        ]
+       ]
+      }
+     }
+    ],
+    "carve": "{footer-rows=1}\n::: list-table\n- - - a\n- - b\n- - f\n:::\n",
+    "diagnostics": [
+     "import-structure-repaired"
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-2434",
+   "clauses": [
+    "C2-M-112"
+   ],
+   "why": "C2-M-112: A row that has no cell and no slot a row span covers gives no item: it is dropped and reported with `import-structure-repaired`, and the counts below are taken over the rows that give an item.",
+   "summary": "an empty row of the head gives no item and header-rows counts the rows that give one (carve#6853)",
+   "kind": "import",
+   "html": "<table><thead><tr><th>h</th></tr><tr></tr></thead><tbody><tr><td><ul><li>a</li></ul></td></tr><tr><td>b</td></tr></tbody></table>",
+   "options": {
+    "listTable": true
+   },
+   "expected": {
+    "children": [
+     {
+      "type": "div",
+      "children": [
+       {
+        "type": "list",
+        "marker": {
+         "kind": "bullet",
+         "char": "-"
+        },
+        "spacing": "tight",
+        "children": [
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "h"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "list",
+                "children": [
+                 {
+                  "type": "list_item",
+                  "children": [
+                   {
+                    "type": "paragraph",
+                    "children": [
+                     {
+                      "type": "text",
+                      "value": "a"
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ],
+                "marker": {
+                 "kind": "bullet",
+                 "char": "-"
+                },
+                "spacing": "tight"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "b"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "classes": [
+        "list-table"
+       ],
+       "keyValues": [
+        [
+         "header-rows",
+         "1"
+        ]
+       ]
+      }
+     }
+    ],
+    "carve": "{header-rows=1}\n::: list-table\n- - h\n- - - a\n- - b\n:::\n",
+    "diagnostics": [
+     "import-structure-repaired"
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-2435",
+   "clauses": [
+    "C2-M-112"
+   ],
+   "why": "C2-M-112: A row that has no cell and no slot a row span covers gives no item: it is dropped and reported with `import-structure-repaired`, and the counts below are taken over the rows that give an item.",
+   "summary": "an empty row does not lower header-cols (carve#6853)",
+   "kind": "import",
+   "html": "<table><tr><th>R</th><td><ul><li>a</li></ul></td></tr><tr></tr><tr><th>S</th><td>b</td></tr></table>",
+   "options": {
+    "listTable": true
+   },
+   "expected": {
+    "children": [
+     {
+      "type": "div",
+      "children": [
+       {
+        "type": "list",
+        "marker": {
+         "kind": "bullet",
+         "char": "-"
+        },
+        "spacing": "tight",
+        "children": [
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "R"
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "list",
+                "children": [
+                 {
+                  "type": "list_item",
+                  "children": [
+                   {
+                    "type": "paragraph",
+                    "children": [
+                     {
+                      "type": "text",
+                      "value": "a"
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ],
+                "marker": {
+                 "kind": "bullet",
+                 "char": "-"
+                },
+                "spacing": "tight"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "S"
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "b"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "classes": [
+        "list-table"
+       ],
+       "keyValues": [
+        [
+         "header-cols",
+         "1"
+        ]
+       ]
+      }
+     }
+    ],
+    "carve": "{header-cols=1}\n::: list-table\n- - R\n  - - a\n- - S\n  - b\n:::\n",
+    "diagnostics": [
+     "import-structure-repaired"
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-2436",
+   "clauses": [
+    "C2-M-112",
+    "C2-W-145"
+   ],
+   "why": "C2-M-112: A row that has no cell and no slot a row span covers gives no item ... A slot that a span covers holds an item with the text `<` or `^`, placed as C2-W-145 places the marks",
+   "summary": "a row that a row span covers entirely is no empty row: it keeps its span mark item (carve#6853)",
+   "kind": "import",
+   "html": "<table><tr><td rowspan=\"2\"><ul><li>a</li></ul></td><td>b</td></tr><tr></tr></table>",
+   "options": {
+    "listTable": true
+   },
+   "expected": {
+    "children": [
+     {
+      "type": "div",
+      "children": [
+       {
+        "type": "list",
+        "marker": {
+         "kind": "bullet",
+         "char": "-"
+        },
+        "spacing": "tight",
+        "children": [
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "list",
+                "children": [
+                 {
+                  "type": "list_item",
+                  "children": [
+                   {
+                    "type": "paragraph",
+                    "children": [
+                     {
+                      "type": "text",
+                      "value": "a"
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ],
+                "marker": {
+                 "kind": "bullet",
+                 "char": "-"
+                },
+                "spacing": "tight"
+               }
+              ]
+             },
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "b"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "list",
+            "marker": {
+             "kind": "bullet",
+             "char": "-"
+            },
+            "spacing": "tight",
+            "children": [
+             {
+              "type": "list_item",
+              "children": [
+               {
+                "type": "paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "^"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "classes": [
+        "list-table"
+       ]
+      }
+     }
+    ],
+    "carve": "::: list-table\n- - - a\n  - b\n- - ^\n:::\n"
+   },
+   "from": []
+  }
  ]
 }
