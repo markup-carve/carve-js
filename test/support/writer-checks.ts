@@ -807,7 +807,8 @@ function canOpenDelimiter(text: string, at: number): boolean {
   const char = text[at]
   if (char !== '/' && char !== '*') return true
   if (text[at - 1] === char || text[at + 1] === char) return false
-  const before = text.codePointAt(at - 1) ?? 0
+  const low = text.charCodeAt(at - 1)
+  const before = (low >= 0xdc00 && low <= 0xdfff ? text.codePointAt(at - 2) : text.codePointAt(at - 1)) ?? 0
   const after = text[at + 1]
   return at === 0 || (!/[\p{L}\p{N}]/u.test(String.fromCodePoint(before)) && after !== undefined && !/\s/u.test(after))
 }
