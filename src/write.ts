@@ -1141,14 +1141,19 @@ function writerEqual(w: Writer, expected: Node, actual: Node): boolean {
   return cores !== undefined && treesEqual(cores, actual)
 }
 
+/** The source each round parsed (`compareGroup`), kept with its tree so a restored `w.parsed` keeps its own. */
+const roundSources = new WeakMap<DocumentNode, string>()
+
 /** C2-W-002: whether the written group reads back as its blocks. */
 function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
   if (group.length === 1 && w.extensions.length === 0 && w.abbreviations.size === 0) {
     const plain = plainParagraph(w.lines)
     if (plain !== null && writerEqual(w, group[0]!, plain)) return true
   }
-  // Equality disregards positions (C2-A-161), so the readback builds none.
-  const parsed = parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.linkKeys, false).children
+  const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
+  // Equality disregards positions (C2-A-161), so the readback builds none, and the last round's parse of the same source stands in.
+  const last = w.parsed
+  const parsed = (last !== null && roundSources.get(last) === source ? last : parseChunk(w, source, w.linkKeys, false)).children
   return parsed.length === group.length && parsed.every((node, at) => writerEqual(w, group[at]!, node))
 }
 
@@ -1463,35 +1468,136 @@ function takeVerbatimReferences(w: Writer, run: WriterRun, group: readonly Node[
   const tree = w.lines
   // A group with a loss does not read back, so no verbatim text can be checked there: its references stay from the tree.
   if (w.lost.size > 0 && groupNodes(group).some((node) => w.lost.has(node))) return
-  const rewrite = (): boolean => {
-    resetLines(w)
-    writeBlocks(w, group, '', 0, false)
-    // The same lines as the rounds wrote read back as they did.
-    return sameLines(w.lines, tree)
-  }
+  const trial = groupTrial(w, group, first, tree)
   w.treeReferences.clear()
-  if (rewrite()) return
+  if (trial.rewrite()) return
   // A group the plan decided from the tree is checked by its plan with the verbatim texts, and parsed where the run checks.
   const decided = planned && plannedVerbatim(w, group, first, references)
-  if (planned) rewrite()
-  if ((decided && !run.check) || readsBack(w, group, first)) return
+  if (planned) trial.rewrite()
+  if (decided && !run.check) return
+  const paragraphs = referenceParagraphs(w, group, references)
+  if (verbatimReads(w, paragraphs, trial)) return
   // As with a loss above: where the tree spelling itself does not read back, no trial can check a verbatim text.
   w.lines = tree
-  if (readsBack(w, group, first)) takeOneByOne(w, group, first, references, tree, rewrite)
+  if (!trial.reads()) return
+  for (const node of references) w.treeReferences.add(node)
+  if (paragraphs === null || !takeByParagraph(w, references, paragraphs, trial)) takeOneByOne(w, references, trial)
+  w.treeReferences.clear()
 }
 
-function takeOneByOne(w: Writer, group: readonly Node[], first: boolean, references: readonly Node[],
-  tree: string[], rewrite: () => boolean): void {
+/** The writes and read-backs of one group's reference trials. */
+interface GroupTrial {
+  tree: string[]
+  /** Writes the group, and whether that gives the lines of the rounds, which read back as they did. */
+  rewrite(): boolean
+  reads(): boolean
+}
+
+function groupTrial(w: Writer, group: readonly Node[], first: boolean, tree: string[]): GroupTrial {
+  return {
+    tree,
+    rewrite: () => {
+      resetLines(w)
+      writeBlocks(w, group, '', 0, false)
+      return sameLines(w.lines, tree)
+    },
+    reads: () => readsBack(w, group, first),
+  }
+}
+
+/** Whether the group reads back with every verbatim text; a paragraph that does not settles it without a group parse. */
+function verbatimReads(w: Writer, paragraphs: ReferenceParagraphs | null, trial: GroupTrial): boolean {
+  if (paragraphs === null) return trial.reads()
+  if (!paragraphsRead(w, paragraphs)) return false
+  trial.rewrite()
+  return trial.reads()
+}
+
+function takeOneByOne(w: Writer, references: readonly Node[], trial: GroupTrial): void {
   for (const node of references) w.treeReferences.add(node)
   let read = false
   for (const node of references.slice(0, MAX_VERBATIM_TRIALS)) {
     w.treeReferences.delete(node)
-    read = rewrite() || readsBack(w, group, first)
+    read = trial.rewrite() || trial.reads()
     if (!read) w.treeReferences.add(node)
   }
-  if (w.treeReferences.size === references.length) w.lines = tree
-  else if (!read) rewrite()
+  if (w.treeReferences.size === references.length) w.lines = trial.tree
+  else if (!read) trial.rewrite()
+}
+
+/** The paragraphs below a group that hold its references, with the lines each takes from the tree. */
+interface ReferenceParagraphs {
+  of: Map<Node, Node>
+  tree: Map<Node, string[]>
+}
+
+/**
+ * carve-js#5644: the trials of `takeOneByOne`, each read back on the paragraph that holds the reference rather than on
+ * the group. Inline parsing does not reach across paragraphs, so they take the same texts. The group is read back once
+ * with them; false, with every reference from the tree again, leaves the choice to the group trials.
+ */
+function takeByParagraph(w: Writer, references: readonly Node[], paragraphs: ReferenceParagraphs,
+  trial: GroupTrial): boolean {
+  let taken = 0
+  for (const node of references.slice(0, MAX_VERBATIM_TRIALS)) {
+    w.treeReferences.delete(node)
+    if (paragraphReads(w, paragraphs, paragraphs.of.get(node)!)) taken++
+    else w.treeReferences.add(node)
+  }
+  if (taken === 0) {
+    w.lines = trial.tree
+    return true
+  }
+  if (trial.rewrite() || trial.reads()) return true
+  for (const node of references) w.treeReferences.add(node)
+  return false
+}
+
+function writeParagraph(w: Writer, paragraph: Node): string[] {
+  const mark = markLosses(w)
+  resetLines(w)
+  writeBlocks(w, [paragraph], '', 0, false)
+  rollBackLosses(w, mark)
+  return w.lines
+}
+
+function paragraphReads(w: Writer, paragraphs: ReferenceParagraphs, paragraph: Node): boolean {
+  return sameLines(writeParagraph(w, paragraph), paragraphs.tree.get(paragraph)!) || readsBack(w, [paragraph], true)
+}
+
+function paragraphsRead(w: Writer, paragraphs: ReferenceParagraphs): boolean {
+  for (const paragraph of paragraphs.tree.keys()) if (!paragraphReads(w, paragraphs, paragraph)) return false
+  return true
+}
+
+/**
+ * The paragraph below the group that holds each reference. Null where one is outside a paragraph, or where the group
+ * is a single paragraph and so its own check.
+ */
+function referenceParagraphs(w: Writer, group: readonly Node[], references: readonly Node[]): ReferenceParagraphs | null {
+  if (group.length === 1 && group[0]!.type === 'paragraph') return null
+  const of = paragraphsOf(group, new Set(references))
+  if (of === null) return null
+  const tree = new Map<Node, string[]>()
+  for (const node of references) w.treeReferences.add(node)
+  for (const paragraph of of.values()) if (!tree.has(paragraph)) tree.set(paragraph, writeParagraph(w, paragraph))
   w.treeReferences.clear()
+  return { of, tree }
+}
+
+function paragraphsOf(group: readonly Node[], wanted: ReadonlySet<Node>): Map<Node, Node> | null {
+  const of = new Map<Node, Node>()
+  const pending: [Node, Node | null][] = group.map((node) => [node, null])
+  for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
+    const [node, above] = entry
+    const paragraph = node.type === 'paragraph' ? node : above
+    if (wanted.has(node)) {
+      if (paragraph === null) return null
+      of.set(node, paragraph)
+    }
+    for (const child of childNodes(node)) pending.push([child, paragraph])
+  }
+  return of.size === wanted.size ? of : null
 }
 
 /**
@@ -1915,6 +2021,7 @@ function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[],
   check.source = source
   const parsed = parseChunk(w, source)
   w.parsed = parsed
+  roundSources.set(parsed, source)
   if (escapeTableCloser(w, check, group, parsed)) return check
   compareBlocks(check, group, parsed.children, document)
   escapeOpeners(check, parsed, first ? 1 : 2)
