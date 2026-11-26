@@ -1097,7 +1097,8 @@ export function renderDocument(
     settings, resolution, taskLabels, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0, verse: false,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
-    document, source, snippets: false, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),
+    document, source, snippets: false, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(),
+    silenced: new Set(),
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }

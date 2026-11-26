@@ -559,7 +559,12 @@ function sourceLine(r: Render, node: Node | null, parts: TagParts): string | nul
 
 /** C2-H-018: a node whose element carries attributes, a language or a direction (C2-A-031). */
 export function carriesAttributes(r: Render, node: Node): boolean {
-  return node.attrs !== undefined || node.lang !== undefined || node.dir !== undefined || (r.snippets && SNIPPET_CARRIERS.has(node))
+  return node.attrs !== undefined || node.lang !== undefined || node.dir !== undefined || hasCarriers(r, node)
+}
+
+/** C2-H-215: whether `node` carries the carriers of an expanded snippet use. */
+function hasCarriers(r: Render, node: Node | null): boolean {
+  return r.snippets && node !== null && SNIPPET_CARRIERS.has(node)
 }
 
 /** The authored parts behind the id: the classes, the language and the keys. */
@@ -575,7 +580,7 @@ function addAuthored(r: Render, list: AttributeList, node: Node | null, parts: T
 
 /** True when an element writes its structural attributes and nothing else, which holds for most links and images. */
 function isStructuralOnly(r: Render, node: Node | null, parts: TagParts): boolean {
-  if (node !== null && r.snippets && SNIPPET_CARRIERS.has(node)) return false
+  if (hasCarriers(r, node)) return false
   if (node !== null && parts.bare !== true && carriesAttributes(r, node)) return false
   if (parts.id !== undefined && parts.id !== null) return false
   if (parts.base !== undefined || parts.last !== undefined || parts.generated !== undefined || parts.style !== undefined) return false
@@ -612,7 +617,11 @@ export function attributes(r: Render, node: Node | null, parts: TagParts): strin
   addAuthored(r, list, node, parts)
   for (const [name, value] of parts.generated ?? []) list.add(name, value)
   if (line !== null) list.text += ` data-source-line="${line}"`
-  return r.snippets ? list.text + snippetCarriers(node) : list.text
+  return list.text + renderCarriers(r, node)
+}
+
+function renderCarriers(r: Render, node: Node | null): string {
+  return r.snippets ? snippetCarriers(node) : ''
 }
 
 /** C2-H-215: the carriers of an expanded snippet use, or nothing. */
