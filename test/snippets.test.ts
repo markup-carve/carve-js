@@ -167,6 +167,24 @@ describe('named snippets', () => {
     expect(html).toContain('<span data-carve-snippet="1:inline:$l"><a href="/u">')
   })
 
+  it('C2-H-215: an autolink copy and a link whose use brings no note carry the carriers on their a', () => {
+    expect(render('{$v}: <https://example.com>\n\nA {{ $v }}\n', { roundtrip: true }))
+      .toContain('<p>A <a href="https://example.com" data-carve-autolink data-carve-snippet="1:inline:$v">https://example.com</a></p>')
+    expect(render('{$b}: text\n\n{$a}: [{{ $b }}](/url)\n\nA {{ $a }}\n', { roundtrip: true }))
+      .toContain('<p>A <a href="/url" data-carve-snippet="1:inline:$a"><span data-carve-snippet="2:inline:$b">text</span></a></p>')
+    expect(render('{$v}: <https://example.com>\n\n[A {{ $v }}](/x)\n', { roundtrip: true }))
+      .toContain('<a href="/x">A <span data-carve-snippet="1:inline:$v">https://example.com</span></a>')
+  })
+
+  it('C2-H-215: the carriers survive the attribute copy of a link with rel or a definition with attributes', () => {
+    expect(render('{$v}: [t](/u){rel=nofollow}\n\nA {{ $v }}\n', { roundtrip: true }))
+      .toContain('<a href="/u" rel="nofollow" data-carve-snippet="1:inline:$v">t</a>')
+    expect(render('{$v}: [t][r]\n\n[r]: /u {.c}\n\nA {{ $v }}\n', { roundtrip: true }))
+      .toContain('<a href="/u" data-carve-ref="r" class="c" data-carve-snippet="1:inline:$v">t</a>')
+    expect(render('{$v}: [x]{abbr="why"}\n\nA {{ $v }}\n', { roundtrip: true }))
+      .toContain('<abbr title="why" data-carve-snippet="1:inline:$v">x</abbr>')
+  })
+
   it('C2-N-090, C2-N-096: across files the losing definition reports duplicate-snippet and no unused hint', () => {
     const files: Record<string, string> = { 'c.crv': '{$x}: B\n' }
     const resolver = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }

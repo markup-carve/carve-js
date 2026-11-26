@@ -67,20 +67,30 @@ const NODE_COST = 32
 /** The inline nodes that render as exactly one element whose attributes the renderer writes. */
 const ONE_ELEMENT: ReadonlySet<string> = new Set([
   'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete', 'span', 'code',
+  'autolink',
 ])
 const DROPPED = new Set(['pos', 'segments'])
 
 /**
  * Whether `node` renders as one element that can take the carriers: a link only where no note mark moves out behind
- * it. A link that renders no `<a>` gets the carrier span from the renderer.
+ * it, a use inside it read through its definition. A link that renders no `<a>` gets the carrier span from the renderer.
  */
-function rendersAsOne(node: Node, extensions: DocumentNode['extensions']): boolean {
+function rendersAsOne(node: Node, registry: Map<string, SnippetEntry>, extensions: DocumentNode['extensions']): boolean {
   if (ONE_ELEMENT.has(node.type)) return true
   if (node.type !== 'link') return false
+  const seen = new Set<string>()
   const pending: Node[] = [node]
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
-    // A use inside the link may expand to a note that moves out behind it.
-    if (next.type === 'footnote_ref' || next.type === 'inline_footnote' || next.type === 'snippet_use') return false
+    if (next.type === 'footnote_ref' || next.type === 'inline_footnote') return false
+    if (next.type === 'snippet_use') {
+      const name = (next as SnippetUseNode).name
+      const entry = registry.get(name)
+      if (entry !== undefined && !seen.has(name)) {
+        seen.add(name)
+        for (const child of entry.definition.children) pending.push(child)
+      }
+      continue
+    }
     forEachSlot(next, (nodes) => { for (const child of nodes) pending.push(child) }, undefined, extensions)
   }
   return true
@@ -269,7 +279,7 @@ function shapeOf(pass: Pass, use: SnippetUseNode, definition: SnippetDefinitionN
   const attrs = definition.attrs === undefined ? undefined : structuredClone(definition.attrs)
   // C2-H-215: under roundtrip a copy that renders as one element carries the carriers itself; any other gets a span.
   const single = use.mode === 'inline' && attrs === undefined && pass.settings.roundtrip && copy.nodes.length === 1 &&
-    rendersAsOne(copy.nodes[0]!, pass.extensions) ? copy.nodes[0]! : null
+    rendersAsOne(copy.nodes[0]!, pass.registry, pass.extensions) ? copy.nodes[0]! : null
   const wraps = use.mode === 'block' || attrs !== undefined || (pass.settings.roundtrip && single === null)
   const bytes = copy.bytes + (wraps ? wrapperBytes(use, attrs) : 0)
   return { attrs, single, wraps, count: copy.count + (wraps ? 1 : 0), bytes }

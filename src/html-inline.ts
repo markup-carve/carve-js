@@ -317,11 +317,14 @@ function image(node: ImageNode, r: Render): string {
 
 function autolink(node: AutolinkNode, r: Render): string {
   const text = escapeText(node.text ?? node.href)
-  if (r.linkDepth > 0 || isDroppedLink(r, node.href, node)) return text
+  if (r.linkDepth > 0 || isDroppedLink(r, node.href, node)) {
+    // C2-H-215: as for a link, carriers with no `<a>` to stand on go on a span.
+    return r.settings.roundtrip && SNIPPET_CARRIERS.has(node) ? `<span${snippetCarriers(node)}>${text}</span>` : text
+  }
   const structural: Pair[] = [['href', destination(r, node.href, node)]]
   const written = withRel(r, node, structural)
   if (r.settings.roundtrip) structural.push(['data-carve-autolink', null])
-  return `<a${attributes(r, written, { structural })}>${text}</a>`
+  return `<a${attributes(r, written, { structural, origin: node })}>${text}</a>`
 }
 
 function xref(node: XrefNode, r: Render): string {
