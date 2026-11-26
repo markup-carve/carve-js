@@ -473,18 +473,44 @@ const NBSP_RUN = /(?<![ \t\u00a0])\u00a0{2,}(?![ \t\u00a0])/g
 
 /** C2-H-043: one paragraph per stanza, a line per `<br>`, and the no-break spaces of whitespace runs as spaces. */
 function lineBlock(node: Html.Element, context: HtmlContext): Block {
-  const lines: Extract<Block, { type: 'line_block' }>['children'] = []
+  const lines: LineNode[] = []
   for (const stanza of elements(node).filter(child => child.tagName === 'p')) {
     if (lines.length > 0) lines.push({ type: 'line', children: [] })
-    let current: Html.ChildNode[] = []
-    const flush = (): void => { lines.push({ type: 'line', children: lineInline(current, stanza, context) }); current = [] }
-    for (const child of content(stanza)) {
-      if (isElement(child) && child.tagName === 'br') flush()
-      else current.push(child)
-    }
-    flush()
+    lines.push(...stanzaLines(stanza, context))
   }
   return { type: 'line_block', children: lines, ...withoutClasses(attrs(context, node), ['line-block']) }
+}
+
+type LineNode = Extract<Block, { type: 'line_block' }>['children'][number]
+
+function stanzaLines(stanza: Html.Element, context: HtmlContext): LineNode[] {
+  const lines: LineNode[] = []
+  const nodes = content(stanza)
+  let end = nodes.length - 1
+  while (end >= 0 && trailingSpace(nodes[end])) end--
+  let current: Html.ChildNode[] = []
+  for (const [index, child] of nodes.entries()) {
+    if (!isElement(child) || child.tagName !== 'br') { current.push(child); continue }
+    const children = lineInline(current, stanza, context)
+    current = []
+    // carve#6785: a `<br>` with only whitespace after it is the hard break of the stanza's last line.
+    const last = index === end
+    // carve#6786, C2-H-195 row 18: keep the break where the line cannot be written without it.
+    if (last || needsBreak(children)) children.push({ type: 'hard_break' })
+    lines.push({ type: 'line', children })
+    if (last) return lines
+  }
+  lines.push({ type: 'line', children: lineInline(current, stanza, context) })
+  return lines
+}
+
+function trailingSpace(node: Html.ChildNode | undefined): boolean {
+  return node !== undefined && isText(node) && /^[ \t\r\n]*$/.test(node.value)
+}
+
+function needsBreak(children: Inline[]): boolean {
+  const end = children.at(-1)
+  return end === undefined || (end.type === 'text' && /[ \t]$/.test(end.value))
 }
 
 function lineInline(nodes: Html.ChildNode[], host: Html.Element, context: HtmlContext): Inline[] {
