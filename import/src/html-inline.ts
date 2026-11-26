@@ -149,7 +149,7 @@ function textNodes(value: string): Inline[] {
 export function inline(node: Html.ChildNode, context: HtmlContext): Inline[] {
   if (isText(node)) return textNodes(node.value)
   if (isComment(node)) return rawInline(node, context)
-  if (isElement(node)) return inlineElement(node, context)
+  if (isElement(node)) return context.dropped?.has(node) === true ? [] : inlineElement(node, context)
   report(context, node, 'import-element-dropped', 'Doctype dropped')
   return []
 }

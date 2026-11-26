@@ -5,13 +5,11 @@ import {
   attr, attrs, classList, isComment, isElement, isText, plain, renamedKeys, report, withoutClasses, withoutKeys,
   type HtmlContext,
 } from './html-dom.ts'
-import { treatment } from './html-elements.ts'
+import { isBlockElement, treatment } from './html-elements.ts'
+import { inline } from './html-inline.ts'
 import { carrierOrdinal } from './html-snippets.ts'
 
 const RANGED_KEYS = { 'data-author': 'author', 'data-date': 'datetime' }
-
-// C2-M-069: the inline containers an import drops when they hold nothing and have no attributes.
-const EMPTY_DROPPED = new Set(['span', 'a', 'em', 'i', 'strong', 'b', 's', 'strike', 'del', 'ins', 'mark', 'u', 'sub', 'sup'])
 
 interface DocumentIndex {
   /** Each node's place in document order, and the last place of its descendants. */
@@ -26,8 +24,11 @@ interface DocumentIndex {
 
 const INDEXES = new WeakMap<HtmlContext, DocumentIndex>()
 
-/** The walk's state: the ids of open starts, the carrier ordinals claimed so far, and the carriers read as snippet uses. */
-interface Walk { pending: Set<string>, ordinals: Set<string>, uses: Set<Html.Element> }
+/**
+ * The walk's state: the ids of open starts, the carrier ordinals claimed so far, the carriers read as snippet uses, and
+ * a context to read empty elements in without reporting or defining anything.
+ */
+interface Walk { pending: Set<string>, ordinals: Set<string>, uses: Set<Html.Element>, scratch: HtmlContext }
 
 function isRangeEndSpan(node: Html.Node): node is Html.Element {
   return isElement(node as Html.ChildNode) && (node as Html.Element).tagName === 'span' &&
@@ -71,7 +72,7 @@ function isOpaque(node: Html.Node, walk: Walk): boolean {
   return walk.uses.has(element) || treatment(element) === 'drop' || isRaw(element) || isRangeStart(element)
 }
 
-/** Whether a node gives an inline by itself: text, a snippet use, a comment or raw element kept, a comment, or a kept empty element. */
+/** Whether a node gives an inline by itself: text, a snippet use, a comment or raw element kept, or a comment. */
 function holds(node: Html.Node, context: HtmlContext, walk: Walk): boolean {
   const child = node as Html.ChildNode
   if (isText(child)) return child.value !== ''
@@ -81,9 +82,21 @@ function holds(node: Html.Node, context: HtmlContext, walk: Walk): boolean {
   if (claimsUse(child, walk)) return true
   if (treatment(child) === 'drop') return false
   if (isRaw(child)) return context.rawHtml === true
-  if (isRangeStart(child)) return plain(child) !== ''
-  if (child.childNodes.length > 0) return false
-  return child.attrs.length > 0 || !EMPTY_DROPPED.has(child.tagName)
+  return isRangeStart(child) && plain(child) !== ''
+}
+
+/**
+ * C2-M-069: an inline element nothing in which gives an inline counts when the reader keeps a node for it, such as a span
+ * with attributes. One that gives nothing is skipped when an element around it is read, so each is read once.
+ */
+function keepsEmpty(node: Html.Node, index: DocumentIndex, walk: Walk): boolean {
+  if (!isElement(node as Html.ChildNode) || isOpaque(node, walk) || index.claimed.has(node as Html.Element)) return false
+  const element = node as Html.Element
+  if (isBlockElement(element) || isTaskBox(element)) return false
+  walk.scratch.diagnostics.length = 0
+  if (inline(element, walk.scratch).length > 0) return true
+  walk.scratch.dropped!.add(element)
+  return false
 }
 
 function documentRoot(node: Html.Node): Html.Node {
@@ -98,7 +111,10 @@ function visit(index: DocumentIndex, walk: Walk, at: Html.Node, count: number, c
   const end = isRangeEndSpan(at)
   const claimed = end && walk.pending.delete(attr(at, 'data-comment-id') ?? '\0')
   if (claimed) index.claimed.add(at)
-  index.holding.push(index.holding[count]! + (!claimed && holds(at, context, walk) ? 1 : 0))
+  const held = !claimed && holds(at, context, walk)
+  index.holding.push(index.holding[count]! + (held ? 1 : 0))
+  // An opaque element or a claimed end that gives no inline here gives none to an element read around it.
+  if (!held && (claimed || isOpaque(at, walk))) walk.scratch.dropped!.add(at as Html.Element)
   if (isElement(at as Html.ChildNode) && isRangeStart(at as Html.Element)) {
     walk.pending.add(attr(at as Html.Element, 'data-comment-id') ?? '\0')
   }
@@ -114,13 +130,19 @@ function documentIndex(node: Html.Element, context: HtmlContext): DocumentIndex 
   const known = INDEXES.get(context)
   if (known !== undefined && known.order.has(node)) return known
   const index: DocumentIndex = { order: new Map(), ends: new Map(), holding: [0], claimed: known?.claimed ?? new Set() }
-  const walk: Walk = { pending: new Set(), ordinals: new Set(), uses: new Set() }
+  const ordinals = new Set<string>()
+  const scratch: HtmlContext = {
+    ...context, diagnostics: [], definitions: new Map(), anchorKeys: new Set(), snippetOrdinals: ordinals, dropped: new WeakSet(),
+  }
+  const walk: Walk = { pending: new Set(), ordinals, uses: new Set(), scratch }
   let count = 0
   const stack: [Html.Node, boolean][] = [[documentRoot(node), false]]
   while (stack.length > 0) {
     const [at, closing] = stack.pop()!
     if (closing) {
-      index.order.get(at)![1] = count - 1
+      const place = index.order.get(at)!
+      place[1] = count - 1
+      if (index.holding[count] === index.holding[place[0]] && keepsEmpty(at, index, walk)) index.holding[count]!++
       continue
     }
     visit(index, walk, at, count++, context)
@@ -147,6 +169,8 @@ function rangeEnd(index: DocumentIndex, id: string, last: number): Html.Element 
 
 /** C2-M-113: a point comment at the start; its end is dropped, and a range with an inline in it is reported as lost. */
 export function rangedComment(node: Html.Element, context: HtmlContext): Inline[] {
+  // The walk's own read, as through an inline footnote's body, only asks whether a node is kept.
+  if (context.dropped !== undefined) return plain(node) === '' ? [] : [{ type: 'critic_comment', value: plain(node) }]
   const index = documentIndex(node, context)
   const last = index.order.get(node)![1]
   const end = rangeEnd(index, attr(node, 'data-comment-id') ?? '\0', last)
