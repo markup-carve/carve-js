@@ -944,6 +944,19 @@ function writeTemplate(r: Render, document: DocumentNode, nodes: readonly Node[]
   line(r, level, `<template data-carve-abbreviations>${escapeCarrierText(source)}</template>`)
 }
 
+/**
+ * C2-H-216: under `roundtrip` a run of snippet definitions is one template that holds the run as the canonical writer
+ * spells it, one blank line between two definitions. A run with a definition of an included file carries the scope.
+ */
+function writeSnippetTemplate(r: Render, document: DocumentNode, run: readonly Node[], level: number,
+  own: ReadonlySet<Node> | null): void {
+  const written = writeTree({ type: 'document', astVersion: document.astVersion, children: run as DocumentNode['children'] }, undefined)
+  for (const entry of written.diagnostics) loss(r, run[0] ?? null, entry.code, entry.message)
+  const source = written.source.endsWith('\n') ? written.source.slice(0, -1) : written.source
+  const scope = own !== null && run.some((node) => !own.has(node)) ? ' data-carve-snippet-scope="include"' : ''
+  line(r, level, `<template data-carve-snippets${scope}>${escapeCarrierText(source)}</template>`)
+}
+
 /** The end of the run of abbreviation definitions that starts at `start`. */
 function runEnd(children: readonly Node[], start: number, own: ReadonlySet<Node> | null): number {
   let end = start
@@ -962,7 +975,12 @@ function writeDocument(r: Render, document: DocumentNode): void {
   for (let index = 0; index < children.length; index++) {
     const node = children[index]
     if (node === undefined) break
-    if (node.type === 'abbreviation_def' && r.settings.roundtrip && (own === null || own.has(node))) {
+    if (node.type === 'snippet_definition' && r.settings.roundtrip) {
+      let end = index
+      while (children[end]?.type === 'snippet_definition') end++
+      writeSnippetTemplate(r, document, children.slice(index, end), open.length, own)
+      index = end - 1
+    } else if (node.type === 'abbreviation_def' && r.settings.roundtrip && (own === null || own.has(node))) {
       const end = runEnd(children, index, own)
       writeTemplate(r, document, children.slice(index, end), open.length)
       index = end - 1

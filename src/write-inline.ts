@@ -1,5 +1,6 @@
 // The inline nodes as Carve source (C2-W-069 to C2-W-080, C2-W-116). A line break of the
 // content is a line feed in the string; the block that holds the content places the lines.
+import { snippetUseSpelling } from './snippets.ts'
 import {
   type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type Inline, type InlineParent, isBreak,
   type LinkNode, type MentionNode, type Node, type NodeOfType, type ParagraphNode, type RubyNode, type TextNode, type InlineExtensionNode,
@@ -1024,6 +1025,7 @@ const WRITERS: InlineWriters = {
   raw_inline: (w, node, flags) => `${spanValue(w, node, node.value, flags)}{=${node.format}}`,
   symbol: (_w, node) => `:${node.name}:`,
   mention: mentionNode,
+  snippet_use: (_w, node) => snippetUseSpelling(node.name),
   tag: (_w, node) => `#${node.name}`,
   autolink: autolinkNode,
   xref: (_w, node) => `</#${node.key}>`,
