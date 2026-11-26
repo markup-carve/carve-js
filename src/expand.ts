@@ -263,7 +263,13 @@ function selectionWithDefinitions(exp: Expansion, text: string, lines: FileLines
     return DEFINITION_TYPES.includes(node.type) && (line < range.from || line >= range.to)
   })
   if (!exp.positions) dropPositions(outside)
-  return { ...selected, children: [...selected.children, ...outside] }
+  return { ...selected, children: [...selected.children, ...outside], facts: withOutsideSnippets(selected.facts, whole.facts, outside) }
+}
+
+/** The appended definitions may hold snippet definitions and uses the selected lines do not. */
+function withOutsideSnippets(facts: ParseFacts | null, whole: ParseFacts | null, outside: readonly Node[]): ParseFacts | null {
+  if (facts === null || whole === null || !outside.some((node) => node.type === 'snippet_definition')) return facts
+  return { ...facts, snippets: true, snippetUses: facts.snippetUses || whole.snippetUses }
 }
 
 function dropPositions(nodes: readonly Node[]): void {

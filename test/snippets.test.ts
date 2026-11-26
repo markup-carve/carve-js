@@ -217,4 +217,13 @@ describe('named snippets', () => {
     expect(render('See {{ a.crv }} here.\n\n{{ a.crv }}\n', { includes: { resolver } })).toBe('<p>See {{ a.crv }} here.</p>\n<p>A <strong>b</strong></p>')
     expect(render('{{ s.crv }}\n\nSay {{ $x }}.\n', { includes: { resolver } })).toBe('<p>Say Hi.</p>')
   })
+
+  it('a line selection without snippet syntax keeps the snippet definitions it appends from its file', () => {
+    const files: Record<string, string> = { 'd.crv': 'Hello\n\n{$x}: A\n\n{$x}: B\n' }
+    const resolver = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    const out = renderWithDiagnostics('{{ d.crv @lines:1-1 }}\n', { includes: { resolver } })
+    expect(out.html).toBe('<p>Hello</p>')
+    expect(out.diagnostics.map((entry) => entry.code)).toEqual(['duplicate-snippet'])
+    expect(render('{{ d.crv @lines:1-1 }}\n\nSay {{ $x }}.\n', { includes: { resolver } })).toBe('<p>Hello</p>\n<p>Say A.</p>')
+  })
 })
