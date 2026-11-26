@@ -49,6 +49,18 @@ export interface PassTrace {
    * (write-chain.ts): a start that already holds one of them would change a read or a comparison.
    */
   braced: Set<Node>
+  /** The trials it read `wholeTrials` for (C2-W-125), each with the writer as it stood there; null past their cap. */
+  wholeTests: WholeTest[] | null
+}
+
+/** A trial a pass without `wholeTrials` read the switch for, which a pass with it would test (write-passes.ts). */
+export interface WholeTest {
+  state: Map<keyof Writer, unknown>
+  linkPlaced: Map<TextNode, Set<number>>
+  work: Writer['work']
+  parses: number
+  /** `givesTree` for the trial, as the pass with the switch runs it. */
+  gives: () => boolean
 }
 
 export interface Attempt {

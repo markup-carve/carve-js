@@ -2,10 +2,10 @@
 // state and the switches it read are those of an earlier pass of the same repair takes that pass's result instead of
 // running its rounds again. It is charged the parses a rerun would make, and where the recorded work would pass the
 // budget it runs.
-import { type Node, type TextNode } from './ast.ts'
+import { type DocumentNode, type Node, type TextNode } from './ast.ts'
 import { type Diagnostic } from './diagnostics.ts'
-import { type Attempt, type PassTrace, type Writer } from './write-state.ts'
-import { chargeParse } from './write-check.ts'
+import { type Attempt, type PassTrace, type WholeTest, type Writer } from './write-state.ts'
+import { chargeParse, exhausted } from './write-check.ts'
 
 /** The switches of a pass that a recorded pass may have left unread (`PassTrace.reads`). */
 export const READ_CLOSER_KINDS = 1
@@ -83,7 +83,11 @@ interface PassRecord {
   rewritten: number
   /** The budget of the repair (C2-W-133), which the start state decides. */
   budget: number
+  /** Where its trials of `wholeTests` give no tree, the parses their tests make; null where one does. Taken once, when asked. */
+  whole?: Charge[] | null
 }
+
+type Charge = [string, DocumentNode | null, boolean]
 
 /** What a pass of the rounds returns: the end of its group, whether it reached a limit of C2-W-133, and its budget. */
 export interface PassRun<T> {
@@ -198,7 +202,7 @@ export function memoPass<T>(w: Writer, memo: PassMemo, step: string, run: () => 
   const trialLog = w.trialLog === null ? null : w.trialLog.map((entry) => [...entry] as [TextNode, number])
   const trialsRetested = w.trialsRetested
   const linkPlaced = new Map([...w.linkPlaced].map(([node, offsets]) => [node, new Set(offsets)]))
-  const trace: PassTrace = { reads: 0, logged: [], checks: [], charges: [], skipped: [0, 0], braced: new Set() }
+  const trace = emptyTrace()
   w.pass = trace
   try {
     const { result, limited, budget } = run()
@@ -216,8 +220,89 @@ export function memoPass<T>(w: Writer, memo: PassMemo, step: string, run: () => 
   }
 }
 
+/**
+ * C2-W-125: a pass without `wholeTrials` stands in for one with it where each trial it read the switch for gives no tree
+ * and leaves the writer as `isAsked` puts it back: the pass with the switch then runs the same rounds.
+ */
+function wholeStandsIn(w: Writer, record: PassRecord): boolean {
+  if (!w.wholeTrials || record.wholeTrials) return false
+  record.whole ??= runWholeTests(w, record.trace.wholeTests)
+  return record.whole !== null
+}
+
+// The fields `isAsked` puts back after its trials, which `givesTree` may leave changed.
+const TRIAL_FIELDS: ReadonlySet<keyof Writer> = new Set<keyof Writer>(['escapes', 'lines', 'lead', 'leadSkip', 'starts'])
+
+// The trials of one pass that are kept for a test; a pass with more runs again.
+const MAX_WHOLE_TESTS = 8
+
+/** Keeps a trial a pass without `wholeTrials` read the switch for, with the writer as it stands. */
+export function noteWholeTest(w: Writer, gives: () => boolean): void {
+  const pass = w.pass
+  if (pass === null || pass.wholeTests === null) return
+  if (pass.wholeTests.length >= MAX_WHOLE_TESTS) {
+    pass.wholeTests = null
+    return
+  }
+  pass.wholeTests.push({ state: snapshot(w), linkPlaced: copyPlaced(w.linkPlaced), work: { ...w.work }, parses: w.parses, gives })
+}
+
+function copyPlaced(placed: Map<TextNode, Set<number>>): Map<TextNode, Set<number>> {
+  return new Map([...placed].map(([node, offsets]) => [node, new Set(offsets)]))
+}
+
+/**
+ * Runs `givesTree` for each kept trial from the writer as it stood there, on a parse cache and trace of its own, and
+ * puts the writer back. The parses it made, or null where a trial gives the tree or changes the writer.
+ */
+function runWholeTests(w: Writer, tests: WholeTest[] | null): Charge[] | null {
+  if (tests === null) return null
+  const current = snapshot(w)
+  const linkPlaced = copyPlaced(w.linkPlaced)
+  const { parseCache, parses, pass } = w
+  const work = { ...w.work }
+  const charges: Charge[] = []
+  try {
+    for (const test of tests) {
+      restore(w, test.state)
+      refillPlaced(w, test.linkPlaced)
+      Object.assign(w.work, test.work)
+      w.parses = test.parses
+      w.parseCache = { trees: new Map(), treeChars: 0, recent: [] }
+      w.pass = emptyTrace()
+      const idle = !test.gives() && !exhausted(w) && sameBeside(test.state, snapshot(w), TRIAL_FIELDS) &&
+        samePlaced(test.linkPlaced, w.linkPlaced)
+      if (!idle) return null
+      charges.push(...w.pass.charges)
+    }
+    return charges
+  } finally {
+    restore(w, current)
+    refillPlaced(w, linkPlaced)
+    Object.assign(w.work, work)
+    w.parses = parses
+    w.parseCache = parseCache
+    w.pass = pass
+  }
+}
+
+function refillPlaced(w: Writer, placed: Map<TextNode, Set<number>>): void {
+  w.linkPlaced.clear()
+  for (const [node, offsets] of placed) w.linkPlaced.set(node, new Set(offsets))
+}
+
+function samePlaced(a: Map<TextNode, Set<number>>, b: Map<TextNode, Set<number>>): boolean {
+  if (a.size !== b.size) return false
+  for (const [node, offsets] of a) {
+    const other = b.get(node)
+    if (other === undefined || other.size !== offsets.size || [...offsets].some((at) => !other.has(at))) return false
+  }
+  return true
+}
+
 /** Puts the writer where the recorded pass left it, with what the pass added and charged. */
 function replay(w: Writer, known: PassRecord, start: Snapshot): void {
+  const whole = wholeStandsIn(w, known)
   restore(w, known.end)
   // The members the start holds beyond the record's are members the pass never found absent (`bracedFits`).
   for (const node of start.get('bracedAnyway') as Set<Node>) w.bracedAnyway.add(node)
@@ -231,6 +316,7 @@ function replay(w: Writer, known: PassRecord, start: Snapshot): void {
   w.trialsRetested = known.retested
   // The parses the pass would make again are charged as `parseChunk` charges them; a kept probe makes none.
   for (const [src, tree, cacheable] of known.trace.charges) chargeParse(w, src, tree, cacheable)
+  if (whole) for (const [src, tree, cacheable] of known.whole ?? []) chargeParse(w, src, tree, cacheable)
   w.parses += known.trace.skipped[0]
   w.work.chars += known.trace.skipped[1]
   w.work.rewritten += known.rewritten
@@ -246,15 +332,21 @@ function mergeTrace(outer: PassTrace, inner: PassTrace): void {
   outer.skipped[0] += inner.skipped[0]
   outer.skipped[1] += inner.skipped[1]
   for (const node of inner.braced) outer.braced.add(node)
+  outer.wholeTests = outer.wholeTests === null || inner.wholeTests === null ? null : [...outer.wholeTests, ...inner.wholeTests]
 }
 
 function matches(w: Writer, record: PassRecord, modes: [boolean, boolean, boolean], start: Snapshot): boolean {
   if (record.modes.some((mode, at) => mode !== modes[at])) return false
   if ((record.trace.reads & READ_CLOSER_KINDS) !== 0 && record.closerKinds !== w.closerKinds) return false
-  if ((record.trace.reads & READ_WHOLE_TRIALS) !== 0 && record.wholeTrials !== w.wholeTrials) return false
+  const whole = (record.trace.reads & READ_WHOLE_TRIALS) !== 0 && record.wholeTrials !== w.wholeTrials
+  if (whole && (!w.wholeTrials || record.trace.wholeTests === null)) return false
   if ((record.trace.reads & READ_TRIAL_LOG) !== 0 &&
     (record.trialsRetested !== w.trialsRetested || !same(record.trialLog, w.trialLog))) return false
   if (record.trace.checks.length > 0 && !closedAtChecks(w, record)) return false
+  return sameStart(record, start) && (!whole || wholeStandsIn(w, record))
+}
+
+function sameStart(record: PassRecord, start: Snapshot): boolean {
   return sameSnapshot(record.start, start) || (sameBesideBraced(record.start, start) && bracedFits(record, start))
 }
 
@@ -313,8 +405,20 @@ export function noteLogClosed(w: Writer): void {
 
 /** Whether the recorded work fits what the budget of the repair leaves, so the rounds would not have stopped early. */
 function fits(w: Writer, record: PassRecord): boolean {
-  return w.work.spent < record.budget && w.work.spent + record.chars <= record.budget &&
+  const whole = wholeStandsIn(w, record) ? (record.whole ?? []).reduce((total, [src]) => total + src.length, 0) : 0
+  return w.work.spent < record.budget && w.work.spent + record.chars + whole <= record.budget &&
     w.work.rewritten + record.rewritten <= record.budget
+}
+
+/** Whether two snapshots hold the same state beside the fields `beside`. */
+export function sameBeside(a: Snapshot, b: Snapshot, beside: ReadonlySet<keyof Writer>): boolean {
+  for (const key of STATE) if (!beside.has(key) && !same(a.get(key), b.get(key))) return false
+  return true
+}
+
+/** A trace that records nothing of its own, for a step whose parses are counted elsewhere. */
+export function emptyTrace(): PassTrace {
+  return { reads: 0, logged: [], checks: [], charges: [], skipped: [0, 0], braced: new Set(), wholeTests: [] }
 }
 
 /** The trials a pass hands to `logTrials`, in its order: a replayed pass logs them into the log of the pass it stands for. */
