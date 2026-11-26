@@ -85,12 +85,20 @@ function withKeys(attrs: Attrs | undefined, keys: [string, string][]): Attrs | u
   return { ...attrs, keyValues: [...attrs?.keyValues ?? [], ...keys] }
 }
 
+/** C2-M-112: a cell of only the text `<` or `^` is a literal-text span, which C2-X-076 never reads as a mark. */
+function literalMark(children: Block[]): void {
+  const only = children.length === 1 && children[0]?.type === 'paragraph' ? children[0] : undefined
+  const text = only?.children.length === 1 && only.children[0]?.type === 'text' ? only.children[0].value : undefined
+  if (only !== undefined && (text === '<' || text === '^')) children[0] = { ...only, children: [{ type: 'literal_inline', value: text }] }
+}
+
 function cellItem(cell: TableCellNode, header: boolean, node: Html.Element, context: HtmlContext): ListItemNode {
   const children: Block[] = cell.children.flatMap((block): Block[] => {
     if (block.type !== 'cell_paragraph') return [block]
     // C2-M-069: an empty cell paragraph gives no paragraph.
     return block.children.length === 0 ? [] : [{ type: 'paragraph', children: block.children }]
   })
+  literalMark(children)
   if (cell.scope !== undefined) report(context, node, 'import-attribute-dropped', 'The scope of a list table cell dropped')
   if (cell.headerIds !== undefined) report(context, node, 'import-attribute-dropped', 'The headers of a list table cell dropped')
   const own = new Set(cell.attrs?.keyValues?.map(([key]) => key))

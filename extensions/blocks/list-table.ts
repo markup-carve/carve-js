@@ -70,7 +70,8 @@ function marker(item: ListItemNode): '<' | '^' | null {
   if (item.attrs !== undefined || item.children.length !== 1 || item.children[0]?.type !== 'paragraph') return null
   const inlines = item.children[0].children
   if (inlines.length !== 1 || inlines[0]?.type !== 'text') return null
-  const value = inlines[0].value.trim()
+  // C2-X-076: only a text node is a mark; a literal-text span `!`<`` is a cell holding `<`.
+  const value = inlines[0].value
   return value === '^' || value === '<' ? value : null
 }
 
@@ -123,14 +124,17 @@ function resolveSpans(rows: Cell[][], groups: number[]): void {
     for (let col = 0; col < (rows[row]?.length ?? 0); col++) {
       const cell = rows[row]?.[col]
       if (cell === undefined) continue
-      current[col] = mergeCell(cell, current[col - 1], above[col], sameGroup)
+      // C2-X-076: a `<` whose left cell a row span covers from above joins nothing.
+      const left = col > 0 && rows[row]?.[col - 1]?.marker === '^' && current[col - 1] !== rows[row]?.[col - 1]
+        ? undefined : current[col - 1]
+      current[col] = mergeCell(cell, left, above[col], sameGroup)
     }
     occupied.push(current)
   }
 }
 
 function mergeCell(cell: Cell, left: Cell | undefined, up: Cell | undefined, sameGroup: boolean): Cell {
-  if (cell.marker === '<' && left !== undefined && left !== up) {
+  if (cell.marker === '<' && left !== undefined) {
     cell.skip = true
     left.colspan += 1
     return left
