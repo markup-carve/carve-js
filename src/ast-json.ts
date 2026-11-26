@@ -1,5 +1,5 @@
 // The JSON form of a tree (C2-A-012, C2-A-165) and tree equality (C2-A-161, C2-A-162).
-import { type DocumentNode, type Envelope, isRecord, type Node } from './ast.ts'
+import { type DocumentNode, type Envelope, isRecord, type Node, pointerKey } from './ast.ts'
 import { AST_RESULTS, type ResultField } from './ast-tables.ts'
 import { type AnnotationRangeSidecar, CarveTreeError, validateEnvelope, validateTree, validateTreeWithAnnotations } from './ast-validate.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
@@ -33,6 +33,99 @@ function cleanString(_key: string, value: unknown): unknown {
   return typeof value === 'string' && value.includes('\u0000') ? value.replaceAll('\u0000', '�') : value
 }
 
+/** The offset of the quote that closes the string opened at `quote`. */
+function stringEnd(json: string, quote: number): number {
+  let close = json.indexOf('"', quote + 1)
+  for (;;) {
+    let slashes = 0
+    while (json.charCodeAt(close - 1 - slashes) === 92) slashes++
+    if (slashes % 2 === 0) return close
+    close = json.indexOf('"', close + 1)
+  }
+}
+
+/** A number spelling as sign, significant digits without leading or trailing zeros, and exponent; zero is `0`. */
+function decimalValue(text: string): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text)
+  if (match === null) return text
+  const fraction = match[3] ?? ''
+  const digits = `${match[2] ?? ''}${fraction}`.replace(/^0+/, '')
+  if (digits === '') return '0'
+  const significant = digits.replace(/0+$/, '')
+  return `${match[1] ?? ''}${significant}e${BigInt(match[4] ?? 0) - BigInt(fraction.length) + BigInt(digits.length - significant.length)}`
+}
+
+/** Whether the number spelled `text` is a binary64 value as it stands (C2-A-219). */
+function keepsValue(text: string): boolean {
+  const number = Number(text)
+  return Number.isFinite(number) && decimalValue(text) === decimalValue(String(number))
+}
+
+/** The end of the number that starts at `start`, negative when it is an integer of at most 15 digits, which keeps its value. */
+function numberEnd(json: string, start: number, end: number): number {
+  let stop = start + 1
+  let plain = true
+  for (; stop < end; stop++) {
+    const code = json.charCodeAt(stop)
+    if (code >= 48 && code <= 57) continue
+    if (code !== 46 && code !== 69 && code !== 101 && code !== 43 && code !== 45) break
+    plain = false
+  }
+  return plain && stop - start <= 15 ? -stop : stop
+}
+
+/** The offset of the first number of `json` from `from` to `end`, which hold no string, that does not keep its value, or -1. */
+function inexactBetween(json: string, from: number, end: number): number {
+  for (let index = from; index < end; index++) {
+    const code = json.charCodeAt(index)
+    if (code !== 45 && (code < 48 || code > 57)) continue
+    const stop = numberEnd(json, index, end)
+    if (stop > 0 && !keepsValue(json.slice(index, stop))) return index
+    index = Math.abs(stop)
+  }
+  return -1
+}
+
+/**
+ * C2-A-219: the offset of the first number of the JSON text whose spelling does not denote its binary64 value, or -1.
+ * The text is valid JSON, so outside strings a digit or a minus sign can only start a number.
+ */
+function inexactNumber(json: string): number {
+  let from = 0
+  for (;;) {
+    const quote = json.indexOf('"', from)
+    const found = inexactBetween(json, from, quote === -1 ? json.length : quote)
+    if (found !== -1 || quote === -1) return found
+    from = stringEnd(json, quote) + 1
+  }
+}
+
+/** The RFC 6901 pointer to the value that starts at `offset` of the JSON text. */
+function pointerAt(json: string, offset: number): string {
+  const path: (string | number)[] = []
+  const arrays: boolean[] = []
+  let key = false
+  for (let index = 0; index < offset; index++) {
+    const char = json[index]
+    const last = path.length - 1
+    if (char === '"') {
+      const end = stringEnd(json, index)
+      if (key) path[last] = JSON.parse(json.slice(index, end + 1)) as string
+      index = end
+    } else if (char === '{' || char === '[') {
+      arrays.push(char === '[')
+      path.push(char === '[' ? 0 : '')
+      key = char === '{'
+    } else if (char === '}' || char === ']') {
+      arrays.pop()
+      path.pop()
+      key = false
+    } else if (char === ',' && arrays[arrays.length - 1] === true) path[last] = (path[last] as number) + 1
+    else if (char === ',' || char === ':') key = char === ','
+  }
+  return path.map((part) => `/${pointerKey(String(part))}`).join('')
+}
+
 /** C2-A-012: `value` as an envelope, which has a document and no type, or null for a bare tree. */
 function envelopeOf(value: unknown): Record<string, unknown> | null {
   return isRecord(value) && value['type'] === undefined && value['document'] !== undefined ? value : null
@@ -50,6 +143,8 @@ export function decodeTree(json: string, source?: string, extensions: readonly E
   } catch {
     throw new CarveTreeError('', 'not JSON')
   }
+  const inexact = inexactNumber(json)
+  if (inexact !== -1) throw new CarveTreeError(pointerAt(json, inexact), 'number does not keep its value as binary64')
   const envelope = envelopeOf(value)
   if (envelope !== null) validateEnvelope(envelope, extensions)
   const document = envelope === null ? value : envelope['document']

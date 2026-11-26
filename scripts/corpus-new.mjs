@@ -231,7 +231,8 @@ function run(entry) {
       ...(expected.column !== undefined && result.column !== expected.column ? ['column'] : [])]
   }
   if (kind === 'fingerprint') {
-    const fingerprint = entry.of === 'tree' ? treeFingerprint(engine.parse(input, { positions: false })) : sourceFingerprint(input)
+    const fingerprint = entry.json !== undefined ? treeFingerprint(engine.decodeTree(entry.json))
+      : entry.of === 'tree' ? treeFingerprint(engine.parse(input, { positions: false })) : sourceFingerprint(input)
     return fingerprint === expected.fingerprint ? [] : ['fingerprint']
   }
   if (kind === 'diff') {
