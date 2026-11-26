@@ -13,7 +13,6 @@ const METADATA_FIELDS = 'carve#3598 root metadata fields beside a frontmatter no
 const REGION_MARKER = 'carve#6727 a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815)'
 const DJOT_GATE = 'carve#6499 the djot- rules default to off (C2-T-031, C2-T-049; spec carve#6824)'
 const QUOTE_LOCALE = 'carve-rs#4838 a smart quotes locale outside its row falls back (C2-X-075; spec carve#6824)'
-const BINARY64 = 'carve#6099 a tree number is a binary64 value (C2-A-219; spec carve#6819)'
 const ESCAPE_ROUND_KEYS = 'carve#6813 a key the escape rounds cannot spell is no loss where the output reads back'
   + ' (C2-W-075; spec carve#6825)'
 
@@ -67,15 +66,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2148', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2298', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2299', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
-  ['CC-2313', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2314', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2315', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2316', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2318', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2319', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2320', { fields: ['threw:TypeError'], fix: BINARY64 }],
-  ['CC-2321', { fields: ['threw:TypeError'], fix: BINARY64 }],
-  ['CC-2322', { fields: ['threw:TypeError'], fix: BINARY64 }],
   ['CC-2323', { fields: ['diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
   ['CC-2324', { fields: ['carve', 'diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
 ])
