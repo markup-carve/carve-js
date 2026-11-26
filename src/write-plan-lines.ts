@@ -6,6 +6,7 @@ import { charsText } from './arrays.ts'
 import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { isImageOnly } from './image-line.ts'
 import { isAbbreviation, isAttributeLine, isDefinition, taskBoxEnd } from './lines.ts'
+import { readSnippetMarker, snippetNameEnd } from './snippets.ts'
 import { ATOM, CLOSE, ESCAPE, type Leaf, OPEN, TEXT } from './write-plan-model.ts'
 
 /** Where the leaf stands, as far as its line starts depend on it. */
@@ -331,7 +332,7 @@ const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [SPACE, () => UNDECIDED],
   [TAB, () => UNDECIDED],
   [91, bracketLine],
-  [123, attributeLine],
+  [123, braceLine],
   [94, caption],
 ])
 
@@ -416,6 +417,36 @@ function attributeLine(leaf: Leaf, at: number, place: LeafPlace, first: boolean)
   if (next > leaf.codes.length) return place.attributed || next > below ? at : decidedIf(place.followed)
   const [after, afterWhole] = textOfLine(leaf, next)
   return afterWhole && isAttributeLine(after, 0, after.length) ? UNDECIDED : at
+}
+
+/** A first line that starts with `{`: a snippet definition, else an attribute line. */
+function braceLine(leaf: Leaf, at: number, place: LeafPlace, first: boolean): number {
+  if (first && !place.nested && code(leaf, at + 1) === 36) {
+    const definition = snippetDefinitionLine(leaf, at)
+    // C2-B-236: an id in the attribute line above refuses the definition; the repair reads which one it is.
+    if (definition !== NO_ESCAPE) return place.attributed ? UNDECIDED : definition
+  }
+  return attributeLine(leaf, at, place, first)
+}
+
+/**
+ * C2-B-236: a first line outside every container opens a snippet definition where a marker of bare text, one space and
+ * a value that is no blank start it. A marker cut by a node or an escape is left to the repair.
+ */
+function snippetDefinitionLine(leaf: Leaf, at: number): number {
+  const end = textEnd(leaf, at)
+  const text = charsText(leaf.codes, at, end)
+  const marker = readSnippetMarker(text, 0, text.length)
+  if (marker === null) {
+    const cut = end < leaf.codes.length && leaf.codes[end] !== LF
+    return cut && snippetNameEnd(text, 2, text.length) > 0 ? UNDECIDED : NO_ESCAPE
+  }
+  for (let unit = at; unit < at + marker.markerEnd; unit++) if (leaf.kinds[unit] !== TEXT) return UNDECIDED
+  if (marker.hasId || code(leaf, at + marker.markerEnd) !== SPACE) return NO_ESCAPE
+  for (let unit = at + marker.markerEnd + 1; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) {
+    if (leaf.kinds[unit] !== TEXT || !isBlank(leaf.codes[unit]!)) return at
+  }
+  return NO_ESCAPE
 }
 
 /** C2-B-137: comment-only lines do not separate a run of attribute lines. */

@@ -103,7 +103,7 @@ export interface LineModel<T> {
 }
 
 const INLINE_HOLDERS: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line',
-  'cell_paragraph', 'code_block', 'raw_block', 'frontmatter', 'comment', 'include'])
+  'cell_paragraph', 'code_block', 'raw_block', 'frontmatter', 'comment', 'include', 'snippet_definition'])
 
 const VERBATIM_LEAVES: ReadonlySet<string> = new Set(['code_block', 'comment_block', 'frontmatter', 'raw_block'])
 
@@ -571,9 +571,11 @@ class BlockRecord {
 }
 
 
-const INLINE_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'cell_paragraph'])
+// C2-B-236: a snippet definition holds the inline content of its one line.
+const INLINE_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'cell_paragraph',
+  'snippet_definition'])
 
-const INLINE_PARENT_TYPES: ReadonlySet<string> = new Set(INLINE_PARENTS)
+const INLINE_PARENT_TYPES: ReadonlySet<string> = new Set([...INLINE_PARENTS, 'snippet_definition'])
 
 class InlineRecord implements ModelInline {
   readonly type: string

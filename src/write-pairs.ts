@@ -9,7 +9,8 @@ const PAIR_RULES = [
   ['~~', 'markdown-strikethrough-double-tilde'], ['**', 'markdown-strong-double-star'],
 ] as const
 
-const PARENTS: ReadonlySet<string> = new Set(INLINE_PARENTS)
+// C2-B-236: the value of a snippet definition is inline content, which the pair rules test too (C2-W-140).
+const PARENTS: ReadonlySet<string> = new Set([...INLINE_PARENTS, 'snippet_definition'])
 
 /** No text of the group holds a pair mark: the pair rules ask nothing of it. */
 export const NO_PAIRS = 0
