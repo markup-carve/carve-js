@@ -304,6 +304,26 @@ describe('normalization', () => {
   it('C2-M-069: a drop that loses an attribute is reported', () => {
     expect(codes('<p class="c"></p>')).toEqual(['import-structure-repaired'])
   })
+
+  it('C2-M-069: an empty code, math, raw or comment node is dropped, and so is a parent it leaves empty', () => {
+    expect(source('<p>a<code></code>b</p>')).toBe('ab\n')
+    expect(codes('<p>a<code></code>b</p>')).toEqual([])
+    expect(source('<p>a<code class="x"></code>b</p>')).toBe('ab\n')
+    expect(codes('<p>a<code class="x"></code>b</p>')).toEqual(['import-structure-repaired'])
+    for (const empty of ['<span class="math inline">\\(\\)</span>', '<math alttext=""></math>', '<span class="critic-comment"></span>',
+      '<em><code></code></em>', '<a href="x"><code></code></a>']) {
+      expect(source(`<p>a${empty}b</p>`, true)).toBe('ab\n')
+    }
+    expect(source('<p>a<span data-carve-raw="html"></span>b</p>', true)).toBe('ab\n')
+    expect(source('<p>a<span class="y"><code></code></span>b</p>')).toBe('a[]{.y}b\n')
+  })
+
+  it('C2-M-069, C2-M-113: an empty code inside a ranged comment loses no range', () => {
+    const html = '<p><span class="comment-start" data-comment-id="1">n</span><code></code>' +
+      '<span class="comment-end" data-comment-id="1"></span>y</p>'
+    expect(source(html)).toBe('{#n#}y\n')
+    expect(codes(html)).toEqual([])
+  })
 })
 
 describe('diagnostics', () => {
