@@ -1267,7 +1267,7 @@ function writePlanned(w: Writer, run: WriterRun, group: readonly Node[], plan: P
 /** C2-W-088: a round escapes every opener of a kind its parse reports; a plan that leaves one bare goes to the rounds. */
 function leavesKind(w: Writer, run: WriterRun, group: readonly Node[], plan: Plan,
   replaced: readonly [TextNode, number[] | undefined][]): boolean {
-  if (!w.kindRounds || w.planKinds || plan.escapes.size === 0 || !leavesKindBare(group, plan.escapes, w.escapes)) return false
+  if (!w.kindRounds || w.planKinds || plan.escapes.size === 0 || !leavesKindBare(w, group, plan.escapes, w.escapes)) return false
   restoreEscapes(w, replaced)
   noteReason(run, 'kind', '')
   w.planWhy = 'kind'

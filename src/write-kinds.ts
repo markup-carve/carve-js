@@ -1,14 +1,16 @@
 // C2-W-088: a round escapes every potential opener of each kind its parse reports in a leaf block.
 import { pushAll, pushReversed } from './arrays.ts'
 import { childNodes, isBreak, isInlineParent } from './ast.ts'
-import type { Node, TextNode } from './ast-nodes.ts'
+import type { DivNode, Node, TextNode } from './ast-nodes.ts'
+import { usesHardBreakOpener } from './write-blocks.ts'
 import { BRACKETED, type Check, CLOSING_MARKS, contentClosers, escapeAt, isEscaped } from './write-check.ts'
 import { BRACED_MARKS } from './inline-tables.ts'
 import { escapeOffsets, IN_CELL } from './write-inline.ts'
 import { isAsciiAlphanumeric, isBoundarySpace, isWordCharacter } from './unicode.ts'
 
 /** One leaf of the inline content of a block: a text node, a break, or the markup of another inline node. */
-type Leaf = { text: TextNode, lineStart: boolean } | { text: null, kind: 'break' | 'markup', dash?: boolean, mark?: string }
+type Leaf = { text: TextNode, lineStart: boolean }
+  | { text: null, kind: 'break' | 'markup', dash?: boolean, mark?: string, backslash?: boolean }
 
 interface KindBlock {
   leaves: Leaf[]
@@ -17,13 +19,14 @@ interface KindBlock {
 }
 
 /** C2-W-088: the text nodes of each block of `group`, in order, with the block that holds them. */
-function kindBlocks(group: readonly Node[]): Map<TextNode, KindBlock> {
+function kindBlocks(w: Check['w'], group: readonly Node[]): Map<TextNode, KindBlock> {
   const owners = new Map<TextNode, KindBlock>()
-  const pending = [...group]
-  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+  const pending: [Node, boolean][] = group.map((node) => [node, false])
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
+    const [node, bareBreaks] = item
     if (isInlineParent(node)) {
       const block: KindBlock = { leaves: [] }
-      flatten(childNodes(node), block.leaves)
+      flatten(childNodes(node), block.leaves, bareBreaks)
       block.places = new Map()
       block.leaves.forEach((leaf, index) => {
         if (leaf.text === null) return
@@ -32,7 +35,9 @@ function kindBlocks(group: readonly Node[]): Map<TextNode, KindBlock> {
       })
       continue
     }
-    for (const child of childNodes(node)) pending.push(child)
+    // C2-W-080: below a hard-break opener and in a line block a hard break is the bare line ending.
+    const bare = bareBreaks || node.type === 'line_block' || (node.type === 'div' && usesHardBreakOpener(w, node as DivNode))
+    for (const child of childNodes(node)) pending.push([child, bare])
   }
   return owners
 }
@@ -45,22 +50,22 @@ function groupKindBlocks(check: Check, group: readonly Node[]): Map<TextNode, Ki
   if (known !== undefined && known.group.length === group.length && known.group.every((node, at) => node === group[at])) {
     return known.owners
   }
-  const owners = kindBlocks(group)
+  const owners = kindBlocks(check.w, group)
   kindBlockCache.set(check.w, { group, owners })
   return owners
 }
 
-function flatten(nodes: readonly Node[], out: Leaf[]): void {
+function flatten(nodes: readonly Node[], out: Leaf[], bareBreaks: boolean): void {
   for (const node of nodes) {
     if (node.type === 'text') {
       const before = out[out.length - 1]
       out.push({ text: node, lineStart: before === undefined || (before.text === null && before.kind === 'break') })
-    } else if (isBreak(node)) out.push({ text: null, kind: 'break' })
+    } else if (isBreak(node)) out.push(breakLeaf(node, bareBreaks))
     else {
       // The source of a smart dash is hyphens that the written text joins (C2-W-099).
       const dash = node.type === 'smart_punctuation' && /^-+$/.test(node.source)
       out.push({ text: null, kind: 'markup', dash })
-      flatten(childNodes(node), out)
+      flatten(childNodes(node), out, bareBreaks)
       // The closer of a paired node starts with its mark in either form, so a text brace before it reads as `{` and that mark.
       const mark = BRACKETED.has(node.type) ? undefined : CLOSING_MARKS.get(node.type)
       out.push(mark === undefined ? { text: null, kind: 'markup', dash } : { text: null, kind: 'markup', dash, mark })
@@ -68,8 +73,14 @@ function flatten(nodes: readonly Node[], out: Leaf[]): void {
   }
 }
 
+/** C2-I-047: the backslash of a written hard break is no whitespace, so a delimiter before it can open. */
+function breakLeaf(node: Node, bareBreaks: boolean): Leaf {
+  return node.type === 'hard_break' && !bareBreaks ? { text: null, kind: 'break', backslash: true } : { text: null, kind: 'break' }
+}
+
 const SLASH = 0x2f
 const STAR = 0x2a
+const BACKSLASH = 0x5c
 
 /**
  * The kind of the opener escaped at `at`, as a key: `L` and the shape for a line start, else the escaped character,
@@ -214,6 +225,7 @@ function isLow(value: string, at: number): boolean {
 /** The character next to a leaf, where a text leaf stands there; -1 at a line edge, 0 beside other markup. */
 function edge(block: KindBlock, index: number, step: number): number {
   const next = block.leaves[index + step]
+  if (next !== undefined && next.text === null && next.backslash === true && step > 0) return BACKSLASH
   if (next === undefined || next.text === null) return next !== undefined && next.kind === 'markup' ? 0x21 : -1
   const value = next.text.value
   if (value === '') return 0x21
@@ -460,9 +472,9 @@ function bareOpener(block: KindBlock, key: string, placed: ReadonlyMap<TextNode,
 }
 
 /** Whether the escapes `escapes` of a plan leave an opener of one of their kinds outside `placed` (C2-W-010). */
-export function leavesKindBare(group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>,
+export function leavesKindBare(w: Check['w'], group: readonly Node[], escapes: ReadonlyMap<TextNode, readonly number[]>,
   placed: ReadonlyMap<TextNode, readonly number[]>): boolean {
-  for (const block of new Set(kindBlocks(group).values())) {
+  for (const block of new Set(kindBlocks(w, group).values())) {
     for (const key of planKinds(block, escapes)) if (bareOpener(block, key, placed)) return true
   }
   return false

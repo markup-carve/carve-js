@@ -667,7 +667,7 @@ function divName(w: Writer, node: DivNode): string | null {
 }
 
 /** C2-W-081: the opener of a hard-break block stands for the class, which it adds last (C2-A-068). */
-function usesHardBreakOpener(w: Writer, node: DivNode): boolean {
+export function usesHardBreakOpener(w: Writer, node: DivNode): boolean {
   const classes = node.attrs?.classes ?? NONE
   if (classes[classes.length - 1] !== HARD_BREAKS_CLASS || node.title !== undefined || node.groupLabel !== undefined) return false
   return w.facts?.get(node)?.hardBreakOpener ?? true
