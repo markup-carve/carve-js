@@ -997,8 +997,10 @@ export function commentLinesEnd(nodes: readonly Node[], at: number): number {
 function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
   // C2-W-059: a line comment after a code block with a caption stands between its closer and the caption line.
   if (before.type === 'code_block' && before.caption !== undefined && node.type === 'comment' && node.form === 'line') return 0
-  // C2-W-034: a region marker is read into no container, so it ends the one above with the usual blank line.
-  if (isCommentLine(node) && isOpenContainer(w, before) && !isRegionMarker(node)) {
+  // C2-W-034, C2-W-123: a region marker is read into no container, so it ends the one above with the usual blank line,
+  // also where the container ends with a fence that keeps its closer.
+  if (isRegionMarker(node) && isOpenContainer(w, before)) return 1
+  if (isCommentLine(node) && isOpenContainer(w, before)) {
     // C2-B-138: the line stays in the container, unless it ends a fence that the container ends with.
     if (lastFence(w, before) !== null) return 0
     loseReadComment(w, node)
@@ -1082,9 +1084,12 @@ function isNestedList(w: Writer, before: Node, node: Node, at: number): boolean 
   return listAttributes(node, listMarkers(w, node).start) === ''
 }
 
-/** C2-B-138: the fence an open container ends with takes its other spelling where a comment line follows the container. */
+/**
+ * C2-B-138, C2-W-123: the fence an open container ends with takes its other spelling where a comment line follows the
+ * container. A region marker closes the container by itself (C2-B-137), so before one the fence keeps its closer.
+ */
 function markFenceBeforeComment(w: Writer, node: Node, next: Node | undefined): void {
-  if (!isCommentLine(next) || !isOpenContainer(w, node)) return
+  if (!isCommentLine(next) || isRegionMarker(next!) || !isOpenContainer(w, node)) return
   const colons: Node[] = []
   const fence = lastFence(w, node, colons)
   if (fence === null) return

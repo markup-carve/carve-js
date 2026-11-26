@@ -2228,7 +2228,6 @@ function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): 
   const metadata = (document.metadata ?? {}) as Readonly<Record<string, unknown>>
   for (const name of Object.keys(metadata)) {
     if (!ROOT_METADATA_LOSSES.has(name) || metadata[name] === undefined) continue
-    if (name === 'fields' && document.children.some((node) => node.type === 'frontmatter')) continue
     diagnostics.push({ code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
       message: `Carve source cannot spell root metadata.${name}`, path: `/metadata/${name}` })
   }

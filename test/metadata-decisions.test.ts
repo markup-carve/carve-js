@@ -79,13 +79,13 @@ describe('typed metadata and tree declarations', () => {
       end: { path: '/children/0', offset: 1 } }] })).toThrow('has no endpoint')
   })
 
-  it('C2-A-192, C2-W-011: HTML ignores root metadata and the writer reports fields unless frontmatter preserves them', () => {
+  it('C2-A-192, C2-W-011: HTML ignores root metadata and the writer reports fields, also beside frontmatter (carve#3598)', () => {
     const root = document()
     expect(render(root)).toBe('')
     expect(resolveTree(root).document.metadata?.fields?.z?.kind).toBe('map')
     expect(writeWithDiagnostics(root).diagnostics.map((entry) => entry.path)).toContain('/metadata/fields')
     root.children = [{ type: 'frontmatter', format: 'yaml', value: 'x: y\n' }]
-    expect(writeWithDiagnostics(root).diagnostics.map((entry) => entry.path)).not.toContain('/metadata/fields')
+    expect(writeWithDiagnostics(root).diagnostics.map((entry) => entry.path)).toContain('/metadata/fields')
   })
 
   it('C2-A-212, C2-H-121: resolution and profiles visit inline nodes inside nested metadata values', () => {
