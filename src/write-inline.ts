@@ -623,19 +623,24 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
   escapeLoneLinkBrackets(w, node)
   if (node.key === undefined && /[\r\n]/u.test(node.tooltip ?? '')) lose(w, node, 'tooltip')
   const content = writeInlines(w, node.children, flags | IN_BRACKET)
-  return `[${collapsedContent(node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`
+  return `[${collapsedContent(w, node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`
 }
 
 /**
  * C2-W-075: the content of a collapsed reference folds to its key (C2-I-079). Where the written content does not, and
  * the key read as content gives the children, the key is the content.
  */
-function collapsedContent(node: LinkNode, content: string, flags: number): string {
+function collapsedContent(w: Writer, node: LinkNode, content: string, flags: number): string {
   const key = node.key
   if ((node.refForm !== 'collapsed' && node.refForm !== 'shortcut') || key === undefined || (flags & IN_CELL) !== 0 ||
     foldLabel(content) === key) return content
+  // The rounds write a reference past the depth cap again with the same content; each label trial parses all of it.
+  const known = w.collapsedLabels.get(node)
+  if (known !== undefined && known[0] === content) return known[1]
   const children: ParagraphNode = { type: 'paragraph', children: node.children }
-  return labelLike(content, key, (candidate) => readsAsCollapsed(candidate, key, children))
+  const label = labelLike(content, key, (candidate) => readsAsCollapsed(candidate, key, children))
+  w.collapsedLabels.set(node, [content, label])
+  return label
 }
 
 /** C2-W-075: the first spelling of the label `written` that folds to `key` and reads back, or `written`. */

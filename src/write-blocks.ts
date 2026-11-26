@@ -227,6 +227,8 @@ function textLeaf(
   w.lead = (w.lead ?? prefix) + mark
   const start = node.type === 'paragraph' ? LINE_START : AFTER_MARK
   const first = w.lines.length
+  const authored = w.authoredLeaves.get(node)
+  if (authored !== undefined) return emitLines(w, prefix, indent, authored)
   escapeBacktickKind(w, node.children)
   emitLines(w, prefix, indent, planLeaf(w, node.children, flags, writeContent(w, node.children, flags), AS_CONTENT, start))
   if (node.type === 'paragraph' && w.topBlocks.has(node)) indentTypedOpener(w, node, first, attributed)
