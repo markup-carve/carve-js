@@ -173,14 +173,13 @@ function resultsOf(node: Record<string, unknown>): ReadonlyMap<string, string | 
   return typeof type === 'string' ? RESULT_WHEN.get(type) ?? null : null
 }
 
-/** Whether equality compares this field. `spanMarks`: the node stands in a table with span marks. */
+/** Whether equality compares the field `name`, whose value is defined. `spanMarks`: the node stands in a table with span marks. */
 function comparedField(node: Record<string, unknown>, results: ReadonlyMap<string, string | undefined> | null, name: string,
   spanMarks: boolean): boolean {
-  if (node[name] === undefined) return false
   if (results === null) return true
   if (name === 'pos' || name === 'segments' || name === 'srcByteLength') return false
-  if (!results.has(name)) return true
   const when = results.get(name)
+  if (when === undefined && !results.has(name)) return true
   if (when === 'reference use') return node['key'] === undefined
   if (when === 'derived from authored span mark') return !spanMarks
   return false
@@ -249,14 +248,56 @@ function equalObjects(a: Record<string, unknown>, b: Record<string, unknown>, sp
   const inner = a['type'] === 'table' ? hasSpanMarks(a) || hasSpanMarks(b) : spanMarks
   const left = resultsOf(a)
   const right = resultsOf(b)
+  return ownKeysOnly && plainRecord(a) && plainRecord(b)
+    ? equalPlainFields(a, b, left, right, inner) : equalFields(a, b, left, right, inner)
+}
+
+type Results = ReadonlyMap<string, string | undefined> | null
+
+/** `equalFields` without an array of keys per record: `for in` walks the own keys of a plain record and no others. */
+function equalPlainFields(a: Record<string, unknown>, b: Record<string, unknown>, left: Results, right: Results, inner: boolean): boolean {
+  let count = 0
+  for (const name in a) {
+    const value = a[name]
+    if (value === undefined || !comparedField(a, left, name, inner)) continue
+    count++
+    const other = b[name]
+    if (other === undefined || !Object.hasOwn(b, name) || !comparedField(b, right, name, inner) ||
+      !equalValues(value, other, inner)) return false
+  }
+  for (const name in b) if (b[name] !== undefined && comparedField(b, right, name, inner)) count--
+  return count === 0
+}
+
+function equalFields(a: Record<string, unknown>, b: Record<string, unknown>, left: Results, right: Results, inner: boolean): boolean {
   let count = 0
   for (const name of Object.keys(a)) {
-    if (!comparedField(a, left, name, inner)) continue
+    const value = a[name]
+    if (value === undefined || !comparedField(a, left, name, inner)) continue
     count++
-    if (!Object.hasOwn(b, name) || !comparedField(b, right, name, inner) || !equalValues(a[name], b[name], inner)) return false
+    const other = b[name]
+    if (other === undefined || !Object.hasOwn(b, name) || !comparedField(b, right, name, inner) ||
+      !equalValues(value, other, inner)) return false
   }
-  for (const name of Object.keys(b)) if (comparedField(b, right, name, inner)) count--
+  for (const name of Object.keys(b)) if (b[name] !== undefined && comparedField(b, right, name, inner)) count--
   return count === 0
+}
+
+/**
+ * Whether the comparison under way may walk plain records with `for in`: `Object.prototype` had no enumerable key when
+ * it started, so `for in` over a record with that prototype or none gives the keys `Object.keys` gives.
+ */
+let ownKeysOnly = false
+
+function prototypeKeysFree(): boolean {
+  for (const _name in Object.prototype) return false
+  return true
+}
+
+/** A record whose prototype is `Object.prototype` or none, as JSON and object literals give. */
+function plainRecord(value: Record<string, unknown>): boolean {
+  const prototype = Object.getPrototypeOf(value) as unknown
+  return prototype === Object.prototype || prototype === null
 }
 
 function equalValues(a: unknown, b: unknown, spanMarks: boolean): boolean {
@@ -267,5 +308,11 @@ function equalValues(a: unknown, b: unknown, spanMarks: boolean): boolean {
 
 /** C2-A-161: whether two trees are the same document. */
 export function treesEqual(a: Node, b: Node): boolean {
-  return equalValues(a, b, false)
+  const outer = ownKeysOnly
+  ownKeysOnly = prototypeKeysFree()
+  try {
+    return equalValues(a, b, false)
+  } finally {
+    ownKeysOnly = outer
+  }
 }
