@@ -1438,7 +1438,7 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
     }
     takeVerbatimReferences(w, run, document.children.slice(from, end), first, references, run.stats.planned > planned)
   }
-  if (w.losses.entries.length > mark.entries && w.authored !== null) {
+  if (w.losses.entries.length > mark.entries && w.facts !== null) {
     settleLosses(w, document.children.slice(from, end), first && !w.blankFirst, mark, references.length > 0)
   }
   return end
@@ -1533,7 +1533,7 @@ function authoredContent(w: Writer, leaf: Node): string | null {
     const spelled = decode(node.pos.startOffset, node.pos.endOffset)
     const end = spelled.indexOf('\n')
     if (end < 0) return null
-    text += `${decode(at, node.pos.startOffset)}${spelled.slice(0, end).replace(/[ \t]+$/u, '')}\n`
+    text += `${decode(at, node.pos.startOffset)}${spelled.slice(0, end).replace(/[ \t\r]+$/u, '')}\n`
     at = node.pos.endOffset
   }
   text += decode(at, to)
@@ -1897,7 +1897,7 @@ function planInstead(w: Writer, run: WriterRun, document: DocumentNode, from: nu
  */
 function passSettled(w: Writer, group: readonly Node[], first: boolean, reported: number): boolean {
   if (w.losses.entries.length === reported) return true
-  if (w.authored === null || w.verbatimRefs) return false
+  if (w.facts === null || w.verbatimRefs) return false
   const lines = w.lines
   const tree = new Set(w.treeReferences)
   w.treeReferences.clear()

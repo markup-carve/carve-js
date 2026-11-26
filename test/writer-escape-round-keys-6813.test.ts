@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatWithDiagnostics, parse, treesEqual, writeWithDiagnostics } from '../src/index.ts'
+import { formatWithDiagnostics, parse, parseWithLayout, treesEqual, writeWithDiagnostics } from '../src/index.ts'
 
 const collapsed = (lines: number): string => '[a *[a][]*[x]: /u\n'.repeat(lines)
 
@@ -38,5 +38,19 @@ describe('C2-W-075: a key the escape rounds cannot spell is no loss where the ou
     const link = (tree.children[0] as { children: { key?: string }[] }).children[0]!
     link.key = 'a\\*x'
     expect(writeWithDiagnostics(tree).source).toBe(writeWithDiagnostics(structuredClone(tree)).source)
+  })
+
+  it('CRLF line endings take the authored fallback too', () => {
+    const source = collapsed(122).replaceAll('\n', '\r\n')
+    const out = formatWithDiagnostics(source)
+    expect(out.diagnostics).toEqual([])
+    expect(treesEqual(parse(out.source), parse(source))).toBe(true)
+  })
+
+  it('a sidecar without its source still takes the verbatim reference texts', () => {
+    const { document, layout } = parseWithLayout(collapsed(121))
+    const out = writeWithDiagnostics(document, { layout: { nodes: layout.nodes } })
+    expect(out.diagnostics).toEqual([])
+    expect(treesEqual(parse(out.source), document)).toBe(true)
   })
 })
