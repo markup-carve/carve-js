@@ -296,7 +296,9 @@ function image(node: ImageNode, r: Render): string {
   if (key !== undefined && src === undefined) return `![${escapeText(alt)}]${unresolvedLabel(node, key)}`
   const definition = definitionFor(r, node, key)
   const title = node.tooltip ?? definition?.tooltip
-  const structural: Pair[] = [['src', destination(r, src ?? '', node)], ['alt', alt]]
+  const structural: Pair[] = [['src', destination(r, src ?? '', node)]]
+  // C2-H-080: an unknown alt text, neither alt nor decorative, writes no alt attribute.
+  if (node.alt !== undefined || node.decorative === true) structural.push(['alt', alt])
   if (title !== undefined) structural.push(['title', title])
   pushAll(structural, referenceCarriers(r, node, key))
   return `<img${attributes(r, withDefinition(node, definition), { structural, origin: node })}>`

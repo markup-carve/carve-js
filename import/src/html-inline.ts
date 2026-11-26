@@ -540,7 +540,10 @@ export function htmlImage(node: Html.Element, context: HtmlContext): Inline[] {
   const ref = reference(node, context)
   if (ref !== undefined) define(context, ref.key, safe, node)
   const tooltip = ref === undefined ? attr(node, 'title') : undefined
-  return withDestination({ type: 'image', ...(safe !== undefined ? { src: safe } : {}), alt: attr(node, 'alt') ?? '',
+  // C2-M-050, C2-A-115: an empty alt is decorative, a missing one leaves the alt text unknown.
+  const alt = attr(node, 'alt')
+  return withDestination({ type: 'image', ...(safe !== undefined ? { src: safe } : {}),
+    ...(alt === '' ? { decorative: true } : alt !== undefined ? { alt } : {}),
     ...(tooltip !== undefined ? { tooltip } : {}), ...(ref ? { key: ref.key, namespace: 'link' as const, refForm: ref.refForm } : {}),
     ...(longDescription ? { longDescription } : {}), ...attrs(context, node, ['src', 'alt', 'title', 'longdesc']) })
 }

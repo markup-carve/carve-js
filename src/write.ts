@@ -3052,6 +3052,33 @@ function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteO
   w.openerRuns = null
 }
 
+function lacksAlt(item: Node): boolean {
+  if (item.type === 'image' && item.alt === undefined) return true
+  let found = false
+  forEachSlot(item, (children) => { found ||= children.some(lacksAlt) })
+  return found
+}
+
+/**
+ * C2-W-011: a copy of `document` in which each image without `alt` has the empty alt that `![](URL)` reads back as.
+ * A decorative image is no loss; one whose alt text is unknown is reported with `image-alt-unknown` at the image.
+ */
+function withSourceAlts(w: Writer, document: DocumentNode): DocumentNode {
+  if (!lacksAlt(document)) return document
+  const copy = structuredClone(document)
+  const visit = (item: Node): void => {
+    if (item.type === 'image' && item.alt === undefined) {
+      if (item.decorative !== true) addFinding(w.losses, item, { code: 'image-alt-unknown', severity: 'warning',
+        channel: 'render-loss', message: 'Carve source cannot spell an unknown alt text; the image is written with an empty one' })
+      delete item.decorative
+      item.alt = ''
+    }
+    forEachSlot(item, (children) => { for (const child of children) visit(child) })
+  }
+  visit(copy)
+  return copy
+}
+
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout),
@@ -3063,6 +3090,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
   w.verifiedSourceBytes = verifiedSourceBytes
+  document = withSourceAlts(w, document)
   prepareDocumentWriter(w, document, layout)
   if (linkKeys !== undefined) w.linkKeys = linkKeys
   w.work.source = original?.length ?? 0

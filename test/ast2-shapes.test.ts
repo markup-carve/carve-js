@@ -6,12 +6,14 @@ import {
 import { documentOf, paragraph, text } from './support/tree.ts'
 
 describe('AST 2.0 shapes', () => {
-  it('C2-A-115: decorative is true exactly when alt is absent', () => {
+  it('C2-A-115: an image has alt text, an unknown alt text or is decorative', () => {
     const image = (fields: Record<string, unknown>): unknown => documentOf(paragraph({ type: 'image', ...fields }))
     expect(() => validateTree(image({ alt: '' }))).not.toThrow()
     expect(() => validateTree(image({ decorative: true }))).not.toThrow()
-    expect(() => validateTree(image({ alt: '', decorative: true }))).toThrow('decorative is true exactly when alt is absent')
-    expect(() => validateTree(image({ src: 'u' }))).toThrow('decorative is true exactly when alt is absent')
+    expect(() => validateTree(image({ src: 'u' }))).not.toThrow()
+    expect(() => validateTree(image({ alt: 'a', decorative: false }))).not.toThrow()
+    expect(() => validateTree(image({ alt: '', decorative: true }))).toThrow('decorative true requires alt to be absent, and decorative false requires alt')
+    expect(() => validateTree(image({ src: 'u', decorative: false }))).toThrow('decorative true requires alt to be absent, and decorative false requires alt')
   })
 
   it('C2-H-080: a long image description follows its containing block', () => {

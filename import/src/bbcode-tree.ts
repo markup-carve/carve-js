@@ -42,7 +42,7 @@ type Node = string
   | { el: 'format', type: FormatType, children: Node[] }
   | { el: 'code', value: string }
   | { el: 'a', href: string, children: Node[] }
-  | { el: 'img', src: string, alt: string }
+  | { el: 'img', src: string, alt: string | undefined }
 
 const FORMATS: Record<string, FormatType> = { strong: 'strong', em: 'emphasis', u: 'underline', del: 'delete', sup: 'superscript',
   sub: 'subscript' }
@@ -82,7 +82,7 @@ function tagNodes(tag: Tag, out: Node[]): void {
       out.push({ el: 'a', href: `mailto:${address}`, children: tag.value === undefined ? nodesOf([address]) : nodesOf(tag.children) })
       return
     }
-    case 'img': out.push({ el: 'img', src: plainText(tag.children).trim(), alt: tag.value ?? '' }); return
+    case 'img': out.push({ el: 'img', src: plainText(tag.children).trim(), alt: tag.value }); return
     case 'youtube': {
       const url = `https://www.youtube.com/watch?v=${encodeURIComponent(plainText(tag.children).trim())}`
       out.push({ el: 'a', href: url, children: [url] })
@@ -151,7 +151,9 @@ function inline(node: Node, context: Context, out: Inline[]): void {
 
 function image(node: Extract<Node, { el: 'img' }>, context: Context): Inline[] {
   const src = safeUrl(context, 'img', node.src)
-  return withDestination({ type: 'image', ...(src !== undefined ? { src } : {}), alt: node.alt })
+  // C2-M-050: as the HTML route reads the `<img>` it writes: an empty alt is decorative, none leaves it unknown.
+  const alt = node.alt === '' ? { decorative: true } : node.alt === undefined ? {} : { alt: node.alt }
+  return withDestination({ type: 'image', ...(src !== undefined ? { src } : {}), ...alt })
 }
 
 function edgeInline(nodes: Node[], context: Context): Inline[] {

@@ -27,8 +27,8 @@ describe('writer losses for AST 2.0 fields', () => {
   it('C2-A-175, C2-W-011: image and xref fields that source cannot spell are reported', () => {
     const image = (fields: Partial<ImageNode>) => documentOf(paragraph({ type: 'image', src: '/a', alt: 'a', ...fields }))
     expect(losses(image({ longDescription: [paragraph('Long')] })).some((entry) => entry.includes('field longDescription'))).toBe(true)
-    expect(losses(documentOf(paragraph({ type: 'image', src: '/a', decorative: true })))
-      .some((entry) => entry.includes('field decorative'))).toBe(true)
+    expect(losses(image({ decorative: false })).some((entry) => entry.includes('field decorative'))).toBe(true)
+    expect(losses(documentOf({ ...paragraph({ type: 'image', src: '/a', decorative: true }), role: 'image' }))).toEqual([])
     expect(losses(documentOf(paragraph({ type: 'xref', key: 'h', namespace: 'heading', display: 'number' })))
       .some((entry) => entry.includes('field display'))).toBe(true)
   })

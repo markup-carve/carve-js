@@ -149,7 +149,8 @@ function inlineTag(tag: Tag): string {
       const address = (tag.value ?? plainText(tag.children)).trim()
       return `<a href="mailto:${escapeHtml(address)}">${tag.value === undefined ? escapeHtml(address) : inlineHtml(tag.children)}</a>`
     }
-    case 'img': return `<img src="${safeHref(plainText(tag.children))}" alt="${escapeHtml(tag.value ?? '')}">`
+    // C2-M-050: `[img]` states no alt text, so it writes no alt attribute and its alt text stays unknown.
+    case 'img': return `<img src="${safeHref(plainText(tag.children))}"${tag.value === undefined ? '' : ` alt="${escapeHtml(tag.value)}"`}>`
     case 'youtube': {
       const url = `https://www.youtube.com/watch?v=${encodeURIComponent(plainText(tag.children).trim())}`
       return `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`
