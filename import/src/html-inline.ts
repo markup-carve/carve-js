@@ -465,7 +465,9 @@ function htmlMath(node: Html.Element, context: HtmlContext): Inline[] {
   const source = annotation ? plain(annotation) : attr(node, 'alttext')
   if (source !== undefined) return [{ type: 'math', display: attr(node, 'display') === 'block', value: source }]
   report(context, node, 'import-element-mapped', 'MathML without a TeX source read as its text')
-  return [text(plain(node))]
+  const value = plain(node)
+  // An empty text node has no spelling (C2-M-069).
+  return value === '' ? [] : [text(value)]
 }
 
 function rubyBase(node: Html.ChildNode, context: HtmlContext): Inline[] {

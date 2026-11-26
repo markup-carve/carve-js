@@ -318,6 +318,19 @@ describe('normalization', () => {
     expect(source('<p>a<span class="y"><code></code></span>b</p>')).toBe('a[]{.y}b\n')
   })
 
+  it('C2-M-069: an empty code span before text is dropped, never written as an empty backtick run', () => {
+    expect(source('<p><code></code>y</p>')).toBe('y\n')
+    expect(codes('<p><code></code>y</p>')).toEqual([])
+    expect(source('<p><code class="language-js"></code>y</p>')).toBe('y\n')
+    expect(codes('<p><code class="language-js"></code>y</p>')).toEqual(['import-structure-repaired'])
+  })
+
+  it('C2-M-069: an empty MathML element without a TeX source leaves no empty text node', () => {
+    expect(source('<p>a<math></math>b</p>')).toBe('ab\n')
+    expect(codes('<p><math></math><code>z</code></p>')).toEqual(['import-element-mapped'])
+    expect(source('<p><math></math><code>z</code></p>')).toBe('`z`\n')
+  })
+
   it('C2-M-069, C2-M-113: an empty code inside a ranged comment loses no range', () => {
     const html = '<p><span class="comment-start" data-comment-id="1">n</span><code></code>' +
       '<span class="comment-end" data-comment-id="1"></span>y</p>'
