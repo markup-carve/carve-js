@@ -1265,7 +1265,12 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
 }
 
 /** C2-A-220: a definition holds no id. C2-A-221: the mode of a use matches its slot. */
+/** C2-B-236: an ASCII letter, digit or `_`, then ASCII letters, digits, `_` and `-`. */
+const SNIPPET_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/u
+
 function checkSnippet(value: Fields, type: string, path: string, allowed: readonly string[]): void {
+  // C2-A-220, C2-A-221: the name is a snippet name, as the schema's pattern states.
+  if (typeof value['name'] === 'string' && !SNIPPET_NAME.test(value['name'])) fail(`${path}/name`, 'not a snippet name')
   if (type === 'snippet_definition') {
     const attrs = value['attrs']
     if (isRecord(attrs) && attrs['id'] !== undefined) fail(`${path}/attrs/id`, 'a snippet definition holds no id')
