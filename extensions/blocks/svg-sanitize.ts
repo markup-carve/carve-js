@@ -45,6 +45,12 @@ export interface SanitizeResult {
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
+const XLINK_NS = 'http://www.w3.org/1999/xlink'
+// The only prefixed names written, each exactly in this spelling: prefixes are case-sensitive
+// and the root binds `xlink` when needed (carve#6782, carve#6783).
+const PREFIXED_NAMES = new Set(['xlink:href', 'xmlns:xlink', 'xml:space'])
+// A namespace name of XML whitespace only, literal or as a character reference, is no URI reference (carve#6783).
+const BLANK_NAMESPACE_RE = /^(?:[ \t\n\r]|&#(?:0*(?:9|10|13|32)|[xX]0*(?:9|[aAdD]|20));)*$/
 
 // Presentational SVG element allowlist. Deliberately excludes script,
 // foreignObject, style, a, image, metadata, and SMIL — those are gated by an
@@ -295,13 +301,18 @@ function parseAttrs(raw: string): ParsedAttr[] {
 function sanitizeAttribute(name: string, n: string, value: string | null, opts: SanitizeSvgOptions, allowExternalHref: boolean): string {
   // XML has no valueless attributes, and none on the allowlist is boolean (carve#6774).
   if (value === null || n.startsWith('on')) return ''
-  // Namespaces in XML forbids undeclaring a prefix (carve#6779).
-  if (value === '' && n.startsWith('xmlns:')) return ''
+  if (namespaceUnwritable(name, value)) return ''
   if (URL_ATTRS.has(n)) return sanitizeUrlAttribute(name, value, opts, allowExternalHref)
   if (n === 'style') return opts.allowStyle && !styleIsDangerous(value) ? ` ${name}="${escapeAttr(value)}"` : ''
   if (!n.startsWith('aria-') && !n.startsWith('data-') && !ALLOWED_ATTRS.has(n)) return ''
   if (REF_VALUE_ATTRS.has(n) ? refAttrUnsafe(value) : valueHasExternalRef(value)) return ''
   return ` ${name}="${escapeAttr(value)}"`
+}
+
+function namespaceUnwritable(name: string, value: string): boolean {
+  if (!name.includes(':')) return false
+  // Namespaces in XML forbids undeclaring a prefix (carve#6779).
+  return !PREFIXED_NAMES.has(name) || (name === 'xmlns:xlink' && BLANK_NAMESPACE_RE.test(value))
 }
 
 function sanitizeUrlAttribute(name: string, value: string, opts: SanitizeSvgOptions, allowExternalHref: boolean): string {
@@ -313,7 +324,12 @@ function sanitizeUrlAttribute(name: string, value: string, opts: SanitizeSvgOpti
 
 const ANIMATION_VALUE_ATTRS = new Set(['values', 'from', 'to', 'by'])
 
-function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string, isRoot: boolean): string {
+interface XlinkUse {
+  declared: boolean
+  used: boolean
+}
+
+function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string, isRoot: boolean, xlink: XlinkUse): string {
   const allowExternalHref = (opts.allowLinks === true && tag.toLowerCase() === 'a') ||
     (opts.allowExternalImages === true && tag.toLowerCase() === 'image')
   const attrs = parseAttrs(raw)
@@ -329,9 +345,16 @@ function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string, isRoo
     // carve#6755: the root's own xmlns is replaced by name, never by searching the written attributes.
     if (isRoot && n === 'xmlns') continue
     if (hrefAnimation && value !== null && ANIMATION_VALUE_ATTRS.has(n) && !localRefs(value)) continue
-    out += sanitizeAttribute(name, n, value, opts, allowExternalHref)
+    out += noteXlink(name, sanitizeAttribute(name, n, value, opts, allowExternalHref), xlink)
   }
   return out
+}
+
+function noteXlink(name: string, written: string, xlink: XlinkUse): string {
+  if (written === '') return written
+  if (name === 'xlink:href') xlink.used = true
+  else if (name === 'xmlns:xlink') xlink.declared = true
+  return written
 }
 
 // carve#6761: an animation of `href` may only write `#id` entries, like the `href` it changes.
@@ -379,9 +402,11 @@ function markerEnd(source: string, marker: string, from: number): number {
 interface SvgState {
   out: string[]
   dropStack: string[]
-  kept: { name: string, contentStart: number }[]
+  kept: { name: string, contentStart: number, xlinkBound: boolean }[]
   sawRoot: boolean
   rootSelfClosed: boolean
+  /** An `xlink:` attribute was written with no `xmlns:xlink` in scope (carve#6782). */
+  bindXlink: boolean
 }
 
 function closeTag(name: string, state: SvgState): boolean {
@@ -404,10 +429,13 @@ function openTag(name: string, raw: string, selfClose: boolean, state: SvgState,
     return true
   }
   if (isRoot) markRoot(state, selfClose)
-  let attrs = sanitizeAttrs(raw, opts, name, isRoot)
+  const xlink: XlinkUse = { declared: false, used: false }
+  let attrs = sanitizeAttrs(raw, opts, name, isRoot, xlink)
   if (isRoot) attrs = ` xmlns="${SVG_NS}"` + attrs
+  const xlinkBound = xlink.declared || state.kept.at(-1)?.xlinkBound === true
+  if (xlink.used && !xlinkBound) state.bindXlink = true
   state.out.push(`<${name}${attrs}${selfClose ? '/>' : '>'}`)
-  if (!selfClose) state.kept.push({ name, contentStart: state.out.length })
+  if (!selfClose) state.kept.push({ name, contentStart: state.out.length, xlinkBound })
   return true
 }
 
@@ -473,7 +501,7 @@ const NON_XML_CHAR_RE = /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]|[\ud800-\udbff
 export function sanitizeSvg(source: string, opts: SanitizeSvgOptions = {}): SanitizeResult {
   const src = (NON_XML_CANDIDATE_RE.test(source) ? source.replace(NON_XML_CHAR_RE, '') : source).trim()
   let cursor = 0
-  const state: SvgState = { out: [], dropStack: [], kept: [], sawRoot: false, rootSelfClosed: false }
+  const state: SvgState = { out: [], dropStack: [], kept: [], sawRoot: false, rootSelfClosed: false, bindXlink: false }
   while (cursor < src.length) {
     const start = src.indexOf('<', cursor)
     if (start < 0) break
@@ -483,6 +511,7 @@ export function sanitizeSvg(source: string, opts: SanitizeSvgOptions = {}): Sani
   }
   if (!consumeText(src, cursor, src.length, state)) return { svg: '', ok: false }
   if (!state.sawRoot || state.kept.length !== 0 || state.dropStack.length !== 0) return { svg: '', ok: false }
+  if (state.bindXlink) state.out[0] = `<svg xmlns="${SVG_NS}" xmlns:xlink="${XLINK_NS}"${state.out[0]!.slice(`<svg xmlns="${SVG_NS}"`.length)}`
   const svg = state.out.join('')
   const tailOk = state.rootSelfClosed ? /\/>\s*$/.test(svg) : /<\/svg>\s*$/i.test(svg)
   return /^<svg[\s/>]/i.test(svg) && tailOk ? { svg, ok: true } : { svg: '', ok: false }

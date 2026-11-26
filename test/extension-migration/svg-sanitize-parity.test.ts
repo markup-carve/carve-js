@@ -97,7 +97,7 @@ describe('sanitizeSvg parity with carve-php', () => {
       const row = ROWS[delta.index]!
       expect(delta.src).toBe(row.src)
       expect(delta.svg === row.svg && delta.ok === row.ok, row.src).toBe(false)
-      expect(delta.tickets.every((ticket) => ['carve#6763', 'carve#6764', 'carve#6765', 'carve#6774'].includes(ticket))).toBe(true)
+      expect(delta.tickets.every((ticket) => ['carve#6763', 'carve#6764', 'carve#6765', 'carve#6774', 'carve#6782'].includes(ticket))).toBe(true)
     }
   })
 
@@ -403,7 +403,8 @@ describe('sanitizeSvg empty prefixed namespace declarations (carve#6779)', () =>
   it('keeps a non-empty one', () => {
     const xlink = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#a"/></svg>'
     expect(sanitizeSvg('<svg xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#a"/></svg>')).toEqual({ svg: xlink, ok: true })
-    expect(sanitizeSvg('<svg><g xmlns:xlink=" "/></svg>').svg).toBe('<svg xmlns="http://www.w3.org/2000/svg"><g xmlns:xlink=" "/></svg>')
+    // carve#6783: a namespace name of whitespace only is dropped like the empty one.
+    expect(sanitizeSvg('<svg><g xmlns:xlink=" "/></svg>').svg).toBe('<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>')
   })
 
   const DECLS = ['xmlns:xlink=""', "xmlns:xlink=''", 'xmlns:xlink = ""', 'xmlns:xlink="http://www.w3.org/1999/xlink"', 'xmlns:xlink="x"',
@@ -420,5 +421,103 @@ describe('sanitizeSvg empty prefixed namespace declarations (carve#6779)', () =>
   }, (svg, src) => {
     expect(xmlProblems(svg), src).toEqual([])
     expect(namespaceProblems(svg), src).toEqual([])
+  })
+})
+
+const SVG_OPEN = '<svg xmlns="http://www.w3.org/2000/svg"'
+const XLINK_DECL = 'xmlns:xlink="http://www.w3.org/1999/xlink"'
+
+function strictStartTagProblems(attrs: string, scope: Set<string>): string[] {
+  const problems: string[] = []
+  const pairs = [...attrs.matchAll(/([^\s=/>]+)\s*=\s*"([^"]*)"/g)].map((a) => [a[1]!, a[2]!] as const)
+  for (const [name, value] of pairs.filter(([name]) => name.startsWith('xmlns:'))) {
+    const read = value.replace(/&#x([0-9a-f]+);/gi, (_m, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+      .replace(/&#(\d+);/g, (_m, dec: string) => String.fromCodePoint(Number(dec)))
+    if (read.trim() === '') problems.push(`blank declaration ${name}`)
+    else scope.add(name.slice(6))
+  }
+  for (const [name] of pairs) {
+    const prefix = name.split(':')[0]!
+    if (name.includes(':') && prefix !== 'xmlns' && !scope.has(prefix)) problems.push(`unbound prefix ${name}`)
+  }
+  return problems
+}
+
+/** Namespaces in XML 1.0 errors, strict: a prefix nothing binds, or a declaration whose value is blank once its references are read. */
+function strictNamespaceProblems(svg: string): string[] {
+  const problems: string[] = []
+  const scopes: Set<string>[] = [new Set(['xml'])]
+  for (const [, close, attrs, self] of svg.matchAll(/<(\/?)[A-Za-z_:][\w:.-]*((?:\s+[^\s=/>]+\s*=\s*"[^"]*")*)\s*(\/?)>/g)) {
+    if (close === '/') {
+      scopes.pop()
+      continue
+    }
+    const scope = new Set(scopes.at(-1))
+    problems.push(...strictStartTagProblems(attrs!, scope))
+    if (self !== '/') scopes.push(scope)
+  }
+  return problems
+}
+
+describe('sanitizeSvg binds the xlink prefix (carve#6782)', () => {
+  it('declares xlink on the root when nothing in scope does', () => {
+    expect(sanitizeSvg('<svg><use xlink:href="#a"/></svg>'))
+      .toEqual({ svg: `${SVG_OPEN} ${XLINK_DECL}><use xlink:href="#a"/></svg>`, ok: true })
+    expect(sanitizeSvg('<svg xlink:href="#a" id="r"/>').svg).toBe(`${SVG_OPEN} ${XLINK_DECL} xlink:href="#a" id="r"/>`)
+  })
+
+  it('keeps an authored declaration in scope and adds none', () => {
+    expect(sanitizeSvg('<svg xmlns:xlink="urn:x"><use xlink:href="#a"/></svg>').svg)
+      .toBe(`${SVG_OPEN} xmlns:xlink="urn:x"><use xlink:href="#a"/></svg>`)
+    expect(sanitizeSvg('<svg><use xlink:href="#a" xmlns:xlink="urn:x"/></svg>').svg)
+      .toBe(`${SVG_OPEN}><use xlink:href="#a" xmlns:xlink="urn:x"/></svg>`)
+    expect(sanitizeSvg('<svg><g xmlns:xlink="urn:x"><use xlink:href="#a"/></g></svg>').svg)
+      .toBe(`${SVG_OPEN}><g xmlns:xlink="urn:x"><use xlink:href="#a"/></g></svg>`)
+  })
+
+  it('binds a use outside the subtree that declares it', () => {
+    expect(sanitizeSvg('<svg><g xmlns:xlink="urn:x"><use xlink:href="#a"/></g><use xlink:href="#b"/></svg>').svg)
+      .toBe(`${SVG_OPEN} ${XLINK_DECL}><g xmlns:xlink="urn:x"><use xlink:href="#a"/></g><use xlink:href="#b"/></svg>`)
+  })
+
+  it('adds nothing when the xlink attribute is dropped', () => {
+    expect(sanitizeSvg('<svg><use xlink:href="https://e/x"/><use XLINK:HREF="#a"/></svg>').svg).toBe(`${SVG_OPEN}><use/><use/></svg>`)
+    expect(sanitizeSvg('<svg><script><use xlink:href="#a"/></script></svg>').svg).toBe(`${SVG_OPEN}/>`)
+  })
+})
+
+describe('sanitizeSvg namespace names (carve#6783)', () => {
+  it('drops a prefixed name in any other spelling', () => {
+    expect(sanitizeSvg('<svg XMLNS:XLINK="http://www.w3.org/1999/xlink"><rect/></svg>'))
+      .toEqual({ svg: `${SVG_OPEN}><rect/></svg>`, ok: true })
+    expect(sanitizeSvg('<svg Xmlns:xlink="urn:x" XML:SPACE="preserve" data-a:b="1" aria-x:y="2" xml:space="preserve"/>').svg)
+      .toBe(`${SVG_OPEN} xml:space="preserve"/>`)
+  })
+
+  it('drops a declaration of whitespace only', () => {
+    expect(sanitizeSvg('<svg xmlns:xlink=" "><rect/></svg>')).toEqual({ svg: `${SVG_OPEN}><rect/></svg>`, ok: true })
+    for (const value of ['\t', ' \n ', '\r', '&#32;', '&#x20;&#9;', '&#xA;', '&#13;', '&#x0D;']) {
+      expect(sanitizeSvg(`<svg><g xmlns:xlink="${value}"/></svg>`).svg, value).toBe(`${SVG_OPEN}><g/></svg>`)
+    }
+    expect(sanitizeSvg('<svg><g xmlns:xlink=" urn:x "/></svg>').svg).toBe(`${SVG_OPEN}><g xmlns:xlink=" urn:x "/></svg>`)
+    expect(sanitizeSvg('<svg><g xmlns:xlink="&#160;"/></svg>').svg).toBe(`${SVG_OPEN}><g xmlns:xlink="&#160;"/></svg>`)
+  })
+
+  const NAMES = ['xmlns:xlink', 'XMLNS:XLINK', 'Xmlns:xlink', 'xmlns:XLINK', 'xlink:href', 'XLINK:HREF', 'Xlink:href', 'xml:space',
+    'XML:SPACE', 'data-a:b', 'aria-x:y', 'id', 'fill']
+  const VALUES = ['', ' ', '\t', ' \n', '&#32;', '&#x9;', '&#xa;', '#a', 'http://www.w3.org/1999/xlink', 'urn:x', ' urn:x', 'preserve', 'red']
+  sweep('namespace names and xlink scope', () => {
+    const attrs = (): string => Array.from({ length: Math.floor(rnd() * 3) }, () => `${pick(NAMES)}=${quoted(pick(VALUES))}`).join(' ')
+    const leaf = (): string => `<${pick(['use', 'rect', 'g', 'textPath'])} ${attrs()}/>`
+    const kids = Array.from({ length: Math.floor(rnd() * 3) }, () => {
+      if (rnd() < 0.5) return leaf()
+      const tag = pick(['g', 'defs', 'text', 'script'])
+      return `<${tag} ${attrs()}>${leaf()}${rnd() < 0.5 ? leaf() : ''}</${tag}>`
+    })
+    return { src: `<svg ${attrs()}>${kids.join('')}</svg>`, opts: pick([{}, { allowLinks: true }]) }
+  }, (svg, src) => {
+    expect(xmlProblems(svg), src).toEqual([])
+    expect(strictNamespaceProblems(svg), src).toEqual([])
+    expect(svg.split(XLINK_DECL).length - 1 <= (src.split(XLINK_DECL).length - 1) + 1, src).toBe(true)
   })
 })
