@@ -3052,6 +3052,46 @@ function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteO
   w.openerRuns = null
 }
 
+/**
+ * C2-W-011: `document` with each image without `alt` given the empty alt that `![](URL)` reads back as.
+ * A decorative image is no loss; one whose alt text is unknown is reported with `image-alt-unknown` at the image.
+ * Only the ancestors of such images are copied.
+ */
+function withSourceAlts(w: Writer, document: DocumentNode): DocumentNode {
+  const spine = new Set<object>()
+  const visit = (item: Node): boolean => {
+    let below = item.type === 'image' && item.alt === undefined
+    forEachSlot(item, (children) => { for (const child of children) below = visit(child) || below })
+    if (below) spine.add(item)
+    return below
+  }
+  if (!visit(document)) return document
+  // Each occurrence gets its own copy, so a node object a tree uses twice is reported at each of its paths.
+  const rewrite = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') return value
+    const fields = value as Record<string, unknown>
+    // A node off the spine holds no image to rewrite; the fields between two nodes (slot arrays, records) are walked.
+    if (typeof fields['type'] === 'string' && !spine.has(value)) return value
+    if (fields['type'] === 'image' && fields['alt'] === undefined) {
+      const image: Record<string, unknown> = { ...fields, alt: '' }
+      delete image['decorative']
+      if (fields['decorative'] !== true) addFinding(w.losses, image as unknown as Node, {
+        code: 'image-alt-unknown', severity: 'warning', channel: 'render-loss',
+        message: 'Carve source cannot spell an unknown alt text; the image is written with an empty one' })
+      return image
+    }
+    let copy: Record<string, unknown> | null = null
+    for (const key of Object.keys(fields)) {
+      const next = rewrite(fields[key])
+      if (next === fields[key]) continue
+      copy ??= Array.isArray(value) ? [...(value as unknown[])] as unknown as Record<string, unknown> : { ...fields }
+      copy[key] = next
+    }
+    return copy ?? value
+  }
+  return rewrite(document) as DocumentNode
+}
+
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false, linkKeys?: ReadonlySet<string>, original: string | null = layoutSource(options?.layout),
@@ -3063,6 +3103,7 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
   w.verifiedSourceBytes = verifiedSourceBytes
+  document = withSourceAlts(w, document)
   prepareDocumentWriter(w, document, layout)
   if (linkKeys !== undefined) w.linkKeys = linkKeys
   w.work.source = original?.length ?? 0

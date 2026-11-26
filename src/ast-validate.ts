@@ -1053,8 +1053,9 @@ const DEPENDENCIES: ReadonlyMap<string, (node: Fields, path: string) => void> = 
 function checkLinkFields(node: Fields, type: string, path: string): void {
   const present = ['key', 'namespace', 'refForm'].filter((name) => node[name] !== undefined).length
   if (present !== 0 && present !== 3) fail(path, 'key, namespace and refForm stand together or not at all')
-  if (type === 'image' && (node['alt'] !== undefined) === (node['decorative'] === true)) {
-    fail(path, 'decorative is true exactly when alt is absent')
+  // C2-A-115: alt text, unknown (neither field) or decorative; decorative false needs alt text.
+  if (type === 'image' && (node['alt'] === undefined ? node['decorative'] === false : node['decorative'] === true)) {
+    fail(path, 'decorative true requires alt to be absent, and decorative false requires alt')
   }
 }
 

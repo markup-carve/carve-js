@@ -43,7 +43,7 @@ it('C2-A-193: source metadata does not make the writer report a loss', () => {
 
 it('C2-W-011: field losses name the field path', () => {
   const image = written([{ type: 'paragraph', role: 'image', children: [
-    { type: 'image', src: 'x.png', decorative: true },
+    { type: 'image', src: 'x.png', alt: 'x', decorative: false },
   ] }])
   expect(image.codes).toContain('field-unspellable /children/0/children/0/decorative')
   const xref = written([{ type: 'paragraph', children: [
