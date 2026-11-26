@@ -81,6 +81,8 @@ interface Scope {
 
 interface Walk {
   declarations: readonly ExtensionDeclaration[]
+  /** False for a parsed tree that holds no snippet node, which then has no copy and no definition (C2-N-090, C2-N-092). */
+  snippets: boolean
   resolution: Resolution
   footnotes: Map<string, FootnoteNode>
   /** The scope of the file of the node that is visited. */
@@ -393,6 +395,7 @@ function mayResolve(walk: Walk, node: Node): boolean {
  * resolution reads.
  */
 function visit(walk: Walk, node: Node, parent: Node | null): void {
+  if (!walk.snippets) return visitNode(walk, node, parent)
   const origin = COPY_SCOPE.get(node)
   if (origin !== undefined) return visitCopy(walk, node, parent, origin)
   visitNode(walk, node, parent)
@@ -791,7 +794,7 @@ export function resolve(
   const top = walk.scope
   collectDefinitions(document, walk, facts)
   // C2-N-090: a later snippet definition of a name stays, renders nothing and reports at its `$` and name.
-  snippetRegistry(document, (node) => {
+  if (walk.snippets) snippetRegistry(document, (node) => {
     const entry: Diagnostic = { code: 'duplicate-snippet', severity: 'warning', channel: 'parse',
       message: `A snippet named ${node.name} is defined earlier; this definition is not used` }
     const start = node.pos?.startOffset
@@ -871,7 +874,7 @@ function newWalk(
     document, includeParents: null,
     headings: [], references: [], xrefs: [], captions: [], identified: [], unwrittenIds: [], noteRefs: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
-    markupLine: facts?.markupLine ?? null, renderers, admitted, rendered: false, extensionDepth: 0,
+    markupLine: facts?.markupLine ?? null, renderers, admitted, rendered: false, extensionDepth: 0, snippets: facts?.snippets ?? true,
   }
 }
 

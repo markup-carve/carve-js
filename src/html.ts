@@ -64,12 +64,12 @@ const NO_PARTS: TagParts = {}
 
 /** True for a node whose element takes nothing from it: no attribute, no language and no source line. */
 function isPlain(r: Render, node: Node): boolean {
-  return !carriesAttributes(node) && !r.settings.sourceLines
+  return !carriesAttributes(r, node) && !r.settings.sourceLines
 }
 
 function tag(r: Render, node: Node | null, parts: TagParts = NO_PARTS): string {
   // Most blocks carry no attribute and add none.
-  if (parts === NO_PARTS && !r.settings.sourceLines && (node === null || !carriesAttributes(node))) return ''
+  if (parts === NO_PARTS && !r.settings.sourceLines && (node === null || !carriesAttributes(r, node))) return ''
   return attributes(r, node, { ...parts, block: true })
 }
 
@@ -302,7 +302,7 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
   let rest = blocks
   if (isTextParagraph(first)) {
     // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`.
-    const bare = tight && !carriesAttributes(first)
+    const bare = tight && !carriesAttributes(r, first)
     open += bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
     rest = blocks.slice(1)
   } else if (isIncludeParagraph(first)) {
@@ -328,7 +328,7 @@ function description(r: Render, node: DefinitionDescriptionNode, level: number):
   }
   if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
     let text = ''
-    const bare = first !== undefined && !carriesAttributes(first)
+    const bare = first !== undefined && !carriesAttributes(r, first)
     if (first !== undefined) text = bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
     line(r, level, `<dd${tag(r, node)}>${text}</dd>`)
     return
@@ -1097,13 +1097,14 @@ export function renderDocument(
     settings, resolution, taskLabels, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0, verse: false,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
-    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),
+    document, source, snippets: false, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }
   // C2-N-094: the snippet copies drew on the budget first; the renderer goes on from what they left.
   const snippets = SNIPPET_BUDGETS.get(document)
   if (snippets !== undefined) {
+    r.snippets = true
     r.derivedBudget = snippets.budget
     r.derivedLeft = snippets.left
     r.derivedReported = snippets.reported
