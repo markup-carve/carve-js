@@ -39,6 +39,9 @@ describe('carve#6832: a bare paragraph that would not import back keeps its <p>'
     const kept = importDocument('<ul data-carve-tight>\n  <li><p>a</p>\n    <img src="i.png" alt="x">\n  </li>\n  <li>c</li>\n</ul>\n',
       { from: 'html' })
     expect(kept.document.children[0]).toMatchObject({ type: 'list', spacing: 'tight' })
+    const commented = importDocument('<ul data-carve-tight><li><p>a</p><!-- c --><img src="i.png" alt="x"></li><li>b</li></ul>',
+      { from: 'html' })
+    expect(commented.document.children[0]).toMatchObject({ type: 'list', spacing: 'tight' })
     const text = importDocument('<ul data-carve-tight>\n  <li><p>a</p></li>\n  <li>c</li>\n</ul>\n', { from: 'html' })
     expect(text.document.children[0]).toMatchObject({ type: 'list', spacing: 'loose' })
   })

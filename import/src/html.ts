@@ -603,7 +603,8 @@ function isKeptParagraph(item: Html.Element, paragraph: Html.Element): boolean {
   const solid = content(paragraph).filter(entry => !isBlank(entry))
   if (solid.some(isImage) && solid.every(entry => isImage(entry) || isComment(entry))) return true
   const siblings = content(item)
-  const next = siblings.slice(siblings.indexOf(paragraph) + 1).find(entry => !isBlank(entry))
+  // A comment is part of a run (C2-M-012), so it does not stand between the paragraph and the image.
+  const next = siblings.slice(siblings.indexOf(paragraph) + 1).find(entry => !isBlank(entry) && !isComment(entry))
   return next !== undefined && isImage(next)
 }
 
