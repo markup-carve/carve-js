@@ -1485,7 +1485,7 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
     }
     takeVerbatimReferences(w, run, document.children.slice(from, end), first, references, run.stats.planned > planned)
   }
-  if (w.losses.entries.length > mark.entries && w.facts !== null) {
+  if (w.losses.entries.length > mark.entries && (w.facts !== null || w.authored !== null)) {
     settleLosses(w, document.children.slice(from, end), first && !w.blankFirst, mark, references.length > 0)
   }
   return end
@@ -1513,17 +1513,13 @@ function settleLosses(w: Writer, group: readonly Node[], first: boolean, mark: L
   // The other blocks keep the spelling of the procedure, whose references are written from the tree.
   for (const node of verbatimReferences(w, group)) w.treeReferences.add(node)
   try {
-    for (const leaf of leaves.slice(0, MAX_VERBATIM_TRIALS)) {
-      if (exhausted(w)) break
-      const content = authoredContent(w, leaf)
-      if (content === null) continue
-      w.authoredLeaves.set(leaf, content)
-      resetLines(w)
-      writeBlocks(w, group, '', 0, false)
-      if (readsBack(w, group, first)) {
-        rollBackLosses(w, mark)
-        return
-      }
+    // First the blocks that did not read back; only where no state of those reads back, the other leaf blocks.
+    const failing = new Set(leaves)
+    const rest = affectedLeaves(group, null).filter((leaf) => !failing.has(leaf))
+    const tested = { last: null as readonly string[] | null }
+    if (authoredReadsBack(w, group, first, leaves, tested) || authoredReadsBack(w, group, first, rest, tested)) {
+      rollBackLosses(w, mark)
+      return
     }
     w.lines = lines
   } finally {
@@ -1532,18 +1528,41 @@ function settleLosses(w: Writer, group: readonly Node[], first: boolean, mark: L
   }
 }
 
+/**
+ * C2-W-088: writes `leaves` as authored one more at a time in document order, keeping the earlier ones, and tells
+ * whether a state reads back; the lines of that state stay written.
+ */
+function authoredReadsBack(w: Writer, group: readonly Node[], first: boolean, leaves: readonly Node[],
+  tested: { last: readonly string[] | null }): boolean {
+  let trials = 0
+  for (const leaf of leaves) {
+    if (trials >= MAX_VERBATIM_TRIALS || exhausted(w)) return false
+    const content = authoredContent(w, leaf)
+    if (content === null) continue
+    w.authoredLeaves.set(leaf, content)
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    // A block whose authored source is its spelling changes no byte, so the state is the one tested before.
+    if (tested.last !== null && sameLines(w.lines, tested.last)) continue
+    tested.last = w.lines.slice()
+    trials++
+    if (readsBack(w, group, first)) return true
+  }
+  return false
+}
+
 // C2-W-088: the leaf blocks whose authored source can stand in for their spelling; a table cell is not one of them.
 const AUTHORED_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'heading', 'definition_term'])
 
-/** The leaf blocks of `group` in document order that hold a node of `lost` or stand below one. */
-function affectedLeaves(group: readonly Node[], lost: ReadonlySet<Node | null>): Node[] {
+/** The leaf blocks of `group` in document order that hold a node of `lost` or stand below one; every one for null. */
+function affectedLeaves(group: readonly Node[], lost: ReadonlySet<Node | null> | null): Node[] {
   const found: Node[] = []
   const pending: [Node, boolean][] = [...group].reverse().map((node) => [node, false])
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
     const [node, below] = item
-    const inside = below || lost.has(node)
+    const inside = below || lost === null || lost.has(node)
     if (AUTHORED_LEAVES.has(node.type)) {
-      if (inside || holdsLoss(lost, node)) found.push(node)
+      if (inside || holdsLoss(lost!, node)) found.push(node)
       continue
     }
     const children = childNodes(node)
@@ -1572,7 +1591,9 @@ function authoredContent(w: Writer, leaf: Node): string | null {
   const source = w.authored
   if (source === null || range === null) return null
   const [from, to] = range
-  const decode = (start: number, end: number): string => new TextDecoder().decode(source.subarray(start, end))
+  // C2-B-010: a CR directly before an LF of the source is part of the line ending.
+  const decode = (start: number, end: number): string =>
+    new TextDecoder().decode(source.subarray(start, end)).replaceAll('\r\n', '\n')
   const breaks = lineBreaks(children)
   // A line break inside a node that holds no break node, as the alternative text of an image, loses the prefix the
   // break before it shows, or the first one, where its line holds it.
@@ -1589,7 +1610,8 @@ function authoredContent(w: Writer, leaf: Node): string | null {
     at = node.pos.endOffset
   }
   text += withoutPrefixes(decode(at, to), prefix)
-  return text.includes('\r') ? null : text
+  // C2-W-016: a lone CR at the end of a written line has no spelling.
+  return /\r[ \t]*(?:\n|$)/u.test(text) ? null : text
 }
 
 /** The source bytes from the first of `nodes` to the end of the last, or null where their positions do not give them. */
@@ -3343,7 +3365,8 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
   w.verifiedSourceBytes = verifiedSourceBytes
-  const authored = layoutSource(layout)
+  // C2-W-127: under `normalize` the fallback of C2-W-088 still reads the source the tree was parsed from.
+  const authored = layout === undefined ? original : layoutSource(layout)
   if (authored !== null) w.authored = new TextEncoder().encode(authored)
   document = withSourceAlts(w, document)
   prepareDocumentWriter(w, document, layout)
