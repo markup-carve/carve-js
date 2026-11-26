@@ -27,14 +27,11 @@ import { BRACED_MARKS, CLASS_KEY_REST } from './inline-tables.ts'
 import { classRunEnd, emptyMemo, readAttributeBlock } from './attributes.ts'
 import { textQuoteKind } from './write-plan-smart.ts'
 
-// The longest source whose tree the parse cache keeps; a source parsed again within it is not counted again.
-export const CACHED_SOURCE = 8192
-
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
 export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys,
   positions = true): DocumentNode {
   const plain = positions && plainParse(w, linkKeys)
-  const cacheable = plain && src.length <= CACHED_SOURCE
+  const cacheable = plain && src.length <= 8192
   const cache = w.parseCache
   const cached = cacheable ? cache.trees.get(src) : undefined
   if (cached !== undefined && cached !== null) return cached

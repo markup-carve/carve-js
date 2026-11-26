@@ -7,7 +7,6 @@
 import { type Node, type TextNode, forEachSlot, SOURCE_ORDER } from './ast.ts'
 import { logTrials, restore, sameBesideRound, type Snapshot, snapshot } from './write-passes.ts'
 import { type Writer } from './write-state.ts'
-import { CACHED_SOURCE } from './write-check.ts'
 
 type Escape = [TextNode, number]
 
@@ -201,11 +200,9 @@ function startBatch(w: Writer, chain: Chain, history: ChainHistory, step: RoundS
   w.parses += size
   w.work.chars += charge(size, source)
   w.work.rewritten += charge(size, source - margin)
-  // A pass that stands in for this one finds a short source in the parse cache, as `chargeParse` does.
-  if (source + size > CACHED_SOURCE) {
-    pass.skipped[0] += size
-    pass.skipped[1] += charge(size, source)
-  }
+  // The skipped sources were never parsed, so no cache holds them: a pass that stands in for this one charges them all.
+  pass.skipped[0] += size
+  pass.skipped[1] += charge(size, source)
   for (const escape of placed) for (const holds of pattern) logTrials(w, holds ? [escape] : [])
 }
 
