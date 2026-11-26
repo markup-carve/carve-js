@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  CLAUSE_CASES, CORPUS_EXAMPLES, DATA, EXAMPLE_TREES, LAYOUT_FIXTURES, REFUSED_TREES, SPEC_PIN, SUPPLIED_TREES, TREE_FILES,
+  CLAUSE_CASES, CORPUS_EXAMPLES, DATA, EXAMPLE_TREES, LAYOUT_FIXTURES, POSITION_TREES, REFUSED_TREES, SPEC_PIN, SUPPLIED_TREES,
+  TREE_FILES,
 } from '../scripts/corpus.ts'
 import {
   clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutMismatches, type Mismatch, refusalPath,
@@ -84,6 +85,12 @@ describe('the trees of the specification', () => {
       expect(failures).toEqual([])
     })
   }
+
+  it('C2-A-145: the positioned trees of trees/positions.json that no position check refuses are this engine\'s trees', () => {
+    const positive = POSITION_TREES.filter((entry) => entry.fails === undefined)
+    expect(positive.length).toBeGreaterThan(0)
+    for (const entry of positive) expect(fields(exampleTreeMismatches(entry)), entry.id).toEqual([])
+  })
 
   it('C2-A-161: the reader accepts every supplied tree of trees/nodes.json', () => {
     for (const entry of SUPPLIED_TREES) {
