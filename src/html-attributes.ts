@@ -31,6 +31,8 @@ export interface Render {
   linksAllowed: boolean
   /** Open links around the node that is written (C2-H-081), and open `abbr` spans (C2-H-099). */
   linkDepth: number
+  /** C2-H-215: the innermost snippet use whose copy holds the open link. */
+  linkSnippet?: number | undefined
   /** C2-H-088: note marks awaiting the close of the enclosing link. */
   linkNotes: string[]
   abbrDepth: number

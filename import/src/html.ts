@@ -15,6 +15,7 @@ import { htmlImage, inline, inlineChildren, normalizeBreaks, trimInlineEdges } f
 import { collectNotes, isFootnoteSection } from './html-notes.ts'
 import { applyAdapter, type Adapter } from './html-adapter.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
+import { blockSnippet } from './html-snippets.ts'
 import { gridWidth, resolveAlignments } from './html-table-align.ts'
 import { listTable, wantsListTable } from './html-list-table.ts'
 import {
@@ -190,6 +191,8 @@ function rawElement(node: Html.Element, context: HtmlContext): Block[] {
 }
 
 function blockElement(node: Html.Element, context: HtmlContext): Block[] {
+  const use = blockSnippet(node, context)
+  if (use !== undefined) return use
   const treated = treatedBlock(node, context)
   if (treated !== undefined) return treated
   const simple = simpleBlockElement(node, context) ?? containerElement(node, context)

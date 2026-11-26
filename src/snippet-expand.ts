@@ -49,6 +49,10 @@ export function holdsSnippetUse(document: DocumentNode, definitions = false): bo
 }
 
 const NODE_COST = 32
+/** The inline nodes that render as exactly one element whose attributes the renderer writes. */
+const ONE_ELEMENT: ReadonlySet<string> = new Set([
+  'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete', 'span', 'code',
+])
 const DROPPED = new Set(['pos', 'segments'])
 const OPAQUE = new Set(['data', 'metadata', 'props', 'payload'])
 
@@ -147,7 +151,8 @@ interface Pass {
   current: number
   /** The nodes whose content a copy went into, which resolution must walk. */
   touched: Set<Node>
-  parent: Node
+  /** The nodes from the document down to the list the walk is in: a copy in a link still sits in the leaf above it. */
+  ancestors: Node[]
   extensions: DocumentNode['extensions']
 }
 
@@ -195,7 +200,10 @@ function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): n
   const definition = entry!.definition
   const copy = copyNodes(definition.children, pass.authored)
   const attrs = definition.attrs === undefined ? undefined : { ...definition.attrs }
-  const wraps = use.mode === 'block' || attrs !== undefined || pass.settings.roundtrip
+  // C2-H-215: under roundtrip a copy that renders as one element carries the carriers itself; any other gets a span.
+  const single = use.mode === 'inline' && attrs === undefined && pass.settings.roundtrip && copy.nodes.length === 1 &&
+    ONE_ELEMENT.has(copy.nodes[0]!.type) ? copy.nodes[0]! : null
+  const wraps = use.mode === 'block' || attrs !== undefined || (pass.settings.roundtrip && single === null)
   const count = copy.count + (wraps ? 1 : 0)
   let bytes = copy.bytes
   if (wraps) {
@@ -231,31 +239,32 @@ function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): n
     placed = [wrapper]
   } else {
     placed = copy.nodes
+    if (single !== null) SNIPPET_CARRIERS.set(single, carrier)
   }
   for (const node of placed) COPY_SCOPE.set(node, entry!.include)
-  pass.touched.add(pass.parent)
+  for (const node of pass.ancestors) pass.touched.add(node)
   for (const node of placed) pass.touched.add(node)
   list.splice(at, 1, ...placed)
   pass.stack.push(definition)
   const outer = pass.current
   pass.current = n
   for (const node of copy.nodes) markNotes(pass, node)
-  const parent = pass.parent
   let length = 1
   if (wraps) {
-    pass.parent = placed[0]!
+    pass.ancestors.push(placed[0]!)
     walkRange(pass, copy.nodes, 0, copy.nodes.length)
+    pass.ancestors.pop()
   } else {
     length = walkRange(pass, list, at, copy.nodes.length)
   }
-  pass.parent = parent
   pass.current = outer
   pass.stack.pop()
   return length
 }
 
 function markNotes(pass: Pass, node: Node): void {
-  if (node.type === 'footnote_ref') SNIPPET_MARKS.set(node, pass.current)
+  // A link is marked too: its mark moves out of a use only where the link stands outside that copy (C2-H-215).
+  if (node.type === 'footnote_ref' || node.type === 'link') SNIPPET_MARKS.set(node, pass.current)
   forEachSlot(node, (nodes) => { for (const child of nodes) markNotes(pass, child) }, undefined, pass.extensions)
 }
 
@@ -277,10 +286,9 @@ function walkRange(pass: Pass, list: Node[], from: number, count: number): numbe
 }
 
 function walkNode(pass: Pass, node: Node): void {
-  const parent = pass.parent
-  pass.parent = node
+  pass.ancestors.push(node)
   forEachSlot(node, (nodes) => { walkRange(pass, nodes as Node[], 0, nodes.length) }, undefined, pass.extensions)
-  pass.parent = parent
+  pass.ancestors.pop()
 }
 
 /**
@@ -294,7 +302,7 @@ export function expandSnippets(document: DocumentNode, findings: Findings, setti
   const pass: Pass = {
     registry, stack: [], depth: harnessLimits()?.snippetDepth ?? SNIPPET_DEPTH, limit: harnessLimits()?.snippetNodes ?? SNIPPET_NODES,
     total: 0, budget: { budget, left: budget, reported: false }, admitted: 0, findings, authored: new Map(), settings, current: 0,
-    extensions: document.extensions, touched: new Set(), parent: document,
+    extensions: document.extensions, touched: new Set(), ancestors: [],
   }
   walkNode(pass, document)
   SNIPPET_BUDGETS.set(document, pass.budget)

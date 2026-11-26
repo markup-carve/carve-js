@@ -1,6 +1,8 @@
 // The parse5 reading shared by the HTML import modules, and the import state of one document.
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
-import type { AbbreviationDefNode, Attrs, Block, FootnoteNode, LinkReferenceDefinitionNode } from '../../src/index.ts'
+import type {
+  AbbreviationDefNode, Attrs, Block, FootnoteNode, LinkReferenceDefinitionNode, SnippetDefinitionNode,
+} from '../../src/index.ts'
 import { attrsOf, classNames, finding, isKey, type Context, type HtmlImportCode } from './kit.ts'
 
 /** C2-H-115: the reserved names that a render with `roundtrip` writes; `data-carve-src` is reserved and never written. */
@@ -9,6 +11,7 @@ export const CARRIERS: ReadonlySet<string> = new Set([
   'data-carve-ref-shortcut', 'data-carve-autolink', 'data-carve-footnote-label', 'data-carve-inline-footnote',
   'data-carve-raw', 'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight', 'data-carve-xref',
   'data-carve-caption-number', 'data-carve-div', 'data-carve-line-block', 'data-carve-src', 'data-carve-source-level',
+  'data-carve-snippet', 'data-carve-snippet-mark', 'data-carve-snippet-scope', 'data-carve-snippets',
 ])
 
 /** C2-H-186: the level of a heading before `headingShift` (C2-H-208); only a heading reads it. */
@@ -34,13 +37,18 @@ const CARRIER_READ_ON: Readonly<Record<string, readonly string[]>> = {
   'data-carve-div': ['div'],
   'data-carve-line-block': ['div'],
   'data-carve-source-level': ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div'],
+  'data-carve-snippet-mark': ['a'],
+  'data-carve-snippets': ['template'],
 }
+
+/** C2-H-186: carriers that any element may hold; their readers decide where they stand. */
+const READ_ANYWHERE: ReadonlySet<string> = new Set(['data-carve-snippet', 'data-carve-snippet-scope'])
 
 export function readsCarrier(node: Html.Element, name: string, heading = false): boolean {
   if (node.tagName === 'div' && (name === SOURCE_LEVEL || name === 'data-carve-explicit-id' || name === 'data-carve-generated-id')) {
     return heading
   }
-  return name === 'data-carve-src' || (CARRIER_READ_ON[name]?.includes(node.tagName) ?? false)
+  return name === 'data-carve-src' || READ_ANYWHERE.has(name) || (CARRIER_READ_ON[name]?.includes(node.tagName) ?? false)
 }
 
 /** A note of the footnote section, by the id of its item (C2-H-089). */
@@ -58,7 +66,9 @@ export interface HtmlContext extends Context {
   /** C2-H-198: the keys whose first element is an `<a>` with an `href` of the form `#ID`. */
   anchorKeys: Set<string>
   /** The templates that stand where a render writes them, and the definitions each holds. */
-  templates: Map<Html.Element, AbbreviationDefNode[]>
+  templates: Map<Html.Element, (AbbreviationDefNode | SnippetDefinitionNode)[]>
+  /** C2-H-217: the ordinals of the accepted snippet carriers. */
+  snippetOrdinals?: Set<string>
   /** C2-M-112: a table with a cell of blocks becomes a list table. */
   listTable?: boolean
 }

@@ -16,6 +16,7 @@ const QUOTE_LOCALE = 'carve-rs#4838 a smart quotes locale outside its row falls 
 const BINARY64 = 'carve#6099 a tree number is a binary64 value (C2-A-219; spec carve#6819)'
 const ESCAPE_ROUND_KEYS = 'carve#6813 a key the escape rounds cannot spell is no loss where the output reads back'
   + ' (C2-W-075; spec carve#6825)'
+const SNIPPET_SPAN = 'carve#6395 an ignored snippet carrier leaves a plain span (C2-H-185, C2-M-044; spec carve#6847)'
 
 /**
  * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
@@ -78,6 +79,7 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2322', { fields: ['threw:TypeError'], fix: BINARY64 }],
   ['CC-2323', { fields: ['diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
   ['CC-2324', { fields: ['carve', 'diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
+  ['CC-2395', { fields: ['children'], fix: SNIPPET_SPAN }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
@@ -126,6 +128,8 @@ export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
   ['extension-source-missing-body', '/children/0/source/body'], ['extension-slot-not-declared', '/children/0/slots/legend'],
   ['unqualified-extension-depth-33', `/children/0${'/children/0'.repeat(33)}`],
   ['image-decorative-false-without-alt', '/children/0/children/0'],
+  ['snippet-definition-id', '/children/0/attrs/id'], ['snippet-definition-empty', '/children/0/children'],
+  ['snippet-use-mode-mismatch', '/children/0/children/0'],
 ])
 
 /** The supplied trees of trees/nodes.json the reader still refuses, each with its ticket; one that is accepted is a stale hold. */

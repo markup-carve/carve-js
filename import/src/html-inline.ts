@@ -1,4 +1,5 @@
 // Inline HTML to Carve inline nodes: foreign markup, and the elements and carriers of a 0.2 render (C2-H-072 to C2-H-101).
+import { droppedMark, inlineSnippet } from './html-snippets.ts'
 import { type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { foldLabel, type Inline, type RubyPairNode } from '../../src/index.ts'
 import {
@@ -175,6 +176,8 @@ function treated(node: Html.Element, context: HtmlContext): Inline[] | undefined
 }
 
 function inlineElement(node: Html.Element, context: HtmlContext): Inline[] {
+  const use = inlineSnippet(node, context)
+  if (use !== undefined) return use
   const own = carveInline(node, context)
   if (own !== undefined) return own
   const kept = treated(node, context) ?? leafInline(node, context)
@@ -254,6 +257,7 @@ function footnoteInline(node: Html.Element, context: HtmlContext): Inline[] | un
   // C2-M-063: a backlink is dropped without a report.
   if (isBacklink(node)) return []
   if (attr(node, 'role') !== 'doc-noteref' && !has(node, 'data-footnote-ref')) return undefined
+  if (droppedMark(node, context)) return []
   const href = attr(node, 'href') ?? ''
   const note = context.notes.get(href.startsWith('#') ? href.slice(1) : href)
   // C2-M-062: naming no note, with no fragment or one that is empty once the prefixes are cut, it is a link.

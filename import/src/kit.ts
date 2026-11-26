@@ -136,7 +136,7 @@ export function byteOffsetTable(input: string): Uint32Array {
 }
 
 /** C2-M-083: the codes of the HTML importer. The Markdown and Djot importers keep the two codes of the 0.1 importer. */
-export type HtmlImportCode = 'import-attribute-dropped' | 'import-carrier-ignored' | 'import-destination-denied'
+export type HtmlImportCode = 'import-attribute-dropped' | 'import-carrier-ignored' | 'import-destination-denied' | 'snippet-scope-loss'
   | 'import-element-dropped' | 'import-element-mapped' | 'import-structure-repaired' | 'import-whitespace-normalized'
 export type ImportCode = HtmlImportCode | 'import-unsupported' | 'import-degraded'
 

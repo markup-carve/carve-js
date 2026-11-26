@@ -48,8 +48,8 @@ describe('the examples of the specification', () => {
 })
 
 describe('the clause cases of the specification', () => {
-  it('holds 2271 cases, each with the sentence that decides it', () => {
-    expect(CLAUSE_CASES).toHaveLength(2271)
+  it('holds 2322 cases, each with the sentence that decides it', () => {
+    expect(CLAUSE_CASES).toHaveLength(2322)
     for (const entry of CLAUSE_CASES) expect(entry.why.length).toBeGreaterThan(0)
   })
 
@@ -63,8 +63,8 @@ describe('the clause cases of the specification', () => {
 })
 
 describe('the trees of the specification', () => {
-  it('the reader refuses each of the 80 refused trees at the field its clause decides', () => {
-    expect(REFUSED_TREES).toHaveLength(80)
+  it('the reader refuses each of the 83 refused trees at the field its clause decides', () => {
+    expect(REFUSED_TREES).toHaveLength(83)
     expect(new Set(REFUSED_TREES.map((entry) => entry.id))).toEqual(new Set(REFUSED_AT.keys()))
     for (const entry of REFUSED_TREES) {
       const path = refusalPath(entry)
