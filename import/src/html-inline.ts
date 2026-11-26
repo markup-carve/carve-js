@@ -441,11 +441,8 @@ const SEMANTIC_TARGETS: Readonly<Record<string, string | undefined>> = { abbr: '
 function semanticSpan(node: Html.Element, children: Inline[], context: HtmlContext): Inline {
   const target = SEMANTIC_TARGETS[node.tagName]
   const value = target === undefined ? '' : attr(node, target) ?? ''
-  // C2-A-035: the key the element names is one key; an attribute of that name beside it would be a second.
-  if (attr(node, node.tagName) !== undefined) {
-    report(context, node, 'import-attribute-dropped', `An ${node.tagName} attribute beside the key its element gives dropped`)
-  }
-  const mapped = attrs(context, node, target === undefined ? [node.tagName] : [target, node.tagName])
+  // C2-M-047: an authored attribute named like the key stays, in upper case, apart from the key (C2-A-035).
+  const mapped = renamedKeys(attrs(context, node, target === undefined ? [] : [target]), { [node.tagName]: node.tagName.toUpperCase() })
   const keyValues: [string, string][] = [[node.tagName, value], ...mapped.attrs?.keyValues ?? []]
   return { type: 'span', children, ...mapped, attrs: { ...mapped.attrs, keyValues } }
 }

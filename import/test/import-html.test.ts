@@ -210,10 +210,18 @@ describe('attributes', () => {
     expect(first?.attrs).toEqual({ keyValues: [['align', 'center']] })
   })
 
-  it('C2-A-035, C2-H-075: an attribute named like the key of its semantic element is dropped and reported', () => {
+  it('C2-M-047, C2-A-035: an attribute named like the key of its semantic element is that key in upper case, unreported', () => {
     const [first] = children('<p><abbr title="a" ABBR="b">y</abbr></p>') as { children: { attrs: unknown }[] }[]
-    expect(first?.children[0]?.attrs).toEqual({ keyValues: [['abbr', 'a']] })
-    expect(codes('<p><abbr title="a" ABBR="b">y</abbr></p>')).toContain('import-attribute-dropped')
+    expect(first?.children[0]?.attrs).toEqual({ keyValues: [['abbr', 'a'], ['ABBR', 'b']] })
+    expect(codes('<p><abbr title="a" ABBR="b">y</abbr></p>')).not.toContain('import-attribute-dropped')
+  })
+
+  it('C2-M-047, C2-H-075: the upper-case key renders as an attribute that imports back to the same tree', () => {
+    for (const html of ['<p><abbr title="a" abbr="b">y</abbr></p>', '<p><kbd kbd="z" class="c">k</kbd></p>',
+      '<p><time data-x="1" time="t" datetime="d">x</time></p>']) {
+      const tree = children(html)
+      expect(children(render(parse(source(html))))).toEqual(tree)
+    }
   })
 
   it('C2-M-075, C2-H-015: the declared value is trimmed and folded to lower case', () => {
