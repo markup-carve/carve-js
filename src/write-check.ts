@@ -35,6 +35,7 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   const cache = w.parseCache
   const cached = cacheable ? cache.trees.get(src) : undefined
   if (cached !== undefined && cached !== null) return cached
+  const charge = noteCharge(w, src, cacheable)
   if (cached === undefined) {
     w.parses++
     w.work.chars += src.length
@@ -47,10 +48,38 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   const parsed = applyExtensions(source, extensions, linkKeys).document
   if (cacheable) remember(cache, src, parsed, cached === null)
   else if (plain) rememberRecent(cache, src, parsed)
+  keepCharged(charge, cacheable, parsed)
   return parsed
 }
 
-const RECENT_TREES = 2
+/** A short tree that `parseChunk` keeps is kept for the pass that stands in for this one too. */
+function keepCharged(charge: [string, DocumentNode | null, boolean] | null, cacheable: boolean, parsed: DocumentNode): void {
+  if (charge !== null && cacheable) charge[1] = parsed
+}
+
+/** Records a parse that a pass of the repair makes, for a pass that stands in for it (write-passes.ts). */
+function noteCharge(w: Writer, src: string, cacheable: boolean): [string, DocumentNode | null, boolean] | null {
+  if (w.pass === null) return null
+  const charge: [string, DocumentNode | null, boolean] = [src, null, cacheable]
+  w.pass.charges.push(charge)
+  return charge
+}
+
+/** C2-W-133: what `parseChunk` charges for `src` where a replayed pass of the repair stands for the parse. */
+export function chargeParse(w: Writer, src: string, tree: DocumentNode | null, cacheable: boolean): void {
+  const cached = cacheable ? w.parseCache.trees.get(src) : undefined
+  if (cached !== undefined && cached !== null) return
+  if (cached === undefined) {
+    w.parses++
+    w.work.chars += src.length
+  }
+  if (cacheable && tree !== null) remember(w.parseCache, src, tree, cached === null)
+}
+
+// The passes of one repair write the sources of earlier passes again (write-passes.ts); the trees kept for them are
+// bounded by count and by characters, past the last two.
+const RECENT_TREES = 16
+const RECENT_CHARS = 2_000_000
 
 /** Whether a parse of the writer reads nothing but its source, so a tree of the same source can stand in for it. */
 function plainParse(w: Writer, linkKeys: ReadonlySet<string> | null): boolean {
@@ -59,7 +88,14 @@ function plainParse(w: Writer, linkKeys: ReadonlySet<string> | null): boolean {
 
 function rememberRecent(cache: ParseCache, src: string, parsed: DocumentNode): void {
   cache.recent.unshift([src, parsed])
-  cache.recent.length = Math.min(cache.recent.length, RECENT_TREES)
+  let chars = 0
+  let keep = 0
+  for (const [kept] of cache.recent) {
+    chars += kept.length
+    if (keep >= RECENT_TREES || (keep >= 2 && chars > RECENT_CHARS)) break
+    keep++
+  }
+  cache.recent.length = keep
 }
 
 // The characters of the sources whose trees the parse cache keeps on first sight; the blocks it reuses are short.
@@ -986,10 +1022,15 @@ function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: numbe
     return known.found
   }
   const before = c.escapes.length
+  const charged = c.w.pass?.charges.length ?? 0
   const found = runProbe(c, e, expected, flags, takes)
   const taken = c.escapes.slice(before)
   // A probe cut short by the limit is not kept: its group is refused (C2-W-133).
-  if (!exhausted(c.w)) c.w.probes.set(key, { found, taken, leads: taken.filter((escape) => c.leadTrials.has(escape)) })
+  if (!exhausted(c.w)) {
+    c.w.probes.set(key, { found, taken, leads: taken.filter((escape) => c.leadTrials.has(escape)) })
+    // A pass that stands in for this one finds the probe kept, so it makes none of its parses.
+    if (c.w.pass !== null) c.w.pass.charges.length = charged
+  }
   return found
 }
 

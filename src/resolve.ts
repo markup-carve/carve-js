@@ -557,6 +557,11 @@ function keyText(key: string): string {
   return foldLabel(plainText(inlineContent(key))).normalize('NFC')
 }
 
+/** The heading `key` names; a document without headings reads no key text. */
+function headingFor(headings: Map<string, HeadingNode>, key: string): HeadingNode | undefined {
+  return headings.size === 0 ? undefined : headings.get(keyText(key))
+}
+
 /** What a reference resolves to: a definition, or a heading (C2-I-084). */
 type Target = LinkReferenceDefinitionNode | HeadingNode
 
@@ -574,7 +579,7 @@ function findTargets(walk: Walk, mode: HeadingIds): Map<Reference, Target> {
     // C2-I-081, C2-A-213: a heading alone never forms a shortcut reference, so a supplied one stays unresolved.
     if (target === undefined && reference.type === 'link' && reference.refForm !== 'shortcut') {
       headings ??= headingIndex(walk, mode)
-      target = headings.get(keyText(key))
+      target = headingFor(headings, key)
     }
     if (target !== undefined) targets.set(reference, target)
   }

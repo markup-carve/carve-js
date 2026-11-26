@@ -633,14 +633,19 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
  */
 function collapsedContent(w: Writer, node: LinkNode, content: string, flags: number): string {
   const key = node.key
-  if ((node.refForm !== 'collapsed' && node.refForm !== 'shortcut') || key === undefined || (flags & IN_CELL) !== 0 ||
-    foldLabel(content) === key) return content
-  // The rounds write a reference past the depth cap again with the same content; each label trial parses all of it.
-  const known = w.collapsedLabels.get(node)
-  if (known !== undefined && known[0] === content) return known[1]
+  if ((node.refForm !== 'collapsed' && node.refForm !== 'shortcut') || key === undefined || (flags & IN_CELL) !== 0) {
+    return content
+  }
+  // The rounds and their passes write a reference again with the contents of earlier writes; each label trial of one
+  // past the depth cap parses all of it.
+  let known = w.collapsedLabels.get(node)
+  const cached = known?.get(content)
+  if (cached !== undefined) return cached
   const children: ParagraphNode = { type: 'paragraph', children: node.children }
-  const label = labelLike(content, key, (candidate) => readsAsCollapsed(candidate, key, children))
-  w.collapsedLabels.set(node, [content, label])
+  const label = foldLabel(content) === key
+    ? content : labelLike(content, key, (candidate) => readsAsCollapsed(w, candidate, key, children))
+  if (known === undefined) w.collapsedLabels.set(node, known = new Map<string, string>())
+  known.set(content, label)
   return label
 }
 
@@ -653,8 +658,10 @@ function labelLike(written: string, key: string, readsBack: (candidate: string) 
 }
 
 /** Trap: the candidate is read inside its brackets, where an edge space stays and `%%` opens no comment. */
-function readsAsCollapsed(candidate: string, key: string, children: ParagraphNode): boolean {
-  const read = inlineContent(`[${candidate}][]`)
+function readsAsCollapsed(w: Writer, candidate: string, key: string, children: ParagraphNode): boolean {
+  // Repeated text gives many references the same candidates; the read of one does not depend on where it stands.
+  let read = w.labelReads.get(candidate)
+  if (read === undefined) w.labelReads.set(candidate, read = inlineContent(`[${candidate}][]`))
   const link = read.length === 1 ? read[0] : undefined
   return link?.type === 'link' && link.key === key && treesEqual({ type: 'paragraph', children: link.children }, children)
 }

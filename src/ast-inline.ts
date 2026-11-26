@@ -323,7 +323,7 @@ function isPart(kind: number): boolean {
 /** C2-B-224: `contentSource` of a cell, each escaped pipe a literal pipe outside the code spans `raw`. */
 function cellContentSource(src: string, spans: number[], start: number, end: number, raw: readonly number[] | null): string {
   const lines: string[] = []
-  for (let at = 0; at < spans.length; at += 2) {
+  for (let at = firstPieceAfter(spans, start); at < spans.length && spans[at]! < end; at += 2) {
     const from = Math.max(start, spans[at]!)
     const to = Math.min(end, spans[at + 1]!)
     if (from < to) lines.push(cellKeySource(src, from, to, raw))
@@ -334,7 +334,7 @@ function cellContentSource(src: string, spans: number[], start: number, end: num
 /** The source of `[start, end)` without the prefixes of the lines it crosses: its parts inside `spans`, joined by line feeds. */
 export function contentSource(src: string, spans: number[], start: number, end: number): string {
   const lines: string[] = []
-  for (let at = 0; at < spans.length; at += 2) {
+  for (let at = firstPieceAfter(spans, start); at < spans.length && spans[at]! < end; at += 2) {
     const from = Math.max(start, spans[at]!)
     const to = Math.min(end, spans[at + 1]!)
     if (from < to) lines.push(src.slice(from, to))
@@ -376,6 +376,18 @@ function openFrame(kind: number, start: number, flags: number, aux: number): Inl
     kind, start, end: start, flags, aux, children: isInlineContainer(kind) ? [] : null,
     value: '', spanned: false, destination: null, title: null, key: null, attributes: null, raw: null,
   }
+}
+
+/** The index in `spans`, in source order, of the first piece that ends after `start`, so a part reads only its own lines. */
+function firstPieceAfter(spans: number[], start: number): number {
+  let low = 0
+  let high = spans.length >> 1
+  while (low < high) {
+    const middle = (low + high) >> 1
+    if (spans[middle * 2 + 1]! <= start) low = middle + 1
+    else high = middle
+  }
+  return low * 2
 }
 
 /** True when `[start, end)` lies in one piece of `spans`, which are in source order: a binary search, as a cell may have many. */
