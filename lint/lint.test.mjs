@@ -76,6 +76,7 @@ import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 import { corpusResolver } from '../scripts/corpus.ts'
 import { HELD, HELD_RULES } from '../scripts/corpus-held.ts'
+import { expectHeld } from '../scripts/holds.ts'
 import { registration } from '../cli/standard-extensions.ts'
 
 describe('C2-W-107 parsed leaf ranges', () => {
@@ -300,8 +301,11 @@ describe('C2-W-106 catalog rules', () => {
     }
   })
   it('registers each lint catalog row exactly once', () => {
-    const implemented = IMPLEMENTED_RULES.map((rule) => rule.id)
-    expect(new Set(implemented)).toEqual(new Set(Object.keys(CATALOG).filter((id) => !HELD_RULES.has(id))))
+    const implemented = new Set(IMPLEMENTED_RULES.map((rule) => rule.id))
+    expect([...implemented].filter((id) => !(id in CATALOG))).toEqual([])
+    // A held row may be registered; its catalog check below fails until the hold goes.
+    expect(Object.keys(CATALOG).filter((id) => !implemented.has(id) && !HELD_RULES.has(id))).toEqual([])
+    expect([...HELD_RULES.keys()].filter((id) => !(id in CATALOG))).toEqual([])
   })
 
   it('has a trigger and a near miss for every catalog row', () => {
@@ -315,8 +319,8 @@ describe('C2-W-106 catalog rules', () => {
   })
 
   for (const id of Object.keys(CATALOG)) {
-    if (('status' in CATALOG[id] && CATALOG[id].status === 'void') || HELD_RULES.has(id)) continue
-    it(`${id} has a candidate 13 trigger, near miss, message variant, and byte range`, () => {
+    if ('status' in CATALOG[id] && CATALOG[id].status === 'void') continue
+    it(`${id} has a candidate 13 trigger, near miss, message variant, and byte range`, () => expectHeld(id, HELD_RULES, () => {
       // Later clause cases carry the latest catalog range when an older case predates a ruling.
       // A held case (scripts/corpus-held.ts) is one this engine does not pass yet, so it is no trigger here.
       const cases = CLAUSE_CASES.filter((entry) => !HELD.has(entry.id))
@@ -350,7 +354,7 @@ describe('C2-W-106 catalog rules', () => {
       }
       const nearOptions = miss ? clauseOptions(miss) : options
       expect(lint(near, nearOptions).some((entry) => entry.code === id)).toBe(false)
-    })
+    }))
   }
 })
 

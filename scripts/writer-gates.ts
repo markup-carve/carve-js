@@ -17,6 +17,7 @@
 // one is a loss it would not report.
 // With --silent a run fails only on a failure with no reported loss.
 import { CARVE_SOURCES } from './corpus.ts'
+import { judgeHolds } from './holds.ts'
 import { parseWithLayout } from '../src/api.ts'
 import { format, parse, tabsExtensions, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
 import { writeTreeWithStats } from '../src/write.ts'
@@ -49,23 +50,19 @@ function runExamples(): boolean {
   const counts: Counts = { inputs: examples.length, refused: 0, losses: 0, failures: 0, undecided: 0 }
   const lines: string[] = []
   const undecided: string[] = []
-  for (const example of examples) {
-    const failure = checkWriter(example.input, undecided)
-    const held = WRITER_GATE_HELD.get(example.id)
-    if (held !== undefined) {
-      if (failure === null) {
-        counts.failures++
-        lines.push(`  ${example.id}: held (${held}) but passes; drop the hold`)
-      }
-      continue
-    }
+  const results = examples.map((example) => [example.id, checkWriter(example.input, undecided)] as const)
+  const { stale } = judgeHolds(results, WRITER_GATE_HELD)
+  counts.failures += stale.length
+  lines.push(...stale.map((line) => `  ${line}`))
+  for (const [id, failure] of results) {
+    if (WRITER_GATE_HELD.has(id)) continue
     if (failure === 'refused') counts.refused++
     else if (failure !== null && isReportedLoss(failure)) {
       counts.losses++
-      lines.push(`  loss: ${example.id}: ${failure}`)
+      lines.push(`  loss: ${id}: ${failure}`)
     } else if (failure !== null) {
       counts.failures++
-      lines.push(`  ${example.id}: ${failure}`)
+      lines.push(`  ${id}: ${failure}`)
     }
   }
   counts.undecided = undecided.length
