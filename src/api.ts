@@ -9,7 +9,7 @@ import { renderDocument } from './html.ts'
 import { buildLayout, createLayoutTrace, type SourceLayout } from './layout.ts'
 import { addFinding, type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
 import {
-  definitionKeys, expandSnippets, holdsSnippetNode, holdsSnippetUse, refuseTransformSnippets,
+  expandSnippets, markDefinitions, holdsSnippetNode, holdsSnippetUse, refuseTransformSnippets,
 } from './snippet-expand.ts'
 import { carrySnippetBudget, carrySnippetMarks } from './snippet-marks.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
@@ -501,14 +501,14 @@ export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode,
 
 /**
  * C2-N-091: the snippet expansion of a render, on the render's own tree: a supplied tree is copied first. A view a
- * transform returned is not expanded: its snippet nodes are refused (C2-N-095), `transformed` naming the definitions before.
+ * transform returned (`transformed`) is not expanded: its snippet nodes are refused (C2-N-095).
  */
 function expandStage(input: string | Uint8Array | DocumentNode, parsed: ParsedTree, settings: Settings,
-  transformed: readonly string[] | null = null): { parsed: ParsedTree, findings: Findings } {
+  transformed = false): { parsed: ParsedTree, findings: Findings } {
   const findings: Findings = { entries: [], nodes: [] }
   if (typeof input === 'string' && !input.includes('{{') && (parsed.facts?.includes.length ?? 0) === 0) return { parsed, findings }
-  if (transformed !== null) {
-    if (holdsSnippetNode(parsed.document)) refuseTransformSnippets(parsed.document, transformed, findings)
+  if (transformed) {
+    if (holdsSnippetNode(parsed.document)) refuseTransformSnippets(parsed.document, findings)
     return { parsed, findings }
   }
   if (!holdsSnippetUse(parsed.document)) return { parsed, findings }
@@ -522,7 +522,7 @@ function expandStage(input: string | Uint8Array | DocumentNode, parsed: ParsedTr
 
 /** `shift`: the heading shift still to apply, 0 for a view that a transform has already shifted. */
 function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings, validated = false,
-  shift = settings.headingShift, reportShift = true, transformed: readonly string[] | null = null): RenderOutput {
+  shift = settings.headingShift, reportShift = true, transformed = false): RenderOutput {
   const expanded = expandStage(input, inputStage(input, settings, true, validated), settings, transformed)
   const parsed = expanded.parsed
   const resolved = shiftedResolve(parsed, settings, isSupplied(input) && parsed.document === input, shift)
@@ -670,8 +670,8 @@ function expansionDiagnostics(resolved: ResolvedTree, findings: Findings): Diagn
 }
 
 /** C2-N-095: the definitions of the resolved view the transforms receive, those with no use among them. */
-function transformBaseline(input: string | Uint8Array | DocumentNode, view: DocumentNode): string[] {
-  return typeof input === 'string' && !input.includes('{$') ? [] : definitionKeys(view)
+function markTransformBaseline(input: string | Uint8Array | DocumentNode, view: DocumentNode): void {
+  if (typeof input !== 'string' || input.includes('{$')) markDefinitions(view)
 }
 
 function transformedRender(
@@ -691,13 +691,13 @@ function transformedRender(
     reportShiftAboveSix(resolved.document, settings.headingShift, shiftLosses)
   }
   const shiftDiagnostics = settings.allowLosses.has(HEADING_SHIFT_CODE) ? [] : locateFindings(resolved.document, shiftLosses)
-  const definitions = transformBaseline(input, resolved.document)
+  markTransformBaseline(input, resolved.document)
   const { view, failures, validated, changed } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
   if (!changed) {
     const direct = unchangedViewRender(resolved, sourceDiagnostics, failures, settings)
     if (direct !== undefined) return direct
   }
-  const rendered = plainRender(view, settings, validated, 0, false, definitions)
+  const rendered = plainRender(view, settings, validated, 0, false, true)
   const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
   ])))

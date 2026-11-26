@@ -9,7 +9,7 @@ import { harnessLimits } from './harness-limits.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { utf8Length } from './positions.ts'
 import {
-  COPY_SCOPE, SNIPPET_BUDGETS, type SnippetBudget, SNIPPET_CARRIERS, SNIPPET_MARKS, type SnippetCarrier,
+  COPY_SCOPE, SNIPPET_BUDGETS, type SnippetBudget, SNIPPET_CARRIERS, SNIPPET_MARKS, type SnippetCarrier, AUTHORED_DEFINITIONS, MARKED_VIEWS,
 } from './snippet-marks.ts'
 import { snippetUseSpelling } from './snippets.ts'
 
@@ -77,11 +77,13 @@ function rendersAsOne(node: Node, extensions: DocumentNode['extensions']): boole
   if (node.type !== 'link') return false
   const pending: Node[] = [node]
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
-    if (next.type === 'footnote_ref' || next.type === 'inline_footnote') return false
+    // A use inside the link may expand to a note that moves out behind it.
+    if (next.type === 'footnote_ref' || next.type === 'inline_footnote' || next.type === 'snippet_use') return false
     forEachSlot(next, (nodes) => { for (const child of nodes) pending.push(child) }, undefined, extensions)
   }
   return true
 }
+
 const OPAQUE = new Set(['data', 'metadata', 'props', 'payload'])
 
 /** The resolution fields of each node type (C2-A-158, AST_RESULTS), which a copy drops. */
@@ -111,7 +113,7 @@ interface Copy {
 }
 
 function copyAttrs(copy: Copy, value: Record<string, unknown>): Record<string, unknown> | undefined {
-  const attrs = { ...value }
+  const attrs = structuredClone(value)
   delete attrs['id']
   if (Object.keys(attrs).length === 0) return undefined
   copy.bytes += opaqueBytes(attrs['classes'], false)
@@ -262,7 +264,7 @@ interface Shape {
 
 /** How the copy of `definition` stands at `use`: on its own, or in a wrapper, with its count and bytes (C2-N-094). */
 function shapeOf(pass: Pass, use: SnippetUseNode, definition: SnippetDefinitionNode, copy: Copy): Shape {
-  const attrs = definition.attrs === undefined ? undefined : { ...definition.attrs }
+  const attrs = definition.attrs === undefined ? undefined : structuredClone(definition.attrs)
   // C2-H-215: under roundtrip a copy that renders as one element carries the carriers itself; any other gets a span.
   const single = use.mode === 'inline' && attrs === undefined && pass.settings.roundtrip && copy.nodes.length === 1 &&
     rendersAsOne(copy.nodes[0]!, pass.extensions) ? copy.nodes[0]! : null
@@ -395,20 +397,19 @@ export function expandSnippets(document: DocumentNode, findings: Findings, setti
   return pass.touched
 }
 
-/** The definitions of a view as JSON, the baseline against which a transform's own definitions are told apart. */
-export function definitionKeys(document: DocumentNode): string[] {
-  const keys: string[] = []
-  snippetRegistry(document, (node) => keys.push(JSON.stringify(node)))
-  for (const entry of snippetRegistry(document).values()) keys.push(JSON.stringify(entry.definition))
-  return keys
+/** C2-N-095: marks the definitions of the view the transforms receive, so a definition a transform adds is told apart. */
+export function markDefinitions(document: DocumentNode): void {
+  MARKED_VIEWS.add(document)
+  snippetRegistry(document, (node) => AUTHORED_DEFINITIONS.add(node))
+  for (const entry of snippetRegistry(document).values()) AUTHORED_DEFINITIONS.add(entry.definition)
 }
 
 /**
  * C2-N-095: in a view a document transform returned, a snippet use is written as its source text and a snippet
- * definition the transform added enters no registry; each reports `snippet-unexpanded-transform`.
+ * definition the transform added enters no registry; each reports `snippet-unexpanded-transform`. A definition the
+ * transform received and kept, edited or not, is no finding.
  */
-export function refuseTransformSnippets(view: DocumentNode, before: readonly string[], findings: Findings): void {
-  const known = [...before]
+export function refuseTransformSnippets(view: DocumentNode, findings: Findings): void {
   const message = 'A document transform inserted a snippet node, which is not expanded'
   const visitList = (list: Node[], top: boolean): void => {
     for (let at = 0; at < list.length; at++) {
@@ -420,10 +421,9 @@ export function refuseTransformSnippets(view: DocumentNode, before: readonly str
         continue
       }
       if (node.type === 'snippet_definition') {
-        const key = JSON.stringify(node)
-        const index = top ? known.indexOf(key) : -1
-        if (index >= 0) known.splice(index, 1)
-        else addFinding(findings, node, { code: 'snippet-unexpanded-transform', severity: 'warning', channel: 'render-loss', message })
+        if (!top || !AUTHORED_DEFINITIONS.has(node)) {
+          addFinding(findings, node, { code: 'snippet-unexpanded-transform', severity: 'warning', channel: 'render-loss', message })
+        }
         continue
       }
       forEachSlot(node, (nodes) => { visitList(nodes as Node[], node.type === 'include') }, undefined, view.extensions)

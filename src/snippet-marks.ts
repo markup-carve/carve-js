@@ -24,6 +24,10 @@ export const COPY_SCOPE = new WeakMap<Node, IncludeNode | null>()
 export const SNIPPET_CARRIERS = new WeakMap<Node, SnippetCarrier>()
 /** C2-H-215: the `N` of the innermost expanded use around each copied note reference. */
 export const SNIPPET_MARKS = new WeakMap<Node, number>()
+/** C2-N-095: the definitions of the view the transforms received, followed through every copy of it. */
+export const AUTHORED_DEFINITIONS = new WeakSet<Node>()
+/** The views whose definitions are marked, so a copy of one carries the marks. */
+export const MARKED_VIEWS = new WeakSet<DocumentNode>()
 /** The budget each expanded document left. */
 export const SNIPPET_BUDGETS = new WeakMap<DocumentNode, SnippetBudget>()
 
@@ -34,6 +38,7 @@ function carryNode(from: Node, to: Node): void {
   const mark = SNIPPET_MARKS.get(from)
   if (mark !== undefined) SNIPPET_MARKS.set(to, mark)
   if (COPY_SCOPE.has(from)) COPY_SCOPE.set(to, COPY_SCOPE.get(from)!)
+  if (AUTHORED_DEFINITIONS.has(from)) AUTHORED_DEFINITIONS.add(to)
 }
 
 /**
@@ -42,8 +47,9 @@ function carryNode(from: Node, to: Node): void {
  */
 export function carrySnippetMarks(view: DocumentNode, copy: DocumentNode): void {
   const budget = SNIPPET_BUDGETS.get(view)
-  if (budget === undefined) return
-  SNIPPET_BUDGETS.set(copy, budget)
+  if (budget === undefined && !MARKED_VIEWS.has(view)) return
+  if (budget !== undefined) SNIPPET_BUDGETS.set(copy, budget)
+  if (MARKED_VIEWS.has(view)) MARKED_VIEWS.add(copy)
   const pending: [unknown, unknown][] = [[view, copy]]
   for (let pair = pending.pop(); pair !== undefined; pair = pending.pop()) {
     const [from, to] = pair

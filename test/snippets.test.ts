@@ -109,4 +109,32 @@ describe('named snippets', () => {
     const found = lint('{{ child.crv }}\n\n{{ $x }}\n', { includes: { resolver } })
     expect(found.filter((entry) => entry.code === 'unused-snippet').map((entry) => entry.message)).toEqual(['Snippet "$y" is defined but never used.'])
   })
+
+  it('C2-N-095: a transform that edits an authored definition adds no snippet node', () => {
+    const edit = [{ name: 'edit', transform: (view: DocumentNode) => {
+      const definition = view.children[0]
+      if (definition?.type === 'snippet_definition') definition.children = [{ type: 'text', value: 'Changed' }]
+      view.children.push({ type: 'paragraph', children: [{ type: 'text', value: 'end' }] })
+      return view
+    } }]
+    expect(renderWithDocumentTransforms('{$x}: Hello\n\nA\n', edit, { strictLosses: true }).diagnostics).toEqual([])
+    const add = [{ name: 'add', transform: (view: DocumentNode) => {
+      view.children.push({ type: 'snippet_definition', name: 'y', children: [{ type: 'text', value: 'Y' }] })
+      return view
+    } }]
+    expect(renderWithDocumentTransforms('{$x}: Hello\n\nA\n', add).diagnostics.map((entry) => entry.code))
+      .toEqual(['snippet-unexpanded-transform'])
+  })
+
+  it('C2-N-092: each copy has attribute arrays of its own', () => {
+    const resolved = resolveTree(parseTree('{$x .a}: Hi\n\n{{ $x }}\n\n{{ $x }}\n'))
+    const [, first, second] = resolved.document.children
+    first!.attrs!.classes!.push('b')
+    expect(second!.attrs!.classes).toEqual(['a'])
+  })
+
+  it('C2-H-215: a link that holds a use is no lone element, so the carriers go on a span', () => {
+    const html = render('{$n}: x[^f]\n\n{$l}: [a {{ $n }}](/u)\n\nB {{ $l }}\n\n[^f]: F\n', { roundtrip: true })
+    expect(html).toContain('<span data-carve-snippet="1:inline:$l"><a href="/u">')
+  })
 })
