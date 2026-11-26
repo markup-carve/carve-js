@@ -46,10 +46,10 @@ function accepted(node: Html.Element, context: HtmlContext, mode: 'inline' | 'bl
   return carrier
 }
 
-/** Whether `inlineSnippet` reads the element as a use, without its reports; a second carrier of one ordinal is not told apart. */
-export function isInlineCarrier(node: Html.Element): boolean {
+/** The ordinal and mode of a well-formed carrier, without the reports and the ordinal claim of `accepted`. */
+export function carrierOrdinal(node: Html.Element): { n: string, mode: 'inline' | 'block' } | undefined {
   const value = attr(node, 'data-carve-snippet')
-  return value !== undefined && parse(value)?.mode === 'inline'
+  return value === undefined ? undefined : parse(value)
 }
 
 export function inlineSnippet(node: Html.Element, context: HtmlContext): Inline[] | undefined {

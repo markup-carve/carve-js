@@ -134,3 +134,17 @@ describe('carve-js#5661: a snippet use in a ranged comment (C2-M-113, C2-H-186)'
     expect(fromHtml(range('<script data-carve-snippet="1:inline:$foo">x()</script>')).codes).toEqual(['import-structure-repaired'])
   })
 })
+
+describe('carve-js#5661: what the reader takes before inline reading (C2-H-186, C2-M-032)', () => {
+  it('a second carrier of one ordinal is read as its element, so an end inside it is claimed', () => {
+    const { source } = fromHtml('<p><span data-carve-snippet="1:inline:$a"></span><span class="comment-start" data-comment-id="1">n</span>'
+      + '<em data-carve-snippet="1:inline:$b">t<span class="comment-end" data-comment-id="1"></span></em>y</p>')
+    expect(source).not.toContain('comment-end')
+  })
+
+  it('a task box in the range is no kept inline', () => {
+    const { codes } = fromHtml('<ul><li><span class="comment-start" data-comment-id="1">n</span></li>'
+      + '<li><input type="checkbox" data-carve-snippet="1:inline:$a"><span class="comment-end" data-comment-id="1"></span></li></ul>')
+    expect(codes).not.toContain('import-structure-repaired')
+  })
+})
