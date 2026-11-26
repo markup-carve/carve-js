@@ -331,9 +331,20 @@ describe('C2-M-041: a col style read as declarations', () => {
     expect(width('\nWiDtH\t:\t12.5%\n')).toBe('12.5')
   })
 
-  it('takes the last percentage width over a later width that is no percentage, and reports the other', () => {
-    expect(width('width: 30%; width: 40px')).toBe('30')
+  it('takes the last width, so a later width that is no percentage gives no width, and reports the style', () => {
+    expect(width('width: 30%; width: 40px')).toBeUndefined()
     expect(codes(table('width: 30%; width: 40px'))).toContain('import-attribute-dropped')
+  })
+
+  it('takes the last width marked important over any later width, and reports the mark (carve-js#5574)', () => {
+    expect(width('width: 30% !important; width: 40%')).toBe('30')
+    expect(width('width: 30%; width: 40%!Important')).toBe('40')
+    expect(width('width: 30% ! important; width: 40% !important; width: 50%')).toBe('40')
+    expect(width('width: 30% !important; width: 40px !important')).toBeUndefined()
+    expect(width('width: 30%\t!\timportant')).toBe('30')
+    expect(width('width: 30% important')).toBeUndefined()
+    expect(codes(table('width: 30% !important'))).toContain('import-attribute-dropped')
+    expect(codes(table('width: 30%'))).not.toContain('import-attribute-dropped')
   })
 
   it('gives no width for a piece without a colon, a spaced percent sign or a width out of range', () => {

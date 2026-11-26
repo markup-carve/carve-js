@@ -958,32 +958,41 @@ function columnWidths(node: Html.Element, context: HtmlContext): (number | undef
   return (group === undefined ? [] : elements(group).filter(child => child.tagName === 'col')).map(col => {
     const style = attr(col, 'style')
     const read = style === undefined ? undefined : colStyleWidth(style)
-    // C2-M-041: a style that gives no width or holds another declaration is reported.
-    if (read !== undefined && (read.width === undefined || read.other)) {
-      report(context, col, 'import-attribute-dropped', 'A col style that gives no width or holds another declaration dropped')
+    // C2-M-041: a style that gives no width, holds another declaration or marks its width important is reported.
+    if (read !== undefined && (read.width === undefined || read.other || read.important)) {
+      report(context, col, 'import-attribute-dropped',
+        'A col style that gives no width, holds another declaration or marks its width important dropped')
     }
     return read?.width
   })
 }
 
 const ASCII_WHITESPACE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/gu
+/** C2-M-041: `!` and `important` at the end of a value, without ASCII case, ASCII whitespace around the `!`. */
+const IMPORTANT = /[\t\n\f\r ]*![\t\n\f\r ]*important$/iu
 
 /**
- * C2-M-041: the style of a `<col>` read as declarations; the last `width: N%` gives the width, and `other` says
- * whether any other declaration stands beside it.
+ * C2-M-041: the style of a `<col>` read as declarations. The `width` that applies is the last one marked important, or
+ * else the last one, and gives a width only where it is `N%`; `other` says whether any other declaration stands beside
+ * it, and `important` whether the width that applies is marked important.
  */
-function colStyleWidth(style: string): { width: number | undefined, other: boolean } {
-  let width: number | undefined
+function colStyleWidth(style: string): { width: number | undefined, other: boolean, important: boolean } {
+  let last: string | undefined
+  let lastImportant: string | undefined
   let declarations = 0
   for (const piece of style.split(';')) {
     if (piece.replace(ASCII_WHITESPACE, '') === '') continue
     declarations++
     const colon = piece.indexOf(':')
     if (colon < 0 || piece.slice(0, colon).replace(ASCII_WHITESPACE, '').toLowerCase() !== 'width') continue
-    const value = percentWidth(piece.slice(colon + 1).replace(ASCII_WHITESPACE, ''))
-    if (value !== undefined) width = value
+    const value = piece.slice(colon + 1).replace(ASCII_WHITESPACE, '')
+    const mark = IMPORTANT.exec(value)
+    if (mark === null) last = value
+    else lastImportant = value.slice(0, mark.index)
   }
-  return { width, other: declarations > 1 }
+  const applies = lastImportant ?? last
+  return { width: applies === undefined ? undefined : percentWidth(applies), other: declarations > 1,
+    important: lastImportant !== undefined }
 }
 
 /** C2-M-041, C2-B-212: `N%` with N a decimal number above 0 and at most 100, as a fraction. */
