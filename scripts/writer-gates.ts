@@ -24,7 +24,7 @@ import { generate, loadCorpus, random as propertyRandom } from '../proptest/gene
 import { LINE_SHAPES } from '../test/support/enumerate.ts'
 import { WRITER_TOKENS } from '../test/support/inline-enumerate.ts'
 import {
-  checkWriter, enumerateWriter, isReportedLoss, type RandomRunResult, randomWriter, seededRandom,
+  checkWriter, enumerateWriter, isReportedLoss, type RandomRunResult, randomWriter, seededRandom, WRITER_GATE_HELD,
 } from '../test/support/writer-checks.ts'
 
 const silentOnly = process.argv.includes('--silent')
@@ -51,6 +51,14 @@ function runExamples(): boolean {
   const undecided: string[] = []
   for (const example of examples) {
     const failure = checkWriter(example.input, undecided)
+    const held = WRITER_GATE_HELD.get(example.id)
+    if (held !== undefined) {
+      if (failure === null) {
+        counts.failures++
+        lines.push(`  ${example.id}: held (${held}) but passes; drop the hold`)
+      }
+      continue
+    }
     if (failure === 'refused') counts.refused++
     else if (failure !== null && isReportedLoss(failure)) {
       counts.losses++

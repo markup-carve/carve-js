@@ -839,6 +839,15 @@ function checkWritten(
   return again === written ? null : `${path}: the canonical form ${show(written)} is formatted to ${show(again)}`
 }
 
+/**
+ * Clause cases whose written form the C2-W-088 reference procedure here does not reach yet, each with its ruling. The
+ * engine passes the clause case; a held case that passes the gate fails the run, so the hold goes with the model fix.
+ */
+export const WRITER_GATE_HELD: ReadonlyMap<string, string> = new Map([
+  ['CC-2165', 'carve#6772: the escape rounds read references from the tree, which the reference procedure does not model'],
+  ['CC-2166', 'carve#6772: the escape rounds read references from the tree, which the reference procedure does not model'],
+])
+
 /** The result of the checks on one source: null, a failure, or `refused` (C2-W-016, C2-W-133). */
 export function checkWriter(src: string, undecided: string[] = []): string | null {
   const tree = parse(src)
