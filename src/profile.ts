@@ -290,6 +290,22 @@ function degradationMessage(filter: Filter, node: Node, block: boolean): string 
     'move it to a shallower level or use a profile that permits the depth.'
 }
 
+function reportDegraded(filter: Filter, node: Node, block: boolean): void {
+  const message = degradationMessage(filter, node, block)
+  addFinding(filter.findings, node, { code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss', message })
+}
+
+/**
+ * Keeps an unwritten node as it is: a definition still resolves the references to it. The body of a note is
+ * filtered where the profile has notes; elsewhere no reference is left to write it.
+ */
+function filterUnwritten(filter: Filter, node: Node, block: boolean, depth: number): void {
+  const outside = isOutside(filter, node, block, depth)
+  if (node.type === 'footnote' && !outside) filterNode(filter, node, depth + containerLevel(node))
+  // C2-H-163, C2-H-165: a definition outside the profile is still reported; C2-H-178 exempts `abbreviation_def`.
+  if (outside && DEFINITION_TYPES.includes(node.type) && node.type !== 'abbreviation_def') reportDegraded(filter, node, block)
+}
+
 /**
  * Filters one list in place. Its nodes stand `depth` levels below the children of the document.
  * `degrade` gives the nodes that replace one outside the profile; `block` names the axis of the list.
@@ -298,16 +314,11 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
   const kept: N[] = []
   let changed = false
   for (const node of list) {
-    if (UNWRITTEN.includes(node.type)) {
-      // Kept as it is: a definition still resolves the references to it. The body of a note is
-      // filtered where the profile has notes; elsewhere no reference is left to write it.
-      if (node.type === 'footnote' && !isOutside(filter, node, block, depth)) filterNode(filter, node, depth + containerLevel(node))
-    } else if (isOutside(filter, node, block, depth)) {
+    if (UNWRITTEN.includes(node.type)) filterUnwritten(filter, node, block, depth)
+    else if (isOutside(filter, node, block, depth)) {
       // C2-H-165: one report for the degraded node, which stays in the tree; the nodes inside it are not reported again.
       const out = degrade(node)
-      const message = degradationMessage(filter, node, block)
-      const entry = { code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss', message } as const
-      addFinding(filter.findings, node, entry)
+      reportDegraded(filter, node, block)
       noteGone(filter, node)
       for (const part of out) kept.push(part)
       changed = true
