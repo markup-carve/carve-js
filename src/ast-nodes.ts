@@ -167,7 +167,15 @@ export interface DivNode extends NodeBase {
 
 export interface DocumentNode extends NodeBase {
   type: "document"
-  children: (Block | FootnoteNode | LinkReferenceDefinitionNode | AbbreviationDefNode | CitationDefinitionNode | FrontmatterNode)[]
+  children: (
+    | Block
+    | FootnoteNode
+    | LinkReferenceDefinitionNode
+    | AbbreviationDefNode
+    | SnippetDefinitionNode
+    | CitationDefinitionNode
+    | FrontmatterNode
+  )[]
   astVersion: string
   srcByteLength?: number
   extensions?: ExtensionDeclaration[]
@@ -238,7 +246,15 @@ export interface ImageNode extends NodeBase {
 
 export interface IncludeNode extends NodeBase {
   type: "include"
-  children?: (Block | FootnoteNode | LinkReferenceDefinitionNode | AbbreviationDefNode | CitationDefinitionNode | FrontmatterNode)[]
+  children?: (
+    | Block
+    | FootnoteNode
+    | LinkReferenceDefinitionNode
+    | AbbreviationDefNode
+    | SnippetDefinitionNode
+    | CitationDefinitionNode
+    | FrontmatterNode
+  )[]
   path: string
   section?: string
   options?: IncludeOptions
@@ -403,6 +419,18 @@ export interface SmartPunctuationNode extends NodeBase {
   glyph: string
 }
 
+export interface SnippetDefinitionNode extends NodeBase {
+  type: "snippet_definition"
+  children: Inline[]
+  name: string
+}
+
+export interface SnippetUseNode extends NodeBase {
+  type: "snippet_use"
+  name: string
+  mode: "inline" | "block"
+}
+
 export interface SoftBreakNode extends NodeBase {
   type: "soft_break"
 }
@@ -532,6 +560,7 @@ export type Block =
   | ParagraphNode
   | RawBlockNode
   | SectionNode
+  | SnippetUseNode
   | TableNode
   | ThematicBreakNode
 
@@ -562,6 +591,7 @@ export type Inline =
   | RubyNode
   | SmallCapsNode
   | SmartPunctuationNode
+  | SnippetUseNode
   | SoftBreakNode
   | SpanNode
   | StrikeNode
@@ -630,6 +660,8 @@ export type Node =
   | SectionNode
   | SmallCapsNode
   | SmartPunctuationNode
+  | SnippetDefinitionNode
+  | SnippetUseNode
   | SoftBreakNode
   | SpanNode
   | StrikeNode
@@ -706,6 +738,8 @@ export interface NodeOfType {
   section: SectionNode
   small_caps: SmallCapsNode
   smart_punctuation: SmartPunctuationNode
+  snippet_definition: SnippetDefinitionNode
+  snippet_use: SnippetUseNode
   soft_break: SoftBreakNode
   span: SpanNode
   strike: StrikeNode
@@ -743,6 +777,7 @@ export const FIELD_VALUES = {
   "xref.display": ["number","page","title","full"],
   "paragraph.role": ["image","math"],
   "citation.mode": ["normal","author-in-text","suppress-author"],
+  "snippet_use.mode": ["inline","block"],
   "table_cell.scope": ["row","col","rowgroup","colgroup"],
   "list.spacing": ["tight","loose"],
   "table_cell.span": ["rowspan","colspan"],

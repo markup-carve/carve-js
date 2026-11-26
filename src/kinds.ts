@@ -25,11 +25,15 @@ export const INCLUDE = 22
 export const LINK_DEFINITION = 23
 export const ABBREVIATION = 24
 export const CELL = 25
+// C2-B-236, C2-B-237: a snippet definition and a block snippet use, leaves of one line.
+export const SNIPPET_DEFINITION = 26
+export const SNIPPET_USE = 27
 
 export const KIND_NAMES = [
   'document', 'quote', 'bullet_list', 'ordered_list', 'item', 'description_list', 'description', 'footnote', 'div',
   'table', 'row', 'paragraph', 'term', 'caption', 'code', 'comment_block', 'line_block', 'frontmatter', 'heading',
   'thematic_break', 'comment', 'attributes', 'include', 'link_definition', 'abbreviation', 'cell',
+  'snippet_definition', 'snippet_use',
 ] as const
 
 export function isLeaf(kind: number): boolean {

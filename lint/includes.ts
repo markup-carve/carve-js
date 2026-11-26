@@ -7,6 +7,8 @@ import { type IncludeConfig, includeSettings, type IncludeResolver, type Include
 import { fileLines, type LineRange, lineRange, regionRange } from '../src/include-source.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { unitBytes, utf8Length } from '../src/positions.ts'
+import { usedNames } from './snippets.ts'
+import { snippetRegistry } from '../src/snippet-expand.ts'
 
 /** The text the resolver returned for each id, as the expansion read it. */
 function recording(config: IncludeSettings, texts: Map<string, string>): IncludeConfig {
@@ -34,7 +36,8 @@ function parsedLines(node: IncludeNode, text: string): LineRange {
 /** C2-N-086: for a section, the lines from the first selected block through the last one. */
 function sectionLines(node: IncludeNode): LineRange | null {
   const blocks = (node.children ?? []).filter((child) => child.pos !== undefined && child.type !== 'link_reference_definition' &&
-    child.type !== 'footnote' && child.type !== 'abbreviation_def' && child.type !== 'citation_definition')
+    child.type !== 'footnote' && child.type !== 'abbreviation_def' && child.type !== 'citation_definition' &&
+    child.type !== 'snippet_definition')
   const first = blocks[0]?.pos
   const last = blocks.at(-1)?.pos
   return first === undefined || last === undefined ? null : { from: first.startLine - 1, to: last.endLine }
@@ -60,6 +63,10 @@ interface ReferenceFindings {
   observed: Set<string>
   unresolved: Set<string>
   used: Set<string>
+  /** C2-N-096: the snippet names the uses of the expanded tree name, across its files. */
+  snippets: Set<string>
+  /** The file and start of each definition that loses to an earlier one of its name, which takes no unused hint. */
+  losing: Set<string>
 }
 
 function referenceKey(file: string, node: Node, code: string): string | null {
@@ -135,13 +142,22 @@ function walkReferences(node: Node, path: string, file: string, inclusion: strin
 
 /** The resolved expansion decides which file's definition a reference actually uses (C2-N-054, C2-N-055). */
 function referenceFindings(document: DocumentNode): ReferenceFindings {
-  const found: ReferenceFindings = { observed: new Set(), unresolved: new Set(), used: new Set() }
+  const found: ReferenceFindings = { observed: new Set(), unresolved: new Set(), used: new Set(), snippets: usedNames(document),
+    losing: new Set() }
   walkReferences(document, '', '', '', scopeOf(document.children, '', null), found)
   return found
 }
 
 const RECONCILED: ReadonlySet<string> = new Set(['unresolved-reference-link', 'unresolved-footnote',
-  'unused-link-reference-definition', 'unused-footnote-definition'])
+  'unused-link-reference-definition', 'unused-footnote-definition', 'unused-snippet'])
+
+/** The file and start of the `$` of each winning snippet definition, as a lint finding about it names them. */
+function winningKeys(document: DocumentNode): string[] {
+  return [...snippetRegistry(document).values()].flatMap(({ definition, include }) => definition.pos === undefined ? []
+    : [`${include?.file ?? ''}\u0000${definition.pos.startOffset + 1}`])
+}
+
+const SNIPPET_NAME = /"\$([^"]+)"/u
 
 function reconciled(entry: Diagnostic, found: ReferenceFindings, inclusion = ''): boolean {
   const key = diagnosticKey(entry)
@@ -151,6 +167,11 @@ function reconciled(entry: Diagnostic, found: ReferenceFindings, inclusion = '')
   }
   if (entry.code === 'unused-link-reference-definition' || entry.code === 'unused-footnote-definition') {
     return !found.used.has(key)
+  }
+  // A definition of one file that another file of the expansion uses is used.
+  if (entry.code === 'unused-snippet') {
+    if (found.losing.has(`${entry.file ?? ''}\u0000${entry.range?.startOffset ?? -1}`)) return false
+    return !found.snippets.has(SNIPPET_NAME.exec(entry.message)?.[1] ?? '')
   }
   return true
 }
@@ -301,10 +322,17 @@ export function lintIncludes(source: string, value: unknown, own: Diagnostic[], 
   const texts = new Map<string, string>()
   const expanded = parseWithDiagnostics(source, { includes: recording(config, texts) })
   const references = referenceFindings(expanded.document)
+  const duplicates = expanded.diagnostics.filter((entry) => entry.code === 'duplicate-snippet')
+  for (const entry of duplicates) references.losing.add(`${entry.file ?? ''}\u0000${entry.range?.startOffset ?? -1}`)
+  // A file included twice repeats its definitions at one offset: the winning one keeps its hint.
+  for (const key of winningKeys(expanded.document)) references.losing.delete(key)
   const visit: Visit = { texts, lintFile, lintPayload, references, seen: new Set(), out: [], codePaths: [] }
   walk(visit, expanded.document, '', undefined, [])
   // The file lint pass selects source lines and sections. Keep only expansion findings that it cannot produce.
   const expansion = expanded.diagnostics.filter((entry) => entry.code.startsWith('include-') ||
     visit.codePaths.some((path) => entry.path?.startsWith(path) === true))
-  return [...own.filter((entry) => reconciled(entry, references)), ...expansion, ...visit.out]
+  // C2-N-090: a duplicate across files is seen only in the expanded tree; one a file pass found is not repeated.
+  const found = new Set([...own, ...visit.out].map(findingKey))
+  const crossFile = duplicates.filter((entry) => !found.has(findingKey(entry)) && !expansion.includes(entry))
+  return [...own.filter((entry) => reconciled(entry, references)), ...expansion, ...crossFile, ...visit.out]
 }

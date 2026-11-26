@@ -7,7 +7,11 @@ import { type LayoutTrace } from './ast-inline.ts'
 import { validateTree } from './ast-validate.ts'
 import { renderDocument } from './html.ts'
 import { buildLayout, createLayoutTrace, type SourceLayout } from './layout.ts'
-import { type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
+import { addFinding, type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
+import {
+  expandSnippets, markDefinitions, holdsSnippetNode, holdsSnippetUse, refuseTransformSnippets,
+} from './snippet-expand.ts'
+import { carrySnippetBudget, carrySnippetMarks } from './snippet-marks.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
 import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
@@ -238,6 +242,15 @@ export function parseTree(src: string | Uint8Array, options?: ParseOptions): Par
  */
 export function resolveTree(input: ParsedTree | DocumentNode, options?: RenderOptions): ResolvedTree {
   const settings = readOptions(options, 'render')
+  // C2-N-091: the staged path expands on its own copy too; the parse facts name the authored nodes, so the copy has none.
+  const document = 'type' in input ? input : input.document
+  if (holdsSnippetUse(document)) {
+    const authored: ParsedTree = 'type' in input ? inputStage(input, settings) : { ...input, facts: null }
+    const expanded = expandStage(document, authored, settings)
+    const resolved = shiftedResolve(expanded.parsed, settings, expanded.parsed.document === document, settings.headingShift)
+    appendFindings(resolved.losses, expanded.findings)
+    return resolved
+  }
   if ('type' in input) return shiftedResolve(inputStage(input, settings), settings, true, settings.headingShift)
   // A parsed tree is resolved in place and its facts hold its nodes, so it is not copied: a second call shifts by the difference.
   const applied = PARSED_SHIFT.get(input.document) ?? 0
@@ -486,11 +499,34 @@ export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode,
   return plainRender(input, settings)
 }
 
+/**
+ * C2-N-091: the snippet expansion of a render, on the render's own tree: a supplied tree is copied first. A view a
+ * transform returned (`transformed`) is not expanded: its snippet nodes are refused (C2-N-095).
+ */
+function expandStage(input: string | Uint8Array | DocumentNode, parsed: ParsedTree, settings: Settings,
+  transformed = false): { parsed: ParsedTree, findings: Findings } {
+  const findings: Findings = { entries: [], nodes: [] }
+  if (typeof input === 'string' && !input.includes('{{') && (parsed.facts?.includes.length ?? 0) === 0) return { parsed, findings }
+  if (transformed) {
+    if (holdsSnippetNode(parsed.document)) refuseTransformSnippets(parsed.document, findings)
+    return { parsed, findings }
+  }
+  if (!holdsSnippetUse(parsed.document)) return { parsed, findings }
+  const own = isSupplied(input) ? { ...parsed, document: cloneTree(parsed.document) } : parsed
+  const touched = expandSnippets(own.document, findings, { roundtrip: settings.roundtrip, source: parsed.source },
+    parsed.document)
+  const leaves = own.facts?.resolvableLeaves as Set<Node> | undefined
+  if (leaves !== undefined) for (const node of touched) leaves.add(node)
+  return { parsed: own, findings }
+}
+
 /** `shift`: the heading shift still to apply, 0 for a view that a transform has already shifted. */
 function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings, validated = false,
-  shift = settings.headingShift, reportShift = true): RenderOutput {
-  const parsed = inputStage(input, settings, true, validated)
-  const resolved = shiftedResolve(parsed, settings, isSupplied(input), shift)
+  shift = settings.headingShift, reportShift = true, transformed = false): RenderOutput {
+  const expanded = expandStage(input, inputStage(input, settings, true, validated), settings, transformed)
+  const parsed = expanded.parsed
+  const resolved = shiftedResolve(parsed, settings, isSupplied(input) && parsed.document === input, shift)
+  appendFindings(resolved.losses, expanded.findings)
   const rendered = renderStage(resolved, reportShift)
   const diagnostics = [...parseDiagnostics(resolved, parsed), ...locateFindings(resolved.document, rendered.losses)]
   if (settings.strictLosses) for (const entry of diagnostics) {
@@ -498,6 +534,10 @@ function plainRender(input: string | Uint8Array | DocumentNode, settings: Settin
   }
   return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html,
     ...capDiagnostics(diagnostics, settings) }
+}
+
+function appendFindings(to: Findings, from: Findings): void {
+  for (let at = 0; at < from.entries.length; at++) addFinding(to, from.nodes[at] ?? null, from.entries[at]!)
 }
 
 /** C2-X-053: one host transform of a copy of the resolved document view. */
@@ -543,6 +583,15 @@ function applies(entry: DocumentTransform, view: DocumentNode): boolean {
   return entry.appliesTo === undefined || entry.appliesTo(view)
 }
 
+/** One transform of a copy of `view`; the copy carries the snippet side tables, and a new root the budget. */
+function runTransform(entry: DocumentTransform, view: DocumentNode): DocumentNode {
+  const input = cloneTree(view)
+  carrySnippetMarks(view, input)
+  const next = entry.transform(input)
+  if (next !== input) carrySnippetBudget(input, next)
+  return next
+}
+
 function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[], extensions: Settings['extensions']): {
   view: DocumentNode, failures: Diagnostic[], validated: boolean, changed: boolean
 } {
@@ -554,7 +603,7 @@ function applyDocumentTransforms(view: DocumentNode, transforms: readonly Docume
   for (const entry of transforms) {
     try {
       if (!applies(entry, view)) continue
-      const next = entry.transform(cloneTree(view))
+      const next = runTransform(entry, view)
       // A view the transform left as it was is checked once; its ids are those of its input.
       if (unchanged(next, view)) {
         if (!validated) validateTree(next, undefined, undefined, extensions)
@@ -614,13 +663,28 @@ function unchangedViewRender(resolved: ResolvedTree, sourceDiagnostics: Diagnost
   return { html: settings.strictLosses && lost ? '' : rendered.html, ...capped }
 }
 
+function expansionDiagnostics(resolved: ResolvedTree, findings: Findings): Diagnostic[] {
+  if (findings.entries.length === 0) return []
+  const allowed = resolved.settings.allowLosses
+  return locateFindings(resolved.document, findings).filter((entry) => !allowed.has(entry.code))
+}
+
+/** C2-N-095: the definitions of the resolved view the transforms receive, those with no use among them. */
+function markTransformBaseline(input: string | Uint8Array | DocumentNode, view: DocumentNode): void {
+  // An include may bring definitions the source does not spell.
+  if (typeof input !== 'string' || input.includes('{$') || input.includes('{{')) markDefinitions(view)
+}
+
 function transformedRender(
   input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], settings: Settings, positions = true,
 ): RenderOutput {
   const authored = typeof input === 'string' || input instanceof Uint8Array ? input : cloneTree(input)
-  const parsed = inputStage(authored, settings, positions)
+  const expanded = expandStage(authored, inputStage(authored, settings, positions), settings)
+  const parsed = expanded.parsed
   const resolved = resolveStage(parsed, settings)
-  const sourceDiagnostics = parseDiagnostics(resolved, parsed)
+  appendFindings(resolved.losses, expanded.findings)
+  // C2-N-093: the findings of the expansion stand for the view the transforms receive, whichever path renders it.
+  const sourceDiagnostics = [...parseDiagnostics(resolved, parsed), ...expansionDiagnostics(resolved, expanded.findings)]
   // C2-H-208: capture the shift's own above-six result before any host can change the level.
   const shiftLosses: Findings = { entries: [], nodes: [] }
   if (settings.headingShift !== 0) {
@@ -628,12 +692,13 @@ function transformedRender(
     reportShiftAboveSix(resolved.document, settings.headingShift, shiftLosses)
   }
   const shiftDiagnostics = settings.allowLosses.has(HEADING_SHIFT_CODE) ? [] : locateFindings(resolved.document, shiftLosses)
+  markTransformBaseline(input, resolved.document)
   const { view, failures, validated, changed } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
   if (!changed) {
     const direct = unchangedViewRender(resolved, sourceDiagnostics, failures, settings)
     if (direct !== undefined) return direct
   }
-  const rendered = plainRender(view, settings, validated, 0, false)
+  const rendered = plainRender(view, settings, validated, 0, false, true)
   const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
   ])))
@@ -670,5 +735,9 @@ export function render(input: string | Uint8Array | DocumentNode, options?: Rend
     if (settings.strictLosses && lost.length > 0) throw new CarveRenderError(lost)
     return output.html
   }
-  return renderTree(shiftedResolve(inputStage(input, settings), settings, isSupplied(input), settings.headingShift))
+  const expanded = expandStage(input, inputStage(input, settings), settings)
+  const resolved = shiftedResolve(expanded.parsed, settings, isSupplied(input) && expanded.parsed.document === input,
+    settings.headingShift)
+  appendFindings(resolved.losses, expanded.findings)
+  return renderTree(resolved)
 }

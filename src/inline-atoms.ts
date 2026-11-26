@@ -2,6 +2,7 @@
 // autolinks, cross-references, comments, the forms at an opening brace, and the sigil forms.
 // Each scanner takes the offset of its first character and returns the offset where the scan
 // goes on; it pushes a token when its form matched.
+import { snippetNameEnd, snippetUseEnd } from './snippets.ts'
 import { classRunEnd, readAttributeBlock } from './attributes.ts'
 import {
   AT_SIGN, BACKTICK, BRACE_CLOSE, BRACE_OPEN, BRACKET_OPEN, COLON, DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LF,
@@ -9,7 +10,7 @@ import {
 } from './chars.ts'
 import {
   ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, EDITORIAL, ESCAPE, FLAG_BRACED, FLAG_DISPLAY, FLAG_EMAIL,
-  HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SOFT_BREAK, SYMBOL, TAG, XREF,
+  HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SNIPPET_USE_INLINE, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import {
   atomLimit, closerMissing, type InlineState, NONE, OPEN_EXTENSION, OPEN_IMAGE, pushToken, TOKEN_A,
@@ -308,6 +309,13 @@ function bracedComment(state: InlineState, pos: number, kind: number): number {
 /** C2-I-043: the forms at an opening brace, in their order. */
 export function scanBrace(state: InlineState, pos: number): number {
   const text = state.text
+  // C2-I-128: a snippet use is read before the four forms.
+  const use = codeAt(state, pos + 1) === BRACE_OPEN ? snippetUseEnd(text, pos, state.end) : NONE
+  if (use !== NONE) {
+    const dollar = text.indexOf('$', pos)
+    pushToken(state, SNIPPET_USE_INLINE, pos, use, dollar + 1, snippetNameEnd(text, dollar + 1, use), 0, NONE)
+    return use
+  }
   const block = readAttributeBlock(text, pos, state.end, state, null)
   if (block !== NONE) {
     pushToken(state, ATTRIBUTE_BLOCK, pos, block, NONE, NONE, 0, NONE)

@@ -15,6 +15,7 @@ import { corpusResolver, hexBytes } from './corpus.ts'
 import { withoutPositions } from './corpus-checks.ts'
 import { applyPatch, diffTree, sourceFingerprint, treeFingerprint } from '../src/tree-patch.ts'
 import { exportTo } from '../src/export/index.ts'
+import { withSnippetLimits } from '../src/harness-limits.ts'
 
 const same = (a, b) => isDeepStrictEqual(a, b)
 // C2-X-059: the standard img renderer reports a failed SVG under C2-X-050.
@@ -66,6 +67,10 @@ function documentTransforms(entry) {
     for (const part of path) parent = parent[part]
     if (row.setLevel !== undefined) {
       parent[at].level = row.setLevel
+      return view
+    }
+    if (row.setValue !== undefined) {
+      parent[at].value = row.setValue
       return view
     }
     const inserted = structuredClone(row.insert)
@@ -269,9 +274,10 @@ function run(entry) {
       ...(expected.suppressed !== undefined && result.suppressedDiagnostics !== expected.suppressed ? ['suppressed'] : [])]
   }
   if (kind === 'render') {
-    const result = entry.host?.documentTransforms === undefined
+    // conformance/README.md: `host.limits` lowers the snippet limits and the derived-text budget for this case only.
+    const result = withSnippetLimits(entry.host?.limits, () => entry.host?.documentTransforms === undefined
       ? engine.renderWithDiagnostics(entry.tree ?? input, options)
-      : engine.renderWithDocumentTransforms(entry.tree ?? input, documentTransforms(entry), options)
+      : engine.renderWithDocumentTransforms(entry.tree ?? input, documentTransforms(entry), options))
     const children = expected.children === undefined ? [] : childrenFields(engine.parse(input, parseOptions(options)), expected)
     if (expected.refusal !== undefined) engine.render(entry.tree ?? input, options)
     return [...children, ...(expected.html !== undefined && result.html !== expected.html ? ['html'] : []),

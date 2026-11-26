@@ -15,7 +15,7 @@ const METADATA_FIELDS = 'carve#3598 root metadata fields beside a frontmatter no
 const REGION_MARKER = 'carve#6727 a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815)'
 const DJOT_GATE = 'carve#6499 the djot- rules default to off (C2-T-031, C2-T-049; spec carve#6824)'
 const QUOTE_LOCALE = 'carve-rs#4838 a smart quotes locale outside its row falls back (C2-X-075; spec carve#6824)'
-const SNIPPETS = 'carve#6395 snippet definitions and uses (C2-B-236, C2-I-128, C2-N-090 to C2-N-096; spec carve#6830)'
+const SNIPPET_SPAN = 'carve#6395 an ignored snippet carrier leaves a plain span (C2-H-185, C2-M-044; spec carve#6847)'
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
 const LIST_TABLE = 'carve#6835 a valueless header-rows and a row item with a block after its list (C2-X-078; spec carve#6842)'
 
@@ -69,53 +69,7 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2148', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2298', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2299', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
-  ['CC-2347', { fields: ['children', 'html'], fix: SNIPPETS }],
-  ['CC-2348', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2349', { fields: ['children', 'html'], fix: SNIPPETS }],
-  ['CC-2350', { fields: ['children', 'html'], fix: SNIPPETS }],
-  ['CC-2351', { fields: ['children', 'html'], fix: SNIPPETS }],
-  ['CC-2352', { fields: ['children', 'html'], fix: SNIPPETS }],
-  ['CC-2355', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2356', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2357', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2358', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2359', { fields: ['diagnostics:unused-snippet'], fix: SNIPPETS }],
-  ['CC-2360', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2361', { fields: ['diagnostics:unused-snippet'], fix: SNIPPETS }],
-  ['CC-2362', { fields: ['diagnostics:unused-snippet'], fix: SNIPPETS }],
-  ['CC-2364', { fields: ['diagnostics:unused-snippet', 'diagnostics:duplicate-snippet'], fix: SNIPPETS }],
-  ['CC-2365', { fields: ['html', 'diagnostics:duplicate-snippet'], fix: SNIPPETS }],
-  ['CC-2366', { fields: ['html', 'diagnostics:duplicate-snippet'], fix: SNIPPETS }],
-  ['CC-2367', { fields: ['diagnostics:snippet-unresolved'], fix: SNIPPETS }],
-  ['CC-2368', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2369', { fields: ['html', 'diagnostics:snippet-cycle'], fix: SNIPPETS }],
-  ['CC-2370', { fields: ['html', 'diagnostics:snippet-cycle'], fix: SNIPPETS }],
-  ['CC-2371', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2372', { fields: ['html', 'diagnostics:snippet-unexpanded-transform'], fix: SNIPPETS }],
-  ['CC-2373', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2374', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2375', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2376', { fields: ['diagnostics:snippet-unresolved'], fix: SNIPPETS }],
-  ['CC-2377', { fields: ['threw:CarveTreeError'], fix: SNIPPETS }],
-  ['CC-2378', { fields: ['threw:CarveTreeError'], fix: SNIPPETS }],
-  ['CC-2379', { fields: ['threw:CarveTreeError'], fix: SNIPPETS }],
-  ['CC-2380', { fields: ['threw:CarveTreeError'], fix: SNIPPETS }],
-  ['CC-2381', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2382', { fields: ['html', 'diagnostics:snippet-depth'], fix: SNIPPETS }],
-  ['CC-2383', { fields: ['html', 'diagnostics:snippet-cycle'], fix: SNIPPETS }],
-  ['CC-2384', { fields: ['threw:CarveTreeError'], fix: SNIPPETS }],
-  ['CC-2385', { fields: ['diagnostics:unused-snippet'], fix: SNIPPETS }],
-  ['CC-2386', { fields: ['diagnostics:unused-snippet', 'diagnosticsComplete'], fix: SNIPPETS }],
-  ['CC-2387', { fields: ['diagnostics:snippet-definition-id'], fix: SNIPPETS }],
-  ['CC-2388', { fields: ['threw:CarveTreeError'], fix: SNIPPETS }],
-  ['CC-2389', { fields: ['threw:CarveTreeError'], fix: SNIPPETS }],
-  ['CC-2390', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2391', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2392', { fields: ['html'], fix: SNIPPETS }],
-  ['CC-2393', { fields: ['children'], fix: SNIPPETS }],
-  ['CC-2394', { fields: ['children', 'carve'], fix: SNIPPETS }],
-  ['CC-2395', { fields: ['children', 'diagnostics:import-carrier-ignored'], fix: SNIPPETS }],
-  ['CC-2396', { fields: ['children', 'diagnostics:snippet-scope-loss'], fix: SNIPPETS }],
+  ['CC-2395', { fields: ['children'], fix: SNIPPET_SPAN }],
   ['CC-2398', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2399', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2402', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
@@ -188,12 +142,10 @@ export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
  * The rows of the pinned lint catalog this engine does not register or does not pass the catalog check of yet, each with
  * its ticket; one that passes is a stale hold.
  */
-export const HELD_RULES: Holds = new Map([
-  ['snippet-definition-id', SNIPPETS], ['unused-snippet', SNIPPETS],
-])
+export const HELD_RULES: Holds = new Map()
 
 /** The supplied trees of trees/nodes.json the reader still refuses, each with its ticket; one that is accepted is a stale hold. */
-export const HELD_SUPPLIED: Holds = new Map([['snippets', SNIPPETS]])
+export const HELD_SUPPLIED: Holds = new Map()
 
 /** The refused trees the reader does not refuse at their `REFUSED_AT` field yet, each with its ticket. */
 export const HELD_REFUSED: Holds = new Map()

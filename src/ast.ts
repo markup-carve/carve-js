@@ -114,7 +114,9 @@ export interface Envelope {
   extensions?: ExtensionDeclaration[]
 }
 
-export const DEFINITION_TYPES: readonly string[] = ['footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition']
+export const DEFINITION_TYPES: readonly string[] = [
+  'footnote', 'link_reference_definition', 'abbreviation_def', 'snippet_definition', 'citation_definition',
+]
 
 /** A node whose children are inline nodes. */
 export type InlineParent = Extract<Node, { children: Inline[] }>

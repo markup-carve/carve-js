@@ -218,6 +218,25 @@ to it: the text, and its first and last line from 1. Where the directive would r
 result is `{ ok: false, reason }`. `includeDependencies(tree, { ranges: true })` adds the UTF-8 byte range of each
 directive in its including file, where the tree has positions.
 
+## Named snippets
+
+A `{$name}: value` definition and its `{{ $name }}` uses (spec `syntax.md`, C2-B-236, C2-I-128) stay in the tree
+that `parse` and `parseTree` give: a use is a `snippet_use` node and the definition a `snippet_definition`, so
+`format` writes them back as typed. `render` and `renderWithDiagnostics` expand the uses in one pass on their own
+copy of the tree, after includes and before resolution and document transforms; a tree you pass in is not changed. A use with no definition, a cycle, nesting deeper than 16 or more than 100,000 copied nodes is
+written as its source text with a diagnostic. With `roundtrip` on, each expanded use carries `data-carve-snippet` and
+the definitions go into a `<template data-carve-snippets>`, which the HTML importer reads back as the uses and
+definitions.
+
+```ts
+import { parse, render } from '@markup-carve/carve'
+
+const source = '{$product}: *Carve*\n\nTry {{ $product }} today.\n'
+if (render(source) !== '<p>Try <strong>Carve</strong> today.</p>') throw new Error('snippet')
+const use = parse(source, { positions: false }).children[1]
+if (use?.type !== 'paragraph' || use.children[1]?.type !== 'snippet_use') throw new Error('snippet_use')
+```
+
 ## Headings and positions
 
 `headingId(text, { headingIds })` is the id that the `headingIds` option generates for a heading whose plain text is

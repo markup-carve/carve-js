@@ -2,6 +2,8 @@
 // headings, footnote numbers, heading ids, caption numbers, cross-references and column alignment.
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
+import { snippetRegistry } from './snippet-expand.ts'
+import { COPY_SCOPE } from './snippet-marks.ts'
 import {
   type AbbreviationDefNode, type AbbreviationNode, type AdmonitionNode, type BlockExtensionNode,
   type BlockQuoteNode, type CaptionNode, type CodeBlockNode,
@@ -85,6 +87,9 @@ interface Walk {
   scope: Scope
   /** The scope of each reference and note body that stands in an included file. */
   scopes: Map<Node, Scope>
+  document: DocumentNode
+  /** The include around each include, found once a snippet copy needs the scope of a file not yet visited. */
+  includeParents: Map<IncludeNode, IncludeNode | null> | null
   headings: HeadingNode[]
   references: Reference[]
   xrefs: XrefNode[]
@@ -231,7 +236,11 @@ function visitReference(node: Reference, walk: Walk): void {
 
 /** C2-N-053: the scope of an included file, with its own definitions; the first of a key wins within the file (C2-N-060). */
 function fileScope(walk: Walk, node: IncludeNode, outer: Scope): Scope {
+  // A snippet copy that stands before the include asks for its scope first (C2-N-092).
+  const known = walk.scopes.get(node)
+  if (known !== undefined) return known
   const scope: Scope = { outer, definitions: new Map(), footnotes: new Map(), abbreviations: new Map() }
+  walk.scopes.set(node, scope)
   for (const child of node.children ?? []) {
     if (child.type === 'abbreviation_def') {
       define(walk, scope.abbreviations, child, 'duplicate-abbreviation-definition', ABBREVIATION_DUPLICATE)
@@ -384,6 +393,49 @@ function mayResolve(walk: Walk, node: Node): boolean {
  * resolution reads.
  */
 function visit(walk: Walk, node: Node, parent: Node | null): void {
+  const origin = COPY_SCOPE.get(node)
+  if (origin !== undefined) return visitCopy(walk, node, parent, origin)
+  visitNode(walk, node, parent)
+}
+
+/** C2-N-092: a snippet copy resolves against the definitions of the file that holds its snippet definition. */
+function visitCopy(walk: Walk, node: Node, parent: Node | null, origin: IncludeNode | null): void {
+  const saved = walk.scope
+  let top = saved
+  while (top.outer !== null) top = top.outer
+  walk.scope = origin === null ? top : copyScope(walk, origin, top)
+  try {
+    visitNode(walk, node, parent)
+  } finally {
+    walk.scope = saved
+  }
+}
+
+/** The scope of the file `include` reads, inside the scopes of the includes around it, before the walk reaches them. */
+function copyScope(walk: Walk, include: IncludeNode, top: Scope): Scope {
+  const known = walk.scopes.get(include)
+  if (known !== undefined) return known
+  const parent = (walk.includeParents ??= includeParents(walk.document)).get(include) ?? null
+  return fileScope(walk, include, parent === null ? top : copyScope(walk, parent, top))
+}
+
+function includeParents(document: DocumentNode): Map<IncludeNode, IncludeNode | null> {
+  const parents = new Map<IncludeNode, IncludeNode | null>()
+  const pending: [Node, IncludeNode | null][] = [[document, null]]
+  for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
+    const [node, around] = entry
+    let inner = around
+    if (node.type === 'include') {
+      parents.set(node, around)
+      inner = node
+    }
+    forEachSlot(node, (nodes) => { for (const child of nodes) pending.push([child, inner]) }, undefined, document.extensions)
+  }
+  return parents
+}
+
+function visitNode(walk: Walk, node: Node, parent: Node | null): void {
+  if (node.type === 'snippet_definition') return visitSnippetDefinition(walk, node)
   if (node.attrs?.id !== undefined && attributesAct(node)) walk.identified.push(node)
   if (isCaptionedBlock(node)) {
     walk.parent = parent
@@ -738,6 +790,14 @@ export function resolve(
   const resolution = walk.resolution
   const top = walk.scope
   collectDefinitions(document, walk, facts)
+  // C2-N-090: a later snippet definition of a name stays, renders nothing and reports at its `$` and name.
+  snippetRegistry(document, (node) => {
+    const entry: Diagnostic = { code: 'duplicate-snippet', severity: 'warning', channel: 'parse',
+      message: `A snippet named ${node.name} is defined earlier; this definition is not used` }
+    const start = node.pos?.startOffset
+    if (start !== undefined) entry.range = { startOffset: start + 1, endOffset: start + 2 + node.name.length }
+    addFinding(resolution.findings, node, entry)
+  })
   visit(walk, document, null)
   // C2-H-025: the content of the notes follows the document body, in the order of the footnote numbers.
   for (let at = 0; at < resolution.notes.length; at++) {
@@ -778,6 +838,15 @@ function resolveUnwrittenFootnote(walk: Walk, footnote: FootnoteNode, scope: Sco
   }
 }
 
+/** C2-N-090: a snippet definition renders nothing; its references resolve, and its notes take no number. */
+function visitSnippetDefinition(walk: Walk, definition: Node): void {
+  const pending: Node[] = [...childNodes(definition)]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
+    forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
+  }
+}
+
 function visitUnwritten(walk: Walk, children: readonly Node[], scope: Scope): void {
   for (const child of children) {
     if (child.type === 'include') visitUnwritten(walk, child.children ?? [], walk.scopes.get(child) ?? scope)
@@ -799,6 +868,7 @@ function newWalk(
   return {
     declarations: document.extensions ?? [], resolution, footnotes,
     scope: { outer: null, definitions: resolution.definitions, footnotes, abbreviations: new Map() }, scopes: new Map(),
+    document, includeParents: null,
     headings: [], references: [], xrefs: [], captions: [], identified: [], unwrittenIds: [], noteRefs: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
     markupLine: facts?.markupLine ?? null, renderers, admitted, rendered: false, extensionDepth: 0,

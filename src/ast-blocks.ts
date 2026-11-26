@@ -3,10 +3,12 @@ import {
   AST_VERSION, type Block, type BlockQuoteNode, type CaptionNode, type CodeBlockNode, type CommentNode, type DefinitionListNode,
   type DocumentNode, type FigureGroupNode, type FrontmatterNode, type HeadingNode, type IncludeNode, type Inline,
   isFieldValue, type LineBlockNode, type LineNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Marker,
-  type Node, type ParagraphNode, type TableNode,
+  type Node, type ParagraphNode, type SnippetDefinitionNode, type SnippetUseNode, type TableNode,
 } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
-import { type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
+import {
+  attributeSink, type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey,
+} from './ast-attributes.ts'
 import {
   addText, commentValue, contentNodes, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, noteLeaf, place,
   setAttributes, type TreeContext,
@@ -15,12 +17,15 @@ import { includeNode, linkDefinitionFields, linkDefinitionTail, openerTitle } fr
 import { delimitedTableNode, tableNode } from './ast-table.ts'
 import { BRACE_OPEN, DIGIT_0, DIGIT_9, LF, PERCENT, SPACE, STAR } from './chars.ts'
 import { scanBlocks } from './blocks.ts'
+import { emptyMemo, readAttributeBlock } from './attributes.ts'
+import { readSnippetMarker, snippetUseName, snippetValueStart } from './snippets.ts'
 import { acquireInlineState, releaseInlineState } from './inline-state.ts'
 import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
   FLAG_AUTO, FLAG_BLOCK_MATH, FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES,
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
-  HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
+  HEADING, INCLUDE, SNIPPET_DEFINITION, SNIPPET_USE, isOpaqueLeaf,
+  LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import { attributeBlocksEnd, fenceRunLength, isBareRun, orderedDelimiter, skipSpaces, trimEnd } from './lines.ts'
 import { lineFeedAt } from './source.ts'
@@ -260,6 +265,32 @@ function abbreviationParts(src: string, node: BlockNode): [string, string] {
   return [src.slice(start, end), expansion]
 }
 
+/** C2-B-236, C2-A-220: a snippet definition, its name, the attributes of its marker and its value as inline content. */
+function snippetDefinitionNode(ctx: TreeContext, node: BlockNode): DocumentChild {
+  const src = ctx.src
+  const start = node.spans![0]!
+  const end = node.spans![1]!
+  const marker = readSnippetMarker(src, start, end)!
+  const attributes = emptyAttributes()
+  const sink = attributeSink(attributes)
+  // The marker's own `}` ends its first block; a quoted value may hold a `}` of its own.
+  const glued = src.charCodeAt(marker.nameEnd) === SPACE
+    ? readAttributeBlock(src, marker.nameEnd - 1, end, emptyMemo(), sink)
+    : marker.nameEnd + 1
+  readGluedBlocks(src, glued, marker.markerEnd - 1, attributes)
+  const valueStart = snippetValueStart(src, end, marker)
+  const children = leafChildren(ctx, { ...node, spans: [valueStart, end] }, FLOW_PLAIN)
+  const name = src.slice(marker.nameStart, marker.nameEnd)
+  const out: SnippetDefinitionNode = noteLeaf(ctx, { type: 'snippet_definition', name, children })
+  setAttributes(out, attributes)
+  return out
+}
+
+/** C2-B-237, C2-A-221: a block snippet use. */
+function snippetUseBlock(ctx: TreeContext, node: BlockNode): Block {
+  return { type: 'snippet_use', name: snippetUseName(ctx.src, node.spans![0]!), mode: 'block' } satisfies SnippetUseNode
+}
+
 function linkDefinitionNode(ctx: TreeContext, node: BlockNode, _flow: number, attributes: Attributes | null): LinkReferenceDefinitionNode {
   const [start, end] = definitionLabel(ctx.src, node.start)
   // The caller applies `attributes` after the build; a definition without attribute lines applies its own block here.
@@ -431,6 +462,7 @@ const BUILDERS = new Map<number, BlockBuilder<Block>>([
   [THEMATIC_BREAK, () => ({ type: 'thematic_break' })],
   [COMMENT, commentNode],
   [INCLUDE, includeBlock],
+  [SNIPPET_USE, snippetUseBlock],
 ])
 
 // C2-A-052: the block pass opens definitions and the frontmatter at the top level only (C2-B-081, C2-B-164).
@@ -440,6 +472,7 @@ const DOCUMENT_BUILDERS = new Map<number, BlockBuilder<DocumentChild>>([
   [FRONTMATTER, frontmatterNode],
   [LINK_DEFINITION, linkDefinitionNode],
   [ABBREVIATION, abbreviationNode],
+  [SNIPPET_DEFINITION, snippetDefinitionNode],
 ])
 
 const DESCRIPTION_BUILDERS = new Map<number, BlockBuilder<DescriptionChild>>([
@@ -563,7 +596,9 @@ function takeCaption(target: CaptionedBlock, caption: CaptionNode): void {
 
 type CaptionedBlock = TableNode | FigureGroupNode | ParagraphNode | CodeBlockNode | BlockQuoteNode | IncludeNode
 
-const DOCUMENT_ONLY = ['footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter']
+const DOCUMENT_ONLY = [
+  'footnote', 'link_reference_definition', 'abbreviation_def', 'snippet_definition', 'citation_definition', 'frontmatter',
+]
 
 function isBlock(node: DocumentChild): node is Block {
   return !DOCUMENT_ONLY.includes(node.type)

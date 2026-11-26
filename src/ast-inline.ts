@@ -12,7 +12,7 @@ import {
   ATTRIBUTE_BLOCK, AUTOLINK, BRACKET_SPAN, CODE_SPAN, DELETE, DESTINATION, EDITORIAL, EMPHASIS, ESCAPE, FLAG_ATOM,
   FLAG_BRACED, FLAG_COLLAPSED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_REFERENCE, FLAG_SHORTCUT, FOOTNOTE_REF, HARD_BREAK, HIGHLIGHT,
   IMAGE, INLINE_COMMENT,
-  INLINE_EXTENSION, INLINE_FOOTNOTE, INSERT, isInlineContainer, LABEL, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE,
+  INLINE_EXTENSION, INLINE_FOOTNOTE, INSERT, isInlineContainer, LABEL, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SNIPPET_USE_INLINE,
   SMART, SOFT_BREAK, STRIKE, STRONG, SUBSCRIPT, SUPERSCRIPT, SYMBOL, TAG, TITLE, UNDERLINE, XREF,
 } from './inline-kinds.ts'
 import { isPlainText, scanInline } from './inline-scan.ts'
@@ -185,6 +185,7 @@ const LEAVES = new Map<number, LeafBuilder>([
   }],
   [XREF, (_ctx, node) => ({ type: 'xref', key: node.value, namespace: 'heading' })],
   [MENTION, (_ctx, node) => ({ type: 'mention', target: node.value, kind: 'user' })],
+  [SNIPPET_USE_INLINE, (_ctx, node) => ({ type: 'snippet_use', name: node.value, mode: 'inline' })],
   [FOOTNOTE_REF, (_ctx, node) => ({ type: 'footnote_ref', key: foldLabel(node.value), namespace: 'footnote' })],
   [SMART, (ctx, node) => ({
     type: 'smart_punctuation', kind: SMART_KIND_NAMES[node.aux]!, glyph: SMART_GLYPHS[node.aux]!,

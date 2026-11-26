@@ -75,6 +75,13 @@ function fieldLines(name: string, type: string, optional = false): string[] {
   return [prefix, ...type.split(' | ').map((part) => `    | ${part}`)]
 }
 
+/** The children field; a union too long for a line puts one member on each line. */
+function childrenLines(type: string, optional = false): string[] {
+  const prefix = `  children${optional ? '?' : ''}:`
+  if (`${prefix} ${type}`.length <= MAX_COLUMNS || !type.startsWith('(')) return [`${prefix} ${type}`]
+  return [`${prefix} (`, ...type.slice(1, -3).split(' | ').map((part) => `    | ${part}`), '  )[]']
+}
+
 /** The text of src/ast-nodes.ts. */
 export function generateAstNodes(): string {
   const types = [...RULES.keys()]
@@ -101,8 +108,8 @@ export function generateAstNodes(): string {
     const [content, required, optional] = RULES.get(type)!
     lines.push('', `export interface ${interfaceName(type)} extends NodeBase {`, `  type: ${JSON.stringify(type)}`)
     const later = OPTIONAL_CONTENT.get(type)
-    if (content !== 'none') lines.push(`  children: ${childrenType(content)}`)
-    else if (later !== undefined) lines.push(`  children?: ${childrenType(later)}`)
+    if (content !== 'none') lines.push(...childrenLines(childrenType(content)))
+    else if (later !== undefined) lines.push(...childrenLines(childrenType(later), true))
     for (const name of required) lines.push(...fieldLines(name, fieldType(type, name)))
     for (const name of optional) lines.push(...fieldLines(name, fieldType(type, name), true))
     lines.push('}')

@@ -8,7 +8,7 @@ import {
 } from './ast.ts'
 import {
   attributeBlockText, attributes, deniesUrl, destination, escapeCarrierText, escapeText, escapeTextNode, isDenied, keyValue, loss,
-  type Pair, type Render, type TagParts,
+  type Pair, type Render, snippetCarriers, type TagParts,
 } from './html-attributes.ts'
 import { inlinesText } from './profile.ts'
 import { kindGlyph, smartGlyph } from './ast-text.ts'
@@ -16,6 +16,7 @@ import { type SocialRequest } from './options.ts'
 import { drawDerivedText } from './derived-text.ts'
 import { withoutUnpairedSurrogates } from './unicode.ts'
 import { utf8Length } from './positions.ts'
+import { SNIPPET_CARRIERS, SNIPPET_MARKS } from './snippet-marks.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
 
@@ -267,6 +268,13 @@ export function isEmptyDroppedLink(r: Render, node: LinkNode): boolean {
 }
 
 function link(node: LinkNode, r: Render): string {
+  const html = linkHtml(node, r)
+  // C2-H-215: a link that carries the carriers of its use but writes no `<a>` puts them on a span.
+  if (!r.settings.roundtrip || html.startsWith('<a ') || !SNIPPET_CARRIERS.has(node)) return html
+  return `<span${snippetCarriers(node)}>${html}</span>`
+}
+
+function linkHtml(node: LinkNode, r: Render): string {
   const key = node.key
   const href = node.href
   const definition = definitionFor(r, node, key)
@@ -281,7 +289,10 @@ function link(node: LinkNode, r: Render): string {
   const merged = withRel(r, withDefinition(node, definition), structural)
   pushAll(structural, referenceCarriers(r, node, key))
   r.linkDepth++
+  const outer = r.linkSnippet
+  r.linkSnippet = SNIPPET_MARKS.get(node)
   const html = children(r, node)
+  r.linkSnippet = outer
   r.linkDepth--
   const notes = r.linkNotes.length === 0 ? '' : r.linkNotes.join('')
   if (notes !== '') r.linkNotes.length = 0
@@ -342,6 +353,10 @@ function xref(node: XrefNode, r: Render): string {
   return `<a${attributes(r, node, { structural })}>${text}</a>`
 }
 
+function noteMark(r: Render, node: FootnoteRefNode | InlineFootnoteNode, number: number, structural: Pair[]): string {
+  return `<a${attributes(r, node, { structural, id: r.resolution.refIds.get(node)!, idFirst: true })}><sup>${number}</sup></a>`
+}
+
 /** C2-H-088: the anchor of a footnote reference or of an inline footnote. */
 function noteReference(node: FootnoteRefNode | InlineFootnoteNode, r: Render): string {
   const key = node.type === 'footnote_ref' ? node.key : undefined
@@ -350,10 +365,10 @@ function noteReference(node: FootnoteRefNode | InlineFootnoteNode, r: Render): s
   if (note === undefined) return escapeText(`[^${key ?? ''}]${attributeBlockText(node)}`)
   const structural: Pair[] = [['href', `#${note.id}`], ['role', 'doc-noteref']]
   if (r.settings.roundtrip && key !== undefined) structural.push(['data-carve-footnote-label', key])
-  const tag = attributes(r, node, { structural, id: r.resolution.refIds.get(node)!, idFirst: true })
-  const mark = `<a${tag}><sup>${note.number}</sup></a>`
-  if (r.linkDepth === 0) return mark
-  r.linkNotes.push(mark)
+  if (r.linkDepth === 0) return noteMark(r, node, note.number, structural)
+  const use = r.settings.roundtrip ? SNIPPET_MARKS.get(node) : undefined
+  if (use !== undefined && use !== r.linkSnippet) structural.push(['data-carve-snippet-mark', String(use)])
+  r.linkNotes.push(noteMark(r, node, note.number, structural))
   return ''
 }
 

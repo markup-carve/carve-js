@@ -1,4 +1,5 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
+import { SNIPPET_CARRIERS } from './snippet-marks.ts'
 import {
   type Block, type BlockExtensionNode, type DocumentNode, type InlineExtensionNode, type ListItemNode, type Node, type ParagraphNode,
 } from './ast.ts'
@@ -30,6 +31,8 @@ export interface Render {
   linksAllowed: boolean
   /** Open links around the node that is written (C2-H-081), and open `abbr` spans (C2-H-099). */
   linkDepth: number
+  /** C2-H-215: the innermost snippet use whose copy holds the open link. */
+  linkSnippet?: number | undefined
   /** C2-H-088: note marks awaiting the close of the enclosing link. */
   linkNotes: string[]
   abbrDepth: number
@@ -96,6 +99,7 @@ const CARRIERS = new Set([
   'data-carve-autolink', 'data-carve-footnote-label', 'data-carve-inline-footnote', 'data-carve-raw',
   'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight', 'data-carve-xref', 'data-carve-caption-number',
   'data-carve-div', 'data-carve-line-block', 'data-carve-src', 'data-carve-ref-shortcut', 'data-carve-source-level',
+  'data-carve-snippet', 'data-carve-snippet-mark', 'data-carve-snippet-scope', 'data-carve-snippets',
 ])
 const DENIED_BY_DEFAULT: ReadonlySet<string> = new Set(DEFAULT_DENIED_SCHEMES)
 const ALIGN_VALUES = ['left', 'right', 'center']
@@ -553,7 +557,7 @@ function sourceLine(r: Render, node: Node | null, parts: TagParts): string | nul
 
 /** C2-H-018: a node whose element carries attributes, a language or a direction (C2-A-031). */
 export function carriesAttributes(node: Node): boolean {
-  return node.attrs !== undefined || node.lang !== undefined || node.dir !== undefined
+  return node.attrs !== undefined || node.lang !== undefined || node.dir !== undefined || SNIPPET_CARRIERS.has(node)
 }
 
 /** The authored parts behind the id: the classes, the language and the keys. */
@@ -569,6 +573,7 @@ function addAuthored(r: Render, list: AttributeList, node: Node | null, parts: T
 
 /** True when an element writes its structural attributes and nothing else, which holds for most links and images. */
 function isStructuralOnly(r: Render, node: Node | null, parts: TagParts): boolean {
+  if (node !== null && SNIPPET_CARRIERS.has(node)) return false
   if (node !== null && parts.bare !== true && carriesAttributes(node)) return false
   if (parts.id !== undefined && parts.id !== null) return false
   if (parts.base !== undefined || parts.last !== undefined || parts.generated !== undefined || parts.style !== undefined) return false
@@ -605,7 +610,15 @@ export function attributes(r: Render, node: Node | null, parts: TagParts): strin
   addAuthored(r, list, node, parts)
   for (const [name, value] of parts.generated ?? []) list.add(name, value)
   if (line !== null) list.text += ` data-source-line="${line}"`
-  return list.text
+  return list.text + snippetCarriers(node)
+}
+
+/** C2-H-215: the carriers of an expanded snippet use, or nothing. */
+export function snippetCarriers(node: Node | null): string {
+  const carrier = node === null ? undefined : SNIPPET_CARRIERS.get(node)
+  if (carrier === undefined) return ''
+  const scope = carrier.include ? ' data-carve-snippet-scope="include"' : ''
+  return ` data-carve-snippet="${carrier.n}:${carrier.mode}:$` + `${carrier.name}"${scope}`
 }
 
 /** C2-H-139: the attribute block of an unresolved reference as text, in the fixed order. */

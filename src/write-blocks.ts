@@ -1,12 +1,14 @@
 // The block nodes as Carve source: the layout of C2-W-017 to C2-W-034 and the canonical forms of
 // C2-W-035 to C2-W-060. A block writes its lines behind `prefix`, the prefix of its containers.
 import { escapeBacktickKind } from './write-backtick-kind.ts'
+import { snippetUseSpelling } from './snippets.ts'
 import {
   type AbbreviationDefNode, type AdmonitionNode, type BlockQuoteNode, captionOf, type CaptionNode, childNodes, type CodeBlockNode,
   type CommentNode, type DefinitionDescriptionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode, type DivNode,
   type FigureGroupNode, type FootnoteNode, type FrontmatterNode, type HeadingNode, type IncludeNode,
   type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
-  type ParagraphNode, type RawBlockNode, type TableNode, type BlockExtensionNode,
+  type ParagraphNode, type RawBlockNode, type TableNode, type BlockExtensionNode, type Inline, type SnippetDefinitionNode,
+  type SnippetUseNode, type TextNode, cloneTree, forEachSlot,
 } from './ast.ts'
 import { isClaimableName } from './ast-validate.ts'
 import { treesEqual } from './ast-json.ts'
@@ -458,6 +460,66 @@ function abbreviationDefinition(w: Writer, node: AbbreviationDefNode, prefix: st
   emit(w, prefix, `*[${node.key}]: ${expansion.slice(0, end)}`)
 }
 
+function isLineBreak(node: Node): boolean {
+  return node.type === 'soft_break' || node.type === 'hard_break'
+}
+
+function holdsBreak(nodes: readonly Node[]): boolean {
+  return nodes.some((node) => isLineBreak(node) || holdsInSlot(node))
+}
+
+function holdsInSlot(node: Node): boolean {
+  let found = false
+  forEachSlot(node, (nodes) => { if (!found && holdsBreak(nodes as Node[])) found = true })
+  return found
+}
+
+function spaceBreaks(nodes: Node[]): void {
+  for (let at = 0; at < nodes.length; at++) {
+    if (isLineBreak(nodes[at]!)) nodes[at] = { type: 'text', value: ' ' } satisfies TextNode
+    else forEachSlot(nodes[at]!, (inner) => { spaceBreaks(inner as Node[]) })
+  }
+}
+
+/** A copy of the inline nodes with every line break, in any slot, as one space, or null where there is none. */
+function spacedBreaks(nodes: readonly Inline[]): Inline[] | null {
+  if (!holdsBreak(nodes)) return null
+  const copy = cloneTree(nodes as Inline[])
+  spaceBreaks(copy)
+  return copy
+}
+
+/**
+ * C2-W-159: `{$`, the name, the attributes as the parts of one block, `}: ` and the value on one line. A line break
+ * of a supplied value is written as one space and reported.
+ */
+function snippetDefinition(w: Writer, node: SnippetDefinitionNode, prefix: string, flags: number): void {
+  const block = braceBlock(node)
+  const marker = '{$' + node.name + (block === '' ? '' : ` ${block.slice(1, -1)}`) + '}: '
+  const spaced = spacedBreaks(node.children)
+  if (spaced !== null) lose(w, node, null)
+  const children = spaced ?? node.children
+  w.lead = (w.lead ?? prefix) + marker
+  escapeBacktickKind(w, children)
+  emitLines(w, prefix, '', planLeaf(w, children, flags, writeContent(w, children, flags), AS_CONTENT, AFTER_MARK))
+}
+
+/** C2-W-159: a block use alone on its line. */
+function snippetUse(w: Writer, node: SnippetUseNode, prefix: string): void {
+  emit(w, prefix, snippetUseSpelling(node.name))
+}
+
+/** C2-W-159: a paragraph whose only child is an inline use reads as a block use, so it is written as one and reported. */
+function paragraph(w: Writer, node: ParagraphNode, prefix: string, flags: number): void {
+  const only = node.children.length === 1 ? node.children[0]! : undefined
+  if (only?.type === 'snippet_use' && node.attrs === undefined && node.caption === undefined) {
+    lose(w, node, null)
+    return snippetUse(w, only, prefix)
+  }
+  textLeaf(w, node, prefix, flags, '', '')
+  caption(w, node.caption, prefix, flags)
+}
+
 /** C2-W-056: a link definition; its attributes stand on the line above (C2-B-106). */
 /** C2-I-079: a key of only spaces, tabs and line feeds folds to nothing, and its brackets are text. */
 function loseBlankKey(w: Writer, node: LinkReferenceDefinitionNode | FootnoteNode): void {
@@ -816,10 +878,7 @@ function table(w: Writer, node: TableNode, prefix: string, flags: number): void 
 }
 
 const WRITERS: BlockWriters = {
-  paragraph: (w, node, prefix, flags) => {
-    textLeaf(w, node, prefix, flags, '', '')
-    caption(w, node.caption, prefix, flags)
-  },
+  paragraph,
   heading,
   thematic_break: (w, node, prefix) => {
     attributeLine(w, node, prefix)
@@ -835,6 +894,8 @@ const WRITERS: BlockWriters = {
   include,
   link_reference_definition: linkDefinition,
   abbreviation_def: abbreviationDefinition,
+  snippet_definition: snippetDefinition,
+  snippet_use: snippetUse,
   footnote,
   list,
   definition_term: (w, node, prefix, flags) => textLeaf(w, node, prefix, flags, ':: ', '   '),

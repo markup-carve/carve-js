@@ -1,3 +1,4 @@
+import { lintSnippets, SNIPPET_RULES } from './snippets.ts'
 import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
 import { parseWithLayoutForLint } from '../src/api.ts'
 import { isCompactEmptyCell } from '../src/ast-table.ts'
@@ -580,6 +581,7 @@ function lintSource(source: string, options: LintOptions, facts?: SourceFacts): 
   if (walk !== undefined) context.dataWalk = walk
   visit(parsed.document, '', context, controls, 0)
   finishStructure(context)
+  lintSnippets(parsed.document, context, (id) => active(id, options))
   const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
   const activeLineRules = LINE_RULES.filter((rule) => active(rule.id, options) && !DATA_RULE_IDS.has(rule.id))
   for (const line of scanLines) {
@@ -594,6 +596,7 @@ function lintSource(source: string, options: LintOptions, facts?: SourceFacts): 
 export const IMPLEMENTED_RULES: readonly Rule[] = [
   ...[...LINE_RULES, ...NODE_RULES].filter((rule) => !DATA_RULE_IDS.has(rule.id)),
   ...DATA_RULES.map((rule): Rule => ({ id: rule.id, ...(rule.over === 'line' ? { lines: true } : {}) })),
+  ...SNIPPET_RULES,
   // A void catalog row is accepted as a rule setting and never reports.
   ...(Object.keys(CATALOG) as RuleId[]).filter((id) => 'status' in CATALOG[id] && CATALOG[id].status === 'void')
     .map((id): Rule => ({ id })),
