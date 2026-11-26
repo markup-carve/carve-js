@@ -53,9 +53,13 @@ const DROPPED = new Set(['pos', 'segments'])
 const OPAQUE = new Set(['data', 'metadata', 'props', 'payload'])
 
 /** The resolution fields of each node type (C2-A-158, AST_RESULTS), which a copy drops. */
-function droppedField(type: string, field: string): boolean {
+function droppedField(node: Node, field: string): boolean {
   if (DROPPED.has(field)) return true
-  return AST_RESULTS.get(type)?.some((entry) => entry.field === field) ?? false
+  const entry = AST_RESULTS.get(node.type)?.find((result) => result.field === field)
+  if (entry === undefined) return false
+  if (entry.when === 'reference use') return (node as { key?: string }).key !== undefined
+  if (entry.when === 'derived from authored span mark') return (node as { span?: string }).span !== undefined
+  return true
 }
 
 /** The bytes of every string and, inside opaque values, every key (C2-N-094). */
@@ -84,7 +88,7 @@ function copyNodes(nodes: readonly Node[], authored: Map<Node, Node>): Copy {
     copy.count++
     const out: Record<string, unknown> = {}
     for (const [field, value] of Object.entries(node)) {
-      if (droppedField(node.type, field) || value === undefined) continue
+      if (droppedField(node, field) || value === undefined) continue
       if (field === 'attrs') {
         const attrs = { ...(value as Record<string, unknown>) }
         delete attrs['id']
@@ -180,13 +184,13 @@ function refusal(pass: Pass, entry: SnippetEntry | undefined): string | null {
   return null
 }
 
-/** Expands the use at `list[at]` and returns the nodes now in its place. */
-function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): Node[] {
+/** Expands the use at `list[at]` and returns how many nodes now stand in its place, the copy expanded too. */
+function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): number {
   const entry = pass.registry.get(use.name)
   const code = refusal(pass, entry)
   if (code !== null) {
     refuse(pass, list, at, use, code, MESSAGES[code]!(use.name))
-    return []
+    return 1
   }
   const definition = entry!.definition
   const copy = copyNodes(definition.children, pass.authored)
@@ -201,18 +205,18 @@ function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): N
   }
   if (pass.total + count > pass.limit) {
     refuse(pass, list, at, use, 'snippet-node-budget', MESSAGES['snippet-node-budget']!(use.name))
-    return []
+    return 1
   }
   const cost = NODE_COST * count + bytes
   if (cost > pass.budget.left) {
     if (pass.budget.reported) {
       list[at] = spelled(use)
-      return []
+      return 1
     }
     pass.budget.reported = true
     refuse(pass, list, at, use, 'derived-text-budget',
       `Wrote a snippet use as its source text: the derived text of this render reached its budget of ${pass.budget.budget} bytes`)
-    return []
+    return 1
   }
   pass.total += count
   pass.budget.left -= cost
@@ -237,12 +241,17 @@ function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): N
   pass.current = n
   for (const node of copy.nodes) markNotes(pass, node)
   const parent = pass.parent
-  if (wraps) pass.parent = placed[0]!
-  walkList(pass, copy.nodes)
+  let length = 1
+  if (wraps) {
+    pass.parent = placed[0]!
+    walkRange(pass, copy.nodes, 0, copy.nodes.length)
+  } else {
+    length = walkRange(pass, list, at, copy.nodes.length)
+  }
   pass.parent = parent
   pass.current = outer
   pass.stack.pop()
-  return placed
+  return length
 }
 
 function markNotes(pass: Pass, node: Node): void {
@@ -250,24 +259,27 @@ function markNotes(pass: Pass, node: Node): void {
   forEachSlot(node, (nodes) => { for (const child of nodes) markNotes(pass, child) }, undefined, pass.extensions)
 }
 
-function walkList(pass: Pass, list: Node[]): void {
-  for (let at = 0; at < list.length; at++) {
+/** Walks `count` nodes of `list` from `from` and returns how many stand there after their uses expanded. */
+function walkRange(pass: Pass, list: Node[], from: number, count: number): number {
+  let end = from + count
+  for (let at = from; at < end;) {
     const node = list[at]!
     if (node.type === 'snippet_use') {
-      const placed = expandUse(pass, list, at, node)
-      // The walk went into the copy already; it goes on after it.
-      at += Math.max(placed.length, 1) - 1
+      const length = expandUse(pass, list, at, node)
+      end += length - 1
+      at += length
       continue
     }
-    if (node.type === 'snippet_definition') continue
-    walkNode(pass, node)
+    if (node.type !== 'snippet_definition') walkNode(pass, node)
+    at++
   }
+  return end - from
 }
 
 function walkNode(pass: Pass, node: Node): void {
   const parent = pass.parent
   pass.parent = node
-  forEachSlot(node, (nodes) => { walkList(pass, nodes as Node[]) }, undefined, pass.extensions)
+  forEachSlot(node, (nodes) => { walkRange(pass, nodes as Node[], 0, nodes.length) }, undefined, pass.extensions)
   pass.parent = parent
 }
 
