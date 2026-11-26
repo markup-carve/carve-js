@@ -46,6 +46,12 @@ function accepted(node: Html.Element, context: HtmlContext, mode: 'inline' | 'bl
   return carrier
 }
 
+/** The ordinal and mode of a well-formed carrier, without the reports and the ordinal claim of `accepted`. */
+export function carrierOrdinal(node: Html.Element): { n: string, mode: 'inline' | 'block' } | undefined {
+  const value = attr(node, 'data-carve-snippet')
+  return value === undefined ? undefined : parse(value)
+}
+
 export function inlineSnippet(node: Html.Element, context: HtmlContext): Inline[] | undefined {
   if (!has(node, 'data-carve-snippet')) return undefined
   const carrier = accepted(node, context, 'inline')

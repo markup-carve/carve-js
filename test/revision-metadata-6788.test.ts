@@ -98,3 +98,53 @@ describe('carve#6788: a ranged comment loses only what the import keeps (C2-M-11
       + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).toEqual(['import-structure-repaired'])
   })
 })
+
+describe('carve-js#5661: a non-task input in a ranged comment (C2-M-113)', () => {
+  const html = '<p><span class="comment-start" data-comment-id="1">n</span><input type="text">'
+    + '<span class="comment-end" data-comment-id="1"></span>y</p>'
+
+  it('a dropped input loses nothing with rawHtml off', () => {
+    const { source, codes } = fromHtml(html)
+    expect(source).toBe('{#n#}y\n')
+    expect(codes).toEqual(['import-element-dropped'])
+  })
+
+  it('a kept raw input is a lost range with rawHtml on', () => {
+    const result = importDocument(html, { from: 'html', rawHtml: true })
+    expect(result.diagnostics.map(entry => entry.code)).toContain('import-structure-repaired')
+  })
+
+  it('a dropped input nested in a span loses nothing', () => {
+    expect(fromHtml('<p><span class="comment-start" data-comment-id="1">n</span><em><input type="text" value="v"></em>'
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).not.toContain('import-structure-repaired')
+  })
+})
+
+describe('carve-js#5661: a snippet use in a ranged comment (C2-M-113, C2-H-186)', () => {
+  const range = (inner: string) => '<p><span class="comment-start" data-comment-id="1">n</span>' + inner
+    + '<span class="comment-end" data-comment-id="1"></span>y</p>'
+
+  it('an input carrier is a kept inline with rawHtml off', () => {
+    const { source, codes } = fromHtml(range('<input data-carve-snippet="1:inline:$foo">'))
+    expect(source).toBe('{#n#}{{ $foo }}y\n')
+    expect(codes).toEqual(['import-structure-repaired'])
+  })
+
+  it('a raw element carrier is a kept inline with rawHtml off', () => {
+    expect(fromHtml(range('<script data-carve-snippet="1:inline:$foo">x()</script>')).codes).toEqual(['import-structure-repaired'])
+  })
+})
+
+describe('carve-js#5661: what the reader takes before inline reading (C2-H-186, C2-M-032)', () => {
+  it('a second carrier of one ordinal is read as its element, so an end inside it is claimed', () => {
+    const { source } = fromHtml('<p><span data-carve-snippet="1:inline:$a"></span><span class="comment-start" data-comment-id="1">n</span>'
+      + '<em data-carve-snippet="1:inline:$b">t<span class="comment-end" data-comment-id="1"></span></em>y</p>')
+    expect(source).not.toContain('comment-end')
+  })
+
+  it('a task box in the range is no kept inline', () => {
+    const { codes } = fromHtml('<ul><li><span class="comment-start" data-comment-id="1">n</span></li>'
+      + '<li><input type="checkbox" data-carve-snippet="1:inline:$a"><span class="comment-end" data-comment-id="1"></span></li></ul>')
+    expect(codes).not.toContain('import-structure-repaired')
+  })
+})
