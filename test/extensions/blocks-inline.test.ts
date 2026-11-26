@@ -258,3 +258,19 @@ describe('registration', () => {
     expect(bad({ quotes: ['a'] })).toThrow(/quotes/)
   })
 })
+
+describe('authored keys on extension elements (carve-js#5647, C2-H-161)', () => {
+  it('writes a value with a denied scheme empty, as on a core element', () => {
+    const options = use(wikilinks(), spoiler())
+    expect(render('X :wiki[Page]{title="javascript:x"} Y\n\nZ :spoiler[s]{title="javascript:x"}\n\n*c*{title="javascript:x"}\n', options)).toBe(
+      '<p>X <a href="page" class="wikilink" data-wikilink="Page" title="">Page</a> Y</p>\n'
+      + '<p>Z <span class="spoiler" title="">s</span></p>\n<p><strong title="">c</strong></p>')
+  })
+
+  it('tests every authored key, and keeps a value without a denied scheme', () => {
+    const options = use(wikilinks(), details())
+    expect(render(':wiki[P]{data-x="vbscript:y" title="a: b"}\n', options))
+      .toBe('<p><a href="p" class="wikilink" data-wikilink="P" data-x="" title="a: b">P</a></p>')
+    expect(render('{title="JavaScript:x" lang="en"}\n::: details\nx\n:::\n', options)).toMatch(/^<details title="" lang="en">/)
+  })
+})

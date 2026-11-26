@@ -1,4 +1,4 @@
-import { isUrlAllowed } from '../../src/html-attributes.ts'
+import { isUrlAllowed, keyValue } from '../../src/html-attributes.ts'
 import type { Attrs, ExtensionRenderHost } from '../../src/index.ts'
 import { styleIsDangerous } from '../blocks/svg-sanitize.ts'
 
@@ -26,7 +26,8 @@ function safePair(name: string, value: string, host: ExtensionRenderHost, consum
   if (!SAFE_NAME.test(name) || lower.startsWith('on') || BLOCKED_NAMES.has(lower) || consumed.includes(lower)) return ''
   if (URL_NAMES.has(lower) && !isUrlAllowed(value, host.urlPolicy)) return ` ${name}=""`
   if (lower === 'style' && styleIsDangerous(value)) return ` ${name}=""`
-  return ` ${name}="${host.escapeAttribute(value)}"`
+  // C2-H-161: an authored value passes the filter of the core renderer, whatever the key.
+  return ` ${name}="${host.escapeAttribute(keyValue(lower, value))}"`
 }
 
 /** C2-H-009: generated declarations join the authored `style` at its place, or follow the authored keys as a new one. */
