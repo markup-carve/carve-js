@@ -32,6 +32,7 @@ export interface ImportOptions {
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   const adapter = readAdapter(options.adapter)
   if (adapter !== 'generic' && options.from !== 'html') throw new CarveOptionError('adapter', 'HTML only')
+  if (options.listTable !== undefined && typeof options.listTable !== 'boolean') throw new CarveOptionError('listTable', 'not a boolean')
   if (options.listTable === true && options.from !== 'html') throw new CarveOptionError('listTable', 'HTML only')
   return runImport(options.from, options, () => importByFormat(input, options))
 }

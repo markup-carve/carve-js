@@ -43,5 +43,6 @@ describe('C2-M-112: the listTable import option (carve#6771)', () => {
   })
   it('is an option of the HTML import only', () => {
     expect(() => importDocument('a', { from: 'markdown', listTable: true })).toThrow(/listTable/)
+    expect(() => importDocument('a', { from: 'html', listTable: 17 as never })).toThrow(/listTable: not a boolean/)
   })
 })
