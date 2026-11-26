@@ -23,7 +23,8 @@ import {
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import {
-  attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, cellMarksLength, continuationClosingPipe, countValue,
+  attributeBlocksEnd, attributeKeyValue, attributeKeyValues, bulletMarkerEnd, captionContentStart, cellMarksLength,
+  continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   definitionTailLeft, isAbbreviation, isAttributeLine, isBareRun, isDefinition, definitionTailLineLeft, isDescriptionListMark,
   isDisplayMathOnly, isFenceLine,
@@ -37,7 +38,7 @@ import { readInclude } from './include.ts'
 import { isRegionMarkerLine } from './include-source.ts'
 import { isImageOnly } from './image-line.ts'
 import { isFigureOpener, openerWord } from './opener.ts'
-import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
+import { advanceColumn, isSpaceOrTab, lineEndAt, trimSpaces } from './source.ts'
 import { addLine, type BlockState, MAX_DEPTH, NO_DEPTH, NO_LEAF, NO_LINE, writeEvent } from './state.ts'
 
 const LIST_BOUNDARY_BLANKS = 3
@@ -951,7 +952,9 @@ function openFence(state: BlockState, end: number): boolean {
   return true
 }
 
-/** C2-B-166: a row opens a table. `footer-rows` on its attribute line is read here (C2-B-187). */
+const TABLE_COUNT_KEYS = ['footer-rows', 'header-rows', 'body-rows', 'body-header-rows', 'body-header-cols']
+
+/** C2-B-166: a row opens a table. `footer-rows` (C2-B-187) and `header-rows` (C2-B-186) on its attribute line are read here. */
 function openTable(state: BlockState, end: number): boolean {
   const leaf = state.leaf
   const above = state.above
@@ -960,15 +963,26 @@ function openTable(state: BlockState, end: number): boolean {
   const closing = rowClosingPipe(src, cursor.pos, end)
   if (closing < 0) return false
   let footerRows = 0
+  let headLimit = -1
+  let endsAtFoot = false
   if (above.takeAttributes) {
+    const [footer, header, bodyRows, bodyHeaderRows, bodyHeaderCols] = attributeKeyValues(src, above.attributesStart,
+      above.attributesEnd, TABLE_COUNT_KEYS)
     // C2-B-210: a value that is no count has no effect.
-    const value = attributeKeyValue(src, above.attributesStart, above.attributesEnd, 'footer-rows')
-    footerRows = Math.max(0, countValue(value))
+    footerRows = Math.max(0, countValue(footer!))
+    headLimit = countValue(header!)
+    // C2-B-187, C2-B-230: an empty `body-rows`, with no other body key that gives a body, ends the head above the foot.
+    endsAtFoot = headLimit < 0 && footerRows > 0 && bodyRows !== null && trimSpaces(bodyRows!) === ''
+      && (bodyHeaderRows === null || trimSpaces(bodyHeaderRows!) === '') && bodyHeaderCols === null
   }
   writeEvent(state, enterTag(state, TABLE, 0), cursor.pos, footerRows)
   leaf.kind = TABLE
   leaf.tableHeadRows = 0
-  leaf.tableHeadOpen = true
+  leaf.tableHeadOpen = headLimit !== 0
+  leaf.tableHeadLimit = headLimit
+  leaf.tableRows = 0
+  leaf.tableFooterRows = footerRows
+  leaf.tableHeadEndsAtFoot = endsAtFoot
   leaf.tableWidths = []
   writeRow(state, closing, end)
   return true
@@ -1018,9 +1032,16 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   }
   writeEvent(state, eventTag(EXIT, ROW, 0), end, 0)
   state.contentEnd = end
-  // C2-B-178: the head is the leading rows made only of header cells.
-  leaf.tableHeadOpen = leaf.tableHeadOpen && head.headers > 0 && head.others === 0
-  if (leaf.tableHeadOpen) leaf.tableHeadRows++
+  leaf.tableRows++
+  // C2-B-178: the head is the leading rows made only of header cells; C2-B-186, C2-B-209: a valid `header-rows` count
+  // makes it the first N rows whatever their cells, and a count past the last row is the number of rows.
+  if (leaf.tableHeadLimit >= 0) {
+    if (leaf.tableHeadOpen) leaf.tableHeadRows++
+    leaf.tableHeadOpen = leaf.tableHeadRows < leaf.tableHeadLimit
+  } else {
+    leaf.tableHeadOpen = leaf.tableHeadOpen && head.headers > 0 && head.others === 0
+    if (leaf.tableHeadOpen) leaf.tableHeadRows++
+  }
   leaf.tableWidths = head.starts.map((start) => head.widths[start]!)
 }
 
@@ -1337,6 +1358,10 @@ function closeLeaf(state: BlockState): void {
   if (kind === NO_LEAF) return
   leaf.kind = NO_LEAF
   if (kind === TABLE) {
+    // C2-B-187: an empty `body-rows` ends the head above a footer count up to the rows, so all the rows leave no head.
+    const rows = leaf.tableRows
+    const foot = leaf.tableFooterRows
+    if (leaf.tableHeadEndsAtFoot && foot <= rows && leaf.tableHeadRows > rows - foot) leaf.tableHeadRows = rows - foot
     // C2-B-147: a table takes a caption.
     writeEvent(state, eventTag(EXIT, TABLE, 0), state.contentEnd, leaf.tableHeadRows)
     state.above.captionDepth = state.containers.depth

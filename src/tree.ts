@@ -176,7 +176,8 @@ function resolveTable(table: BlockNode, src: string): number {
   let rows = 0
   for (const row of table.children!) if (row.kind === ROW && (row.flags & FLAG_CONTINUATION) === 0) rows++
   const attributes = tableAttributes(table, src)
-  const headRows = endHead(table, attributes, rows)
+  // C2-B-186, C2-B-187: the block pass counts the head rows, `header-rows` and an empty `body-rows` included.
+  const headRows = table.facts
   // C2-B-187: the footer rows are the last rows below the head.
   const footStart = rows - Math.min(table.aux, rows - headRows)
   const bodies = bodyBoundaries(attributes, headRows, footStart)
@@ -206,14 +207,6 @@ function resolveTable(table: BlockNode, src: string): number {
 
 function tableAttributes(table: BlockNode, src: string): Attributes | null {
   return table.attributes === null || table.attributes.length === 0 || src === '' ? null : readAttributeLines(src, table.attributes)
-}
-
-/** C2-B-187: an empty `body-rows` ends the head above a footer count smaller than the rows. Returns the head rows. */
-function endHead(table: BlockNode, attributes: Attributes | null, rows: number): number {
-  if (table.aux < rows && table.facts > rows - table.aux && bodyPartition(attributes, 0)?.data.length === 0) {
-    table.facts = rows - table.aux
-  }
-  return table.facts
 }
 
 /** C2-B-230: the row indexes at which a body of `body-rows` starts. */

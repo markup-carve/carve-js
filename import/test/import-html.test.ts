@@ -331,9 +331,20 @@ describe('C2-M-041: a col style read as declarations', () => {
     expect(width('\nWiDtH\t:\t12.5%\n')).toBe('12.5')
   })
 
-  it('takes the last percentage width over a later width that is no percentage, and reports the other', () => {
-    expect(width('width: 30%; width: 40px')).toBe('30')
+  it('takes the last width, so a later width that is no percentage gives no width, and reports the style', () => {
+    expect(width('width: 30%; width: 40px')).toBeUndefined()
     expect(codes(table('width: 30%; width: 40px'))).toContain('import-attribute-dropped')
+  })
+
+  it('takes the last width marked important over any later width, and reports the mark (carve-js#5574)', () => {
+    expect(width('width: 30% !important; width: 40%')).toBe('30')
+    expect(width('width: 30%; width: 40%!Important')).toBe('40')
+    expect(width('width: 30% ! important; width: 40% !important; width: 50%')).toBe('40')
+    expect(width('width: 30% !important; width: 40px !important')).toBeUndefined()
+    expect(width('width: 30%\t!\timportant')).toBe('30')
+    expect(width('width: 30% important')).toBeUndefined()
+    expect(codes(table('width: 30% !important'))).toContain('import-attribute-dropped')
+    expect(codes(table('width: 30%'))).not.toContain('import-attribute-dropped')
   })
 
   it('gives no width for a piece without a colon, a spaced percent sign or a width out of range', () => {
@@ -373,6 +384,18 @@ describe('C2-M-037: leading column-heading rows of a table with no thead (carve#
     expect(source('<table><tr><td>1</td></tr><tr><th>A</th></tr></table>')).toBe('| 1 |\n|= A |\n')
   })
 
+  const scopes = (html: string): (string | undefined)[][] =>
+    ((children(html) as { children: { type: string, children: { children: { scope?: string }[] }[] }[] }[])[0]?.children
+      .find(group => group.type === 'table_body')?.children ?? []).map(row => row.children.map(cell => cell.scope))
+
+  it('an unscoped th of a leading th row that stays in the body takes scope col, which the writer reports', () => {
+    const html = '<table><tr><th>A</th><th scope="row">B</th></tr><tr><th>C</th></tr><tr><td>1</td><th>D</th></tr></table>'
+    expect(scopes(html)).toEqual([['col', undefined], ['col'], [undefined, undefined]])
+    expect(codes(html).filter(code => code === 'field-unspellable')).toHaveLength(2)
+    expect(scopes('<table><thead><tr><th>H</th></tr></thead><tbody><tr><th>A</th></tr><tr><td>1</td></tr></tbody></table>'))
+      .toEqual([[undefined], [undefined]])
+  })
+
   it('a thead keeps the rows of the first body where they are', () => {
     expect(source('<table><thead><tr><th>H</th></tr></thead><tr><th>A</th></tr><tr><td>1</td></tr></table>'))
       .toBe('{body-rows=1 body-header-rows=1}\n|= H |\n| A |\n| 1 |\n')
@@ -388,29 +411,31 @@ describe('C2-M-037: leading column-heading rows of a table with no thead (carve#
 describe('C2-M-037: the data cells of a thead (carve#6663)', () => {
   const head = (html: string): { source: string, codes: string[] } => ({ source: source(html), codes: codes(html) })
 
-  it('a td of the thead is a header cell, reported once at the thead', () => {
+  it('a td of the thead stays a data cell of the head, written with header-rows and not reported', () => {
     expect(head('<table><thead><tr><td>a</td><td>b</td></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>'))
-      .toEqual({ source: '|= a |= b |\n| 1 | 2 |\n', codes: ['import-structure-repaired'] })
+      .toEqual({ source: '{header-rows=1}\n| a | b |\n| 1 | 2 |\n', codes: [] })
     expect(head('<table><thead><tr><th>a</th><td>b</td></tr><tr><td>c</td></tr></thead></table>'))
-      .toEqual({ source: '|= a |= b |\n|= c |\n', codes: ['import-structure-repaired'] })
+      .toEqual({ source: '{header-rows=2}\n|= a | b |\n| c |\n', codes: [] })
     expect(head('<table><thead><tr><th>a</th></tr></thead><tr><td>1</td></tr></table>'))
       .toEqual({ source: '|= a |\n| 1 |\n', codes: [] })
   })
 
-  it('an empty corner td of the thead is an empty header cell', () => {
+  it('an empty corner td of the thead stays an empty data cell', () => {
     const html = '<table><thead><tr><td></td><td>Q1</td><td>Q2</td></tr></thead>'
       + '<tbody><tr><th>North</th><td>1</td><td>2</td></tr></tbody></table>'
     expect(head(html))
-      .toEqual({ source: '|= |= Q1 |= Q2 |\n|= North | 1 | 2 |\n', codes: ['import-structure-repaired'] })
+      .toEqual({ source: '{header-rows=1}\n| | Q1 | Q2 |\n|= North | 1 | 2 |\n', codes: [] })
   })
 
   it('a thead of td rows above a header-cell foot reads back as head and foot', () => {
     expect(source('<table><thead><tr><td>a</td></tr></thead><tfoot><tr><th>F</th></tr></tfoot></table>'))
-      .toBe('{footer-rows=1 body-rows}\n|= a |\n|= F |\n')
+      .toBe('{header-rows=1 footer-rows=1}\n| a |\n|= F |\n')
   })
 
   it('a foot keeps its rows and cell kinds', () => {
     expect(source('<table><tr><td>1</td></tr><tfoot><tr><th>F</th></tr></tfoot></table>')).toBe('{footer-rows=1}\n| 1 |\n|= F |\n')
-    expect(codes('<table><tfoot><tr><th scope="row">F</th></tr></tfoot></table>')).toContain('structure-unspellable')
+    // carve#6664: a table of only a foot led by a row of header cells is spelled with an empty body-rows.
+    expect(head('<table><tfoot><tr><th scope="row">F</th></tr></tfoot></table>'))
+      .toEqual({ source: '{footer-rows=1 body-rows}\n|= F |\n', codes: [] })
   })
 })

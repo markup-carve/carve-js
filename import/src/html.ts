@@ -883,6 +883,26 @@ function headsColumns(tr: Html.Element): boolean {
   })
 }
 
+/** A row whose cells, one at least, are all `<th>`. */
+function allHeaderCells(tr: Html.Element): boolean {
+  const cells = elements(tr).filter(entry => entry.nodeName === 'th' || entry.nodeName === 'td')
+  return cells.length > 0 && cells.every(entry => entry.nodeName === 'th')
+}
+
+/**
+ * C2-M-037: in a table with no `<thead>`, each `<th>` with no `scope` in the leading all-`<th>` rows of the first body
+ * that stay in it takes the `scope` `col` that HTML gives it. `all` are the rows of the body, `lead` of them the head.
+ */
+function scopeLeadingHeaderRows(all: Html.Element[], lead: number, body: TableRowNode[]): void {
+  for (let at = lead; at < all.length && allHeaderCells(all[at] as Html.Element); at++) {
+    const cells = elements(all[at] as Html.Element).filter(entry => entry.nodeName === 'th' || entry.nodeName === 'td')
+    cells.forEach((entry, index) => {
+      const target = body[at - lead]?.children[index]
+      if (target !== undefined && attr(entry, 'scope') === undefined) target.scope = 'col'
+    })
+  }
+}
+
 /** C2-A-093, C2-B-174: as in the HTML table model, a row span ends at the last row of its group. */
 function clampRowspans(result: TableRowNode[], groupRows: Html.Element[], context: HtmlContext): void {
   result.forEach((tableRow, index) => {
@@ -918,7 +938,9 @@ function tableGroups(node: Html.Element, context: HtmlContext): TableChildren {
     let lead = 0
     while (lead < all.length && headsColumns(all[lead] as Html.Element)) lead++
     headRows = rowsOf(all.slice(0, lead), context, true)
-    return rowsOf(all.slice(lead), context, false)
+    const result = rowsOf(all.slice(lead), context, false)
+    scopeLeadingHeaderRows(all, lead, result)
+    return result
   }
   const direct = directRows.length ? bodyOf(node) : []
   const children: TableChildren = []
@@ -933,23 +955,10 @@ function tableGroups(node: Html.Element, context: HtmlContext): TableChildren {
     }
   }
   if (direct.length) children.unshift({ type: 'table_body', children: direct })
-  if (head !== undefined) children.unshift({ type: 'table_head', children: headCells(head, context), ...attrs(context, head) })
+  if (head !== undefined) children.unshift({ type: 'table_head', children: rows(head, context, true), ...attrs(context, head) })
   else if (headRows.length) children.unshift({ type: 'table_head', children: headRows })
   if (foot !== undefined) children.push({ type: 'table_foot', children: rows(foot, context, false), ...attrs(context, foot) })
   return children
-}
-
-/** carve#6663: a head holds header cells only (C2-B-178), so each `<td>` of the `<thead>` is one, reported once. */
-function headCells(head: Html.Element, context: HtmlContext): TableRowNode[] {
-  const result = rows(head, context, true)
-  let changed = false
-  for (const tableRow of result) {
-    for (const entry of tableRow.children) {
-      if (!entry.header) { entry.header = true; changed = true }
-    }
-  }
-  if (changed) report(context, head, 'import-structure-repaired', 'The data cells of a table head read as header cells')
-  return result
 }
 
 /** C2-H-152: the widths of a column group, a percent each. */
@@ -958,32 +967,41 @@ function columnWidths(node: Html.Element, context: HtmlContext): (number | undef
   return (group === undefined ? [] : elements(group).filter(child => child.tagName === 'col')).map(col => {
     const style = attr(col, 'style')
     const read = style === undefined ? undefined : colStyleWidth(style)
-    // C2-M-041: a style that gives no width or holds another declaration is reported.
-    if (read !== undefined && (read.width === undefined || read.other)) {
-      report(context, col, 'import-attribute-dropped', 'A col style that gives no width or holds another declaration dropped')
+    // C2-M-041: a style that gives no width, holds another declaration or marks its width important is reported.
+    if (read !== undefined && (read.width === undefined || read.other || read.important)) {
+      report(context, col, 'import-attribute-dropped',
+        'A col style that gives no width, holds another declaration or marks its width important dropped')
     }
     return read?.width
   })
 }
 
 const ASCII_WHITESPACE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/gu
+/** C2-M-041: `!` and `important` at the end of a value, without ASCII case, ASCII whitespace around the `!`. */
+const IMPORTANT = /[\t\n\f\r ]*![\t\n\f\r ]*important$/iu
 
 /**
- * C2-M-041: the style of a `<col>` read as declarations; the last `width: N%` gives the width, and `other` says
- * whether any other declaration stands beside it.
+ * C2-M-041: the style of a `<col>` read as declarations. The `width` that applies is the last one marked important, or
+ * else the last one, and gives a width only where it is `N%`; `other` says whether any other declaration stands beside
+ * it, and `important` whether the width that applies is marked important.
  */
-function colStyleWidth(style: string): { width: number | undefined, other: boolean } {
-  let width: number | undefined
+function colStyleWidth(style: string): { width: number | undefined, other: boolean, important: boolean } {
+  let last: string | undefined
+  let lastImportant: string | undefined
   let declarations = 0
   for (const piece of style.split(';')) {
     if (piece.replace(ASCII_WHITESPACE, '') === '') continue
     declarations++
     const colon = piece.indexOf(':')
     if (colon < 0 || piece.slice(0, colon).replace(ASCII_WHITESPACE, '').toLowerCase() !== 'width') continue
-    const value = percentWidth(piece.slice(colon + 1).replace(ASCII_WHITESPACE, ''))
-    if (value !== undefined) width = value
+    const value = piece.slice(colon + 1).replace(ASCII_WHITESPACE, '')
+    const mark = IMPORTANT.exec(value)
+    if (mark === null) last = value
+    else lastImportant = value.slice(0, mark.index)
   }
-  return { width, other: declarations > 1 }
+  const applies = lastImportant ?? last
+  return { width: applies === undefined ? undefined : percentWidth(applies), other: declarations > 1,
+    important: lastImportant !== undefined }
 }
 
 /** C2-M-041, C2-B-212: `N%` with N a decimal number above 0 and at most 100, as a fraction. */

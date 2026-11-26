@@ -4,10 +4,6 @@
 import type { Holds } from './holds.ts'
 
 // Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
-const TABLE_HEAD = 'carve#6663 a head of data cells (C2-M-037, C2-B-186; spec carve#6816)'
-const TABLE_FOOT = 'carve#6664 a table of only a foot (C2-B-187, C2-W-136; spec carve#6816)'
-const UNSCOPED_TH = 'carve#6623 an unscoped th of a leading th row (C2-M-037; spec carve#6816)'
-const COL_WIDTH = 'carve-js#5574 the width a col style gives (C2-M-041; spec carve#6816)'
 const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute beside the key (C2-M-047; spec carve#6814)'
 const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
 const DJOT_STATUS = 'carve#6833 CC-1354 keeps the status 1 of the djot- gate that carve#6499 turned off (C2-T-049, C2-T-050)'
@@ -15,6 +11,8 @@ const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not impor
 const NOTE_CONDITIONALS = 'carve#6850 the Word conditional comments of a dropped note wrapper (C2-M-109; spec carve#6851)'
 const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under normalize too (C2-W-088, C2-W-127; spec carve#6849)'
 const EMPTY_LIST_ROW = 'carve#6853 a list-table row with no cell is dropped and the counts skip it (C2-M-112; spec carve#6855)'
+const TRAILING_LINE_FEED = 'carve#6837 the render cases of carve#6816 expect a line feed after </table> (spec data)'
+const PIPE_CLAMP = 'carve#6838 the lint model skips the header-rows clamp of a pipe table (C2-B-209; spec data)'
 
 /**
  * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
@@ -22,32 +20,13 @@ const EMPTY_LIST_ROW = 'carve#6853 a list-table row with no cell is dropped and 
  * fixed, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['CC-2100', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_HEAD }],
-  ['CC-2101', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_HEAD }],
-  ['CC-2102', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_HEAD }],
-  ['CC-2103', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_HEAD }],
-  ['CC-2237', { fields: ['html'], fix: TABLE_HEAD }],
-  ['CC-2238', { fields: ['html'], fix: TABLE_HEAD }],
-  ['CC-2239', { fields: ['html'], fix: TABLE_HEAD }],
-  ['CC-2240', { fields: ['html'], fix: TABLE_HEAD }],
-  ['CC-2241', { fields: ['diagnostics:table-row-count-clamped'], fix: TABLE_HEAD }],
-  ['CC-2242', { fields: ['carve'], fix: TABLE_HEAD }],
-  ['syntax-blocks-219', { fields: ['html', 'tree'], fix: TABLE_HEAD }],
-  ['CC-2068', { fields: ['html', 'children'], fix: TABLE_FOOT }],
-  ['CC-2244', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_FOOT }],
-  ['CC-2245', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_FOOT }],
-  ['CC-2246', { fields: ['html'], fix: TABLE_FOOT }],
-  ['CC-2247', { fields: ['notReported:table-row-count-clamped'], fix: TABLE_FOOT }],
-  ['CC-2248', { fields: ['html'], fix: TABLE_FOOT }],
-  ['CC-2249', { fields: ['carve'], fix: TABLE_FOOT }],
-  ['CC-2063', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: UNSCOPED_TH }],
-  ['CC-2250', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: UNSCOPED_TH }],
-  ['CC-2251', { fields: ['status', 'stderrCategory'], fix: UNSCOPED_TH }],
-  ['CC-2252', { fields: ['carve'], fix: COL_WIDTH }],
-  ['CC-2253', { fields: ['carve'], fix: COL_WIDTH }],
-  ['CC-2254', { fields: ['carve'], fix: COL_WIDTH }],
-  ['CC-2255', { fields: ['carve'], fix: COL_WIDTH }],
-  ['CC-2256', { fields: ['carve'], fix: COL_WIDTH }],
+  ['CC-2237', { fields: ['html'], fix: TRAILING_LINE_FEED }],
+  ['CC-2238', { fields: ['html'], fix: TRAILING_LINE_FEED }],
+  ['CC-2239', { fields: ['html'], fix: TRAILING_LINE_FEED }],
+  ['CC-2240', { fields: ['html'], fix: TRAILING_LINE_FEED }],
+  ['CC-2241', { fields: ['diagnostics:table-row-count-clamped'], fix: PIPE_CLAMP }],
+  ['CC-2246', { fields: ['html'], fix: TRAILING_LINE_FEED }],
+  ['CC-2248', { fields: ['html'], fix: TRAILING_LINE_FEED }],
   ['CC-2230', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
   ['CC-2231', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
   ['CC-2232', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],

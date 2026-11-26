@@ -44,11 +44,11 @@ describe('table keys', () => {
     expect(render('{aligns=x}\npara\n')).toBe('<p aligns="x">para</p>')
   })
 
-  it('C2-B-210, C2-B-186, C2-B-227: counts are consumed when valid; header-rows on a pipe table stays', () => {
+  it('C2-B-210, C2-B-186, C2-B-227: counts are consumed when valid; header-rows sets the head of a pipe table', () => {
     const node = table('{header-rows=2 footer-rows=x}\n| a | b |\n| c | d |\n')
-    expect(node.attrs).toEqual({ keyValues: [['header-rows', '2'], ['footer-rows', 'x']] })
-    expect(node.children.map((group) => group.type)).toEqual(['table_body'])
-    expect(format('{header-rows=2 footer-rows=x}\n| a | b |\n| c | d |\n')).toBe('{header-rows=2 footer-rows=x}\n| a | b |\n| c | d |\n')
+    expect(node.attrs).toEqual({ keyValues: [['footer-rows', 'x']] })
+    expect(node.children.map((group) => group.type)).toEqual(['table_head'])
+    expect(format('{header-rows=2 footer-rows=x}\n| a | b |\n| c | d |\n')).toBe('{footer-rows=x header-rows=2}\n| a | b |\n| c | d |\n')
     const csv = table('{table header-rows=0}\n```csv\na\n```\n')
     expect(csv.attrs).toBeUndefined()
     expect(csv.children[0]).toEqual(expect.objectContaining({ type: 'table_body' }))

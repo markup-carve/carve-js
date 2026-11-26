@@ -55,6 +55,12 @@ export interface OpenLeaf {
   // that covers it in the row above (C2-B-174).
   tableHeadRows: number
   tableHeadOpen: boolean
+  /** C2-B-186: the head rows a valid `header-rows` count sets, or -1 where the header marks make the head. */
+  tableHeadLimit: number
+  /** C2-B-187: the rows of the open table, its footer count, and whether an empty `body-rows` may end its head. */
+  tableRows: number
+  tableFooterRows: number
+  tableHeadEndsAtFoot: boolean
   tableWidths: number[]
 }
 
@@ -127,7 +133,8 @@ function createState(): BlockState {
     leaf: {
       kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, definitionTail: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0, raw: false,
       stanzaOpen: false, commentRun: 0, commentColumn: 0,
-      tableHeadRows: 0, tableHeadOpen: false, tableWidths: [],
+      tableHeadRows: 0, tableHeadOpen: false, tableHeadLimit: -1, tableRows: 0, tableFooterRows: 0, tableHeadEndsAtFoot: false,
+      tableWidths: [],
     },
     above: {
       blankCount: 0, captionDepth: NO_DEPTH, attributesDepth: NO_DEPTH, attributesStart: 0, attributesEnd: 0, takeAttributes: false,

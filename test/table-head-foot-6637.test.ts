@@ -19,6 +19,8 @@ describe('carve#6637: an empty body-rows ends the head above a footer of header 
     ['{footer-rows=2 body-rows}\n|= A |\n|= F |\n| G |\n', ['table_head:th', 'table_foot:th,td']],
     ['{body-rows="" footer-rows=1}\n|= A |\n|= F |\n', ['table_head:th', 'table_foot:th']],
     ['{footer-rows=1 body-rows}\n|= A |= B |\n|= ^ |= F |\n', ['table_head:th', 'table_foot:th']],
+    // carve#6664: a count of all the rows leaves no head.
+    ['{footer-rows=2 body-rows}\n|= A |\n|= F |\n', ['table_foot:th,th']],
   ])('%j', (source, expected) => {
     expect(groups(source)).toEqual(expected)
     expect(lint(source).map((entry) => entry.code)).not.toContain('table-row-count-clamped')
@@ -26,7 +28,6 @@ describe('carve#6637: an empty body-rows ends the head above a footer of header 
 
   it.each([
     ['{footer-rows=1}\n|= A |\n|= F |\n', ['table_head:th,th']],
-    ['{footer-rows=2 body-rows}\n|= A |\n|= F |\n', ['table_head:th,th']],
     ['{footer-rows=1 body-rows=0}\n|= A |\n|= F |\n', ['table_head:th,th', 'table_body:']],
     ['{footer-rows=1 body-rows body-header-rows=1}\n|= A |\n|= F |\n', ['table_head:th,th']],
     ['{footer-rows=1 body-rows}\n|= A |\n|= B |\n| F |\n', ['table_head:th,th', 'table_foot:td']],

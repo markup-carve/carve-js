@@ -226,7 +226,7 @@ const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
   [216, ['| a \\| b | c |'], 'table[tr[td"a \\| b" td"c"]]'],
   [217, ['{table header-rows=2}', '```csv', 'a,b', 'c,d', '1,2', '```'], '{table header-rows=2}csv(h2)[a,b / c,d / 1,2]'],
   [218, ['| 1 | 2 |', '+ ^ | < |'], 'table[tr[td"1|^" td"2|<"]]'],
-  [219, ['{header-rows=1}', '| a |', '| b |'], '{header-rows=1}table[tr[td"a"] tr[td"b"]]'],
+  [219, ['{header-rows=1}', '| a |', '| b |'], '{header-rows=1}table(h1)[tr[td"a"] tr[td"b"]]'],
   [220, ['{table}', '```csv', 'a,b', '1,"2', '3,4', '```'], '{table}csv(h1)![a,b / 1,2|3,4]'],
   [221, ['-a', '', '>c', '', ':d', '', '======='], 'p"-a" p">c" p":d" p"======="'],
   [222, ['::: note', 'text'], 'div[p"text"]'],
