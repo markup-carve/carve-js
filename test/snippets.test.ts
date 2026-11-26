@@ -31,6 +31,14 @@ describe('named snippets', () => {
     expect(lint(src).filter((d) => d.code === 'snippet-definition-id').map((d) => d.range)).toEqual([{ startOffset: 12, endOffset: 17 }])
   })
 
+  it('C2-B-236: a comment line between the attribute lines holds no id, and an id above it still refuses the marker', () => {
+    const kept = parseTree('{.a}\n%% {#z}\n{.b}\n{$x}: Hi\n', { positions: false }).document.children
+    expect(kept.map((child) => child.type)).toEqual(['comment', 'snippet_definition'])
+    expect(kept[1]?.attrs).toEqual({ classes: ['a', 'b'] })
+    const src = '{#z}\n%% c\n{.a}\n{$x}: Hi\n'
+    expect(lint(src).filter((d) => d.code === 'snippet-definition-id').map((d) => d.range)).toEqual([{ startOffset: 15, endOffset: 20 }])
+  })
+
   it('C2-H-215: a document transform that changes the view keeps the carriers of the uses', () => {
     const result = renderWithDocumentTransforms('{$x}: Hello\n\n{{ $x }}\n', [{ name: 'append', transform: (view) => {
       view.children.push({ type: 'paragraph', children: [{ type: 'text', value: 'end' }] })

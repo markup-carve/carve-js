@@ -1,7 +1,8 @@
 // The two shapes of named snippets: the definition marker `{$name}:` (C2-B-236) and the use `{{ $name }}`
 // (C2-I-128, C2-B-237). The block pass, the inline scan, the writer and lint all read them here.
 import { readAttributeBlock, emptyMemo, type AttributeSink } from './attributes.ts'
-import { BRACE_CLOSE, BRACE_OPEN, COLON, DOLLAR, HYPHEN, SPACE, TAB, UNDERSCORE } from './chars.ts'
+import { BRACE_CLOSE, BRACE_OPEN, COLON, CR, DOLLAR, HYPHEN, SPACE, TAB, UNDERSCORE } from './chars.ts'
+import { isAttributeLine } from './lines.ts'
 import { isAsciiDigit, isAsciiLetter } from './unicode.ts'
 
 const NONE = -1
@@ -69,15 +70,23 @@ export function readSnippetMarker(src: string, pos: number, end: number): Snippe
   return { nameStart: pos + 2, nameEnd, markerEnd: p + 1, hasId: found.id }
 }
 
-/** C2-B-236: whether the attribute lines between `pos` and `end` hold an id, which refuses the definition below them. */
+/**
+ * C2-B-236: whether the attribute lines between `pos` and `end` hold an id, which refuses the definition below them. Only
+ * attribute lines are read: a comment line between them holds no attributes.
+ */
 export function attributeLinesHoldId(src: string, pos: number, end: number): boolean {
   const found = { id: false }
   const sink = ID_SINK(found)
-  const memo = emptyMemo()
-  let p = pos
-  while (p < end && !found.id) {
-    const after = src.charCodeAt(p) === BRACE_OPEN ? readAttributeBlock(src, p, end, memo, sink) : NONE
-    p = after === NONE ? p + 1 : after
+  for (let line = pos; line < end && !found.id;) {
+    let lineEnd = src.indexOf('\n', line)
+    if (lineEnd < 0 || lineEnd > end) lineEnd = end
+    const next = lineEnd + 1
+    if (lineEnd > line && src.charCodeAt(lineEnd - 1) === CR) lineEnd--
+    if (isAttributeLine(src, line, lineEnd)) {
+      const memo = emptyMemo()
+      for (let p = line; p < lineEnd && src.charCodeAt(p) === BRACE_OPEN;) p = readAttributeBlock(src, p, lineEnd, memo, sink)
+    }
+    line = next
   }
   return found.id
 }
