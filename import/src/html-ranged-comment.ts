@@ -34,12 +34,16 @@ function isRangeStart(node: Html.Element): boolean {
   return node.tagName === 'span' && classList(node)[0] === 'comment-start'
 }
 
+// C2-M-066: the inline reader reads any `<input>` as raw; a task box is taken by its item first.
+function isRaw(node: Html.Element): boolean {
+  return treatment(node) === 'raw' || node.tagName === 'input'
+}
+
 /** An element whose content gives no inline of its own: it is dropped, kept whole as raw, or a comment's text. */
 function isOpaque(node: Html.Node): boolean {
   if (!isElement(node as Html.ChildNode)) return false
   const element = node as Html.Element
-  const kind = treatment(element)
-  return kind === 'drop' || kind === 'raw' || isRangeStart(element)
+  return treatment(element) === 'drop' || isRaw(element) || isRangeStart(element)
 }
 
 /** Whether a node gives an inline by itself: text, a comment or raw element kept, a comment, or an empty element the import keeps. */
@@ -48,9 +52,8 @@ function holds(node: Html.Node, context: HtmlContext): boolean {
   if (isText(child)) return child.value !== ''
   if (isComment(child)) return context.rawHtml === true
   if (!isElement(child)) return false
-  const kind = treatment(child)
-  if (kind === 'drop') return false
-  if (kind === 'raw') return context.rawHtml === true
+  if (treatment(child) === 'drop') return false
+  if (isRaw(child)) return context.rawHtml === true
   if (isRangeStart(child)) return plain(child) !== ''
   if (child.childNodes.length > 0) return false
   return child.attrs.length > 0 || !EMPTY_DROPPED.has(child.tagName)
