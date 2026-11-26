@@ -259,13 +259,13 @@ function bracket(leaf: Leaf, at: number, escaped: Uint8Array): void {
 
 // C2-I-036: the atoms that are no host of an attribute block.
 const NO_HOSTS: ReadonlySet<string> = new Set([
-  'mention', 'tag', 'xref', 'comment', 'critic_comment', 'raw_inline', 'smart_punctuation', 'soft_break', 'hard_break',
+  'mention', 'tag', 'xref', 'comment', 'raw_inline', 'smart_punctuation', 'soft_break', 'hard_break',
 ])
 
 // C2-I-036: the hosts of an attribute block; a node of any other type behind a block is left to the repair.
 const HOSTS: ReadonlySet<string> = new Set([
   'span', 'link', 'image', 'autolink', 'code', 'literal_inline', 'math', 'footnote_ref', 'inline_footnote', 'symbol',
-  'inline_extension', 'emphasis', 'strong', 'delete', 'insert', 'highlight', 'superscript', 'subscript',
+  'inline_extension', 'emphasis', 'strong', 'delete', 'insert', 'highlight', 'superscript', 'subscript', 'critic_comment',
 ])
 
 function isHost(leaf: Leaf, at: number): boolean {

@@ -52,7 +52,7 @@ const written: [string, string, string][] = [
     '[^n]: intro\n\n  > quote\n    ordinary line\n\nsee[^n]\n'],
   // A glued attribute block that 0.1 wrote as text after a substitution stays text.
   ['U-069', '{~a~>b~}{.k} c\n{~a~>b~}{.k} c\n\n{#note#}{.k} c\n',
-    '{-a-}{+b+}\\{.k} c\n{-a-}{+b+}\\{.k} c\n\n{#note#}{.k} c\n'],
+    '{-a-}{+b+}\\{.k} c\n{-a-}{+b+}\\{.k} c\n\n{#note#}\\{.k} c\n'],
   // A term on the marker line of a later item needs no blank line (C2-B-015).
   ['U-008', '- para\n- :: t\n  : para\n  - li\n',
     '- para\n- :: t\n  : para\n\n  - li\n'],

@@ -132,6 +132,26 @@ function withoutKeys<N extends Node>(node: N, names: string[], caseInsensitive =
   return { ...node, attrs: { ...node.attrs, keyValues } }
 }
 
+const INSERT_REVISION_KEYS = ['author']
+const COMMENT_REVISION_KEYS = ['author', 'datetime']
+
+/** C2-H-210: a copy of `node` whose revision keys `names` are written as `data-` attributes, in place; an authored one wins (C2-H-013). */
+function withRevisionKeys<N extends Node>(node: N, names: readonly string[]): N {
+  const keyValues = node.attrs?.keyValues
+  if (keyValues === undefined || !keyValues.some(([key]) => names.includes(key))) return node
+  const authored = new Set(keyValues.map(([key]) => key.toLowerCase()))
+  const mapped: [string, string][] = []
+  for (const [key, value] of keyValues) {
+    if (!names.includes(key)) mapped.push([key, value])
+    else if (!authored.has(`data-${key}`)) mapped.push([`data-${key}`, value])
+  }
+  return { ...node, attrs: { ...node.attrs, keyValues: mapped } }
+}
+
+function revisionElement(name: string): InlineWriter {
+  return (node, r) => `<${name}${attributes(r, withRevisionKeys(node, INSERT_REVISION_KEYS), {})}>${children(r, node)}</${name}>`
+}
+
 /** A closing single quote between two letters is an apostrophe, which locale quotes leave as it is. */
 function isApostrophe(node: SmartPunctuationNode, before: Inline | undefined, after: Inline | undefined): boolean {
   return node.kind === 'right_single_quote' && before?.type === 'text' && after?.type === 'text' &&
@@ -469,7 +489,8 @@ const WRITERS: NodeHandlers<string, Render> = {
   literal_inline: literal,
   math,
   raw_inline: rawInline,
-  critic_comment: (node, r) => `<span${attributes(r, node, { base: ['critic-comment'] })}>${escapeText(node.value)}</span>`,
+  critic_comment: (node, r) =>
+    `<span${attributes(r, withRevisionKeys(node, COMMENT_REVISION_KEYS), { base: ['critic-comment'] })}>${escapeText(node.value)}</span>`,
   mention: social,
   tag: social,
   symbol,
@@ -494,6 +515,6 @@ const WRITERS: NodeHandlers<string, Render> = {
   highlight: element('mark'),
   superscript: element('sup'),
   subscript: element('sub'),
-  insert: element('ins'),
-  delete: element('del'),
+  insert: revisionElement('ins'),
+  delete: revisionElement('del'),
 }

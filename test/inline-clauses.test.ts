@@ -288,8 +288,8 @@ describe('attribute blocks', () => {
   })
 
   it('C2-I-036: what is not a host', () => {
-    expect(inline('word{.c} @a{.c} #a{.c} </#a>{.c} {# a #}{.c} `a`{=x}{.c} "a"{.c} ...{.c} \\*{.c}')).toBe(
-      '"word{.c} " @"a" "{.c} " #"a" "{.c} " xref"a" "{.c} " {#}" a " "{.c} " raw(x)"a" "{.c} " ‹“› "a" ‹”› "{.c} " ‹…› "{.c} *{.c}"',
+    expect(inline('word{.c} @a{.c} #a{.c} </#a>{.c} `a`{=x}{.c} "a"{.c} ...{.c} \\*{.c}')).toBe(
+      '"word{.c} " @"a" "{.c} " #"a" "{.c} " xref"a" "{.c} " raw(x)"a" "{.c} " ‹“› "a" ‹”› "{.c} " ‹…› "{.c} *{.c}"',
     )
     expect(inline('a %% b {.c}')).toBe('"a" %%" b {.c}"')
   })
@@ -454,7 +454,8 @@ describe('braced delimiters', () => {
     expect(inline('{# a *b* `c #} d')).toBe('{#}" a *b* `c " " d"')
     expect(inline('{#a', 'b#}')).toBe('{#}"a|b"')
     expect(inline('{##} {# #} {#a')).toBe('"{##} " {#}" " " {" #"a"')
-    expect(inline('{#a#}{.c}')).toBe('{#}"a" "{.c}"')
+    // C2-I-036, carve#6788: an editorial comment is a host.
+    expect(inline('{#a#}{.c}')).toBe('{#}"a"{.c}')
   })
 })
 

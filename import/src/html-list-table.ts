@@ -99,6 +99,8 @@ function cellItem(cell: TableCellNode, header: boolean, node: Html.Element, cont
     return block.children.length === 0 ? [] : [{ type: 'paragraph', children: block.children }]
   })
   literalMark(children)
+  // C2-M-112: an item that holds no block holds an empty line comment, as `- %%` parses.
+  if (children.length === 0) children.push({ type: 'comment', form: 'line', value: '' })
   if (cell.scope !== undefined) report(context, node, 'import-attribute-dropped', 'The scope of a list table cell dropped')
   if (cell.headerIds !== undefined) report(context, node, 'import-attribute-dropped', 'The headers of a list table cell dropped')
   const own = new Set(cell.attrs?.keyValues?.map(([key]) => key))

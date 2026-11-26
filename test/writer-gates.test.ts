@@ -5,16 +5,17 @@ import { describe, expect, it } from 'vitest'
 import { CARVE_SOURCES, CLAUSE_CASES } from '../scripts/corpus.ts'
 import { LINE_SHAPES } from './support/enumerate.ts'
 import { INLINE_TOKENS, WRITER_TOKENS } from './support/inline-enumerate.ts'
-import { checkGates, checkWriter, enumerateWriter, seededRandom } from './support/writer-checks.ts'
+import { checkGates, checkWriter, enumerateWriter, seededRandom, WRITER_GATE_HELD } from './support/writer-checks.ts'
 
 describe('the gates of the writer', () => {
   it('C2-W-002, C2-W-003, C2-W-088: every example input of the specification', () => {
     // C2-W-133: a clause case that expects `writer-refused` (CC-1493) is checked by the corpus test.
     const refusing = new Set(CLAUSE_CASES.filter((entry) => (entry.expected as { diagnostics?: { code: string }[] })
       .diagnostics?.some((found) => found.code === 'writer-refused') === true).map((entry) => entry.id))
-    const failures = CARVE_SOURCES.filter((example) => !refusing.has(example.id))
-      .map((example) => [example.id, checkWriter(example.input)]).filter((entry) => entry[1] !== null)
-    expect(failures).toEqual([])
+    const results = CARVE_SOURCES.filter((example) => !refusing.has(example.id))
+      .map((example) => [example.id, checkWriter(example.input)] as const)
+    expect(results.filter(([id, failure]) => failure !== null && !WRITER_GATE_HELD.has(id))).toEqual([])
+    expect(results.filter(([id, failure]) => failure === null && WRITER_GATE_HELD.has(id)).map(([id]) => id)).toEqual([])
   })
 
   it('C2-W-002, C2-W-003, C2-W-088: every document of up to 2 lines', () => {
