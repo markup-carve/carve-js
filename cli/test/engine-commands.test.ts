@@ -271,4 +271,21 @@ describe('--extensions and --extension-options (C2-T-010)', () => {
       expect([flags, result.status, result.stdout, /^carve\[usage\]:/.test(result.stderr)]).toEqual([flags, 2, '', true])
     }
   })
+
+  it('takes any string as the smart quotes locale and falls back to its language, then en (C2-X-075, carve-rs#4838)', () => {
+    const dir = temp({ 'a.crv': '"a" \'b\'\n' })
+    const quoted = (locale: unknown) => cli(['render', '--smart-typography', '--extensions', '["carve.smartQuotes"]',
+      '--extension-options', JSON.stringify({ 'carve.smartQuotes': { locale } }), 'a.crv'], '', dir)
+    const cases: [string, string][] = [
+      ['xx', '“a” ‘b’'], ['', '“a” ‘b’'], ['de-AT', '„a“ ‚b‘'], ['DE_ch', '«a» ‹b›'], ['De-cH-x', '„a“ ‚b‘'],
+      ['PT_br', '«a» “b”'], ['-de', '“a” ‘b’'], ['constructor', '“a” ‘b’'], ['toString-x', '“a” ‘b’'],
+    ]
+    for (const [locale, html] of cases) {
+      expect([locale, quoted(locale)]).toEqual([locale, { status: 0, stdout: `<p>${html}</p>\n`, stderr: '' }])
+    }
+    for (const locale of [1, null, ['de'], { a: 'de' }]) {
+      const result = quoted(locale)
+      expect([locale, result.status, result.stdout, /^carve\[usage\]:/.test(result.stderr)]).toEqual([locale, 2, '', true])
+    }
+  })
 })

@@ -119,7 +119,7 @@ const STANDARD: ReadonlyMap<string, Standard> = new Map<string, Standard>([
 ])
 
 /** The renderer options each standard extension takes: the `rendererOptions` of its row, each with its values. */
-const RENDERER_OPTIONS: ReadonlyMap<string, Readonly<Record<string, { values: readonly string[] }>>> = new Map(
+const RENDERER_OPTIONS: ReadonlyMap<string, Readonly<Record<string, { values: readonly string[], open?: boolean }>>> = new Map(
   catalog.extensions.map((entry) => [entry.name, 'rendererOptions' in entry ? entry.rendererOptions : {}]))
 
 // The catalog and the table above name the same extensions; a pin that adds one fails here, not at a user's command.
@@ -140,7 +140,7 @@ export function extensionNames(value: unknown): string[] {
   return [...new Set(value)]
 }
 
-/** The renderer options of one listed extension, each one its row names with a value the row allows. */
+/** The renderer options of one listed extension: each one its row names, with a value the row allows or, where it is open, any string. */
 function checkedOptions(name: string, options: unknown, names: readonly string[]): Options {
   const known = RENDERER_OPTIONS.get(name)
   if (known === undefined) throw new UsageError(`${name} is no standard extension`)
@@ -149,7 +149,9 @@ function checkedOptions(name: string, options: unknown, names: readonly string[]
   for (const [key, option] of Object.entries(options)) {
     const row = Object.hasOwn(known, key) ? known[key] : undefined
     if (row === undefined) throw new UsageError(`${name} has no option ${key}`)
-    if (typeof option !== 'string' || !row.values.includes(option)) throw new UsageError(`bad value for the option ${key} of ${name}`)
+    if (typeof option !== 'string' || (row.open !== true && !row.values.includes(option))) {
+      throw new UsageError(`bad value for the option ${key} of ${name}`)
+    }
   }
   return options
 }

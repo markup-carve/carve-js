@@ -890,6 +890,13 @@ export const WRITER_GATE_HELD: ReadonlyMap<string, string> = new Map([
   ['CC-2265', 'carve#6727: a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815), not in carve-js yet'],
   ['CC-2323', 'carve#6813: passes with the sidecar; without it the tree has no authored-block fallback and keeps the loss (C2-W-117)'],
   ['CC-2324', 'carve#6813: passes with the sidecar; without it the tree has no verbatim reference text and keeps the loss (C2-W-117)'],
+  ['CC-2426', 'carve#6846: passes with the sidecar; without it the tree has no authored-block fallback and keeps the loss (C2-W-117)'],
+  ['CC-2427', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
+  ['CC-2428', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
+  ['CC-2429', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
+  ['CC-2430', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
+  ['CC-2431', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
+  ['CC-2432', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
 ])
 
 /** The result of the checks on one source: null, a failure, or `refused` (C2-W-016, C2-W-133). */
