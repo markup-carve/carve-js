@@ -184,4 +184,14 @@ describe('named snippets', () => {
     expect(written.source.split('\n')).toHaveLength(2)
     expect(parse(written.source).children).toHaveLength(1)
   })
+
+  it('C2-N-092: after a transform a copy still resolves in the scopes of the includes around its file', () => {
+    const files: Record<string, string> = { 'a.crv': '[k]: /from-a\n\n{{ b.crv }}\n', 'b.crv': '{$s}: [x][k]\n' }
+    const includes = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    const add = [{ name: 'add', transform: (view: DocumentNode) => {
+      view.children.push({ type: 'paragraph', children: [{ type: 'text', value: 'e' }] })
+      return view
+    } }]
+    expect(renderWithDocumentTransforms('{{ a.crv }}\n\n{{ $s }}\n', add, { includes }).html).toBe('<p><a href="/from-a">x</a></p>\n<p>e</p>')
+  })
 })
