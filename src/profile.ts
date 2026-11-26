@@ -302,8 +302,8 @@ function reportDegraded(filter: Filter, node: Node, block: boolean): void {
 function filterUnwritten(filter: Filter, node: Node, block: boolean, depth: number): void {
   const outside = isOutside(filter, node, block, depth)
   if (node.type === 'footnote' && !outside) filterNode(filter, node, depth + containerLevel(node))
-  // C2-H-163, C2-H-165: a definition or comment outside the profile is still reported; C2-H-178 exempts `abbreviation_def`.
-  if (outside && node.type !== 'frontmatter' && node.type !== 'abbreviation_def') reportDegraded(filter, node, block)
+  // C2-H-163, C2-H-165: a definition, comment or frontmatter outside the profile is still reported; C2-H-178 exempts `abbreviation_def`.
+  if (outside && node.type !== 'abbreviation_def') reportDegraded(filter, node, block)
 }
 
 /**
