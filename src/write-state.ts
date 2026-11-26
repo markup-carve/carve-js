@@ -42,6 +42,8 @@ export interface PassTrace {
   checks: number[]
   /** Its parses outside a kept probe: the source, and the tree where `parseChunk` keeps short ones (C2-W-133). */
   charges: [string, DocumentNode | null, boolean][]
+  /** The parses of rounds a chain step stood in for (write-chain.ts): their count and their characters. */
+  skipped: [number, number]
 }
 
 export interface Attempt {
