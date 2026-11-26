@@ -25,7 +25,7 @@ describe('HTML round trip harness', () => {
     expect(diffTrees(tree, other)).toEqual(['list.spacing'])
   })
 
-  it('C2-H-195 row 8, C2-M-093: a column alignment comes back as the mark of the header cell', () => {
+  it('C2-H-195 row 7, C2-M-093: a column alignment comes back as the mark of the header cell', () => {
     expect(roundTrip('{aligns="center"}\n|= a |\n| b |\n').equal).toBe(true)
     expect(roundTrip('{aligns="left right"}\n|= a | b |\n| c | d |\n').equal).toBe(true)
   })

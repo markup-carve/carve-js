@@ -268,8 +268,9 @@ function listParts(r: Render, node: ListNode): TagParts {
   const structural: Pair[] = marker.kind === 'ordered' ? orderedAttributes(marker) : []
   if (r.settings.roundtrip) {
     if (marker.kind === 'bullet' && marker.char !== undefined && marker.char !== '-') structural.push(['data-marker', marker.char])
-    // C2-H-138.
+    // C2-H-138: a one-item loose list carries neither, as C2-B-062 reads it as tight.
     if (node.spacing === 'tight') structural.push(['data-carve-tight', null])
+    else if (node.children.length > 1) structural.push(['data-carve-loose', null])
   }
   const tasks = node.children.some((item) => item.task !== undefined)
   return tasks ? { structural, base: ['task-list'] } : { structural }

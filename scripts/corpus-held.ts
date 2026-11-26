@@ -4,7 +4,6 @@
 import type { Holds } from './holds.ts'
 
 // Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
-const LOOSE_CARRIER = 'carve#6844 data-carve-loose carries the spacing of a loose list (C2-H-138, C2-H-186; spec carve#6862)'
 const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under normalize too (C2-W-088, C2-W-127; spec carve#6849)'
 
 /**
@@ -14,20 +13,6 @@ const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under nor
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
   ['CC-2428', { fields: ['carve', 'diagnosticsComplete'], fix: AUTHORED_FALLBACK }],
-  ['CC-2414', { fields: ['html'], fix: LOOSE_CARRIER }],
-  ['CC-2440', { fields: ['html'], fix: LOOSE_CARRIER }],
-  ['CC-2441', { fields: ['children', 'carve'], fix: LOOSE_CARRIER }],
-  ['CC-2442', { fields: ['html'], fix: LOOSE_CARRIER }],
-  ['CC-2443', { fields: ['children', 'carve'], fix: LOOSE_CARRIER }],
-  ['CC-2444', { fields: ['html'], fix: LOOSE_CARRIER }],
-  ['CC-2445', { fields: ['html'], fix: LOOSE_CARRIER }],
-  ['CC-2446', { fields: ['children', 'carve'], fix: LOOSE_CARRIER }],
-  ['CC-2447', { fields: ['html'], fix: LOOSE_CARRIER }],
-  ['CC-2450', { fields: ['children', 'carve', 'diagnostics:import-carrier-ignored'], fix: LOOSE_CARRIER }],
-  ['CC-2451', { fields: ['children', 'carve', 'diagnostics:import-carrier-ignored'], fix: LOOSE_CARRIER }],
-  ['CC-2452', { fields: ['children', 'carve', 'diagnostics:import-carrier-ignored'], fix: LOOSE_CARRIER }],
-  ['CC-2453', { fields: ['children', 'carve'], fix: LOOSE_CARRIER }],
-  ['CC-2454', { fields: ['html', 'diagnostics:carrier-attribute-dropped'], fix: LOOSE_CARRIER }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */

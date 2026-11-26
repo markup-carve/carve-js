@@ -97,7 +97,7 @@ describe('line block whitespace', () => {
     expect(imported('&nbsp;x<br>\na&nbsp;&nbsp;b')).toBe('::: |\n x\na  b\n:::\n')
   })
 
-  it('carve#6786, C2-H-195 row 18: an empty line or one ending in a space or tab keeps its hard break (CC-2167 to 2171)', () => {
+  it('carve#6786, C2-H-195 row 17: an empty line or one ending in a space or tab keeps its hard break (CC-2167 to 2171)', () => {
     expect(imported('a <br>\nb')).toBe('::: |\na \\\nb\n:::\n')
     expect(imported('a<br>\n<br>\nb')).toBe('::: |\na\n\\\nb\n:::\n')
     expect(imported('a <code>x</code> <br>\nb')).toBe('::: |\na `x` \\\nb\n:::\n')

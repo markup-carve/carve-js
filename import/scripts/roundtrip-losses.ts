@@ -509,7 +509,7 @@ function headCellAt(table: Fields, at: number): Fields | undefined {
 }
 
 /**
- * C2-H-195 row 8: where a head row exists, every cell writes its resolved alignment, and the column's alignment comes
+ * C2-H-195 row 7: where a head row exists, every cell writes its resolved alignment, and the column's alignment comes
  * back as a mark on the header cell, which aligns the column (C2-B-213); a mark the header cell has already wins.
  */
 function columnAlignments(tree: Fields, found: Set<string>): void {
@@ -522,13 +522,13 @@ function columnAlignments(tree: Fields, found: Set<string>): void {
         if (cell === undefined) continue
         cell[axis] ??= column[axis]
         delete column[axis]
-        found.add('C2-H-195 row 8 column alignment')
+        found.add('C2-H-195 row 7 column alignment')
       }
     })
   })
 }
 
-/** C2-H-195 row 7: a line break in a cell reads as a space. */
+/** C2-H-195 row 6: a line break in a cell reads as a space. */
 function cellBreaks(tree: Fields, found: Set<string>): void {
   eachNode(tree, node => {
     if (node['type'] === 'cell_paragraph' && flattenBreaks(node)) found.add('G2 cell line break')
@@ -545,7 +545,7 @@ function trimmed(value: string, start: boolean): string {
   return value.slice(from, to)
 }
 
-/** C2-H-195 row 16: the import removes the whitespace at the edge of a cell's inline content (C2-M-018). */
+/** C2-H-195 row 15: the import removes the whitespace at the edge of a cell's inline content (C2-M-018). */
 function cellEdges(tree: Fields, found: Set<string>): void {
   eachNode(tree, node => {
     if (node['type'] !== 'cell_paragraph') return
@@ -555,7 +555,7 @@ function cellEdges(tree: Fields, found: Set<string>): void {
       const value = trimmed(str(entry['value']), start)
       if (value === entry['value']) continue
       entry['value'] = value
-      found.add('C2-H-195 row 16 cell edge whitespace')
+      found.add('C2-H-195 row 15 cell edge whitespace')
     }
     node['children'] = list.filter(entry => entry['type'] !== 'text' || entry['value'] !== '')
   })

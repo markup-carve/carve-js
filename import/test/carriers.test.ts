@@ -35,13 +35,13 @@ const GAPS = ['table_column.authored: lost', 'table_body.headRows: lost']
 
 /**
  * Examples whose difference no carrier of C2-H-011 can carry: a key typed in another normal form than the id it names
- * (C2-I-097), the bodies and row header columns of `body-rows` (C2-B-230), and attribute name case (C2-H-195 row 13).
+ * (C2-I-097), the bodies and row header columns of `body-rows` (C2-B-230), and attribute name case (C2-H-195 row 12).
  */
 const HELD_SOURCES: ReadonlyMap<string, readonly string[]> = new Map([
   ['# Caf\u00e9\n\nSee </#Cafe\u0301>.', ['xref.key']],
   ['{body-rows=1,1 body-header-rows=0,1 body-header-cols=1,0 footer-rows=1}\n|= Item |= Qty |\n| tea | 2 |\n| Later | |\n'
     + '| milk | 1 |\n| Total | 3 |', ['table_body.rowHeadColumns: lost', 'table_cell.header']],
-  // C2-H-195 row 13: HTML lowers KBD and ABBR, and KBD then selects the semantic span key of C2-H-075.
+  // C2-H-195 row 12: HTML lowers KBD and ABBR, and KBD then selects the semantic span key of C2-H-075.
   ['[x]{KBD} and [y]{abbr="a" ABBR="b"}', ['span.attrs.keyValues: lost object', 'span.attrs.keyValues: value']],
 ])
 
@@ -72,7 +72,7 @@ describe('C2-H-186 carriers', () => {
     'data-carve-footnote-label', 'data-carve-inline-footnote', 'data-carve-raw',
     'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight',
     'data-carve-xref', 'data-carve-caption-number', 'data-carve-div',
-    'data-carve-line-block', 'data-carve-source-level',
+    'data-carve-line-block', 'data-carve-source-level', 'data-carve-loose',
   ])('C2-M-009 reports %s on a paragraph', name => {
     expect(ignored(`<p ${name}="1">x</p>`, name)).toBe(true)
   })
@@ -84,11 +84,11 @@ describe('C2-H-186 carriers', () => {
     expect(ignored('<div role="heading" aria-level="7" data-carve-source-level="6">x</div>', 'data-carve-source-level')).toBe(false)
   })
 
-  it('C2-H-195 row 16: the space at the edge of a delimited-table cell is a listed loss', () => {
+  it('C2-H-195 row 15: the space at the edge of a delimited-table cell is a listed loss', () => {
     const outcome = roundTrip('{table}\n```csv\na,"b ""q"" c", d\n```\n')
     expect(outcome.html).toContain('<th scope="col"> d</th>')
     expect(outcome.equal).toBe(true)
-    expect(outcome.losses).toEqual(['C2-H-195 row 16 cell edge whitespace'])
+    expect(outcome.losses).toEqual(['C2-H-195 row 15 cell edge whitespace'])
   })
 
   it('C2-H-186 data-marker gives the bullet character', () => {
@@ -105,6 +105,43 @@ describe('C2-H-186 carriers', () => {
     const list = first(html)
     expect(list?.type === 'list' ? list.spacing : undefined).toBe('loose')
     expect(ignored(html, 'data-carve-tight')).toBe(true)
+  })
+
+  it('C2-H-138, C2-H-186 data-carve-loose keeps a loose list without item paragraphs loose', () => {
+    expect(back('- ![x](j.png)\n\n- ![x](k.png)\n')).toEqual([])
+    expect(back('- > a\n\n- > b\n')).toEqual([])
+    expect(back('1. ```\n   a\n   ```\n\n2. ---\n')).toEqual([])
+    const list = first('<ul data-carve-loose><li><blockquote><p>a</p></blockquote></li><li>b<ul><li>c</li></ul></li></ul>')
+    expect(list?.type === 'list' ? list.spacing : undefined).toBe('tight')
+  })
+
+  it.each([
+    ['<ul data-carve-loose><li><blockquote><p>a</p></blockquote></li></ul>', 'tight'],
+    ['<ul data-carve-loose><li>a</li><li>b</li></ul>', 'tight'],
+    ['<ul data-carve-loose><li><p>a</p></li><li><p>b</p> c</li></ul>', 'loose'],
+    ['<ul data-carve-loose><li><input type="text"><img src="x" alt="x"></li><li><p>b</p></li></ul>', 'loose'],
+  ])('C2-H-186 data-carve-loose is ignored on a one-item list and over a bare run: %s', (html, spacing) => {
+    const list = first(html)
+    expect(list?.type === 'list' ? list.spacing : undefined).toBe(spacing)
+    expect(ignored(html, 'data-carve-loose')).toBe(true)
+  })
+
+  it('C2-H-186 data-carve-loose is accepted over image runs and a task box', () => {
+    for (const html of [
+      '<ul data-carve-loose><li><img src="a.png" alt="a"> <!-- c --> <img src="b.png" alt="b"></li><li><img src="c.png" alt="c"></li></ul>',
+      '<ul data-carve-loose><li><input type="checkbox" disabled> <p>a</p></li><li><p>b</p></li></ul>',
+    ]) {
+      const list = first(html)
+      expect(list?.type === 'list' ? list.spacing : undefined).toBe('loose')
+      expect(ignored(html, 'data-carve-loose')).toBe(false)
+    }
+  })
+
+  it('C2-H-185 data-carve-tight beside data-carve-loose: both ignored, the structure decides', () => {
+    const html = '<ul data-carve-tight data-carve-loose><li><p>a</p></li><li><p>b</p></li></ul>'
+    const list = first(html)
+    expect(list?.type === 'list' ? list.spacing : undefined).toBe('loose')
+    expect(read(html).messages.filter(message => message.includes('data-carve-loose'))).toHaveLength(1)
   })
 
   it('C2-H-186 data-carve-explicit-id gives the authored heading id', () => {
