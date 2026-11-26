@@ -18,7 +18,7 @@ import {
   DIV, DOCUMENT, FLAG_ALPHA, FLAG_ATTRIBUTES, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_CONTINUATION, FLAG_DELIMITED,
   FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_BLOCK_MATH, FLAG_PAREN,
   FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_SPAN_LEFT, FLAG_SPAN_UP, FLAG_STAR, FLAG_TIGHT,
-  FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, isIndentContainer, isLabel, isList, isOpaqueLeaf,
+  FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, SNIPPET_DEFINITION, SNIPPET_USE, isIndentContainer, isLabel, isList, isOpaqueLeaf,
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import {
@@ -31,6 +31,7 @@ import {
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
+import { isBlockSnippetUse, readSnippetMarker, snippetValueStart } from './snippets.ts'
 import { readInclude } from './include.ts'
 import { isRegionMarkerLine } from './include-source.ts'
 import { isImageOnly } from './image-line.ts'
@@ -882,7 +883,7 @@ function openLeafOf(state: BlockState, shape: number, lineStart: number, end: nu
     case SHAPE_TERM: return openTerm(state, end)
     case SHAPE_LINK_DEFINITION: return openDefinitionLine(state, LINK_DEFINITION, lineStart, end)
     case SHAPE_CODE_FENCE_OPENER: return openFence(state, end)
-    case SHAPE_ATTRIBUTE_LINE: return openAttributeLine(state, end)
+    case SHAPE_ATTRIBUTE_LINE: return openSnippetDefinition(state, lineStart, end) || openAttributeLine(state, end)
     case SHAPE_INCLUDE: return openInclude(state, end)
     case SHAPE_TABLE_ROW: return openTable(state, end)
     default: return false
@@ -1118,7 +1119,22 @@ function openAttributeLine(state: BlockState, end: number): boolean {
   return true
 }
 
+/** C2-B-236: a snippet definition, a block of one line at column 0 outside every container. */
+function openSnippetDefinition(state: BlockState, lineStart: number, end: number): boolean {
+  const cursor = state.cursor
+  const src = state.src
+  if (state.containers.depth !== 1 || cursor.pos !== lineStart) return false
+  if (snippetValueStart(src, end, readSnippetMarker(src, cursor.pos, end)) < 0) return false
+  writeLeafLine(state, enterTag(state, SNIPPET_DEFINITION, 0), SNIPPET_DEFINITION, end)
+  return true
+}
+
 function openInclude(state: BlockState, end: number): boolean {
+  // C2-B-237: a block snippet use is tested before the include directive.
+  if (isBlockSnippetUse(state.src, state.cursor.pos, end)) {
+    writeLeafLine(state, enterTag(state, SNIPPET_USE, 0), SNIPPET_USE, end)
+    return true
+  }
   const parts = readInclude(state.src, state.cursor.pos, end)
   if (parts === null) return false
   writeLeafLine(state, enterTag(state, INCLUDE, 0), INCLUDE, end)

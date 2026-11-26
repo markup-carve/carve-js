@@ -36,16 +36,20 @@ export const MAX_TREE_DEPTH = 2 * MAX_DEPTH + DEPTH_CAP + 16
 
 const BLOCKS = [
   'admonition', 'block_extension', 'block_quote', 'code_block', 'comment', 'definition_list', 'directive', 'div',
-  'figure_group', 'heading', 'include', 'line_block', 'list', 'paragraph', 'raw_block', 'section', 'table', 'thematic_break',
+  'figure_group', 'heading', 'include', 'line_block', 'list', 'paragraph', 'raw_block', 'section', 'snippet_use', 'table',
+  'thematic_break',
 ]
 const INLINES = [
   'abbreviation', 'autolink', 'caption_number', 'citation_group', 'code', 'comment', 'critic_comment', 'delete', 'emphasis',
   'footnote_ref', 'hard_break', 'highlight', 'image', 'inline_extension', 'inline_footnote', 'insert', 'link',
   'literal_inline', 'math', 'mention', 'non_breaking_space', 'raw_inline', 'ruby', 'small_caps', 'smart_punctuation',
-  'soft_break', 'span', 'strike', 'strong', 'subscript', 'superscript', 'symbol', 'tag', 'text', 'underline', 'xref',
+  'snippet_use', 'soft_break', 'span', 'strike', 'strong', 'subscript', 'superscript', 'symbol', 'tag', 'text', 'underline',
+  'xref',
 ]
 const TABLE_GROUPS = ['table_head', 'table_body', 'table_foot']
-const DOCUMENT_CHILDREN = [...BLOCKS, 'footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter']
+const DOCUMENT_CHILDREN = [
+  ...BLOCKS, 'footnote', 'link_reference_definition', 'abbreviation_def', 'snippet_definition', 'citation_definition', 'frontmatter',
+]
 const COMMON = ['type', 'attrs', 'data', 'pos', 'segments', 'metadata', 'dir', 'lang']
 
 /** What the `children` of a node type hold: `blocks`, `inlines`, `none`, or the member types by name. */
@@ -116,6 +120,8 @@ const RULES = new Map<string, Rule>([
   ['section', ['blocks', [], ['level']]],
   ['small_caps', ['inlines', [], []]],
   ['smart_punctuation', ['none', ['kind', 'source', 'glyph'], []]],
+  ['snippet_definition', ['inlines', ['name'], []]],
+  ['snippet_use', ['none', ['name', 'mode'], []]],
   ['soft_break', ['none', [], []]],
   ['span', ['inlines', [], []]],
   ['strike', ['inlines', [], []]],
@@ -157,6 +163,7 @@ const ENUMS = new Map<string, readonly string[]>([
   ['xref.display', ['number', 'page', 'title', 'full']],
   ['paragraph.role', ['image', 'math']],
   ['citation.mode', ['normal', 'author-in-text', 'suppress-author']],
+  ['snippet_use.mode', ['inline', 'block']],
   ['table_cell.scope', ['row', 'col', 'rowgroup', 'colgroup']],
   ['list.spacing', ['tight', 'loose']],
   ['table_cell.span', ['rowspan', 'colspan']],
@@ -1254,7 +1261,19 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
   checkFields(value, type, rule, path, current)
   checkDependencies(value, type, path, current)
   if (type === 'table_cell') checkCellReferences(value, path, walk)
+  if (type === 'snippet_use' || type === 'snippet_definition') checkSnippet(value, type, path, allowed)
   checkNodeBounds(value, path, walk)
+}
+
+/** C2-A-220: a definition holds no id. C2-A-221: the mode of a use matches its slot. */
+function checkSnippet(value: Fields, type: string, path: string, allowed: readonly string[]): void {
+  if (type === 'snippet_definition') {
+    const attrs = value['attrs']
+    if (isRecord(attrs) && attrs['id'] !== undefined) fail(`${path}/attrs/id`, 'a snippet definition holds no id')
+    return
+  }
+  const mode = allowed.includes('text') ? 'inline' : 'block'
+  if (value['mode'] !== mode) fail(`${path}/mode`, `a snippet use in a list of ${mode === 'inline' ? 'inline nodes' : 'blocks'} has the mode ${mode}`)
 }
 
 function checkCellReferences(value: Fields, path: string, walk: Walk): void {
