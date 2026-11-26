@@ -115,7 +115,7 @@ function copyAttrs(copy: Copy, value: Record<string, unknown>): Record<string, u
   delete attrs['id']
   if (Object.keys(attrs).length === 0) return undefined
   copy.bytes += opaqueBytes(attrs['classes'], false)
-  for (const pair of (attrs['keyValues'] ?? []) as [string, string][]) copy.bytes += utf8Length(pair[1])
+  for (const pair of (attrs['keyValues'] ?? []) as [string, string][]) copy.bytes += utf8Length(pair[0]) + utf8Length(pair[1])
   return attrs
 }
 
@@ -255,7 +255,7 @@ function shapeOf(pass: Pass, use: SnippetUseNode, definition: SnippetDefinitionN
 
 function wrapperBytes(use: SnippetUseNode, attrs: Attrs | undefined): number {
   let bytes = utf8Length(use.mode === 'block' ? 'paragraph' : 'span') + opaqueBytes(attrs?.classes, false)
-  for (const pair of attrs?.keyValues ?? []) bytes += utf8Length(pair[1])
+  for (const pair of attrs?.keyValues ?? []) bytes += utf8Length(pair[0]) + utf8Length(pair[1])
   return bytes
 }
 
@@ -332,7 +332,7 @@ function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): n
 
 function markNotes(pass: Pass, node: Node): void {
   // A link is marked too: its mark moves out of a use only where the link stands outside that copy (C2-H-215).
-  if (node.type === 'footnote_ref' || node.type === 'link') SNIPPET_MARKS.set(node, pass.current)
+  if (node.type === 'footnote_ref' || node.type === 'inline_footnote' || node.type === 'link') SNIPPET_MARKS.set(node, pass.current)
   forEachSlot(node, (nodes) => { for (const child of nodes) markNotes(pass, child) }, undefined, pass.extensions)
 }
 

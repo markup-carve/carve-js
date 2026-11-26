@@ -1,6 +1,7 @@
 // Named snippets beyond the clause cases: the marker parts and the carriers a document transform keeps.
 import { describe, expect, it } from 'vitest'
 import { type DocumentNode, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree } from '../src/index.ts'
+import { withSnippetLimits } from '../src/harness-limits.ts'
 
 describe('named snippets', () => {
   it('C2-B-236: a glued block after a quoted value holding } still reads', () => {
@@ -50,5 +51,20 @@ describe('named snippets', () => {
     expect(result.html).toContain('<span data-carve-snippet="1:inline:$x"><abbr title="Long">A</abbr></span>')
     expect(result.html).toContain('<template data-carve-snippets>{$x}: [A](/inner)</template>')
     expect(result.diagnostics).toEqual([])
+  })
+
+  it('C2-H-115, C2-H-215: authored snippet carriers are dropped, and a moved inline note carries its mark', () => {
+    const authored = renderWithDiagnostics('{data-carve-snippet="1:inline:$z"}\nP\n', { roundtrip: true })
+    expect(authored.html).toBe('<p>P</p>')
+    expect(authored.diagnostics.map((entry) => entry.code)).toEqual(['carrier-attribute-dropped'])
+    expect(render('{$s}: x^[note]\n\n[Go {{ $s }}](/u)\n', { roundtrip: true })).toContain('data-carve-snippet-mark="1"')
+  })
+
+  it('C2-N-094: a key of a key-value attribute counts with its value', () => {
+    // Two nodes, 64, and `text`, `X`, `paragraph`, `foo` and `v`, 18: 82 bytes.
+    const source = '{$x foo=v}: X\n\n{{ $x }}\n'
+    expect(withSnippetLimits({ derivedTextBytes: 82 }, () => render(source))).toBe('<p foo="v">X</p>')
+    const refused = withSnippetLimits({ derivedTextBytes: 81 }, () => renderWithDiagnostics(source))
+    expect(refused.diagnostics.map((entry) => entry.code)).toEqual(['derived-text-budget'])
   })
 })
