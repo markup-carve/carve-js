@@ -290,6 +290,7 @@ function snippetDefinitionNode(ctx: TreeContext, node: BlockNode): DocumentChild
 /** C2-B-237, C2-A-221: a block snippet use. */
 function snippetUseBlock(ctx: TreeContext, node: BlockNode): Block {
   ctx.snippets = true
+  ctx.snippetUses = true
   return { type: 'snippet_use', name: snippetUseName(ctx.src, node.spans![0]!), mode: 'block' } satisfies SnippetUseNode
 }
 
@@ -706,6 +707,8 @@ export interface ParseFacts {
   includes: readonly IncludeNode[]
   /** Whether the tree holds a snippet definition or use; without one no snippet stage runs (C2-N-090). */
   snippets: boolean
+  /** Whether the tree holds a snippet use; without one there is nothing to expand (C2-N-091). */
+  snippetUses: boolean
   /** C2-N-023, C2-N-054: the terms and the link keys the source was read with, which a file it includes reads too. */
   scope: OuterScope
 }
@@ -745,7 +748,7 @@ export function inlineContent(text: string): Inline[] {
       src: text, positions: false, inline, abbreviations: new Map(), abbreviationBytesLeft: 0,
       abbreviationCosts: new Map(), atoms: new Map(), markup: new Map(), resolvable: false,
       resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null, includes: [],
-      snippets: false,
+      snippets: false, snippetUses: false,
     }
     return contentNodes(ctx, [0, text.length], 0, 2, true, FLOW_PLAIN)
   } finally {
@@ -778,6 +781,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string, source
     },
     includes: ctx.includes,
     snippets: ctx.snippets,
+    snippetUses: ctx.snippetUses,
     scope: { abbreviations: ctx.abbreviations, linkKeys: ctx.inline.definitions },
   }
   return { document, facts }
@@ -818,7 +822,7 @@ export function buildSource(
       abbreviationBytesLeft: Math.max(DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR * sourceByteLength),
       abbreviationCosts: new Map(), atoms: new Map(), markup: new Map(),
       resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
-      sourceNames: collectSourceNames ? new Map() : null, includes: [], snippets: false,
+      sourceNames: collectSourceNames ? new Map() : null, includes: [], snippets: false, snippetUses: false,
     }
     return buildDocument(ctx, root, src, sourceByteLength)
   } finally {

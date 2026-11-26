@@ -203,4 +203,18 @@ describe('named snippets', () => {
     } }]
     expect(renderWithDocumentTransforms('{{ a.crv }}\n\n{{ $s }}\n', add, { includes }).html).toBe('<p><a href="/from-a">x</a></p>\n<p>e</p>')
   })
+
+  it('the staged path keeps the parse facts of a document that defines a snippet and uses none', () => {
+    const source = '{$x}: hi\n\n{#x}\n```js\nx\n```\n^ cap\n'
+    const staged = renderTree(resolveTree(parseTree(source), { sourceLines: true }))
+    expect(staged).toBe(render(source, { sourceLines: true }))
+    expect(staged).toContain('data-source-line="4"')
+  })
+
+  it('a document with an include and no snippet renders as it did, with and without a snippet in the include', () => {
+    const files: Record<string, string> = { 'a.crv': 'A *b*\n', 's.crv': '{$x}: Hi\n' }
+    const resolver = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    expect(render('See {{ a.crv }} here.\n\n{{ a.crv }}\n', { includes: { resolver } })).toBe('<p>See {{ a.crv }} here.</p>\n<p>A <strong>b</strong></p>')
+    expect(render('{{ s.crv }}\n\nSay {{ $x }}.\n', { includes: { resolver } })).toBe('<p>Say Hi.</p>')
+  })
 })

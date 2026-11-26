@@ -88,6 +88,8 @@ export interface TreeContext {
   includes: IncludeNode[]
   /** Set when a snippet definition or use is built, so a tree without one skips the snippet stages. */
   snippets: boolean
+  /** Set when a snippet use is built, so a tree without one skips the expansion. */
+  snippetUses: boolean
 }
 
 // How the breaks of a content are read. C2-A-068: every line end of a hard-break block is a hard break.
@@ -189,6 +191,7 @@ const LEAVES = new Map<number, LeafBuilder>([
   [MENTION, (_ctx, node) => ({ type: 'mention', target: node.value, kind: 'user' })],
   [SNIPPET_USE_INLINE, (ctx, node) => {
     ctx.snippets = true
+    ctx.snippetUses = true
     return { type: 'snippet_use', name: node.value, mode: 'inline' }
   }],
   [FOOTNOTE_REF, (_ctx, node) => ({ type: 'footnote_ref', key: foldLabel(node.value), namespace: 'footnote' })],
