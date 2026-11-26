@@ -8,6 +8,7 @@ import * as engine from '../src/index.ts'
 import { imgFence, imgFenceExtensions } from '../extensions/blocks/img-fence.ts'
 import { mermaid } from '../src/extensions/standard/fenced-render.ts'
 import { codeGroup } from '../src/extensions/standard/code-group.ts'
+import { listTable } from '../extensions/blocks/list-table.ts'
 import { importDocument } from '../import/src/index.ts'
 import { CATALOG } from '../lint/catalog.ts'
 import { corpusResolver, hexBytes } from './corpus.ts'
@@ -17,7 +18,7 @@ import { exportTo } from '../src/export/index.ts'
 
 const same = (a, b) => isDeepStrictEqual(a, b)
 // C2-X-059: the standard img renderer reports a failed SVG under C2-X-050.
-const standardRenderers = { ...imgFence().renderers, ...mermaid().renderers, ...codeGroup().renderers }
+const standardRenderers = { ...imgFence().renderers, ...mermaid().renderers, ...codeGroup().renderers, ...listTable().renderers }
 const catalogRows = Object.freeze(JSON.parse(readFileSync(new URL('../data/lint-rules.json', import.meta.url), 'utf8')).rules)
 const parseRows = Object.freeze(Object.fromEntries(catalogRows.filter(row => row.channel !== 'lint').map(row => [row.id, row])))
 const plain = value => JSON.parse(JSON.stringify(value))
@@ -34,6 +35,7 @@ function optionsOf(entry) {
     ...(extensions.includes('carve.imgFence.img') ? imgFenceExtensions : []),
     ...(extensions.includes('carve.fencedRender.mermaid') ? mermaid().extensions : []),
     ...(extensions.includes('carve.codeGroup') ? codeGroup().extensions : []),
+    ...(extensions.includes('carve.listTable') ? listTable().extensions : []),
     ...(extensions.includes('carve.details') ? [engine.detailsExtension] : []),
     ...(extensions.includes('carve.spoiler') ? [engine.spoilerExtension] : []),
     ...(extensions.includes('carve.spoilerBlock') ? [engine.spoilerBlockExtension] : []),
