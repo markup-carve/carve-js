@@ -112,6 +112,7 @@ const SCHEME_STRIP_RE =
   /[\x00-\x20\u007f-\u009f\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]/g
 
 function schemeIsSafe(url: string): boolean {
+  if (!url.includes(':')) return true
   const probe = url.replace(SCHEME_STRIP_RE, '')
   const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
   if (!m) return true // relative / fragment — safe
@@ -121,6 +122,7 @@ function schemeIsSafe(url: string): boolean {
 // Decode CSS escapes (`\72` → `r`, `\/` → `/`) so an escaped `url(` / `expression(`
 // cannot slip past the needle checks. Mirrors the core renderer's decodeCssEscapes.
 function decodeCssEscapes(value: string): string {
+  if (!value.includes('\\')) return value
   return value.replace(/\\([0-9a-f]{1,6}\s?|[\s\S])/gi, (_m, esc: string) => {
     if (/^[0-9a-f]/i.test(esc)) {
       const cp = Number.parseInt(esc.trim(), 16)
@@ -141,6 +143,7 @@ const NAMED_REFS: Record<string, string> = {
 // is normalized before a URL/scheme check. The browser decodes these back, so
 // the sanitizer must too. Used ONLY for validation, never for output.
 function decodeEntities(value: string): string {
+  if (!value.includes('&')) return value
   return value.replace(/&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/gi, (m, body: string) => {
     if (body[0] === '#') {
       const cp = body[1]?.toLowerCase() === 'x' ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10)
@@ -195,6 +198,7 @@ function refAttrUnsafe(value: string): boolean {
   for (const seg of decoded.split(';')) {
     const s = seg.trim()
     if (NONLOCAL_URL_RE.test(s)) return true
+    if (!s.includes(':') && !s.includes('/')) continue
     const probe = s.replace(SCHEME_STRIP_RE, '')
     if (ABSOLUTE_SCHEME_RE.test(probe)) return true
     // A leading `/` is a path reference: `//host/x` (protocol-relative) or
@@ -223,6 +227,7 @@ function valueHasExternalRef(value: string): boolean {
 // A numeric reference survives only when it names an XML 1.0 `Char`; any other
 // keeps no parser happy, so its `&` is escaped (carve#6764).
 function escapeAmp(s: string): string {
+  if (!s.includes('&')) return s
   return s.replace(/&(#\d+;|#x[0-9a-fA-F]+;|(?:amp|lt|gt|quot|apos);)?/g, (m, ref: string | undefined) => {
     if (ref === undefined) return '&amp;'
     if (ref[0] !== '#') return m
@@ -230,20 +235,25 @@ function escapeAmp(s: string): string {
     return isXmlChar(cp) ? m : `&amp;${ref}`
   })
 }
+const TEXT_SPECIAL_RE = /[&<>]/
+const ATTR_SPECIAL_RE = /[&"<>]/
 function isXmlChar(cp: number): boolean {
   return cp === 0x9 || cp === 0xa || cp === 0xd || (cp >= 0x20 && cp <= 0xd7ff) ||
     (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff)
 }
 function escapeText(s: string): string {
+  if (!TEXT_SPECIAL_RE.test(s)) return s
   return escapeAmp(s).replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 function escapeAttr(s: string): string {
+  if (!ATTR_SPECIAL_RE.test(s)) return s
   return escapeAmp(s).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function tagAllowed(name: string, opts: SanitizeSvgOptions): boolean {
+  if (ALLOWED_TAGS.has(name)) return true
   const n = name.toLowerCase()
-  if (ALLOWED_TAGS.has(name) || ALLOWED_TAGS.has(n)) return true
+  if (ALLOWED_TAGS.has(n)) return true
   if (opts.allowLinks && LINK_TAGS.has(n)) return true
   // Note: the `<style>` *element* is never allowed — its text can carry
   // `@import`/`url()` that no attribute scrub would catch. `allowStyle` governs
@@ -258,49 +268,31 @@ interface ParsedAttr {
   value: string | null
 }
 
+// One attribute: a name, then an optional `=` and a double-quoted, single-quoted or bare value.
+// A quoted value with no closing quote runs to the end of the tag.
+const ATTR_RE = /\s*([A-Za-z_:][\w:.-]*)\s*(?:=\s*(?:"([^"]*)"?|'([^']*)'?|([^\s>]*)))?/y
+const SPACE_RUN_RE = /\s*/y
+
 function parseAttrs(raw: string): ParsedAttr[] {
   const out: ParsedAttr[] = []
   let at = 0
   while (at < raw.length) {
-    const read = readOneAttr(raw, at)
-    if (read.attr !== null) out.push(read.attr)
-    at = read.next
+    ATTR_RE.lastIndex = at
+    const m = ATTR_RE.exec(raw)
+    if (m === null) {
+      // No name here: step over one character.
+      SPACE_RUN_RE.lastIndex = at
+      SPACE_RUN_RE.test(raw)
+      at = SPACE_RUN_RE.lastIndex + 1
+      continue
+    }
+    out.push({ name: m[1]!, value: m[2] ?? m[3] ?? m[4] ?? null })
+    at = ATTR_RE.lastIndex
   }
   return out
 }
 
-function skipSpace(raw: string, start: number): number {
-  let at = start
-  while (/\s/.test(raw[at] ?? '')) at++
-  return at
-}
-
-function readOneAttr(raw: string, start: number): { attr: ParsedAttr | null, next: number } {
-  let at = skipSpace(raw, start)
-  const name = /^[A-Za-z_:][\w:.-]*/.exec(raw.slice(at))?.[0]
-  if (name === undefined) return { attr: null, next: at + 1 }
-  at = skipSpace(raw, at + name.length)
-  if (raw[at] !== '=') return { attr: { name, value: null }, next: at }
-  at = skipSpace(raw, at + 1)
-  const char = raw[at] ?? ''
-  const quote = char === '"' || char === "'" ? char : null
-  if (quote !== null) at++
-  const end = readAttrEnd(raw, at, quote)
-  return { attr: { name, value: raw.slice(at, end) }, next: end + (quote === null ? 0 : 1) }
-}
-
-function readAttrEnd(raw: string, start: number, quote: string | null): number {
-  let at = start
-  while (at < raw.length) {
-    const char = raw[at]
-    if (quote === null ? /[\s>]/.test(char ?? '') : char === quote) break
-    at++
-  }
-  return at
-}
-
-function sanitizeAttribute(name: string, value: string | null, opts: SanitizeSvgOptions, allowExternalHref: boolean): string {
-  const n = name.toLowerCase()
+function sanitizeAttribute(name: string, n: string, value: string | null, opts: SanitizeSvgOptions, allowExternalHref: boolean): string {
   // XML has no valueless attributes, and none on the allowlist is boolean (carve#6774).
   if (value === null || n.startsWith('on')) return ''
   // Namespaces in XML forbids undeclaring a prefix (carve#6779).
@@ -322,20 +314,22 @@ function sanitizeUrlAttribute(name: string, value: string, opts: SanitizeSvgOpti
 const ANIMATION_VALUE_ATTRS = new Set(['values', 'from', 'to', 'by'])
 
 function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string, isRoot: boolean): string {
-  const t = tag.toLowerCase()
-  const allowExternalHref = (opts.allowLinks === true && t === 'a') || (opts.allowExternalImages === true && t === 'image')
+  const allowExternalHref = (opts.allowLinks === true && tag.toLowerCase() === 'a') ||
+    (opts.allowExternalImages === true && tag.toLowerCase() === 'image')
   const attrs = parseAttrs(raw)
   const hrefAnimation = animatesHref(attrs)
   let out = ''
-  const seen = new Set<string>()
+  const seen = attrs.length > 1 ? new Set<string>() : null
   for (const { name, value } of attrs) {
-    if (seen.has(name)) continue
-    seen.add(name)
+    if (seen !== null) {
+      if (seen.has(name)) continue
+      seen.add(name)
+    }
     const n = name.toLowerCase()
     // carve#6755: the root's own xmlns is replaced by name, never by searching the written attributes.
     if (isRoot && n === 'xmlns') continue
     if (hrefAnimation && value !== null && ANIMATION_VALUE_ATTRS.has(n) && !localRefs(value)) continue
-    out += sanitizeAttribute(name, value, opts, allowExternalHref)
+    out += sanitizeAttribute(name, n, value, opts, allowExternalHref)
   }
   return out
 }
@@ -343,7 +337,7 @@ function sanitizeAttrs(raw: string, opts: SanitizeSvgOptions, tag: string, isRoo
 // carve#6761: an animation of `href` may only write `#id` entries, like the `href` it changes.
 function animatesHref(attrs: ParsedAttr[]): boolean {
   return attrs.some(({ name, value }) => {
-    if (name.toLowerCase() !== 'attributename' || value === null) return false
+    if (name.length !== 13 || value === null || name.toLowerCase() !== 'attributename') return false
     const target = normalizeForCheck(value).trim().toLowerCase()
     return target === 'href' || target === 'xlink:href'
   })
@@ -356,18 +350,23 @@ function localRefs(value: string): boolean {
   })
 }
 
+const TAG_STOP_RE = /["'<>]/g
+
 function tokenEnd(source: string, start: number): number {
-  if (source.startsWith('<!--', start)) return markerEnd(source, '-->', start + 4)
-  if (source.startsWith('<![CDATA[', start)) return markerEnd(source, ']]>', start + 9)
-  if (source.startsWith('<?', start)) return markerEnd(source, '?>', start + 2)
-  let quote: string | null = null
-  for (let at = start + 1; at < source.length; at++) {
-    const char = source[at]
-    if (quote !== null) {
-      if (char === quote) quote = null
-    } else if (char === '"' || char === "'") quote = char
-    else if (char === '>') return at + 1
-    else if (char === '<') return -1
+  const next = source[start + 1]
+  if (next === '!' || next === '?') {
+    if (source.startsWith('<!--', start)) return markerEnd(source, '-->', start + 4)
+    if (source.startsWith('<![CDATA[', start)) return markerEnd(source, ']]>', start + 9)
+    if (next === '?') return markerEnd(source, '?>', start + 2)
+  }
+  TAG_STOP_RE.lastIndex = start + 1
+  for (let m = TAG_STOP_RE.exec(source); m !== null; m = TAG_STOP_RE.exec(source)) {
+    const char = m[0]
+    if (char === '>') return m.index + 1
+    if (char === '<') return -1
+    const close = source.indexOf(char, m.index + 1)
+    if (close < 0) return -1
+    TAG_STOP_RE.lastIndex = close + 1
   }
   return -1
 }
@@ -422,8 +421,10 @@ function markRoot(state: SvgState, selfClose: boolean): void {
 }
 
 function consumeToken(token: string, state: SvgState, opts: SanitizeSvgOptions): boolean {
-  const closing = /^<\/([A-Za-z][\w:.-]*)\s*>$/.exec(token)
-  if (closing?.[1] !== undefined) return closeTag(closing[1], state)
+  if (token[1] === '/') {
+    const closing = /^<\/([A-Za-z][\w:.-]*)\s*>$/.exec(token)
+    return closing?.[1] === undefined || closeTag(closing[1], state)
+  }
   const name = /^<([A-Za-z][\w:.-]*)/.exec(token)?.[1]
   if (name === undefined) return true
   const selfClose = token.endsWith('/>')
@@ -431,8 +432,28 @@ function consumeToken(token: string, state: SvgState, opts: SanitizeSvgOptions):
   return openTag(name, raw, selfClose, state, opts)
 }
 
+// A plain closing or opening tag, read in one step: the same token tokenEnd and consumeToken find.
+// Name and body sit in lookaheads so a failed match never backtracks into them (no quadratic tail).
+const PLAIN_TAG_RE = /<(?:\/(?=([A-Za-z][\w:.-]*))\1\s*|(?=([A-Za-z][\w:.-]*))\2(?=((?:"[^"]*"|'[^']*'|[^"'<>])*))\3)>/y
+
+// The cursor after the tag at `start`, or -1 when the source is not well-formed.
+function consumeTag(src: string, start: number, state: SvgState, opts: SanitizeSvgOptions): number {
+  PLAIN_TAG_RE.lastIndex = start
+  const plain = PLAIN_TAG_RE.exec(src)
+  if (plain !== null) {
+    const end = PLAIN_TAG_RE.lastIndex
+    if (plain[1] !== undefined) return closeTag(plain[1], state) ? end : -1
+    const raw = plain[3]!
+    const selfClose = raw.endsWith('/')
+    return openTag(plain[2]!, selfClose ? raw.slice(0, -1) : raw, selfClose, state, opts) ? end : -1
+  }
+  const end = tokenEnd(src, start)
+  if (end < 0) return -1
+  return consumeToken(src.slice(start, end), state, opts) ? end : -1
+}
+
 function consumeText(src: string, start: number, end: number, state: SvgState): boolean {
-  if (end <= start) return true
+  if (end <= start || (state.sawRoot && state.dropStack.length > 0)) return true
   const between = src.slice(start, end)
   if (!state.sawRoot) return between.trim() === ''
   if (state.dropStack.length === 0) state.out.push(escapeText(between))
@@ -442,23 +463,23 @@ function consumeText(src: string, start: number, end: number, state: SvgState): 
 // Raw characters outside the XML 1.0 `Char` production: C0 controls other than tab,
 // LF and CR, U+FFFE, U+FFFF and unpaired surrogates (carve#6764). Dropped from the
 // source before any check, so a check never sees a value the output does not hold.
+// Every character NON_XML_CHAR_RE can drop, paired surrogates included: absent, the replace is a no-op.
+const NON_XML_CANDIDATE_RE = /[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]/
 const NON_XML_CHAR_RE = /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g
 
 /**
  * Sanitize an SVG source string. See the module docblock for the guarantees.
  */
 export function sanitizeSvg(source: string, opts: SanitizeSvgOptions = {}): SanitizeResult {
-  const src = source.replace(NON_XML_CHAR_RE, '').trim()
+  const src = (NON_XML_CANDIDATE_RE.test(source) ? source.replace(NON_XML_CHAR_RE, '') : source).trim()
   let cursor = 0
   const state: SvgState = { out: [], dropStack: [], kept: [], sawRoot: false, rootSelfClosed: false }
   while (cursor < src.length) {
     const start = src.indexOf('<', cursor)
     if (start < 0) break
     if (!consumeText(src, cursor, start, state)) return { svg: '', ok: false }
-    const end = tokenEnd(src, start)
-    if (end < 0) return { svg: '', ok: false }
-    if (!consumeToken(src.slice(start, end), state, opts)) return { svg: '', ok: false }
-    cursor = end
+    cursor = consumeTag(src, start, state, opts)
+    if (cursor < 0) return { svg: '', ok: false }
   }
   if (!consumeText(src, cursor, src.length, state)) return { svg: '', ok: false }
   if (!state.sawRoot || state.kept.length !== 0 || state.dropStack.length !== 0) return { svg: '', ok: false }

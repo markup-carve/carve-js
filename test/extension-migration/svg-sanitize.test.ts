@@ -304,3 +304,16 @@ describe('sanitizeSvg — idempotence', () => {
     expect(twice).toBe(once)
   })
 })
+
+describe('sanitizeSvg — linear time', () => {
+  // A backtracking tag scan is quadratic on these: 200k characters would take minutes.
+  it.each([
+    ['an unterminated tag name', `<svg><${'a'.repeat(200_000)}`],
+    ['an unterminated tag with an attribute', `<svg><a${'b'.repeat(200_000)} x="1"`],
+    ['an unterminated closing tag', `<svg></${'g'.repeat(200_000)}`],
+  ])('rejects %s quickly', (_name, src) => {
+    const start = performance.now()
+    expect(sanitizeSvg(src).ok).toBe(false)
+    expect(performance.now() - start).toBeLessThan(1000)
+  })
+})
