@@ -617,11 +617,12 @@ export function attributes(r: Render, node: Node | null, parts: TagParts): strin
   addAuthored(r, list, node, parts)
   for (const [name, value] of parts.generated ?? []) list.add(name, value)
   if (line !== null) list.text += ` data-source-line="${line}"`
-  return list.text + renderCarriers(r, node)
+  return list.text + renderCarriers(r, node, parts.origin)
 }
 
-function renderCarriers(r: Render, node: Node | null): string {
-  return r.snippets ? snippetCarriers(node) : ''
+// The carriers sit on the authored node; `node` may be a copy with keys taken out.
+function renderCarriers(r: Render, node: Node | null, origin: Node | undefined): string {
+  return r.snippets && node !== null ? snippetCarriers(origin ?? node) : ''
 }
 
 /** C2-H-215: the carriers of an expanded snippet use, or nothing. */
