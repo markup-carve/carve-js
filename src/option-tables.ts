@@ -109,8 +109,8 @@ export const COUNT_MAXIMA: ReadonlyMap<string, number> = new Map([
 /** C2-H-204: the codes of the render-loss channel, the values `allowLosses` takes. */
 export const RENDER_LOSS_CODES: readonly string[] = [
   "carrier-attribute-dropped", "derived-text-budget", "destination-denied", "extension-fallback-rendered", "extension-renderer-failed",
-  "extension-transform-failed", "field-unspellable", "heading-shift-above-6", "import-attribute-dropped", "import-carrier-ignored",
-  "import-destination-denied", "import-element-dropped", "import-element-mapped", "import-structure-repaired",
+  "extension-transform-failed", "field-unspellable", "heading-shift-above-6", "image-alt-unknown", "import-attribute-dropped",
+  "import-carrier-ignored", "import-destination-denied", "import-element-dropped", "import-element-mapped", "import-structure-repaired",
   "import-whitespace-normalized", "include-expanded-roundtrip", "include-unresolved", "profile-construct-degraded", "raw-format-dropped",
   "structure-unspellable", "writer-refused",
 ]

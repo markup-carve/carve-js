@@ -76,7 +76,7 @@ import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 import { corpusResolver } from '../scripts/corpus.ts'
 import { HELD } from '../scripts/corpus-held.ts'
-import { tabsExtensions } from '../src/index.ts'
+import { registration } from '../cli/standard-extensions.ts'
 
 describe('C2-W-107 parsed leaf ranges', () => {
   for (const [id, trigger] of [
@@ -249,7 +249,7 @@ const CLAUSE_CASES = JSON.parse(fs.readFileSync(new URL('../data/conformance/cla
 
 function clauseOptions(entry) {
   const options = { ...entry.options }
-  if (options.extensions?.includes('carve.tabs')) options.extensions = tabsExtensions
+  if (options.extensions !== undefined) options.extensions = registration(options.extensions, new Map(), false).extensions
   if (entry.files) options.includes = { resolver: corpusResolver(entry.files), ...options.includes }
   return options
 }

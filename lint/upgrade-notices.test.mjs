@@ -2,16 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { lint } from './lint.ts'
 import { CATALOG } from './catalog.ts'
 
-// carve#6508 took description-term-multi-line back to the default on.
+// carve#6508 took description-term-multi-line back to the default on; carve#6499 took the djot- rules to the default off.
 const NOTICES = ['blank-reference-label', 'code-span-padding-kept', 'comment-fence-closer-with-text',
   'continuation-reading-changed',
   'deprecated-bare-highlight', 'deprecated-bare-strike', 'deprecated-bare-underline', 'deprecated-cell-alignment',
   'deprecated-continuation-marker',
   'deprecated-indented-line-under-heading', 'deprecated-loose-attribute', 'deprecated-separator-row',
   'deprecated-spaced-thematic-break', 'deprecated-substitution-arrow', 'deprecated-table-attribute',
-  'djot-definition-list', 'djot-emphasis-underscore', 'djot-emphasis-underscore-braced', 'djot-heading-continuation',
-  'djot-intraword-underscore', 'djot-ordered-marker', 'djot-plus-bullet', 'djot-subscript-tilde',
-  'djot-subscript-tilde-braced', 'djot-superscript-caret', 'djot-tag-mention', 'djot-typography-sign',
   'sigil-after-letter', 'thematic-break-spelling', 'tight-list-item-with-blank-line']
 const HEADING = '# a\n b\n'
 const reported = (source, options = {}) => lint(source, options)

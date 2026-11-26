@@ -366,6 +366,7 @@ import { columnOf } from '../src/layout-lines.ts'
 import { type ModelBlock, type ModelInline, type ModelLine } from './data-model.ts'
 import { linearPattern, type Pattern } from './linear-patterns.ts'
 import { type LintContext } from './types.ts'
+import { idExtensions } from './extension-ids.ts'
 
 let groups: Record<string, [number, number]> | undefined
 let base = 0
@@ -623,7 +624,7 @@ function percentDecode(text: string): string {
 }
 
 function runValue(context: LintContext, name: string): unknown {
-  return name === 'extensions' ? context.options.extensions ?? [] : undefined
+  return name === 'id_extensions' ? idExtensions(context.options.extensions) : undefined
 }
 
 // C2-W-141, C2-W-150: the offset of a text in a text, or the index of an item in a list; -1 where there is none.

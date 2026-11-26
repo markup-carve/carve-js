@@ -1,59 +1,92 @@
 // What the corpus runner holds: the example and clause case fields whose stated result departs from its clause, and the
 // field each refused tree is refused at.
 
+// Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
+const TABLE_HEAD = 'carve#6663 a head of data cells (C2-M-037, C2-B-186; spec carve#6816)'
+const TABLE_FOOT = 'carve#6664 a table of only a foot (C2-B-187, C2-W-136; spec carve#6816)'
+const UNSCOPED_TH = 'carve#6623 an unscoped th of a leading th row (C2-M-037; spec carve#6816)'
+const COL_WIDTH = 'carve-js#5574 the width a col style gives (C2-M-041; spec carve#6816)'
+const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute beside the key (C2-M-047; spec carve#6814)'
+const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
+const UNKNOWN_ALT = 'carve#6804 an image of unknown alt text (C2-A-115, C2-W-011; spec carve#6810, carve#6820)'
+const LINE_OPTIONS = 'carve#6791 the line options of a captioned code block stay on its pre (C2-H-211; spec carve#6803)'
+const METADATA_FIELDS = 'carve#3598 root metadata fields beside a frontmatter node (C2-A-193, C2-W-011; spec carve#6815)'
+const REGION_MARKER = 'carve#6727 a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815)'
+const DJOT_GATE = 'carve#6499 the djot- rules default to off (C2-T-031, C2-T-049; spec carve#6824)'
+const QUOTE_LOCALE = 'carve-rs#4838 a smart quotes locale outside its row falls back (C2-X-075; spec carve#6824)'
+const BINARY64 = 'carve#6099 a tree number is a binary64 value (C2-A-219; spec carve#6819)'
+const ESCAPE_ROUND_KEYS = 'carve#6813 a key the escape rounds cannot spell is no loss where the output reads back'
+  + ' (C2-W-075; spec carve#6825)'
+
 /**
  * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
  * clause, or a ruling of the pin not yet implemented here, each with its ticket. The field must keep failing until it is
  * fixed, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  // Rulings the spec pin carries that carve-js does not implement yet, each with its ticket.
-  ['syntax-blocks-219', { fields: ['html', 'tree'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-501', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#3598: not in carve-js yet' }],
-  ['CC-2063', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#6623: not in carve-js yet' }],
-  ['CC-2068', { fields: ['html', 'children'], fix: 'carve#6664: not in carve-js yet' }],
-  ['CC-2100', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2101', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2102', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2103', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2206', { fields: ['threw:CarveTreeError'], fix: 'carve#6804: not in carve-js yet' }],
-  ['CC-2207', { fields: ['children', 'diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#6804: not in carve-js yet' }],
-  ['CC-2208', { fields: ['children', 'diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#6804: not in carve-js yet' }],
-  ['CC-2210', { fields: ['threw:CarveTreeError'], fix: 'carve#6804: not in carve-js yet' }],
-  ['CC-2213', { fields: ['threw:CarveTreeError'], fix: 'carve#6804: not in carve-js yet' }],
-  ['CC-2214', { fields: ['status', 'stderrCategory'], fix: 'carve#6804: not in carve-js yet' }],
-  ['CC-2218', { fields: ['html'], fix: 'carve#6791: not in carve-js yet' }],
-  ['CC-2227', { fields: ['html'], fix: 'carve#6791: not in carve-js yet' }],
-  ['CC-2228', { fields: ['html'], fix: 'carve#6791: not in carve-js yet' }],
-  ['CC-2230', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: 'carve#6605: not in carve-js yet' }],
-  ['CC-2231', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: 'carve#6605: not in carve-js yet' }],
-  ['CC-2232', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: 'carve#6605: not in carve-js yet' }],
-  ['CC-2233', { fields: ['children', 'carve', 'diagnosticsComplete'], fix: 'carve#6605: not in carve-js yet' }],
-  ['CC-2234', { fields: ['children', 'carve'], fix: 'carve#6235: not in carve-js yet' }],
-  ['CC-2235', { fields: ['diagnostics:import-element-dropped', 'diagnosticsComplete'], fix: 'carve#6235: not in carve-js yet' }],
-  ['CC-2236', { fields: ['children', 'carve'], fix: 'carve#6235: not in carve-js yet' }],
-  ['CC-2237', { fields: ['html'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2238', { fields: ['html'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2239', { fields: ['html'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2240', { fields: ['html'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2241', { fields: ['diagnostics:table-row-count-clamped'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2242', { fields: ['carve'], fix: 'carve#6663: not in carve-js yet' }],
-  ['CC-2244', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6664: not in carve-js yet' }],
-  ['CC-2245', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6664: not in carve-js yet' }],
-  ['CC-2246', { fields: ['html'], fix: 'carve#6664: not in carve-js yet' }],
-  ['CC-2247', { fields: ['notReported:table-row-count-clamped'], fix: 'carve#6664: not in carve-js yet' }],
-  ['CC-2248', { fields: ['html'], fix: 'carve#6664: not in carve-js yet' }],
-  ['CC-2249', { fields: ['carve'], fix: 'carve#6664: not in carve-js yet' }],
-  ['CC-2250', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#6623: not in carve-js yet' }],
-  ['CC-2251', { fields: ['status', 'stderrCategory'], fix: 'carve#6623: not in carve-js yet' }],
-  ['CC-2252', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
-  ['CC-2253', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
-  ['CC-2254', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
-  ['CC-2255', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
-  ['CC-2256', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
-  ['CC-2265', { fields: ['carve'], fix: 'carve#6727: not in carve-js yet' }],
-  ['CC-2266', { fields: ['carve'], fix: 'carve#6727: not in carve-js yet' }],
-  ['CC-2267', { fields: ['carve'], fix: 'carve#6727: not in carve-js yet' }],
+  ['CC-2100', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_HEAD }],
+  ['CC-2101', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_HEAD }],
+  ['CC-2102', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_HEAD }],
+  ['CC-2103', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_HEAD }],
+  ['CC-2237', { fields: ['html'], fix: TABLE_HEAD }],
+  ['CC-2238', { fields: ['html'], fix: TABLE_HEAD }],
+  ['CC-2239', { fields: ['html'], fix: TABLE_HEAD }],
+  ['CC-2240', { fields: ['html'], fix: TABLE_HEAD }],
+  ['CC-2241', { fields: ['diagnostics:table-row-count-clamped'], fix: TABLE_HEAD }],
+  ['CC-2242', { fields: ['carve'], fix: TABLE_HEAD }],
+  ['syntax-blocks-219', { fields: ['html', 'tree'], fix: TABLE_HEAD }],
+  ['CC-2068', { fields: ['html', 'children'], fix: TABLE_FOOT }],
+  ['CC-2244', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_FOOT }],
+  ['CC-2245', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_FOOT }],
+  ['CC-2246', { fields: ['html'], fix: TABLE_FOOT }],
+  ['CC-2247', { fields: ['notReported:table-row-count-clamped'], fix: TABLE_FOOT }],
+  ['CC-2248', { fields: ['html'], fix: TABLE_FOOT }],
+  ['CC-2249', { fields: ['carve'], fix: TABLE_FOOT }],
+  ['CC-2063', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: UNSCOPED_TH }],
+  ['CC-2250', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: UNSCOPED_TH }],
+  ['CC-2251', { fields: ['status', 'stderrCategory'], fix: UNSCOPED_TH }],
+  ['CC-2252', { fields: ['carve'], fix: COL_WIDTH }],
+  ['CC-2253', { fields: ['carve'], fix: COL_WIDTH }],
+  ['CC-2254', { fields: ['carve'], fix: COL_WIDTH }],
+  ['CC-2255', { fields: ['carve'], fix: COL_WIDTH }],
+  ['CC-2256', { fields: ['carve'], fix: COL_WIDTH }],
+  ['CC-2230', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
+  ['CC-2231', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
+  ['CC-2232', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
+  ['CC-2233', { fields: ['children', 'carve', 'diagnosticsComplete'], fix: KEY_ATTRIBUTES }],
+  ['CC-2234', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
+  ['CC-2235', { fields: ['diagnostics:import-element-dropped', 'diagnosticsComplete'], fix: NOTE_COMMENTS }],
+  ['CC-2236', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
+  ['CC-2206', { fields: ['threw:CarveTreeError'], fix: UNKNOWN_ALT }],
+  ['CC-2207', { fields: ['children', 'diagnostics:image-alt-unknown', 'diagnosticsComplete'], fix: UNKNOWN_ALT }],
+  ['CC-2208', { fields: ['children'], fix: UNKNOWN_ALT }],
+  ['CC-2210', { fields: ['threw:CarveTreeError'], fix: UNKNOWN_ALT }],
+  ['CC-2213', { fields: ['threw:CarveTreeError'], fix: UNKNOWN_ALT }],
+  ['CC-2214', { fields: ['stderrDiagnostics'], fix: UNKNOWN_ALT }],
+  ['CC-2292', { fields: ['status', 'stdout', 'stderrCategory'], fix: UNKNOWN_ALT }],
+  ['CC-2293', { fields: ['diagnosticsComplete'], fix: UNKNOWN_ALT }],
+  ['CC-2218', { fields: ['html'], fix: LINE_OPTIONS }],
+  ['CC-2227', { fields: ['html'], fix: LINE_OPTIONS }],
+  ['CC-2228', { fields: ['html'], fix: LINE_OPTIONS }],
+  ['CC-501', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: METADATA_FIELDS }],
+  ['CC-2265', { fields: ['carve'], fix: REGION_MARKER }],
+  ['CC-2266', { fields: ['carve'], fix: REGION_MARKER }],
+  ['CC-2267', { fields: ['carve'], fix: REGION_MARKER }],
+  ['CC-1354', { fields: ['status'], fix: DJOT_GATE }],
+  ['CC-2148', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
+  ['CC-2298', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
+  ['CC-2299', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
+  ['CC-2313', { fields: ['refusal'], fix: BINARY64 }],
+  ['CC-2314', { fields: ['refusal'], fix: BINARY64 }],
+  ['CC-2315', { fields: ['refusal'], fix: BINARY64 }],
+  ['CC-2316', { fields: ['refusal'], fix: BINARY64 }],
+  ['CC-2318', { fields: ['refusal'], fix: BINARY64 }],
+  ['CC-2319', { fields: ['refusal'], fix: BINARY64 }],
+  ['CC-2320', { fields: ['threw:TypeError'], fix: BINARY64 }],
+  ['CC-2321', { fields: ['threw:TypeError'], fix: BINARY64 }],
+  ['CC-2322', { fields: ['threw:TypeError'], fix: BINARY64 }],
+  ['CC-2323', { fields: ['diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
+  ['CC-2324', { fields: ['carve', 'diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
@@ -106,5 +139,5 @@ export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
 
 /** The supplied trees of trees/nodes.json the reader still refuses, each with its ticket; one that is accepted is a stale hold. */
 export const HELD_SUPPLIED: ReadonlyMap<string, string> = new Map([
-  ['image-alt-unknown', 'carve#6804: not in carve-js yet'],
+  ['image-alt-unknown', UNKNOWN_ALT],
 ])
