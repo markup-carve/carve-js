@@ -67,4 +67,21 @@ describe('named snippets', () => {
     const refused = withSnippetLimits({ derivedTextBytes: 81 }, () => renderWithDiagnostics(source))
     expect(refused.diagnostics.map((entry) => entry.code)).toEqual(['derived-text-budget'])
   })
+
+  it('C2-N-092: a copy used before a nested include resolves in the scopes of the includes around its file', () => {
+    const files: Record<string, string> = { 'a.crv': '[k]: /from-a\n\n{{ b.crv }}\n', 'b.crv': '{$s}: [x][k]\n' }
+    const includes = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    expect(render('{{ $s }}\n\n{{ a.crv }}\n', { includes })).toBe('<p><a href="/from-a">x</a></p>')
+  })
+
+  it('C2-N-092, C2-N-093: a node in the metadata of a copy is copied without its position and counted', () => {
+    const pos = { startLine: 1, endLine: 1, startColumn: 1, endColumn: 2, startOffset: 0, endOffset: 1 }
+    const tree = { type: 'document', astVersion: '2.0', children: [
+      { type: 'snippet_definition', name: 'x', children: [
+        { type: 'span', metadata: { title: [{ type: 'text', value: 'T', pos }] }, children: [{ type: 'text', value: 'X' }] }] },
+      { type: 'paragraph', children: [{ type: 'snippet_use', name: 'x', mode: 'inline' }] }] } as unknown as DocumentNode
+    expect(JSON.stringify(resolveTree(tree).document.children[1])).not.toContain('"pos"')
+    expect(withSnippetLimits({ snippetNodes: 2 }, () => renderTree(resolveTree(tree)))).toBe('<p>{{ $x }}</p>')
+    expect(withSnippetLimits({ snippetNodes: 3 }, () => renderTree(resolveTree(tree)))).toBe('<p><span>X</span></p>')
+  })
 })

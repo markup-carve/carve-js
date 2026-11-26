@@ -87,6 +87,9 @@ interface Walk {
   scope: Scope
   /** The scope of each reference and note body that stands in an included file. */
   scopes: Map<Node, Scope>
+  document: DocumentNode
+  /** The include around each include, found once a snippet copy needs the scope of a file not yet visited. */
+  includeParents: Map<IncludeNode, IncludeNode | null> | null
   headings: HeadingNode[]
   references: Reference[]
   xrefs: XrefNode[]
@@ -400,12 +403,35 @@ function visitCopy(walk: Walk, node: Node, parent: Node | null, origin: IncludeN
   const saved = walk.scope
   let top = saved
   while (top.outer !== null) top = top.outer
-  walk.scope = origin === null ? top : fileScope(walk, origin, top)
+  walk.scope = origin === null ? top : copyScope(walk, origin, top)
   try {
     visitNode(walk, node, parent)
   } finally {
     walk.scope = saved
   }
+}
+
+/** The scope of the file `include` reads, inside the scopes of the includes around it, before the walk reaches them. */
+function copyScope(walk: Walk, include: IncludeNode, top: Scope): Scope {
+  const known = walk.scopes.get(include)
+  if (known !== undefined) return known
+  const parent = (walk.includeParents ??= includeParents(walk.document)).get(include) ?? null
+  return fileScope(walk, include, parent === null ? top : copyScope(walk, parent, top))
+}
+
+function includeParents(document: DocumentNode): Map<IncludeNode, IncludeNode | null> {
+  const parents = new Map<IncludeNode, IncludeNode | null>()
+  const pending: [Node, IncludeNode | null][] = [[document, null]]
+  for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
+    const [node, around] = entry
+    let inner = around
+    if (node.type === 'include') {
+      parents.set(node, around)
+      inner = node
+    }
+    forEachSlot(node, (nodes) => { for (const child of nodes) pending.push([child, inner]) }, undefined, document.extensions)
+  }
+  return parents
 }
 
 function visitNode(walk: Walk, node: Node, parent: Node | null): void {
@@ -842,6 +868,7 @@ function newWalk(
   return {
     declarations: document.extensions ?? [], resolution, footnotes,
     scope: { outer: null, definitions: resolution.definitions, footnotes, abbreviations: new Map() }, scopes: new Map(),
+    document, includeParents: null,
     headings: [], references: [], xrefs: [], captions: [], identified: [], unwrittenIds: [], noteRefs: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
     markupLine: facts?.markupLine ?? null, renderers, admitted, rendered: false, extensionDepth: 0,

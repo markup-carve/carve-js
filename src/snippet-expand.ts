@@ -132,6 +132,23 @@ function copyData(copy: Copy, value: Record<string, unknown>): Record<string, un
   return structuredClone(data)
 }
 
+/**
+ * C2-N-094: metadata is opaque, its keys counted, except that a node it holds, as a title, is a node of the copy
+ * (C2-N-092): copied as one, without its position, and counted.
+ */
+function copyMetadata(copy: Copy, value: unknown, clone: (node: Node) => Node): unknown {
+  if (isNode(value)) return clone(value)
+  if (Array.isArray(value)) return value.map((item) => copyMetadata(copy, item, clone))
+  if (typeof value === 'string') copy.bytes += utf8Length(value)
+  if (value === null || typeof value !== 'object') return value
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value)) {
+    copy.bytes += utf8Length(key)
+    out[key] = copyMetadata(copy, item, clone)
+  }
+  return out
+}
+
 function isNode(value: unknown): value is Node {
   return typeof value === 'object' && value !== null && 'type' in value
 }
@@ -140,6 +157,7 @@ function isNode(value: unknown): value is Node {
 function copyField(copy: Copy, field: string, value: unknown, clone: (node: Node) => Node): unknown {
   if (field === 'attrs') return copyAttrs(copy, value as Record<string, unknown>)
   if (field === 'data') return copyData(copy, value as Record<string, unknown>)
+  if (field === 'metadata') return copyMetadata(copy, value, clone)
   // The slots of an extension node hold nodes of the copy; the names of the slots are no string of the tree.
   if (field === 'slots') {
     const slots = value as Record<string, Node[]>
