@@ -6,7 +6,6 @@ import type { Holds } from './holds.ts'
 // Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
 const TABLE_HEAD = 'carve#6663 a head of data cells (C2-M-037, C2-B-186; spec carve#6816)'
 const TABLE_FOOT = 'carve#6664 a table of only a foot (C2-B-187, C2-W-136; spec carve#6816)'
-const UNSCOPED_TH = 'carve#6623 an unscoped th of a leading th row (C2-M-037; spec carve#6816)'
 const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute beside the key (C2-M-047; spec carve#6814)'
 const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
 const DJOT_STATUS = 'carve#6833 CC-1354 keeps the status 1 of the djot- gate that carve#6499 turned off (C2-T-049, C2-T-050)'
@@ -39,9 +38,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2247', { fields: ['notReported:table-row-count-clamped'], fix: TABLE_FOOT }],
   ['CC-2248', { fields: ['html'], fix: TABLE_FOOT }],
   ['CC-2249', { fields: ['carve'], fix: TABLE_FOOT }],
-  ['CC-2063', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: UNSCOPED_TH }],
-  ['CC-2250', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: UNSCOPED_TH }],
-  ['CC-2251', { fields: ['status', 'stderrCategory'], fix: UNSCOPED_TH }],
   ['CC-2230', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
   ['CC-2231', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
   ['CC-2232', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],

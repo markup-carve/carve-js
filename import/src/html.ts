@@ -883,6 +883,26 @@ function headsColumns(tr: Html.Element): boolean {
   })
 }
 
+/** A row whose cells, one at least, are all `<th>`. */
+function allHeaderCells(tr: Html.Element): boolean {
+  const cells = elements(tr).filter(entry => entry.nodeName === 'th' || entry.nodeName === 'td')
+  return cells.length > 0 && cells.every(entry => entry.nodeName === 'th')
+}
+
+/**
+ * C2-M-037: in a table with no `<thead>`, each `<th>` with no `scope` in the leading all-`<th>` rows of the first body
+ * that stay in it takes the `scope` `col` that HTML gives it. `all` are the rows of the body, `lead` of them the head.
+ */
+function scopeLeadingHeaderRows(all: Html.Element[], lead: number, body: TableRowNode[]): void {
+  for (let at = lead; at < all.length && allHeaderCells(all[at] as Html.Element); at++) {
+    const cells = elements(all[at] as Html.Element).filter(entry => entry.nodeName === 'th' || entry.nodeName === 'td')
+    cells.forEach((entry, index) => {
+      const target = body[at - lead]?.children[index]
+      if (target !== undefined && attr(entry, 'scope') === undefined) target.scope = 'col'
+    })
+  }
+}
+
 /** C2-A-093, C2-B-174: as in the HTML table model, a row span ends at the last row of its group. */
 function clampRowspans(result: TableRowNode[], groupRows: Html.Element[], context: HtmlContext): void {
   result.forEach((tableRow, index) => {
@@ -918,7 +938,9 @@ function tableGroups(node: Html.Element, context: HtmlContext): TableChildren {
     let lead = 0
     while (lead < all.length && headsColumns(all[lead] as Html.Element)) lead++
     headRows = rowsOf(all.slice(0, lead), context, true)
-    return rowsOf(all.slice(lead), context, false)
+    const result = rowsOf(all.slice(lead), context, false)
+    scopeLeadingHeaderRows(all, lead, result)
+    return result
   }
   const direct = directRows.length ? bodyOf(node) : []
   const children: TableChildren = []

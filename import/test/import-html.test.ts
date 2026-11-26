@@ -384,6 +384,18 @@ describe('C2-M-037: leading column-heading rows of a table with no thead (carve#
     expect(source('<table><tr><td>1</td></tr><tr><th>A</th></tr></table>')).toBe('| 1 |\n|= A |\n')
   })
 
+  const scopes = (html: string): (string | undefined)[][] =>
+    ((children(html) as { children: { type: string, children: { children: { scope?: string }[] }[] }[] }[])[0]?.children
+      .find(group => group.type === 'table_body')?.children ?? []).map(row => row.children.map(cell => cell.scope))
+
+  it('an unscoped th of a leading th row that stays in the body takes scope col, which the writer reports', () => {
+    const html = '<table><tr><th>A</th><th scope="row">B</th></tr><tr><th>C</th></tr><tr><td>1</td><th>D</th></tr></table>'
+    expect(scopes(html)).toEqual([['col', undefined], ['col'], [undefined, undefined]])
+    expect(codes(html).filter(code => code === 'field-unspellable')).toHaveLength(2)
+    expect(scopes('<table><thead><tr><th>H</th></tr></thead><tbody><tr><th>A</th></tr><tr><td>1</td></tr></tbody></table>'))
+      .toEqual([[undefined], [undefined]])
+  })
+
   it('a thead keeps the rows of the first body where they are', () => {
     expect(source('<table><thead><tr><th>H</th></tr></thead><tr><th>A</th></tr><tr><td>1</td></tr></table>'))
       .toBe('{body-rows=1 body-header-rows=1}\n|= H |\n| A |\n| 1 |\n')
