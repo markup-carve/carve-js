@@ -10,7 +10,7 @@ import {
 import {
   clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutMismatches, type Mismatch, refusalPath,
 } from '../scripts/corpus-checks.ts'
-import { HELD, REFUSED_AT } from '../scripts/corpus-held.ts'
+import { HELD, HELD_SUPPLIED, REFUSED_AT } from '../scripts/corpus-held.ts'
 import { CORPUS_DIRECTORIES } from '../scripts/pin-spec.ts'
 import { decodeTree } from '../src/index.ts'
 import { newCaseMismatches } from '../scripts/corpus-new.mjs'
@@ -47,8 +47,8 @@ describe('the examples of the specification', () => {
 })
 
 describe('the clause cases of the specification', () => {
-  it('holds 2143 cases, each with the sentence that decides it', () => {
-    expect(CLAUSE_CASES).toHaveLength(2143)
+  it('holds 2214 cases, each with the sentence that decides it', () => {
+    expect(CLAUSE_CASES).toHaveLength(2214)
     for (const entry of CLAUSE_CASES) expect(entry.why.length).toBeGreaterThan(0)
   })
 
@@ -62,8 +62,8 @@ describe('the clause cases of the specification', () => {
 })
 
 describe('the trees of the specification', () => {
-  it('the reader refuses each of the 79 refused trees at the field its clause decides', () => {
-    expect(REFUSED_TREES).toHaveLength(79)
+  it('the reader refuses each of the 80 refused trees at the field its clause decides', () => {
+    expect(REFUSED_TREES).toHaveLength(80)
     expect(new Set(REFUSED_TREES.map((entry) => entry.id))).toEqual(new Set(REFUSED_AT.keys()))
     for (const entry of REFUSED_TREES) {
       const path = refusalPath(entry)
@@ -86,7 +86,12 @@ describe('the trees of the specification', () => {
   }
 
   it('C2-A-161: the reader accepts every supplied tree of trees/nodes.json', () => {
-    for (const entry of SUPPLIED_TREES) expect(() => decodeTree(JSON.stringify(entry.tree)), entry.id).not.toThrow()
+    for (const entry of SUPPLIED_TREES) {
+      const read = (): unknown => decodeTree(JSON.stringify(entry.tree))
+      const held = HELD_SUPPLIED.get(entry.id)
+      if (held === undefined) expect(read, entry.id).not.toThrow()
+      else expect(read, `${entry.id} is held (${held}) and must still throw`).toThrow()
+    }
   })
 
   it('C2-L-007, C2-L-012, C2-L-056: each layout sidecar is accepted or refused as trees/layouts.json says, and is this engine\'s', () => {

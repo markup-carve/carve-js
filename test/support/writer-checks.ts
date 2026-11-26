@@ -884,7 +884,9 @@ function checkWritten(
  * Clause cases whose written form the C2-W-088 reference procedure here does not reach yet, each with its ruling. The
  * engine passes the clause case; a held case that passes the gate fails the run, so the hold goes with the model fix.
  */
-export const WRITER_GATE_HELD: ReadonlyMap<string, string> = new Map()
+export const WRITER_GATE_HELD: ReadonlyMap<string, string> = new Map([
+  ['CC-2265', 'carve#6727: not in carve-js yet'],
+])
 
 /** The result of the checks on one source: null, a failure, or `refused` (C2-W-016, C2-W-133). */
 export function checkWriter(src: string, undecided: string[] = []): string | null {

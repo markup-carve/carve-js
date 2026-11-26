@@ -402,8 +402,9 @@ export const CATALOG = {
   ] },
   "deprecated-table-attribute": { severity: "warning", default: "upgrade", messages: [
     [
-      "`header-rows` does not apply to a pipe table in 0.2. Mark header cel",
-      "ls with the header mark and write alignment on the cells.",
+      "`header-rows` on a pipe table no longer makes the cells of its rows ",
+      "header cells in 0.2: they keep the kind they are written with. Mark ",
+      "header cells with the header mark.",
     ].join(''),
   ], conditions: [
     "",
