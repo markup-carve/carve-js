@@ -83,3 +83,18 @@ describe('carve#6794: an empty list-table cell (C2-M-112)', () => {
     expect(result.source).toBe('::: list-table\n- - %%\n  - - a\n:::\n')
   })
 })
+
+describe('carve#6788: a ranged comment loses only what the import keeps (C2-M-113)', () => {
+  it('a dropped element in the range loses nothing', () => {
+    expect(fromHtml('<p><span class="comment-start" data-comment-id="1">n</span><script>x()</script>'
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).not.toContain('import-structure-repaired')
+  })
+
+  it('an empty nested start loses nothing, a nested comment does', () => {
+    const empty = '<span class="comment-start" data-comment-id="2"></span><span class="comment-end" data-comment-id="2"></span>'
+    expect(fromHtml(`<p><span class="comment-start" data-comment-id="1">n</span>${empty}`
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).toEqual(['import-element-dropped'])
+    expect(fromHtml('<p><span class="comment-start" data-comment-id="1">n</span><span class="comment-start" data-comment-id="2">m</span>'
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).toEqual(['import-structure-repaired'])
+  })
+})

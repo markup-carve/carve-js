@@ -5,6 +5,7 @@ import {
   attr, attrs, classList, isComment, isElement, isText, plain, renamedKeys, report, withoutClasses, withoutKeys,
   type HtmlContext,
 } from './html-dom.ts'
+import { treatment } from './html-elements.ts'
 
 const RANGED_KEYS = { 'data-author': 'author', 'data-date': 'datetime' }
 
@@ -29,12 +30,29 @@ function isRangeEndSpan(node: Html.Node): node is Html.Element {
     classList(node as Html.Element)[0] === 'comment-end'
 }
 
-/** Whether a node gives an inline by itself: text, a comment kept as raw HTML, or an empty element the import keeps. */
+function isRangeStart(node: Html.Element): boolean {
+  return node.tagName === 'span' && classList(node)[0] === 'comment-start'
+}
+
+/** An element whose content gives no inline of its own: it is dropped, kept whole as raw, or a comment's text. */
+function isOpaque(node: Html.Node): boolean {
+  if (!isElement(node as Html.ChildNode)) return false
+  const element = node as Html.Element
+  const kind = treatment(element)
+  return kind === 'drop' || kind === 'raw' || isRangeStart(element)
+}
+
+/** Whether a node gives an inline by itself: text, a comment or raw element kept, a comment, or an empty element the import keeps. */
 function holds(node: Html.Node, context: HtmlContext): boolean {
   const child = node as Html.ChildNode
   if (isText(child)) return child.value !== ''
   if (isComment(child)) return context.rawHtml === true
-  if (!isElement(child) || child.childNodes.length > 0) return false
+  if (!isElement(child)) return false
+  const kind = treatment(child)
+  if (kind === 'drop') return false
+  if (kind === 'raw') return context.rawHtml === true
+  if (isRangeStart(child)) return plain(child) !== ''
+  if (child.childNodes.length > 0) return false
   return child.attrs.length > 0 || !EMPTY_DROPPED.has(child.tagName)
 }
 
@@ -44,11 +62,15 @@ function documentRoot(node: Html.Node): Html.Node {
   return root
 }
 
-/** Places `at` at `count` in document order. */
-function visit(index: DocumentIndex, at: Html.Node, count: number, context: HtmlContext): void {
+/** Places `at` at `count` in document order. A start's end is the first later end of its id, which is dropped with it. */
+function visit(index: DocumentIndex, pending: Set<string>, at: Html.Node, count: number, context: HtmlContext): void {
   index.order.set(at, [count, count])
-  index.holding.push(index.holding[count]! + (holds(at, context) ? 1 : 0))
-  if (!isRangeEndSpan(at)) return
+  const end = isRangeEndSpan(at)
+  const claimed = end && pending.delete(attr(at, 'data-comment-id') ?? '\0')
+  if (claimed) index.claimed.add(at)
+  index.holding.push(index.holding[count]! + (!claimed && holds(at, context) ? 1 : 0))
+  if (isElement(at as Html.ChildNode) && isRangeStart(at as Html.Element)) pending.add(attr(at as Html.Element, 'data-comment-id') ?? '\0')
+  if (!end) return
   const id = attr(at, 'data-comment-id') ?? '\0'
   const list = index.ends.get(id)
   if (list === undefined) index.ends.set(id, [[count, at]])
@@ -60,6 +82,7 @@ function documentIndex(node: Html.Element, context: HtmlContext): DocumentIndex 
   const known = INDEXES.get(context)
   if (known !== undefined && known.order.has(node)) return known
   const index: DocumentIndex = { order: new Map(), ends: new Map(), holding: [0], claimed: known?.claimed ?? new Set() }
+  const pending = new Set<string>()
   let count = 0
   const stack: [Html.Node, boolean][] = [[documentRoot(node), false]]
   while (stack.length > 0) {
@@ -68,9 +91,9 @@ function documentIndex(node: Html.Element, context: HtmlContext): DocumentIndex 
       index.order.get(at)![1] = count - 1
       continue
     }
-    visit(index, at, count++, context)
+    visit(index, pending, at, count++, context)
     stack.push([at, true])
-    const children = 'childNodes' in at ? at.childNodes : []
+    const children = 'childNodes' in at && !isOpaque(at) ? at.childNodes : []
     for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, false])
   }
   INDEXES.set(context, index)
@@ -95,7 +118,6 @@ export function rangedComment(node: Html.Element, context: HtmlContext): Inline[
   const index = documentIndex(node, context)
   const last = index.order.get(node)![1]
   const end = rangeEnd(index, attr(node, 'data-comment-id') ?? '\0', last)
-  if (end !== undefined) index.claimed.add(end)
   const value = plain(node)
   if (value === '') {
     report(context, node, 'import-element-dropped', 'Ranged comment with no text dropped')
