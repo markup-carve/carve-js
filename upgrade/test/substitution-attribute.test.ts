@@ -6,7 +6,7 @@ describe('C2-I-062 C2-I-043 replacement attribute', () => {
     const source = '{~a~>b~}{.k} c\n\n{#note#}{.k} c\n'
     const result = upgrade(source)
     expect(result.check).toBe('pass')
-    expect(result.output).toBe('{-a-}{+b+}\\{.k} c\n\n{#note#}{.k} c\n')
+    expect(result.output).toBe('{-a-}{+b+}\\{.k} c\n\n{#note#}\\{.k} c\n')
     expect(result.records.map((record) => record.entry)).toContain('U-200')
   })
 })
