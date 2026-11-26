@@ -3,7 +3,7 @@ import { type DocumentNode, forEachSlot, type Node } from '../src/ast.ts'
 import { snippetRegistry } from '../src/snippet-expand.ts'
 import { readSnippetMarker } from '../src/snippets.ts'
 import { type RuleId } from './catalog.ts'
-import { type LintContext } from './types.ts'
+import { type LintContext, type Rule } from './types.ts'
 
 /** The names every authored use names, those inside definitions included (C2-N-096). */
 function usedNames(document: DocumentNode): Set<string> {
@@ -45,6 +45,9 @@ function definitionIds(document: DocumentNode, context: LintContext): void {
     context.report('snippet-definition-id', start, value, `/children/${index}`)
   })
 }
+
+/** The snippet rules, which lintSnippets runs over the whole tree. */
+export const SNIPPET_RULES: readonly Rule[] = [{ id: 'unused-snippet' }, { id: 'snippet-definition-id' }]
 
 export function lintSnippets(document: DocumentNode, context: LintContext, active: (id: RuleId) => boolean): void {
   if (active('unused-snippet')) unusedSnippets(document, context)
