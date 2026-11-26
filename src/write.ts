@@ -1544,8 +1544,8 @@ function authoredContent(w: Writer, leaf: Node): string | null {
   const [from, to] = range
   const decode = (start: number, end: number): string => new TextDecoder().decode(source.subarray(start, end))
   const breaks = lineBreaks(children)
-  // A line break inside a node that holds no break node, as the alternative text of an image, takes the prefix the
-  // break before it shows, or the first one.
+  // A line break inside a node that holds no break node, as the alternative text of an image, loses the prefix the
+  // break before it shows, or the first one, where its line holds it.
   let prefix = firstPrefix(breaks, decode)
   let text = ''
   let at = from
@@ -1553,15 +1553,12 @@ function authoredContent(w: Writer, leaf: Node): string | null {
     if (node.pos === undefined || node.pos.startOffset < at) return null
     const spelled = decode(node.pos.startOffset, node.pos.endOffset)
     const end = spelled.indexOf('\n')
-    const before = withoutPrefixes(decode(at, node.pos.startOffset), prefix)
-    if (end < 0 || before === null) return null
-    text += `${before}${spelled.slice(0, end).replace(/[ \t\r]+$/u, '')}\n`
+    if (end < 0) return null
+    text += `${withoutPrefixes(decode(at, node.pos.startOffset), prefix)}${spelled.slice(0, end).replace(/[ \t\r]+$/u, '')}\n`
     prefix = spelled.slice(end + 1)
     at = node.pos.endOffset
   }
-  const rest = withoutPrefixes(decode(at, to), prefix)
-  if (rest === null) return null
-  text += rest
+  text += withoutPrefixes(decode(at, to), prefix)
   return text.includes('\r') ? null : text
 }
 
@@ -1572,25 +1569,19 @@ function byteRange(nodes: readonly Node[]): [number, number] | null {
   return from === undefined || to === undefined || to < from ? null : [from, to]
 }
 
-/** `text` with `prefix` taken off each line after the first; null where a line does not start with it. */
-function withoutPrefixes(text: string, prefix: string | null): string | null {
-  if (!text.includes('\n')) return text
-  if (prefix === null) return null
-  const lines = text.split('\n')
-  for (let line = 1; line < lines.length; line++) {
-    if (!lines[line]!.startsWith(prefix)) return null
-    lines[line] = lines[line]!.slice(prefix.length)
-  }
-  return lines.join('\n')
+/** `text` with `prefix` taken off each line after the first that holds it; a lazy line keeps its spelling. */
+function withoutPrefixes(text: string, prefix: string): string {
+  if (prefix === '' || !text.includes('\n')) return text
+  return text.split('\n').map((line, at) => (at > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line)).join('\n')
 }
 
-/** The container prefix the first line break of `breaks` spells behind its line end, or '' where there is none. */
-function firstPrefix(breaks: readonly Node[], decode: (start: number, end: number) => string): string | null {
+/** The container prefix the first line break of `breaks` spells behind its line end, or '' where it shows none. */
+function firstPrefix(breaks: readonly Node[], decode: (start: number, end: number) => string): string {
   const first = breaks[0]?.pos
-  if (first === undefined) return breaks.length === 0 ? '' : null
+  if (first === undefined) return ''
   const spelled = decode(first.startOffset, first.endOffset)
   const end = spelled.indexOf('\n')
-  return end < 0 ? null : spelled.slice(end + 1)
+  return end < 0 ? '' : spelled.slice(end + 1)
 }
 
 /** The soft and hard breaks below `nodes`, in document order. */

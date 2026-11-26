@@ -10,6 +10,9 @@ describe('C2-W-088: an authored leaf block drops the prefix of each line (carve#
     ['an image across two lines between the references', `${quoted(60)}> ![b\n> c](u)\n${quoted(62)}`],
     ['an image across two lines first', `> ![b\n> c](u)\n${quoted(122)}`],
     ['in a list item', `- ![b\n  c](u)\n${'  [a *[a][]*[x]: /u\n'.repeat(122)}`],
+    // A lazy line holds no prefix and keeps its spelling.
+    ['an image across a lazy line first', `> ![b\nc](u)\n${quoted(122)}`],
+    ['an image across a lazy line between the references', `${quoted(60)}> ![b\nc](u)\n${quoted(62)}`],
   ])('%s', (_, source) => {
     const out = formatWithDiagnostics(source)
     expect(out.diagnostics).toEqual([])
