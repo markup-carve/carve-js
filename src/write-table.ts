@@ -63,7 +63,7 @@ function columnList(table: TableNode, field: 'align' | 'valign' | 'width'): stri
  * that `attrs` holds too is written from the fields, and the key in `attrs` is reported where `w` is given.
  */
 function tableKeys(w: Writer | null, table: TableNode, leadingKeys: readonly (readonly [string, string])[],
-  header: number | undefined): BlockParts {
+  header: number | undefined, plan: BodyPlan): BlockParts {
   const keys: (readonly [string, string])[] = []
   const aligns = columnList(table, 'align')
   const valigns = columnList(table, 'valign')
@@ -76,10 +76,11 @@ function tableKeys(w: Writer | null, table: TableNode, leadingKeys: readonly (re
   if (widths !== null) keys.push(['widths', widths])
   if (header !== undefined) keys.push(['header-rows', String(header)])
   if (footRows > 0) keys.push(['footer-rows', String(footRows)])
-  pushAll(keys, bodyKeys(table))
+  pushAll(keys, plan.keys)
   const skipKeys: string[] = []
   table.attrs?.keyValues?.forEach(([key], index) => {
-    if (!leadingKeys.some((pair) => pair[0] === key) && !keys.some((pair) => pair[0] === key)) return
+    const made = leadingKeys.some((pair) => pair[0] === key) || keys.some((pair) => pair[0] === key)
+    if (!made && !(plan.loseKept && BODY_KEYS.includes(key))) return
     skipKeys.push(key)
     if (w !== null) loseKey(w, table, index, key)
   })
@@ -114,10 +115,83 @@ function isHeadRow(row: TableRowNode): boolean {
   return row.children.every((cell) => cell.header || cell.span !== undefined)
 }
 
-/** C2-W-066, C2-B-186: a pipe table takes `header-rows`, the rows of its head, only where a head row holds a data cell. */
-function pipeHeaderRows(table: TableNode): number | undefined {
-  const head = rowsOf(table, 'table_head')
-  return head.every(isHeadRow) ? undefined : head.length
+const BODY_KEYS: readonly string[] = ['body-rows', 'body-header-rows', 'body-header-cols']
+
+/** C2-W-136: the body keys the writer makes, whether the leading header rows of a body lose their marks, and whether
+ * the body keys kept in `attrs` are dropped. */
+interface BodyPlan {
+  keys: (readonly [string, string])[]
+  split: boolean
+  loseKept: boolean
+}
+
+function keptValue(table: TableNode, key: string): string | undefined {
+  return table.attrs?.keyValues?.find((pair) => pair[0] === key)?.[1]
+}
+
+/**
+ * C2-W-136: where `attrs` keeps a body key, the writer makes none, unless the bodies need one: then the keys are made
+ * from the fields and the kept ones are reported. A delimited table has no header marks to keep.
+ */
+function bodyPlan(table: TableNode, pipe: boolean): BodyPlan {
+  const bodies = bodiesOf(table)
+  const kept = table.attrs?.keyValues?.some(([key]) => BODY_KEYS.includes(key)) ?? false
+  if (kept) {
+    const unspellable = pipe
+      ? bodies.length > 1 || bodies.some((body) => !body.children.some((row) => row.type === 'table_row') ||
+        body.rowHeadColumns !== undefined)
+      : partitioned(bodies)
+    if (!unspellable) return { keys: [], split: false, loseKept: false }
+  }
+  return { keys: bodyKeys(table, bodies), split: partitioned(bodies), loseKept: kept }
+}
+
+/** C2-B-174, C2-B-178: whether the row as written is a head row; a span mark carries the header mark in the head only. */
+function readsAsHead(row: TableRowNode, inHead: boolean, bare: boolean): boolean {
+  let headers = 0
+  for (const cell of row.children) {
+    if (cell.span !== undefined) headers += inHead ? 1 : 0
+    else if (cell.header && !bare) headers++
+    else return false
+  }
+  return headers > 0
+}
+
+/** C2-B-178: the leading rows that read as the head as they are written, a body's bare header rows not among them. */
+function writtenHeadRows(table: TableNode, plan: BodyPlan): number {
+  let reads = 0
+  for (const group of table.children) {
+    if (group.type === 'comment') continue
+    let bare = plan.split && group.type === 'table_body' ? leadingHeaderRows(group) : 0
+    for (const row of group.children) {
+      if (row.type !== 'table_row') continue
+      if (!readsAsHead(row, group.type === 'table_head', bare-- > 0)) return reads
+      reads++
+    }
+  }
+  return reads
+}
+
+/** C2-B-187: whether the written keys hold an empty `body-rows` that no other body key gives a body beside. */
+function writtenEmptyBodyRows(table: TableNode, plan: BodyPlan): boolean {
+  const value = (key: string): string | undefined =>
+    plan.keys.find((pair) => pair[0] === key)?.[1] ?? (plan.loseKept ? undefined : keptValue(table, key))
+  const headerList = value('body-header-rows')
+  return value('body-rows')?.trim() === '' && (headerList === undefined || headerList.trim() === '') &&
+    value('body-header-cols') === undefined
+}
+
+/**
+ * C2-W-066: a pipe table takes `header-rows`, the rows of its head, wherever the rows and keys written without it give
+ * another head: the leading rows of header marks (C2-B-178), ended above the foot by an empty `body-rows` (C2-B-187).
+ */
+function pipeHeaderRows(table: TableNode, plan: BodyPlan): number | undefined {
+  const head = rowsOf(table, 'table_head').length
+  const foot = rowsOf(table, 'table_foot').length
+  const rows = head + rowsOf(table, 'table_body').length + foot
+  let reads = writtenHeadRows(table, plan)
+  if (foot > 0 && foot <= rows && writtenEmptyBodyRows(table, plan)) reads = Math.min(reads, rows - foot)
+  return reads === head ? undefined : head
 }
 
 function headEndsAboveFoot(table: TableNode): boolean {
@@ -128,8 +202,7 @@ function headEndsAboveFoot(table: TableNode): boolean {
 }
 
 /** C2-W-136, C2-B-230: `body-rows`, and `body-header-rows` and `body-header-cols` where a body needs them. */
-function bodyKeys(table: TableNode): (readonly [string, string])[] {
-  const bodies = bodiesOf(table)
+function bodyKeys(table: TableNode, bodies: readonly TableBodyNode[]): (readonly [string, string])[] {
   // C2-W-136, C2-B-187: an empty `body-rows` ends the head, if any, above a foot that leads with a row of header cells.
   if (bodies.length === 0) return headEndsAboveFoot(table) ? [['body-rows', '']] : []
   if (!partitioned(bodies)) return []
@@ -282,9 +355,8 @@ function lineComment(w: Writer, node: CommentNode, prefix: string): void {
 }
 
 /** The written rows of `table` and the comments between them, in source order (C2-A-086). */
-function tableEntries(w: Writer, table: TableNode, flags: number): (WrittenRow | CommentNode)[] {
+function tableEntries(w: Writer, table: TableNode, flags: number, split: boolean): (WrittenRow | CommentNode)[] {
   const entries: (WrittenRow | CommentNode)[] = []
-  const split = partitioned(bodiesOf(table))
   for (const group of table.children) {
     if (group.type === 'comment') entries.push(group)
     else {
@@ -297,10 +369,11 @@ function tableEntries(w: Writer, table: TableNode, flags: number): (WrittenRow |
 }
 
 function pipeTable(w: Writer, table: TableNode, prefix: string, flags: number): void {
-  const block = braceBlock(table, tableKeys(w, table, [], pipeHeaderRows(table)))
+  const plan = bodyPlan(table, true)
+  const block = braceBlock(table, tableKeys(w, table, [], pipeHeaderRows(table, plan), plan))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
   else if (block !== '') emit(w, prefix, block)
-  const entries = tableEntries(w, table, flags)
+  const entries = tableEntries(w, table, flags, plan.split)
   const rows = entries.filter((entry): entry is WrittenRow => 'lines' in entry)
   // C2-A-086: a comment that ends the last group stands before a continuation row; an empty one adds nothing (C2-B-184).
   const closing = endsWithGroupComment(table)
@@ -456,7 +529,7 @@ function delimitedTable(w: Writer, table: TableNode, prefix: string, format: str
   if (table.children.every((group) => group.type === 'comment' || group.children.every((row) => row.type !== 'table_row'))) {
     loseEmptyGroups(w, table)
   }
-  const block = braceBlock(table, tableKeys(w, table, [['table', '']], headerRows(w, table)))
+  const block = braceBlock(table, tableKeys(w, table, [['table', '']], headerRows(w, table), bodyPlan(table, false)))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
   else emit(w, prefix, block)
   const body = delimitedBody(table, separator)
@@ -476,6 +549,9 @@ export function writeTable(w: Writer, table: TableNode, prefix: string, flags: n
 /** C2-W-122: the same table attribute line before an intervening comment as before the table itself. */
 export function tableAttribute(w: Writer, table: TableNode): string {
   const format = tableFormat(w, table)
-  if (format === 'pipe') return braceBlock(table, tableKeys(null, table, [], pipeHeaderRows(table)))
-  return braceBlock(table, tableKeys(null, table, [['table', '']], headerRows(w, table)))
+  if (format === 'pipe') {
+    const plan = bodyPlan(table, true)
+    return braceBlock(table, tableKeys(null, table, [], pipeHeaderRows(table, plan), plan))
+  }
+  return braceBlock(table, tableKeys(null, table, [['table', '']], headerRows(w, table), bodyPlan(table, false)))
 }
