@@ -96,6 +96,7 @@ describe('typed metadata and tree declarations', () => {
       ] }] } } } }
     const { diagnostics } = renderWithDiagnostics(structuredClone(root), { profile: 'minimal' })
     expect(diagnostics.map((entry) => [entry.code, entry.path])).toEqual([
+      ['profile-construct-degraded', '/children/0'],
       ['profile-construct-degraded', '/metadata/fields/nested/value/0/value/0'],
     ])
     // The profile is a render option: the resolved tree keeps the link.

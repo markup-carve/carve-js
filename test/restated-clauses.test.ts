@@ -562,9 +562,10 @@ describe('the profiles', () => {
     expect(render('a'.repeat(100001), { profile: 'article' })).toHaveLength(100008)
   })
 
-  it('C2-H-163: the body of a note is not filtered where the profile has no notes, so nothing in it is reported', () => {
+  it('C2-H-163: the body of a note is not filtered where the profile has no notes, so only the note itself is reported', () => {
     expect(degraded('a[^n]\n\n[^n]: note\n\n    # heading in the note', 'comment')).toEqual([
       'profile-construct-degraded: Degraded a construct the profile "comment" does not allow: footnote_ref.',
+      'profile-construct-degraded: Degraded a construct the profile "comment" does not allow: footnote.',
     ])
   })
 
