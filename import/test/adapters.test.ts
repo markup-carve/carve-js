@@ -77,23 +77,25 @@ const PANDOC_1X = `<p>Here is a footnote reference,<a href="#fn1" class="footnot
 </div>`
 
 
-const PRODUCERS: Array<[string, string, string]> = [
-  ['word save as web page', WORD_SAVE_AS_WEB_PAGE, 'Static Object Orient Languages'],
-  ['word filtered', WORD_FILTERED, 'NCAS British Atmospheric Data Centre'],
-  ['google docs', GOOGLE_DOCS, 'General Secretary of the Communist Party.'],
-  ['libreoffice', LIBREOFFICE, 'first note body.'],
-  ['pandoc 1.x', PANDOC_1X, 'Here is the footnote.'],
+// The last field counts the comments of the dropped note wrapper, which the mapping reports (C2-M-109, C2-M-110).
+const PRODUCERS: Array<[string, string, string, number]> = [
+  ['word save as web page', WORD_SAVE_AS_WEB_PAGE, 'Static Object Orient Languages', 2],
+  ['word filtered', WORD_FILTERED, 'NCAS British Atmospheric Data Centre', 0],
+  ['google docs', GOOGLE_DOCS, 'General Secretary of the Communist Party.', 0],
+  ['libreoffice', LIBREOFFICE, 'first note body.', 0],
+  ['pandoc 1.x', PANDOC_1X, 'Here is the footnote.', 0],
 ]
 
 describe('the note pass of word and google-docs', () => {
-  for (const [name, html, body] of PRODUCERS) {
+  for (const [name, html, body, comments] of PRODUCERS) {
     it(`C2-M-106: ${name} imports its notes as footnotes without backlinks or separator`, () => {
       const result = importDocument(html, { from: 'html', adapter: 'word' })
       expect(result.source).toContain('[^1]')
       expect(result.source).toMatch(/^\[\^1\]: /m)
       expect(result.source).toContain(body)
       expect(result.source).not.toMatch(/#_ftnref|#fnref|#ftnt_ref|#sdfootnote1anc|↩|\*\*\*|supportFootnotes/)
-      expect(result.diagnostics.filter(entry => entry.code !== 'import-whitespace-normalized')).toEqual([])
+      expect(result.diagnostics.filter(entry => entry.code !== 'import-whitespace-normalized')
+        .map(entry => [entry.code, entry.foreignType])).toEqual(Array(comments).fill(['import-element-dropped', '#comment']))
     })
   }
 

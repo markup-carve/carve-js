@@ -4,11 +4,9 @@
 import type { Holds } from './holds.ts'
 
 // Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
-const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute beside the key (C2-M-047; spec carve#6814)'
-const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
 const LOOSE_CARRIER = 'carve#6844 data-carve-loose carries the spacing of a loose list (C2-H-138, C2-H-186; spec carve#6862)'
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
-const NOTE_CONDITIONALS = 'carve#6850 the Word conditional comments of a dropped note wrapper (C2-M-109; spec carve#6851)'
+const HEADER_ROWS_HEAD = 'carve#6860 header-rows where the header marks cannot end the head (C2-W-066, C2-W-136; spec 5001ee27)'
 const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under normalize too (C2-W-088, C2-W-127; spec carve#6849)'
 
 /**
@@ -17,13 +15,6 @@ const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under nor
  * fixed, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['CC-2230', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
-  ['CC-2231', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
-  ['CC-2232', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
-  ['CC-2233', { fields: ['children', 'carve', 'diagnosticsComplete'], fix: KEY_ATTRIBUTES }],
-  ['CC-2234', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
-  ['CC-2235', { fields: ['diagnostics:import-element-dropped', 'diagnosticsComplete'], fix: NOTE_COMMENTS }],
-  ['CC-2236', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
   ['CC-2398', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2399', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2402', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
@@ -33,7 +24,9 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2409', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2410', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2412', { fields: ['children'], fix: IMAGE_PARAGRAPH }],
-  ['CC-1425', { fields: ['diagnostics:import-element-dropped'], fix: NOTE_CONDITIONALS }],
+  ['CC-2468', { fields: ['carve'], fix: HEADER_ROWS_HEAD }],
+  ['CC-2469', { fields: ['carve'], fix: HEADER_ROWS_HEAD }],
+  ['CC-2470', { fields: ['carve'], fix: HEADER_ROWS_HEAD }],
   ['CC-2428', { fields: ['carve', 'diagnosticsComplete'], fix: AUTHORED_FALLBACK }],
   ['CC-2414', { fields: ['html'], fix: LOOSE_CARRIER }],
   ['CC-2440', { fields: ['html'], fix: LOOSE_CARRIER }],
