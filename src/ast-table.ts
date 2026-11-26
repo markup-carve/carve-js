@@ -367,10 +367,19 @@ function columnEntries<T>(value: string | null, read: (entry: string) => T | und
 }
 
 /** The column lists of a table: `aligns`, `valigns` and `widths` (C2-B-211, C2-B-212). */
-interface ColumnLists {
+export interface ColumnLists {
   aligns: string[] | null
   valigns: string[] | null
   widths: number[] | null
+}
+
+/** The column lists as a pipe table reads them, which the list table shares (C2-X-078). */
+export function readColumnLists(value: (name: string) => string | null): ColumnLists {
+  return {
+    aligns: columnEntries(value('aligns'), alignEntry),
+    valigns: columnEntries(value('valigns'), valignEntry),
+    widths: columnEntries(value('widths'), columnWidth),
+  }
 }
 
 /** C2-A-089: one column per position up to the widest row, with what the column lists spell. */

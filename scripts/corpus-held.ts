@@ -6,12 +6,10 @@ import type { Holds } from './holds.ts'
 // Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
 const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute beside the key (C2-M-047; spec carve#6814)'
 const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
-const DJOT_STATUS = 'carve#6833 CC-1354 keeps the status 1 of the djot- gate that carve#6499 turned off (C2-T-049, C2-T-050)'
+const LOOSE_CARRIER = 'carve#6844 data-carve-loose carries the spacing of a loose list (C2-H-138, C2-H-186; spec carve#6862)'
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
 const NOTE_CONDITIONALS = 'carve#6850 the Word conditional comments of a dropped note wrapper (C2-M-109; spec carve#6851)'
 const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under normalize too (C2-W-088, C2-W-127; spec carve#6849)'
-const TRAILING_LINE_FEED = 'carve#6837 the render cases of carve#6816 expect a line feed after </table> (spec data)'
-const PIPE_CLAMP = 'carve#6838 the lint model skips the header-rows clamp of a pipe table (C2-B-209; spec data)'
 
 /**
  * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
@@ -19,13 +17,6 @@ const PIPE_CLAMP = 'carve#6838 the lint model skips the header-rows clamp of a p
  * fixed, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['CC-2237', { fields: ['html'], fix: TRAILING_LINE_FEED }],
-  ['CC-2238', { fields: ['html'], fix: TRAILING_LINE_FEED }],
-  ['CC-2239', { fields: ['html'], fix: TRAILING_LINE_FEED }],
-  ['CC-2240', { fields: ['html'], fix: TRAILING_LINE_FEED }],
-  ['CC-2241', { fields: ['diagnostics:table-row-count-clamped'], fix: PIPE_CLAMP }],
-  ['CC-2246', { fields: ['html'], fix: TRAILING_LINE_FEED }],
-  ['CC-2248', { fields: ['html'], fix: TRAILING_LINE_FEED }],
   ['CC-2230', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
   ['CC-2231', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
   ['CC-2232', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
@@ -33,7 +24,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2234', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
   ['CC-2235', { fields: ['diagnostics:import-element-dropped', 'diagnosticsComplete'], fix: NOTE_COMMENTS }],
   ['CC-2236', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
-  ['CC-1354', { fields: ['status'], fix: DJOT_STATUS }],
   ['CC-2398', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2399', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2402', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
@@ -45,6 +35,20 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2412', { fields: ['children'], fix: IMAGE_PARAGRAPH }],
   ['CC-1425', { fields: ['diagnostics:import-element-dropped'], fix: NOTE_CONDITIONALS }],
   ['CC-2428', { fields: ['carve', 'diagnosticsComplete'], fix: AUTHORED_FALLBACK }],
+  ['CC-2414', { fields: ['html'], fix: LOOSE_CARRIER }],
+  ['CC-2440', { fields: ['html'], fix: LOOSE_CARRIER }],
+  ['CC-2441', { fields: ['children', 'carve'], fix: LOOSE_CARRIER }],
+  ['CC-2442', { fields: ['html'], fix: LOOSE_CARRIER }],
+  ['CC-2443', { fields: ['children', 'carve'], fix: LOOSE_CARRIER }],
+  ['CC-2444', { fields: ['html'], fix: LOOSE_CARRIER }],
+  ['CC-2445', { fields: ['html'], fix: LOOSE_CARRIER }],
+  ['CC-2446', { fields: ['children', 'carve'], fix: LOOSE_CARRIER }],
+  ['CC-2447', { fields: ['html'], fix: LOOSE_CARRIER }],
+  ['CC-2450', { fields: ['children', 'carve', 'diagnostics:import-carrier-ignored'], fix: LOOSE_CARRIER }],
+  ['CC-2451', { fields: ['children', 'carve', 'diagnostics:import-carrier-ignored'], fix: LOOSE_CARRIER }],
+  ['CC-2452', { fields: ['children', 'carve', 'diagnostics:import-carrier-ignored'], fix: LOOSE_CARRIER }],
+  ['CC-2453', { fields: ['children', 'carve'], fix: LOOSE_CARRIER }],
+  ['CC-2454', { fields: ['html', 'diagnostics:carrier-attribute-dropped'], fix: LOOSE_CARRIER }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
