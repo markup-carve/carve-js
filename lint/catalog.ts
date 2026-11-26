@@ -933,7 +933,10 @@ export const CATALOG = {
     ].join(''),
   ], conditions: [
     "a directive with a section and no path",
-    "a line that starts with an id in braces and a colon",
+    [
+      "a line that starts with an id in braces, optional attributes and a c",
+      "olon",
+    ].join(''),
   ] },
   "semantic-attribute-outside-span": { severity: "warning", default: "on", messages: [
     [
