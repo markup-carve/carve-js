@@ -584,12 +584,18 @@ const MAX_COUNT_DIGITS = 9
  * there holds it. The last one written counts (C2-A-035), and a bare key has the empty value.
  */
 export function attributeKeyValue(src: string, pos: number, end: number, key: string): string | null {
-  const found: { value: string | null } = { value: null }
+  return attributeKeyValues(src, pos, end, [key])[0]!
+}
+
+/** The values of `keys` on the attribute lines between `pos` and `end`, read in one pass, as `attributeKeyValue` gives each. */
+export function attributeKeyValues(src: string, pos: number, end: number, keys: readonly string[]): (string | null)[] {
+  const found: (string | null)[] = keys.map(() => null)
   const ignore = (): void => undefined
   const sink: AttributeSink = {
     id: ignore, className: ignore, lang: ignore,
     key: (name, value) => {
-      if (name === key) found.value = value
+      const at = keys.indexOf(name)
+      if (at >= 0) found[at] = value
     },
   }
   const memo = emptyMemo()
@@ -598,7 +604,7 @@ export function attributeKeyValue(src: string, pos: number, end: number, key: st
     const after = src.charCodeAt(p) === BRACE_OPEN ? readAttributeBlock(src, p, end, memo, sink) : -1
     p = after < 0 ? p + 1 : after
   }
-  return found.value
+  return found
 }
 
 /** C2-B-210: the count that `value` spells: one or more digits, or 1 for the empty value. -1 for any other value and for null. */

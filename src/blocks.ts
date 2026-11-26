@@ -23,7 +23,8 @@ import {
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import {
-  attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, cellMarksLength, continuationClosingPipe, countValue,
+  attributeBlocksEnd, attributeKeyValue, attributeKeyValues, bulletMarkerEnd, captionContentStart, cellMarksLength,
+  continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   definitionTailLeft, isAbbreviation, isAttributeLine, isBareRun, isDefinition, definitionTailLineLeft, isDescriptionListMark,
   isDisplayMathOnly, isFenceLine,
@@ -951,6 +952,8 @@ function openFence(state: BlockState, end: number): boolean {
   return true
 }
 
+const TABLE_COUNT_KEYS = ['footer-rows', 'header-rows', 'body-rows', 'body-header-rows', 'body-header-cols']
+
 /** C2-B-166: a row opens a table. `footer-rows` (C2-B-187) and `header-rows` (C2-B-186) on its attribute line are read here. */
 function openTable(state: BlockState, end: number): boolean {
   const leaf = state.leaf
@@ -963,15 +966,14 @@ function openTable(state: BlockState, end: number): boolean {
   let headLimit = -1
   let endsAtFoot = false
   if (above.takeAttributes) {
-    const key = (name: string): string | null => attributeKeyValue(src, above.attributesStart, above.attributesEnd, name)
+    const [footer, header, bodyRows, bodyHeaderRows, bodyHeaderCols] = attributeKeyValues(src, above.attributesStart,
+      above.attributesEnd, TABLE_COUNT_KEYS)
     // C2-B-210: a value that is no count has no effect.
-    footerRows = Math.max(0, countValue(key('footer-rows')))
-    headLimit = countValue(key('header-rows'))
+    footerRows = Math.max(0, countValue(footer!))
+    headLimit = countValue(header!)
     // C2-B-187, C2-B-230: an empty `body-rows`, with no other body key that gives a body, ends the head above the foot.
-    const bodyRows = key('body-rows')
-    const bodyHeaderRows = key('body-header-rows')
-    endsAtFoot = headLimit < 0 && footerRows > 0 && bodyRows !== null && trimSpaces(bodyRows) === ''
-      && (bodyHeaderRows === null || trimSpaces(bodyHeaderRows) === '') && key('body-header-cols') === null
+    endsAtFoot = headLimit < 0 && footerRows > 0 && bodyRows !== null && trimSpaces(bodyRows!) === ''
+      && (bodyHeaderRows === null || trimSpaces(bodyHeaderRows!) === '') && bodyHeaderCols === null
   }
   writeEvent(state, enterTag(state, TABLE, 0), cursor.pos, footerRows)
   leaf.kind = TABLE
