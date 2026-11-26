@@ -33,7 +33,8 @@ function accepted(node: Html.Element, context: HtmlContext, mode: 'inline' | 'bl
   const ordinals = context.snippetOrdinals ??= new Set()
   let fault: string | undefined
   if (carrier === undefined) fault = 'the value is not N:MODE:$NAME'
-  else if (carrier.mode !== mode) fault = `the mode ${carrier.mode} does not match a slot of ${mode === 'inline' ? 'inline content' : 'blocks'}`
+  else if (carrier.mode !== mode) fault =
+    `the mode ${carrier.mode} does not match a slot of ${mode === 'inline' ? 'inline content' : 'blocks'}`
   else if (ordinals.has(carrier.n)) fault = 'another carrier holds the same ordinal'
   if (fault !== undefined) {
     ignoredCarrier(context, node, 'data-carve-snippet', fault)

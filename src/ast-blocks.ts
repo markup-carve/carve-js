@@ -6,7 +6,9 @@ import {
   type Node, type ParagraphNode, type SnippetDefinitionNode, type SnippetUseNode, type TableNode,
 } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
-import { attributeSink, type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
+import {
+  attributeSink, type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey,
+} from './ast-attributes.ts'
 import {
   addText, commentValue, contentNodes, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, noteLeaf, place,
   setAttributes, type TreeContext,
@@ -22,7 +24,8 @@ import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
   FLAG_AUTO, FLAG_BLOCK_MATH, FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES,
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
-  HEADING, INCLUDE, SNIPPET_DEFINITION, SNIPPET_USE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
+  HEADING, INCLUDE, SNIPPET_DEFINITION, SNIPPET_USE, isOpaqueLeaf,
+  LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import { attributeBlocksEnd, fenceRunLength, isBareRun, orderedDelimiter, skipSpaces, trimEnd } from './lines.ts'
 import { lineFeedAt } from './source.ts'
@@ -275,7 +278,8 @@ function snippetDefinitionNode(ctx: TreeContext, node: BlockNode): DocumentChild
   readGluedBlocks(src, close + 1, marker.markerEnd - 1, attributes)
   const valueStart = snippetValueStart(src, end, marker)
   const children = leafChildren(ctx, { ...node, spans: [valueStart, end] }, FLOW_PLAIN)
-  const out: SnippetDefinitionNode = noteLeaf(ctx, { type: 'snippet_definition', name: src.slice(marker.nameStart, marker.nameEnd), children })
+  const name = src.slice(marker.nameStart, marker.nameEnd)
+  const out: SnippetDefinitionNode = noteLeaf(ctx, { type: 'snippet_definition', name, children })
   setAttributes(out, attributes)
   return out
 }
@@ -590,7 +594,9 @@ function takeCaption(target: CaptionedBlock, caption: CaptionNode): void {
 
 type CaptionedBlock = TableNode | FigureGroupNode | ParagraphNode | CodeBlockNode | BlockQuoteNode | IncludeNode
 
-const DOCUMENT_ONLY = ['footnote', 'link_reference_definition', 'abbreviation_def', 'snippet_definition', 'citation_definition', 'frontmatter']
+const DOCUMENT_ONLY = [
+  'footnote', 'link_reference_definition', 'abbreviation_def', 'snippet_definition', 'citation_definition', 'frontmatter',
+]
 
 function isBlock(node: DocumentChild): node is Block {
   return !DOCUMENT_ONLY.includes(node.type)

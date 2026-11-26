@@ -1,5 +1,5 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
-import { SNIPPET_CARRIERS, type SnippetCarrier } from './snippet-marks.ts'
+import { SNIPPET_CARRIERS } from './snippet-marks.ts'
 import {
   type Block, type BlockExtensionNode, type DocumentNode, type InlineExtensionNode, type ListItemNode, type Node, type ParagraphNode,
 } from './ast.ts'
@@ -609,13 +609,13 @@ export function attributes(r: Render, node: Node | null, parts: TagParts): strin
   addAuthored(r, list, node, parts)
   for (const [name, value] of parts.generated ?? []) list.add(name, value)
   if (line !== null) list.text += ` data-source-line="${line}"`
-  const carrier = node === null ? undefined : SNIPPET_CARRIERS.get(node)
-  if (carrier !== undefined) list.text += snippetCarriers(carrier)
-  return list.text
+  return list.text + snippetCarriers(node)
 }
 
-/** C2-H-215: the carriers of an expanded snippet use. */
-function snippetCarriers(carrier: SnippetCarrier): string {
+/** C2-H-215: the carriers of an expanded snippet use, or nothing. */
+function snippetCarriers(node: Node | null): string {
+  const carrier = node === null ? undefined : SNIPPET_CARRIERS.get(node)
+  if (carrier === undefined) return ''
   const scope = carrier.include ? ' data-carve-snippet-scope="include"' : ''
   return ` data-carve-snippet="${carrier.n}:${carrier.mode}:$` + `${carrier.name}"${scope}`
 }

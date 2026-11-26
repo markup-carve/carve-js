@@ -768,7 +768,8 @@ export function resolve(
   snippetRegistry(document, (node) => {
     const entry: Diagnostic = { code: 'duplicate-snippet', severity: 'warning', channel: 'parse',
       message: `A snippet named ${node.name} is defined earlier; this definition is not used` }
-    if (node.pos !== undefined) entry.range = { startOffset: node.pos.startOffset + 1, endOffset: node.pos.startOffset + 2 + node.name.length }
+    const start = node.pos?.startOffset
+    if (start !== undefined) entry.range = { startOffset: start + 1, endOffset: start + 2 + node.name.length }
     addFinding(resolution.findings, node, entry)
   })
   visit(walk, document, null)

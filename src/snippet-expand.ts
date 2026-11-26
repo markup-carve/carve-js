@@ -1,7 +1,9 @@
 // C2-N-090 to C2-N-096: the snippet registry and the one expansion pass over the render view, after includes
 // and before resolution and document transforms. The authored tree keeps its uses: the pass runs on the render's own tree.
 import { AST_RESULTS } from './ast-tables.ts'
-import { type DocumentNode, forEachSlot, type IncludeNode, type Node, type SnippetDefinitionNode, type SnippetUseNode } from './ast.ts'
+import {
+  type Attrs, type DocumentNode, forEachSlot, type IncludeNode, type Node, type SnippetDefinitionNode, type SnippetUseNode,
+} from './ast.ts'
 import { derivedTextBudget } from './derived-text.ts'
 import { harnessLimits } from './harness-limits.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
@@ -82,6 +84,44 @@ interface Copy {
   bytes: number
 }
 
+function copyAttrs(copy: Copy, value: Record<string, unknown>): Record<string, unknown> | undefined {
+  const attrs = { ...value }
+  delete attrs['id']
+  if (Object.keys(attrs).length === 0) return undefined
+  copy.bytes += opaqueBytes(attrs['classes'], false)
+  for (const pair of (attrs['keyValues'] ?? []) as [string, string][]) copy.bytes += utf8Length(pair[1])
+  return attrs
+}
+
+function copyData(copy: Copy, value: Record<string, unknown>): Record<string, unknown> | undefined {
+  const data = { ...value }
+  const annotation = data['carve.annotation'] as Record<string, unknown> | undefined
+  if (annotation !== undefined) {
+    const { ids: _ids, ...rest } = annotation
+    if (Object.keys(rest).length === 0) delete data['carve.annotation']
+    else data['carve.annotation'] = rest
+  }
+  if (Object.keys(data).length === 0) return undefined
+  copy.bytes += opaqueBytes(data, true)
+  return structuredClone(data)
+}
+
+function isNode(value: unknown): value is Node {
+  return typeof value === 'object' && value !== null && 'type' in value
+}
+
+/** The copy of one field of a node, or undefined where the copy leaves the field out. */
+function copyField(copy: Copy, field: string, value: unknown, clone: (node: Node) => Node): unknown {
+  if (field === 'attrs') return copyAttrs(copy, value as Record<string, unknown>)
+  if (field === 'data') return copyData(copy, value as Record<string, unknown>)
+  if (!OPAQUE.has(field)) {
+    if (Array.isArray(value) && value.every(isNode)) return value.map(clone)
+    if (isNode(value)) return clone(value)
+  }
+  copy.bytes += opaqueBytes(value, OPAQUE.has(field))
+  return structuredClone(value)
+}
+
 /**
  * C2-N-092: a copy of `nodes` with no positions, no authored ids, no annotation ids and no resolution fields, with
  * its node count and the bytes of its strings (C2-N-094). `authored` maps each copied use to the use it came from.
@@ -93,35 +133,8 @@ function copyNodes(nodes: readonly Node[], authored: Map<Node, Node>): Copy {
     const out: Record<string, unknown> = {}
     for (const [field, value] of Object.entries(node)) {
       if (droppedField(node, field) || value === undefined) continue
-      if (field === 'attrs') {
-        const attrs = { ...(value as Record<string, unknown>) }
-        delete attrs['id']
-        if (Object.keys(attrs).length === 0) continue
-        copy.bytes += opaqueBytes(attrs['classes'], false)
-        for (const pair of (attrs['keyValues'] ?? []) as [string, string][]) copy.bytes += utf8Length(pair[1])
-        out[field] = attrs
-      } else if (field === 'data') {
-        const data = { ...(value as Record<string, unknown>) }
-        const annotation = data['carve.annotation'] as Record<string, unknown> | undefined
-        if (annotation !== undefined) {
-          const { ids: _ids, ...rest } = annotation
-          if (Object.keys(rest).length === 0) delete data['carve.annotation']
-          else data['carve.annotation'] = rest
-        }
-        if (Object.keys(data).length === 0) continue
-        copy.bytes += opaqueBytes(data, true)
-        out[field] = structuredClone(data)
-      } else if (OPAQUE.has(field)) {
-        copy.bytes += opaqueBytes(value, true)
-        out[field] = structuredClone(value)
-      } else if (Array.isArray(value) && value.every((item) => typeof item === 'object' && item !== null && 'type' in item)) {
-        out[field] = (value as Node[]).map(clone)
-      } else if (typeof value === 'object' && value !== null && 'type' in value) {
-        out[field] = clone(value as Node)
-      } else {
-        copy.bytes += opaqueBytes(value, false)
-        out[field] = structuredClone(value)
-      }
+      const copied = copyField(copy, field, value, clone)
+      if (copied !== undefined) out[field] = copied
     }
     if (node.type === 'snippet_use') authored.set(out as unknown as Node, authored.get(node) ?? node)
     return out as unknown as Node
@@ -189,6 +202,68 @@ function refusal(pass: Pass, entry: SnippetEntry | undefined): string | null {
   return null
 }
 
+interface Shape {
+  attrs: Attrs | undefined
+  /** The one copy node that carries the carriers itself, or null. */
+  single: Node | null
+  wraps: boolean
+  count: number
+  bytes: number
+}
+
+/** How the copy of `definition` stands at `use`: on its own, or in a wrapper, with its count and bytes (C2-N-094). */
+function shapeOf(pass: Pass, use: SnippetUseNode, definition: SnippetDefinitionNode, copy: Copy): Shape {
+  const attrs = definition.attrs === undefined ? undefined : { ...definition.attrs }
+  // C2-H-215: under roundtrip a copy that renders as one element carries the carriers itself; any other gets a span.
+  const single = use.mode === 'inline' && attrs === undefined && pass.settings.roundtrip && copy.nodes.length === 1 &&
+    ONE_ELEMENT.has(copy.nodes[0]!.type) ? copy.nodes[0]! : null
+  const wraps = use.mode === 'block' || attrs !== undefined || (pass.settings.roundtrip && single === null)
+  const bytes = copy.bytes + (wraps ? wrapperBytes(use, attrs) : 0)
+  return { attrs, single, wraps, count: copy.count + (wraps ? 1 : 0), bytes }
+}
+
+function wrapperBytes(use: SnippetUseNode, attrs: Attrs | undefined): number {
+  let bytes = utf8Length(use.mode === 'block' ? 'paragraph' : 'span') + opaqueBytes(attrs?.classes, false)
+  for (const pair of attrs?.keyValues ?? []) bytes += utf8Length(pair[1])
+  return bytes
+}
+
+/** Whether the node and text budgets admit the copy; where not, the use is refused in place (C2-N-094, C2-H-201). */
+function admits(pass: Pass, list: Node[], at: number, use: SnippetUseNode, shape: Shape): boolean {
+  if (pass.total + shape.count > pass.limit) {
+    refuse(pass, list, at, use, 'snippet-node-budget', MESSAGES['snippet-node-budget']!(use.name))
+    return false
+  }
+  const cost = NODE_COST * shape.count + shape.bytes
+  if (cost <= pass.budget.left) {
+    pass.total += shape.count
+    pass.budget.left -= cost
+    return true
+  }
+  if (pass.budget.reported) {
+    list[at] = spelled(use)
+  } else {
+    pass.budget.reported = true
+    refuse(pass, list, at, use, 'derived-text-budget',
+      `Wrote a snippet use as its source text: the derived text of this render reached its budget of ${pass.budget.budget} bytes`)
+  }
+  return false
+}
+
+/** The nodes that stand in place of `use`, the carriers set on the node that holds them. */
+function placedNodes(pass: Pass, use: SnippetUseNode, entry: SnippetEntry, copy: Copy, shape: Shape, n: number): Node[] {
+  const carrier: SnippetCarrier = { n, mode: use.mode as 'inline' | 'block', name: use.name, include: entry.include !== null,
+    carrierOnly: use.mode === 'inline' && shape.attrs === undefined }
+  if (!shape.wraps) {
+    if (shape.single !== null) SNIPPET_CARRIERS.set(shape.single, carrier)
+    return copy.nodes
+  }
+  const wrapper = { type: use.mode === 'block' ? 'paragraph' : 'span', children: copy.nodes } as unknown as Node
+  if (shape.attrs !== undefined) wrapper.attrs = shape.attrs
+  if (pass.settings.roundtrip) SNIPPET_CARRIERS.set(wrapper, carrier)
+  return [wrapper]
+}
+
 /** Expands the use at `list[at]` and returns how many nodes now stand in its place, the copy expanded too. */
 function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): number {
   const entry = pass.registry.get(use.name)
@@ -199,48 +274,10 @@ function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): n
   }
   const definition = entry!.definition
   const copy = copyNodes(definition.children, pass.authored)
-  const attrs = definition.attrs === undefined ? undefined : { ...definition.attrs }
-  // C2-H-215: under roundtrip a copy that renders as one element carries the carriers itself; any other gets a span.
-  const single = use.mode === 'inline' && attrs === undefined && pass.settings.roundtrip && copy.nodes.length === 1 &&
-    ONE_ELEMENT.has(copy.nodes[0]!.type) ? copy.nodes[0]! : null
-  const wraps = use.mode === 'block' || attrs !== undefined || (pass.settings.roundtrip && single === null)
-  const count = copy.count + (wraps ? 1 : 0)
-  let bytes = copy.bytes
-  if (wraps) {
-    bytes += utf8Length(use.mode === 'block' ? 'paragraph' : 'span')
-    bytes += opaqueBytes(attrs?.classes, false)
-    for (const pair of attrs?.keyValues ?? []) bytes += utf8Length(pair[1])
-  }
-  if (pass.total + count > pass.limit) {
-    refuse(pass, list, at, use, 'snippet-node-budget', MESSAGES['snippet-node-budget']!(use.name))
-    return 1
-  }
-  const cost = NODE_COST * count + bytes
-  if (cost > pass.budget.left) {
-    if (pass.budget.reported) {
-      list[at] = spelled(use)
-      return 1
-    }
-    pass.budget.reported = true
-    refuse(pass, list, at, use, 'derived-text-budget',
-      `Wrote a snippet use as its source text: the derived text of this render reached its budget of ${pass.budget.budget} bytes`)
-    return 1
-  }
-  pass.total += count
-  pass.budget.left -= cost
+  const shape = shapeOf(pass, use, definition, copy)
+  if (!admits(pass, list, at, use, shape)) return 1
   const n = ++pass.admitted
-  const carrier: SnippetCarrier = { n, mode: use.mode as 'inline' | 'block', name: use.name, include: entry!.include !== null,
-    carrierOnly: use.mode === 'inline' && attrs === undefined }
-  let placed: Node[]
-  if (wraps) {
-    const wrapper = { type: use.mode === 'block' ? 'paragraph' : 'span', children: copy.nodes } as unknown as Node
-    if (attrs !== undefined) wrapper.attrs = attrs
-    if (pass.settings.roundtrip) SNIPPET_CARRIERS.set(wrapper, carrier)
-    placed = [wrapper]
-  } else {
-    placed = copy.nodes
-    if (single !== null) SNIPPET_CARRIERS.set(single, carrier)
-  }
+  const placed = placedNodes(pass, use, entry!, copy, shape, n)
   for (const node of placed) COPY_SCOPE.set(node, entry!.include)
   for (const node of pass.ancestors) pass.touched.add(node)
   for (const node of placed) pass.touched.add(node)
@@ -250,7 +287,7 @@ function expandUse(pass: Pass, list: Node[], at: number, use: SnippetUseNode): n
   pass.current = n
   for (const node of copy.nodes) markNotes(pass, node)
   let length = 1
-  if (wraps) {
+  if (shape.wraps) {
     pass.ancestors.push(placed[0]!)
     walkRange(pass, copy.nodes, 0, copy.nodes.length)
     pass.ancestors.pop()

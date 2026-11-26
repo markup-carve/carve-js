@@ -965,6 +965,21 @@ function runEnd(children: readonly Node[], start: number, own: ReadonlySet<Node>
 }
 
 /** Writes the blocks of the document; C2-H-093: the footnote section stands at a top-level directive or at the end. */
+/** The end of the run of definitions at `index` that a `roundtrip` template holds, written, or `index` for none. */
+function writeTemplateRun(r: Render, document: DocumentNode, children: readonly Node[], index: number, level: number,
+  own: ReadonlySet<Node> | null): number {
+  const node = children[index]!
+  let end = index
+  if (node.type === 'snippet_definition') {
+    while (children[end]?.type === 'snippet_definition') end++
+    writeSnippetTemplate(r, document, children.slice(index, end), level, own)
+  } else if (node.type === 'abbreviation_def' && (own === null || own.has(node))) {
+    end = runEnd(children, index, own)
+    writeTemplate(r, document, children.slice(index, end), level)
+  }
+  return end
+}
+
 function writeDocument(r: Render, document: DocumentNode): void {
   const open: number[] = []
   const hasNotes = r.resolution.notes.length > 0
@@ -975,14 +990,8 @@ function writeDocument(r: Render, document: DocumentNode): void {
   for (let index = 0; index < children.length; index++) {
     const node = children[index]
     if (node === undefined) break
-    if (node.type === 'snippet_definition' && r.settings.roundtrip) {
-      let end = index
-      while (children[end]?.type === 'snippet_definition') end++
-      writeSnippetTemplate(r, document, children.slice(index, end), open.length, own)
-      index = end - 1
-    } else if (node.type === 'abbreviation_def' && r.settings.roundtrip && (own === null || own.has(node))) {
-      const end = runEnd(children, index, own)
-      writeTemplate(r, document, children.slice(index, end), open.length)
+    const end = r.settings.roundtrip ? writeTemplateRun(r, document, children, index, open.length, own) : index
+    if (end > index) {
       index = end - 1
     } else if (node.type === 'heading' && r.settings.sections) {
       openSection(r, node, open)

@@ -23,6 +23,7 @@ import { plainLeaf } from './write-plain.ts'
 import { braceBlock } from './write-attributes.ts'
 import { BRACED_MARKS, CHARACTER_CLASSES, CLASS_KEY_REST, CLASS_MENTION } from './inline-tables.ts'
 import { plainNameEnd } from './inline-atoms.ts'
+import { snippetUseEnd } from './snippets.ts'
 
 /** What one planned write of a group collects. */
 export interface Plan {
@@ -317,6 +318,7 @@ function hostBlock(leaf: Leaf, at: number, escaped: Uint8Array): number {
 /** C2-W-096: a brace that opens a comment or an attribute block; a braced opener is paired in write-plan-pairs.ts. */
 function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
+  if (opensSnippetUse(leaf, at, escaped)) return void (escaped[at] = 1)
   // C2-I-028: behind a host the brace may open its attribute block; a braced opener is no attribute block.
   if (behindHost(leaf, at) && !nextIs(leaf, at, behindCode(leaf, at) ? '*+,-/^~' : '*+,-/^~=') && closesOnLine(leaf, at)) {
     const reading = hostBlock(leaf, at, escaped)
@@ -331,6 +333,22 @@ function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   // C2-I-060: with no closer of that mark later in the leaf, the opener is text and the atom keeps its source.
   const opens = leaf.kinds[at + 1] === ATOM && nextIs(leaf, at, BRACED_CLOSER_MARKS)
   undecidedIf(opens && lastClose(leaf, code(leaf, at + 1)) > at, leaf, 'brace')
+}
+
+/** C2-I-128: text that reads as a snippet use from `at`, every unit of it bare text; its first `{` takes the backslash. */
+function opensSnippetUse(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  if (code(leaf, at + 1) !== 123) return false
+  // The scan stops at the first unit no use holds, so a run of braces costs one step each.
+  let end = at + 2
+  while (end < leaf.codes.length && isUseUnit(leaf.codes[end]!)) end++
+  if (code(leaf, end) !== 125 || code(leaf, end + 1) !== 125) return false
+  for (let unit = at; unit <= end + 1; unit++) if (leaf.kinds[unit] !== TEXT || escaped[unit] === 1) return false
+  const text = String.fromCharCode(...leaf.codes.slice(at, end + 2))
+  return snippetUseEnd(text, 0, text.length) === text.length
+}
+
+function isUseUnit(value: number): boolean {
+  return value === 32 || value === 36 || value === 45 || value === 95 || (value < 128 && isWordCharacter(value))
 }
 
 /** The last `}` of the leaf behind the ASCII mark `value`, or -1; found once per leaf for every mark. */

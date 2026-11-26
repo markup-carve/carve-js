@@ -42,6 +42,16 @@ function read(node: Html.Template, context: HtmlContext, carrier: NonNullable<Re
   return found
 }
 
+function collectTemplate(node: Html.Template, context: HtmlContext, carrier: NonNullable<ReturnType<typeof carrierOf>>): void {
+  const found = read(node, context, carrier) ?? []
+  context.templates.set(node, found)
+  for (const definition of found) {
+    if (definition.type === 'abbreviation_def' && !context.abbreviations.has(definition.key)) {
+      context.abbreviations.set(definition.key, definition)
+    }
+  }
+}
+
 /**
  * Reads every template that stands where a render writes one: among the children of the document, or of a
  * section it opened at a heading. A template anywhere else is not a carrier.
@@ -51,13 +61,7 @@ export function collectTemplates(nodes: Html.ChildNode[], context: HtmlContext):
     if (!isElement(node)) continue
     const carrier = isTemplate(node) ? carrierOf(node) : undefined
     if (carrier !== undefined) {
-      const found = read(node as Html.Template, context, carrier)
-      context.templates.set(node, found ?? [])
-      for (const definition of found ?? []) {
-        if (definition.type === 'abbreviation_def' && !context.abbreviations.has(definition.key)) {
-          context.abbreviations.set(definition.key, definition)
-        }
-      }
+      collectTemplate(node as Html.Template, context, carrier)
     } else if (['section', 'html', 'body'].includes(node.tagName) && !isFootnoteSection(node)) {
       collectTemplates(content(node), context)
     }

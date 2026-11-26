@@ -167,7 +167,15 @@ export interface DivNode extends NodeBase {
 
 export interface DocumentNode extends NodeBase {
   type: "document"
-  children: (Block | FootnoteNode | LinkReferenceDefinitionNode | AbbreviationDefNode | SnippetDefinitionNode | CitationDefinitionNode | FrontmatterNode)[]
+  children: (
+    | Block
+    | FootnoteNode
+    | LinkReferenceDefinitionNode
+    | AbbreviationDefNode
+    | SnippetDefinitionNode
+    | CitationDefinitionNode
+    | FrontmatterNode
+  )[]
   astVersion: string
   srcByteLength?: number
   extensions?: ExtensionDeclaration[]
@@ -238,7 +246,15 @@ export interface ImageNode extends NodeBase {
 
 export interface IncludeNode extends NodeBase {
   type: "include"
-  children?: (Block | FootnoteNode | LinkReferenceDefinitionNode | AbbreviationDefNode | SnippetDefinitionNode | CitationDefinitionNode | FrontmatterNode)[]
+  children?: (
+    | Block
+    | FootnoteNode
+    | LinkReferenceDefinitionNode
+    | AbbreviationDefNode
+    | SnippetDefinitionNode
+    | CitationDefinitionNode
+    | FrontmatterNode
+  )[]
   path: string
   section?: string
   options?: IncludeOptions

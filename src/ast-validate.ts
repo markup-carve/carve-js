@@ -1260,8 +1260,7 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
   }
   checkFields(value, type, rule, path, current)
   checkDependencies(value, type, path, current)
-  if (type === 'table_cell') checkCellReferences(value, path, walk)
-  if (type === 'snippet_use' || type === 'snippet_definition') checkSnippet(value, type, path, allowed)
+  TYPE_CHECKS.get(type)?.(value, type, path, allowed, walk)
   checkNodeBounds(value, path, walk)
 }
 
@@ -1270,11 +1269,23 @@ function checkSnippet(value: Fields, type: string, path: string, allowed: readon
   if (type === 'snippet_definition') {
     const attrs = value['attrs']
     if (isRecord(attrs) && attrs['id'] !== undefined) fail(`${path}/attrs/id`, 'a snippet definition holds no id')
+    // C2-A-220: the value is never empty.
+    if (Array.isArray(value['children']) && value['children'].length === 0) fail(`${path}/children`, 'a snippet definition with no value')
     return
   }
   const mode = allowed.includes('text') ? 'inline' : 'block'
-  if (value['mode'] !== mode) fail(`${path}/mode`, `a snippet use in a list of ${mode === 'inline' ? 'inline nodes' : 'blocks'} has the mode ${mode}`)
+  const slot = mode === 'inline' ? 'inline nodes' : 'blocks'
+  if (value['mode'] !== mode) fail(`${path}/mode`, `a snippet use in a list of ${slot} has the mode ${String(value['mode'])}`)
 }
+
+type TypeCheck = (value: Fields, type: string, path: string, allowed: readonly string[], walk: Walk) => void
+
+/** The checks one node type adds beyond its row. */
+const TYPE_CHECKS: ReadonlyMap<string, TypeCheck> = new Map([
+  ['table_cell', (value, _type, path, _allowed, walk) => { checkCellReferences(value, path, walk) }],
+  ['snippet_use', checkSnippet],
+  ['snippet_definition', checkSnippet],
+])
 
 function checkCellReferences(value: Fields, path: string, walk: Walk): void {
   const attrs = value['attrs']
