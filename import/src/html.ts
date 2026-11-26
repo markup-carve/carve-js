@@ -16,6 +16,7 @@ import { collectNotes, isFootnoteSection } from './html-notes.ts'
 import { applyAdapter, type Adapter } from './html-adapter.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
 import { gridWidth, resolveAlignments } from './html-table-align.ts'
+import { listTable, wantsListTable } from './html-list-table.ts'
 import {
   cell, coalesce, complete, documentOf, ensureForeignDepth, imageParagraph, paragraph, row, softText, type ImportResult, type LossSettings,
 } from './kit.ts'
@@ -988,6 +989,7 @@ function table(node: Html.Element, context: HtmlContext): Block {
   const captionNode = caption === undefined ? undefined : figureCaption(caption, context)
   const result: TableNode = { type: 'table', children, columns: tableColumns(children, node, context),
     ...(captionNode ? { caption: captionNode } : {}), ...attrs(context, node) }
+  if (context.listTable === true && wantsListTable(result)) return listTable(result, node, context)
   resolveAlignments(result)
   return result
 }
@@ -1084,7 +1086,7 @@ export interface HubHooks {
 
 export function importHtml(
   input: string, rawHtml = false, hooks: HubHooks = {}, sourceLocations = true, labels: Readonly<Record<string, string>> = {},
-  adapter: Adapter = 'generic', losses?: LossSettings,
+  adapter: Adapter = 'generic', settings?: LossSettings & { listTable?: boolean },
 ): ImportResult {
   const full = isFullDocument(input)
   const foreign = full ? parse(input, { sourceCodeLocationInfo: sourceLocations }) : parseFragment(input, sourceLocations)
@@ -1094,7 +1096,7 @@ export function importHtml(
   const context: HtmlContext = { format: 'html', input, rawHtml, labels: { ...DEFAULT_LABELS, ...labels }, diagnostics: [], deferred: [],
     notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),
     anchorKeys: new Set() }
-  if (losses !== undefined) context.losses = losses
+  if (settings !== undefined) Object.assign(context, { losses: settings, listTable: settings.listTable === true })
   if (!full) fragmentBody(input, context)
   collectNotes(foreign.childNodes, context)
   rootLanguage(foreign.childNodes, context)

@@ -17,6 +17,7 @@ const { document, source, diagnostics } = importDocument('# Hello *world*\n', { 
 | `rawHtml` | boolean, default `false` | HTML only: keeps comments and raw elements as raw nodes (C2-M-065). |
 | `labels` | map of label keys to text | HTML only: identifies generated accessible names from the renderer (C2-M-101). |
 | `adapter` | `generic` (default), `tiptap`, `prosemirror`, `ckeditor`, `tinymce`, `word`, `google-docs` | HTML only: the editor that wrote the HTML (C2-M-102). `word` and `google-docs` read a word processor's notes, a reference and a note linked to each other, as footnotes; the other values read the HTML as `generic` does. |
+| `listTable` | boolean, default `false` | HTML only: a table with a cell of two or more blocks, or of one block that is not a paragraph, becomes a `::: list-table` div (C2-M-112). |
 | `strictLosses` | boolean, default `false` | Makes each loss of the import an error (C2-M-082). |
 | `constructs` | boolean, default `false` | Markdown, GFM and Djot: adds `constructs` to the result, a record of each construct of the input. |
 
@@ -32,6 +33,7 @@ carve import --from markdown README.md > README.crv
 carve import --from djot notes.dj > notes.crv
 carve import --from bbcode post.txt > post.crv
 carve import --from html --adapter word export.html > export.crv
+carve import --from html --list-table page.html > page.crv
 ```
 
 ## Construct records

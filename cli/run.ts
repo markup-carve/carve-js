@@ -563,6 +563,7 @@ function importFile(display: string, bytes: Uint8Array, args: ParsedArgs): FileR
   let result: ReturnType<typeof importDocument>
   try {
     result = importDocument(html, { from: args.values['from'] as Format, rawHtml: args.values['raw-html'] === true, strictLosses: strict,
+      listTable: args.values['list-table'] === true,
       ...(args.values['adapter'] !== undefined ? { adapter: args.values['adapter'] as Adapter } : {}) })
   } catch (error) {
     if (error instanceof CarveTreeError) throw new FileFailure('import-tree-invalid', `${display}: ${error.message}`, { status: 1 })

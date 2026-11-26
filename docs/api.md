@@ -31,7 +31,7 @@ HTML importer uses.
 | `lint` | source, `{ rules, platforms, upgrade, includes, extensions, headingIds }` | diagnostics | `CarveOptionError` |
 | `fix` | source, `{ rules, platforms, extensions }` | `{ output, applied }`, as `carve lint --fix` writes it ([Lint fixes](#lint-fixes)) | `CarveOptionError` |
 | `fixEdits` | source, a diagnostic of `lint` | the edits that fix that finding, or null | `CarveOptionError` |
-| `importDocument` | HTML, `{ from: 'html', rawHtml, labels, adapter, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
+| `importDocument` | HTML, `{ from: 'html', rawHtml, labels, adapter, listTable, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
 | `includeDependencies` | a tree, `{ ranges }` | its include dependencies; with `ranges`, each directive's byte range | |
 | `flatten` | an expanded tree | `{ source, same }`: one Carve file, and whether it renders as the tree does | `CarveTreeError`, `CarveWriteError` |
 | `includeRegion` | file text, a region name, `{ code }` | `{ ok, text, start, end }` or `{ ok: false, reason }` | `CarveOptionError` |

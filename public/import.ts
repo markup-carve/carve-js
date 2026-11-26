@@ -21,6 +21,8 @@ export interface ImportOptions {
   labels?: Readonly<Record<string, string>>
   /** C2-M-102: the editor that wrote the HTML; default `generic`. */
   adapter?: Adapter
+  /** C2-M-112: a table with a cell of blocks becomes a list table. */
+  listTable?: boolean
   /** C2-M-082: makes each loss of the import an error. */
   strictLosses?: boolean
   /** C2-H-204: render-loss codes left out of the result. */
@@ -35,7 +37,7 @@ export interface ImportOptions {
  */
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   if (options === undefined) throw new CarveOptionError('from', 'required')
-  checkOptions(options, { from: 'string', rawHtml: 'boolean', labels: 'labels', adapter: 'string', strictLosses: 'boolean', allowLosses: 'losses', maxLosses: 'losses' })
+  checkOptions(options, { from: 'string', rawHtml: 'boolean', labels: 'labels', adapter: 'string', listTable: 'boolean', strictLosses: 'boolean', allowLosses: 'losses', maxLosses: 'losses' })
   if (options.from !== 'html') {
     const routed = (OTHER_FORMATS as readonly unknown[]).includes(options.from)
     throw new CarveOptionError('from', routed ? `${JSON.stringify(options.from)} is read by @markup-carve/carve/import`

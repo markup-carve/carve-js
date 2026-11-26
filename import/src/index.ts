@@ -19,6 +19,8 @@ export interface ImportOptions {
   labels?: Readonly<Record<string, string>>
   /** C2-M-102: the editor that wrote the HTML; default `generic`. */
   adapter?: Adapter
+  /** C2-M-112: HTML only; a table with a cell of blocks becomes a list table. */
+  listTable?: boolean
   strictLosses?: boolean
   /** Markdown, GFM and Djot: adds `constructs`, a record of each construct of the input. */
   constructs?: boolean
@@ -30,6 +32,8 @@ export interface ImportOptions {
 export function importDocument(input: string, options: ImportOptions): ImportResult {
   const adapter = readAdapter(options.adapter)
   if (adapter !== 'generic' && options.from !== 'html') throw new CarveOptionError('adapter', 'HTML only')
+  if (options.listTable !== undefined && typeof options.listTable !== 'boolean') throw new CarveOptionError('listTable', 'not a boolean')
+  if (options.listTable === true && options.from !== 'html') throw new CarveOptionError('listTable', 'HTML only')
   return runImport(options.from, options, () => importByFormat(input, options))
 }
 
