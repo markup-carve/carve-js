@@ -56,6 +56,8 @@ function noteKey(id: string): string {
 class Edits {
   private readonly slots = new Map<Parent, Map<Html.ChildNode, number>>()
   private readonly gone = new Set<Html.ChildNode>()
+  /** The nodes that stand in the slot of a removed node. */
+  private readonly standIns = new Map<Html.ChildNode, Html.ChildNode[]>()
 
   private slot(node: Html.ChildNode): [Parent, number] | undefined {
     const parent = node.parentNode
@@ -72,7 +74,11 @@ class Edits {
   isGone(node: Html.ChildNode): boolean { return this.gone.has(node) }
 
   /** The children of `parent` that are still there. */
-  children(parent: Parent): Html.ChildNode[] { return parent.childNodes.filter(child => !this.gone.has(child)) }
+  children(parent: Parent): Html.ChildNode[] { return parent.childNodes.flatMap(child => this.present(child)) }
+
+  private present(child: Html.ChildNode): Html.ChildNode[] {
+    return this.gone.has(child) ? this.standIns.get(child) ?? [] : [child]
+  }
 
   /** The child before `node` that is still there, or undefined. */
   before(node: Html.ChildNode): Html.ChildNode | undefined {
@@ -86,9 +92,10 @@ class Edits {
     return undefined
   }
 
-  detach(node: Html.ChildNode): void {
+  detach(node: Html.ChildNode, standIns: Html.ChildNode[] = []): void {
     if (this.slot(node) === undefined) return
     this.gone.add(node)
+    if (standIns.length > 0) this.standIns.set(node, standIns)
   }
 
   replace(node: Html.ChildNode, replacement: Html.Element): void {
@@ -107,11 +114,12 @@ class Edits {
 
   finish(): void {
     for (const parent of this.slots.keys()) {
-      if (!parent.childNodes.some(child => this.gone.has(child))) continue
-      parent.childNodes = parent.childNodes.filter(child => {
-        if (!this.gone.has(child)) return true
-        child.parentNode = null
-        return false
+      if (this.gone.has(parent as Html.ChildNode) || !parent.childNodes.some(child => this.gone.has(child))) continue
+      parent.childNodes = parent.childNodes.flatMap(child => {
+        const kept = this.present(child)
+        if (kept[0] !== child) child.parentNode = null
+        for (const node of kept) node.parentNode = parent
+        return kept
       })
     }
   }
@@ -428,13 +436,14 @@ function dropSeparator(first: Html.Element, edits: Edits): void {
   }
 }
 
-/** C2-M-105: an element the notes left with layout only gives nothing, nor its parent, up to the `<body>`. */
+/** C2-M-109: an element the notes left with layout only is dropped, and so is its parent, up to the `<body>`; its comments stay. */
 function pruneEmpty(start: Parent, edits: Edits): void {
   let node: Html.ChildNode = start as Html.ChildNode
+  let children: Html.ChildNode[] = []
   while (isElement(node) && !isTopLevel(node) && !edits.isGone(node) && node.parentNode !== null
-    && edits.children(node).every(isLayout)) {
+    && (children = edits.children(node)).every(isLayout)) {
     const parent: Parent = node.parentNode
-    edits.detach(node)
+    edits.detach(node, children.filter(isComment))
     node = parent as Html.ChildNode
   }
 }
