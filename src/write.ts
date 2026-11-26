@@ -1424,18 +1424,132 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   // A blank line separates groups, so earlier escape and form choices no longer affect readback.
   if (from > 0) clearGroupChoices(w)
   const group = document.children.slice(from, groupEnd(w, document.children, from))
+  const mark = markLosses(w)
   const references = verbatimReferences(w, group)
-  if (references.length === 0) return writeGroupEscapes(w, run, document, from, first, group)
-  w.verbatimRefs = false
-  const planned = run.stats.planned
   let end: number
-  try {
-    end = writeGroupEscapes(w, run, document, from, first, group)
-  } finally {
-    w.verbatimRefs = true
+  if (references.length === 0) end = writeGroupEscapes(w, run, document, from, first, group)
+  else {
+    w.verbatimRefs = false
+    const planned = run.stats.planned
+    try {
+      end = writeGroupEscapes(w, run, document, from, first, group)
+    } finally {
+      w.verbatimRefs = true
+    }
+    takeVerbatimReferences(w, run, document.children.slice(from, end), first, references, run.stats.planned > planned)
   }
-  takeVerbatimReferences(w, run, document.children.slice(from, end), first, references, run.stats.planned > planned)
+  if (w.losses.entries.length > mark.entries && w.authored !== null) {
+    settleLosses(w, document.children.slice(from, end), first && !w.blankFirst, mark, references.length > 0)
+  }
   return end
+}
+
+/**
+ * C2-W-075, C2-W-088 (carve#6813): a loss of the rounds is provisional. The group is taken with every verbatim
+ * reference text where it then reads back, and otherwise with the authored source of its affected leaf blocks, the
+ * first in document order with which it reads back. The rounds do not run again.
+ */
+function settleLosses(w: Writer, group: readonly Node[], first: boolean, mark: LossMark, references: boolean): void {
+  const lines = w.lines
+  if (references) {
+    w.treeReferences.clear()
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    if (readsBack(w, group, first)) {
+      rollBackLosses(w, mark)
+      return
+    }
+    w.lines = lines
+  }
+  const leaves = affectedLeaves(group, new Set(w.losses.nodes.slice(mark.entries)))
+  if (leaves.length === 0) return
+  // The other blocks keep the spelling of the procedure, whose references are written from the tree.
+  for (const node of verbatimReferences(w, group)) w.treeReferences.add(node)
+  try {
+    for (const leaf of leaves.slice(0, MAX_VERBATIM_TRIALS)) {
+      if (exhausted(w)) break
+      const content = authoredContent(w, leaf)
+      if (content === null) continue
+      w.authoredLeaves.set(leaf, content)
+      resetLines(w)
+      writeBlocks(w, group, '', 0, false)
+      if (readsBack(w, group, first)) {
+        rollBackLosses(w, mark)
+        return
+      }
+    }
+    w.lines = lines
+  } finally {
+    w.authoredLeaves.clear()
+    w.treeReferences.clear()
+  }
+}
+
+// C2-W-088: the leaf blocks whose authored source can stand in for their spelling; a table cell is not one of them.
+const AUTHORED_LEAVES: ReadonlySet<string> = new Set(['paragraph', 'heading', 'definition_term'])
+
+/** The leaf blocks of `group` in document order that hold a node of `lost` or stand below one. */
+function affectedLeaves(group: readonly Node[], lost: ReadonlySet<Node | null>): Node[] {
+  const found: Node[] = []
+  const pending: [Node, boolean][] = [...group].reverse().map((node) => [node, false])
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
+    const [node, below] = item
+    const inside = below || lost.has(node)
+    if (AUTHORED_LEAVES.has(node.type)) {
+      if (inside || holdsLoss(lost, node)) found.push(node)
+      continue
+    }
+    const children = childNodes(node)
+    for (let at = children.length - 1; at >= 0; at--) pending.push([children[at]!, inside])
+  }
+  return found
+}
+
+/** Whether one of the nodes `lost` is `block` or a node below it. */
+function holdsLoss(lost: ReadonlySet<Node | null>, block: Node): boolean {
+  const pending: Node[] = [block]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (lost.has(node)) return true
+    for (const child of childNodes(node)) pending.push(child)
+  }
+  return false
+}
+
+/**
+ * C2-W-088: the content of a leaf block as authored, from the sidecar's source: its inline nodes' byte range, each line
+ * break without the container prefix that follows it and the spaces before it. Null where it cannot be cut out.
+ */
+function authoredContent(w: Writer, leaf: Node): string | null {
+  const children = childNodes(leaf)
+  const from = children[0]?.pos?.startOffset
+  const to = children.at(-1)?.pos?.endOffset
+  const source = w.authored
+  if (source === null || from === undefined || to === undefined || to < from) return null
+  const decode = (start: number, end: number): string => new TextDecoder().decode(source.subarray(start, end))
+  let text = ''
+  let at = from
+  for (const node of lineBreaks(children)) {
+    if (node.pos === undefined || node.pos.startOffset < at) return null
+    const spelled = decode(node.pos.startOffset, node.pos.endOffset)
+    const end = spelled.indexOf('\n')
+    if (end < 0) return null
+    text += `${decode(at, node.pos.startOffset)}${spelled.slice(0, end).replace(/[ \t]+$/u, '')}\n`
+    at = node.pos.endOffset
+  }
+  text += decode(at, to)
+  return text.includes('\r') ? null : text
+}
+
+/** The soft and hard breaks below `nodes`, in document order. */
+function lineBreaks(nodes: readonly Node[]): Node[] {
+  const breaks: Node[] = []
+  const pending: Node[] = [...nodes].reverse()
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'soft_break' || node.type === 'hard_break') breaks.push(node)
+    const below = childNodes(node)
+    for (let at = below.length - 1; at >= 0; at--) pending.push(below[at]!)
+  }
+  return breaks
 }
 
 function writeGroupEscapes(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,
@@ -1754,7 +1868,9 @@ function writeGroupOnce(w: Writer, run: WriterRun, document: DocumentNode, from:
   const saved = w.planWhy === 'kind' ? saveGroup(w, groupEnd(w, document.children, from)) : null
   let end = w.planWhy === 'depth cap'
     ? repairBareAlts(w, document, from, first, reported) : repairGroup(w, document, from, first, reported)
-  if (saved !== null && w.losses.entries.length > reported) end = planInstead(w, run, document, from, first, pairs, saved, reported)
+  if (saved !== null && !passSettled(w, document.children.slice(from, end), first, reported)) {
+    end = planInstead(w, run, document, from, first, pairs, saved, reported)
+  }
   run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), w.work.chars - work])
   return end
 }
@@ -1776,6 +1892,29 @@ function planInstead(w: Writer, run: WriterRun, document: DocumentNode, from: nu
 }
 
 /**
+ * C2-W-075 (carve#6813): a pass of the rounds settles the group where it reports no loss, and also where its losses are
+ * only those of its temporary form: the group written with the verbatim reference texts reads back.
+ */
+function passSettled(w: Writer, group: readonly Node[], first: boolean, reported: number): boolean {
+  if (w.losses.entries.length === reported) return true
+  if (w.authored === null || w.verbatimRefs) return false
+  const lines = w.lines
+  const tree = new Set(w.treeReferences)
+  w.treeReferences.clear()
+  w.verbatimRefs = true
+  try {
+    if (verbatimReferences(w, group).length === 0) return false
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    return readsBack(w, group, first && !w.blankFirst)
+  } finally {
+    w.verbatimRefs = false
+    for (const node of tree) w.treeReferences.add(node)
+    w.lines = lines
+  }
+}
+
+/**
  * C2-I-118: past the depth cap the brackets of an alt text are text, and the backslash a bracket without a partner
  * takes elsewhere removes an opener and moves the cap. Such a group is repaired with bare alt brackets first, and as
  * usual where that reports a loss.
@@ -1789,7 +1928,7 @@ function repairBareAlts(w: Writer, document: DocumentNode, from: number, first: 
   } finally {
     w.bareAlts = false
   }
-  if (w.losses.entries.length === reported) return end
+  if (passSettled(w, document.children.slice(from, end), first, reported)) return end
   restoreGroup(w, saved)
   return repairGroup(w, document, from, first, reported)
 }
@@ -1812,14 +1951,14 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   addEscapes(w, earlyLoneNoteBrackets(w, group).filter(([node, at]) => !(w.escapes.get(node) ?? []).includes(at)))
   const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
   const end = repairOnce(w, document, from, first, reported)
-  if (saved === null || w.losses.entries.length === reported) return end
+  if (saved === null || passSettled(w, group, first, reported)) return end
   restoreGroup(w, saved)
   const before = saveGroup(w, saved.end)
   // C2-W-005: where that loses a node, the closer repairs give their kind too, the smallest departure that keeps it.
   w.closerKinds = true
   try {
     const kinds = repairOnce(w, document, from, first, reported)
-    if (w.losses.entries.length === reported) return kinds
+    if (passSettled(w, group, first, reported)) return kinds
   } finally {
     w.closerKinds = false
   }
@@ -1830,7 +1969,7 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   w.kindRounds = false
   try {
     const openers = repairOnce(w, document, from, first, reported)
-    if (w.losses.entries.length === reported) return openers
+    if (passSettled(w, group, first, reported)) return openers
   } finally {
     w.kindRounds = true
   }
@@ -1847,7 +1986,7 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
       w.kindRounds = kinds
       try {
         const trials = repairOnce(w, document, from, first, reported)
-        if (w.losses.entries.length === reported) return trials
+        if (passSettled(w, group, first, reported)) return trials
       } finally {
         w.wholeTrials = false
         w.kindRounds = true
@@ -3103,6 +3242,8 @@ export function writeTreeWithStats(document: DocumentNode, options: WriteOptions
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
   w.verifiedSourceBytes = verifiedSourceBytes
+  const authored = layoutSource(layout)
+  if (authored !== null) w.authored = new TextEncoder().encode(authored)
   document = withSourceAlts(w, document)
   prepareDocumentWriter(w, document, layout)
   if (linkKeys !== undefined) w.linkKeys = linkKeys

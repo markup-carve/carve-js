@@ -634,9 +634,16 @@ function collapsedContent(node: LinkNode, content: string, flags: number): strin
   const key = node.key
   if ((node.refForm !== 'collapsed' && node.refForm !== 'shortcut') || key === undefined || (flags & IN_CELL) !== 0 ||
     foldLabel(content) === key) return content
+  // The rounds write a reference past the depth cap again with the same content; each label trial parses all of it.
+  const known = collapsedLabels.get(node)
+  if (known !== undefined && known[0] === content) return known[1]
   const children: ParagraphNode = { type: 'paragraph', children: node.children }
-  return labelLike(content, key, (candidate) => readsAsCollapsed(candidate, key, children))
+  const label = labelLike(content, key, (candidate) => readsAsCollapsed(candidate, key, children))
+  collapsedLabels.set(node, [content, label])
+  return label
 }
+
+const collapsedLabels = new WeakMap<LinkNode, [string, string]>()
 
 /** C2-W-075: the first spelling of the label `written` that folds to `key` and reads back, or `written`. */
 function labelLike(written: string, key: string, readsBack: (candidate: string) => boolean): string {

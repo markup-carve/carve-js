@@ -13,8 +13,6 @@ const METADATA_FIELDS = 'carve#3598 root metadata fields beside a frontmatter no
 const REGION_MARKER = 'carve#6727 a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815)'
 const DJOT_GATE = 'carve#6499 the djot- rules default to off (C2-T-031, C2-T-049; spec carve#6824)'
 const QUOTE_LOCALE = 'carve-rs#4838 a smart quotes locale outside its row falls back (C2-X-075; spec carve#6824)'
-const ESCAPE_ROUND_KEYS = 'carve#6813 a key the escape rounds cannot spell is no loss where the output reads back'
-  + ' (C2-W-075; spec carve#6825)'
 const SNIPPETS = 'carve#6395 snippet definitions and uses (C2-B-236, C2-I-128, C2-N-090 to C2-N-096; spec carve#6830)'
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
 const LIST_TABLE = 'carve#6835 a valueless header-rows and a row item with a block after its list (C2-X-078; spec carve#6842)'
@@ -69,8 +67,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2148', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2298', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2299', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
-  ['CC-2323', { fields: ['diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
-  ['CC-2324', { fields: ['carve', 'diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
   ['CC-2347', { fields: ['children', 'html'], fix: SNIPPETS }],
   ['CC-2348', { fields: ['html'], fix: SNIPPETS }],
   ['CC-2349', { fields: ['children', 'html'], fix: SNIPPETS }],
