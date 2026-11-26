@@ -49,8 +49,9 @@ const XLINK_NS = 'http://www.w3.org/1999/xlink'
 // The only prefixed names written, each exactly in this spelling: prefixes are case-sensitive
 // and the root binds `xlink` when needed (carve#6782, carve#6783).
 const PREFIXED_NAMES = new Set(['xlink:href', 'xmlns:xlink', 'xml:space'])
-// A namespace name of XML whitespace only, literal or as a character reference, is no URI reference (carve#6783).
-const BLANK_NAMESPACE_RE = /^(?:[ \t\n\r]|&#(?:0*(?:9|10|13|32)|[xX]0*(?:9|[aAdD]|20));)*$/
+// A namespace name that is empty or holds XML whitespace or U+00A0, literal or as a character
+// reference, is no URI reference libxml2 accepts (carve#6783, carve#6811).
+const UNWRITABLE_NAMESPACE_RE = /^$|[ \t\n\r\u00a0]/
 
 // Presentational SVG element allowlist. Deliberately excludes script,
 // foreignObject, style, a, image, metadata, and SMIL — those are gated by an
@@ -312,7 +313,7 @@ function sanitizeAttribute(name: string, n: string, value: string | null, opts: 
 function namespaceUnwritable(name: string, value: string): boolean {
   if (!name.includes(':')) return false
   // Namespaces in XML forbids undeclaring a prefix (carve#6779).
-  return !PREFIXED_NAMES.has(name) || (name === 'xmlns:xlink' && BLANK_NAMESPACE_RE.test(value))
+  return !PREFIXED_NAMES.has(name) || (name === 'xmlns:xlink' && UNWRITABLE_NAMESPACE_RE.test(decodeEntities(value)))
 }
 
 function sanitizeUrlAttribute(name: string, value: string, opts: SanitizeSvgOptions, allowExternalHref: boolean): string {
