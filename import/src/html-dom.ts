@@ -228,6 +228,18 @@ export function withoutKeys(mapped: MappedAttrs, drop: readonly string[]): Mappe
   return result
 }
 
+/** Renames the keys `names` maps, in place; a key whose new name is already present keeps its name. */
+export function renamedKeys(mapped: MappedAttrs, names: Readonly<Record<string, string>>): MappedAttrs {
+  const keyValues = mapped.attrs?.keyValues
+  if (keyValues === undefined || !keyValues.some(([key]) => Object.hasOwn(names, key))) return mapped
+  const present = new Set(keyValues.map(([key]) => key))
+  const renamed = keyValues.map(([key, value]): [string, string] => {
+    const target = Object.hasOwn(names, key) ? names[key]! : undefined
+    return target !== undefined && !present.has(target) ? [target, value] : [key, value]
+  })
+  return { ...mapped, attrs: { ...mapped.attrs, keyValues: renamed } }
+}
+
 export type BlockReader = (node: Html.ChildNode, context: HtmlContext) => Block[]
 
 function isFormatChar(code: number, first: boolean): boolean {

@@ -3,8 +3,9 @@ import { type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { foldLabel, type Inline, type RubyPairNode } from '../../src/index.ts'
 import {
   at, attr, attrs, classList, content, elements, has, ignoredCarrier, isComment, isElement, isText, plain, report,
-  withoutClasses, withoutKeys, isRawFormat, isRawSpan, type HtmlContext, type NoteEntry,
+  renamedKeys, withoutClasses, withoutKeys, isRawFormat, isRawSpan, type HtmlContext, type NoteEntry,
 } from './html-dom.ts'
+import { isRangeEnd, rangedComment } from './html-ranged-comment.ts'
 import { isBacklink } from './html-notes.ts'
 import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
 import { coalesce, isKey, paragraph, safeUrl, softText, text, withDestination } from './kit.ts'
@@ -376,12 +377,20 @@ function rawSpan(node: Html.Element, format: string, context: HtmlContext): Inli
 
 const MATH_CLASSES = ['math', 'inline', 'display']
 
+// C2-M-044, C2-H-210: the revision keys a render writes as data attributes.
+const COMMENT_KEYS = { 'data-author': 'author', 'data-datetime': 'datetime' }
+const REVISION_KEYS = { 'data-author': 'author' }
+
 /** The spans whose classes a 0.2 render gives the node it writes (C2-H-076, C2-H-100, C2-H-102). */
 function classedSpan(node: Html.Element, context: HtmlContext): Inline[] | undefined {
   const classes = classList(node)
   const first = classes[0]
   if (first === 'math' && (classes[1] === 'inline' || classes[1] === 'display')) return mathSpan(node, classes[1], context)
-  if (first === 'critic-comment') return [{ type: 'critic_comment', value: plain(node), ...withoutClasses(attrs(context, node), [first]) }]
+  if (first === 'critic-comment') {
+    return [{ type: 'critic_comment', value: plain(node), ...renamedKeys(withoutClasses(attrs(context, node), [first]), COMMENT_KEYS) }]
+  }
+  if (first === 'comment-start') return rangedComment(node, context)
+  if (first === 'comment-end' && isRangeEnd(node, context)) return []
   if (first === 'mention' || first === 'tag') return socialSpan(node, first, context)
   // C2-M-035 row `ext`, C2-I-094: NAME is an inline extension name, which has the shape of a key.
   if (first?.startsWith('ext-') === true && isKey(first.slice(4))) {
@@ -542,8 +551,8 @@ function formatInline(node: Html.Element, children: Inline[], context: HtmlConte
     case 'em': case 'i': return [{ type: 'emphasis', children, ...mapped() }]
     case 'strong': case 'b': return [{ type: 'strong', children, ...mapped() }]
     case 's': case 'strike': return [{ type: 'strike', children, ...mapped() }]
-    case 'del': return [{ type: 'delete', children, ...mapped() }]
-    case 'ins': return [{ type: 'insert', children, ...mapped() }]
+    case 'del': return [{ type: 'delete', children, ...renamedKeys(mapped(), REVISION_KEYS) }]
+    case 'ins': return [{ type: 'insert', children, ...renamedKeys(mapped(), REVISION_KEYS) }]
     case 'mark': return [{ type: 'highlight', children, ...mapped() }]
     case 'u': return [{ type: 'underline', children, ...mapped() }]
     case 'sub': return [{ type: 'subscript', children, ...mapped() }]
