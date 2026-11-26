@@ -112,6 +112,7 @@ export const RENDER_LOSS_CODES: readonly string[] = [
   "extension-transform-failed", "field-unspellable", "heading-shift-above-6", "image-alt-unknown", "import-attribute-dropped",
   "import-carrier-ignored", "import-destination-denied", "import-element-dropped", "import-element-mapped", "import-structure-repaired",
   "import-whitespace-normalized", "include-expanded-roundtrip", "include-unresolved", "profile-construct-degraded", "raw-format-dropped",
+  "snippet-cycle", "snippet-depth", "snippet-node-budget", "snippet-scope-loss", "snippet-unexpanded-transform", "snippet-unresolved",
   "structure-unspellable", "writer-refused",
 ]
 

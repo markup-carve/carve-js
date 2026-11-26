@@ -923,21 +923,11 @@ export const CATALOG = {
   ] },
   "reserved-syntax": { severity: "warning", default: "on", messages: [
     [
-      "This \"${text}\" is reserved for an include from the same document in ",
-      "a later 0.2 release and renders as literal text. Write \\{{ to keep t",
-      "he text.",
-    ].join(''),
-    [
-      "A line that starts with \"${text}\" is reserved for a definition in a ",
-      "later 0.2 release and renders as literal text. Write \\{# to keep the",
-      " text.",
+      "This \"${text}\" is reserved and renders as literal text. Write \\{{ to",
+      " keep the text.",
     ].join(''),
   ], conditions: [
     "a directive with a section and no path",
-    [
-      "a line that starts with an id in braces, optional attributes and a c",
-      "olon",
-    ].join(''),
   ] },
   "semantic-attribute-outside-span": { severity: "warning", default: "on", messages: [
     [
@@ -969,6 +959,14 @@ export const CATALOG = {
     [
       "A mention or tag does not start directly after a letter or number. P",
       "ut a space or punctuation before it.",
+    ].join(''),
+  ], conditions: [
+    "",
+  ] },
+  "snippet-definition-id": { severity: "warning", default: "on", messages: [
+    [
+      "A snippet definition is no anchor and takes no id, so this line is t",
+      "ext. Remove the id.",
     ].join(''),
   ], conditions: [
     "",
@@ -1231,6 +1229,11 @@ export const CATALOG = {
   ] },
   "unused-link-reference-definition": { severity: "warning", default: "on", messages: [
     "This link reference definition is unused.",
+  ], conditions: [
+    "",
+  ] },
+  "unused-snippet": { severity: "hint", default: "on", messages: [
+    "Snippet \"$${name}\" is defined but never used.",
   ], conditions: [
     "",
   ] },
