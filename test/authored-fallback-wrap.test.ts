@@ -25,6 +25,8 @@ describe('C2-W-088: the authored slice of a node that wraps', () => {
       ['- > ``^[/`"`[^\\\\/\n  > `]^[[^*]\\`/=[^`[]]\n', '- > ``^[/`"`[^\\\\/\n  > `]^[[^*]\\`/=[^`[]]\n'],
       [' > ^[/\\[^}[^}]*\\][^[\n> ]/', '> ^[/\\[^}[^}]*\\][^[\n> ]/\n'],
       ['> :n[\n{[]``\n> ``@\\`~]`', '> :n[\n> {[]``\n> ``@\\`~]`\n'],
+      // A code span line whose content starts with a quote marker keeps it on both runs.
+      ['> `\n> >`*[\n|*[^\n{]|', '> `\n> >`*[\n> |*[^\n> {]|\n'],
     ]) {
       const result = formatWithDiagnostics(input!)
       expect(result.source, input).toBe(expected)
