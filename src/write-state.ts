@@ -85,8 +85,11 @@ export interface Writer {
   escapes: Map<TextNode, number[]>
   /** While set, each backslash of `escapes` is written as `mark` and listed in `written`, in the order written. */
   escapeTrace: { mark: string, written: [TextNode, number][] } | null
-  /** The lines the last prune of `escapes` gave, with the group and the lines it started from (carve-js#5715). */
-  prunedFrom: { group: readonly Node[], written: readonly string[], lines: readonly string[] } | null
+  /**
+   * By the lines a prune of the group gave, joined, the group and the lines it pruned (carve-js#5715). Keyed by text, so a
+   * pass that takes a recorded pass's lines finds them too.
+   */
+  prunedFrom: Map<string, { group: readonly Node[], written: readonly string[] }>
   /** Braced kinds reported by this group's repair rounds. */
   reportedBraceKinds: Set<string>
   /** The spelling of a node that has more than one: 0 is the first choice of its clause. */
@@ -231,7 +234,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
   extensions: readonly ExtensionDefinition[] = []): Writer {
   return {
     extensions,
-    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), escapeTrace: null, prunedFrom: null,
+    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), escapeTrace: null, prunedFrom: new Map(),
     reportedBraceKinds: new Set(),
     forms: new Map(), glued: new Set(),
     bracedAnyway: new Set(), caseEightLinks: new Set(),

@@ -1421,6 +1421,7 @@ function compareWithRepair(
  */
 function clearGroupChoices(w: Writer): void {
   if (w.escapes.size > 0) w.escapes = new Map()
+  w.prunedFrom.clear()
   w.reportedBraceKinds.clear()
   if (w.forms.size > 0) w.forms.clear()
   if (w.attempts.size > 0) w.attempts.clear()
@@ -2944,7 +2945,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
     at = source.indexOf('\\', at + 1)
   }
   w.lines = source.slice(first ? 0 : 1, -1).split('\n')
-  w.prunedFrom = sameLines(w.lines, written) ? null : { group: [...group], written, lines: w.lines }
+  if (!sameLines(w.lines, written)) w.prunedFrom.set(w.lines.join('\n'), { group: [...group], written })
 }
 
 /**
@@ -2953,10 +2954,8 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
  * them back. True where `escapes` changed; where the trace cannot place every pruned one, they stay.
  */
 function dropPrunedEscapes(w: Writer, group: readonly Node[], lines: readonly string[]): boolean {
-  const from = w.prunedFrom
-  if (from === null || !sameLines(from.lines, lines) || from.group.length !== group.length ||
-    from.group.some((node, at) => node !== group[at])) return false
-  w.prunedFrom = null
+  const from = w.prunedFrom.get(lines.join('\n'))
+  if (from === undefined || from.group.length !== group.length || from.group.some((node, at) => node !== group[at])) return false
   const { lead, leadSkip, bareDotLead, verbatimRefs } = w
   const kept = w.lines
   const starts = new Map(w.starts)
