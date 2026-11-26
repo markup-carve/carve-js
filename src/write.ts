@@ -1188,12 +1188,15 @@ function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
   const result = groupEqual(w, group, parseChunk(w, source, w.linkKeys, false).children)
   if (w.readBacks.size >= MAX_READ_BACKS) w.readBacks.clear()
   const entries = w.readBacks.get(source) ?? []
+  // Groups of the same source each add one, so the list keeps the last few and its scan stays short.
+  if (entries.length >= MAX_READ_BACK_GROUPS) entries.shift()
   entries.push({ group, lineFeedValues: w.lineFeedValues, result })
   w.readBacks.set(source, entries)
   return result
 }
 
 const MAX_READ_BACKS = 16
+const MAX_READ_BACK_GROUPS = 4
 
 function groupEqual(w: Writer, group: readonly Node[], parsed: readonly Node[]): boolean {
   return parsed.length === group.length && parsed.every((node, at) => writerEqual(w, group[at]!, node))
