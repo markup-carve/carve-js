@@ -113,7 +113,7 @@ it(
   () => {
     for (const directory of CORPUS_DIRECTORIES) {
       const names = ['examples.json', 'clause-cases.json', 'refused-trees.json', 'schema.json']
-      const files = directory === 'conformance' ? names : TREE_FILES.map((file) => `${file}.json`).concat(['nodes.json', 'refused.json', 'layouts.json'])
+      const files = directory === 'conformance' ? names : TREE_FILES.map((file) => `${file}.json`).concat(['nodes.json', 'refused.json', 'layouts.json', 'positions.json'])
       for (const name of files) {
         expect(readFileSync(join(DATA, directory, name), 'utf8'), `${directory}/${name}`).toBe(readFileSync(join(spec, directory, name), 'utf8'))
       }

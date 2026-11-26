@@ -58,12 +58,20 @@ function checkSiblings(list: readonly Node[], path: string): string | null {
   let lastEnd = 0
   for (const node of list) {
     if (node.pos === undefined) continue
+    // C2-A-145: a comment block in a line block before the lazy `%%` line that ends the line above lies inside that line.
+    if (last !== null && insideLazyEndedLine(last, node, lastEnd)) continue
     const exempt = last !== null && (last.type === 'comment' || (isBreak(last) && isBreak(node)))
     if (last !== null && !exempt && lastEnd > node.pos.startOffset) return `${path}: ${last.type} overlaps ${node.type}`
     last = node
     lastEnd = node.pos.endOffset
   }
   return null
+}
+
+function insideLazyEndedLine(line: Node, node: Node, lineEnd: number): boolean {
+  if (line.type !== 'line' || node.type !== 'comment' || node.form !== 'block') return false
+  const tail = line.children.at(-1)
+  return tail?.type === 'comment' && tail.form === 'line' && node.pos!.endOffset <= lineEnd
 }
 
 /** C2-A-144: a child lies inside the nearest ancestor that has a position. */
