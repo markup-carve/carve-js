@@ -6,7 +6,7 @@ import { type RuleId } from './catalog.ts'
 import { type LintContext, type Rule } from './types.ts'
 
 /** The names every authored use names, those inside definitions included (C2-N-096). */
-function usedNames(document: DocumentNode): Set<string> {
+export function usedNames(document: DocumentNode): Set<string> {
   const names = new Set<string>()
   const pending: Node[] = [document]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {

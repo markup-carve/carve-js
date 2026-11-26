@@ -56,3 +56,9 @@ export function carrySnippetMarks(view: DocumentNode, copy: DocumentNode): void 
     for (const key of Object.keys(from)) pending.push([(from as Record<string, unknown>)[key], (to as Record<string, unknown>)[key]])
   }
 }
+
+/** The budget the copies of `from` left, for `to`, a new root a transform returned. */
+export function carrySnippetBudget(from: DocumentNode, to: DocumentNode): void {
+  const budget = SNIPPET_BUDGETS.get(from)
+  if (budget !== undefined && !SNIPPET_BUDGETS.has(to)) SNIPPET_BUDGETS.set(to, budget)
+}

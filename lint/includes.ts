@@ -7,6 +7,7 @@ import { type IncludeConfig, includeSettings, type IncludeResolver, type Include
 import { fileLines, type LineRange, lineRange, regionRange } from '../src/include-source.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { unitBytes, utf8Length } from '../src/positions.ts'
+import { usedNames } from './snippets.ts'
 
 /** The text the resolver returned for each id, as the expansion read it. */
 function recording(config: IncludeSettings, texts: Map<string, string>): IncludeConfig {
@@ -60,6 +61,8 @@ interface ReferenceFindings {
   observed: Set<string>
   unresolved: Set<string>
   used: Set<string>
+  /** C2-N-096: the snippet names the uses of the expanded tree name, across its files. */
+  snippets: Set<string>
 }
 
 function referenceKey(file: string, node: Node, code: string): string | null {
@@ -135,13 +138,15 @@ function walkReferences(node: Node, path: string, file: string, inclusion: strin
 
 /** The resolved expansion decides which file's definition a reference actually uses (C2-N-054, C2-N-055). */
 function referenceFindings(document: DocumentNode): ReferenceFindings {
-  const found: ReferenceFindings = { observed: new Set(), unresolved: new Set(), used: new Set() }
+  const found: ReferenceFindings = { observed: new Set(), unresolved: new Set(), used: new Set(), snippets: usedNames(document) }
   walkReferences(document, '', '', '', scopeOf(document.children, '', null), found)
   return found
 }
 
 const RECONCILED: ReadonlySet<string> = new Set(['unresolved-reference-link', 'unresolved-footnote',
-  'unused-link-reference-definition', 'unused-footnote-definition'])
+  'unused-link-reference-definition', 'unused-footnote-definition', 'unused-snippet'])
+
+const SNIPPET_NAME = /"\$([^"]+)"/u
 
 function reconciled(entry: Diagnostic, found: ReferenceFindings, inclusion = ''): boolean {
   const key = diagnosticKey(entry)
@@ -152,6 +157,8 @@ function reconciled(entry: Diagnostic, found: ReferenceFindings, inclusion = '')
   if (entry.code === 'unused-link-reference-definition' || entry.code === 'unused-footnote-definition') {
     return !found.used.has(key)
   }
+  // A definition of one file that another file of the expansion uses is used.
+  if (entry.code === 'unused-snippet') return !found.snippets.has(SNIPPET_NAME.exec(entry.message)?.[1] ?? '')
   return true
 }
 

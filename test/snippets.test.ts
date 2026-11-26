@@ -1,7 +1,8 @@
 // Named snippets beyond the clause cases: the marker parts and the carriers a document transform keeps.
 import { describe, expect, it } from 'vitest'
-import { type DocumentNode, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree } from '../src/index.ts'
+import { type DocumentNode, parse, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree, writeWithDiagnostics } from '../src/index.ts'
 import { withSnippetLimits } from '../src/harness-limits.ts'
+import { lint } from '../lint/lint.ts'
 
 describe('named snippets', () => {
   it('C2-B-236: a glued block after a quoted value holding } still reads', () => {
@@ -83,5 +84,29 @@ describe('named snippets', () => {
     expect(JSON.stringify(resolveTree(tree).document.children[1])).not.toContain('"pos"')
     expect(withSnippetLimits({ snippetNodes: 2 }, () => renderTree(resolveTree(tree)))).toBe('<p>{{ $x }}</p>')
     expect(withSnippetLimits({ snippetNodes: 3 }, () => renderTree(resolveTree(tree)))).toBe('<p><span>X</span></p>')
+  })
+
+  it('C2-N-093: a refused use keeps its finding through a document transform, a new root keeping the budget', () => {
+    const noop = [{ name: 'noop', transform: (view: DocumentNode) => view }]
+    const fresh = [{ name: 'fresh', transform: (view: DocumentNode) => ({ ...view, children: [...view.children] }) }]
+    for (const transforms of [noop, fresh]) {
+      const result = renderWithDocumentTransforms('A {{ $missing }}\n', transforms)
+      expect(result.diagnostics.map((entry) => entry.code)).toEqual(['snippet-unresolved'])
+    }
+  })
+
+  it('C2-W-159: a break inside an inline container of a supplied definition is written as a space', () => {
+    const tree = { type: 'document', astVersion: '2.0', children: [{ type: 'snippet_definition', name: 'x', children: [
+      { type: 'emphasis', children: [{ type: 'text', value: 'a' }, { type: 'soft_break' }, { type: 'text', value: 'b' }] }] }] }
+    const written = writeWithDiagnostics(tree as unknown as DocumentNode)
+    expect(written.source).toBe('{$x}: /a b/\n')
+    expect(parse(written.source).children).toHaveLength(1)
+  })
+
+  it('C2-N-096: a definition of an included file that the including file uses is no unused snippet', () => {
+    const files: Record<string, string> = { 'child.crv': '{$x}: X\n\n{$y}: Y\n' }
+    const resolver = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    const found = lint('{{ child.crv }}\n\n{{ $x }}\n', { includes: { resolver } })
+    expect(found.filter((entry) => entry.code === 'unused-snippet').map((entry) => entry.message)).toEqual(['Snippet "$y" is defined but never used.'])
   })
 })

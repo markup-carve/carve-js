@@ -458,6 +458,23 @@ function abbreviationDefinition(w: Writer, node: AbbreviationDefNode, prefix: st
   emit(w, prefix, `*[${node.key}]: ${expansion.slice(0, end)}`)
 }
 
+/** The inline nodes with every line break, at any depth, as one space, or null where there is none. */
+function spacedBreaks(nodes: readonly Inline[]): Inline[] | null {
+  let out: Inline[] | null = null
+  nodes.forEach((child, at) => {
+    let next: Inline | null = null
+    if (child.type === 'soft_break' || child.type === 'hard_break') next = { type: 'text', value: ' ' } satisfies TextNode
+    else if ('children' in child && Array.isArray(child.children)) {
+      const inner = spacedBreaks(child.children as Inline[])
+      if (inner !== null) next = { ...child, children: inner } as Inline
+    }
+    if (next === null) return
+    out ??= nodes.slice()
+    out[at] = next
+  })
+  return out
+}
+
 /**
  * C2-W-159: `{$`, the name, the attributes as the parts of one block, `}: ` and the value on one line. A line break
  * of a supplied value is written as one space and reported.
@@ -465,12 +482,9 @@ function abbreviationDefinition(w: Writer, node: AbbreviationDefNode, prefix: st
 function snippetDefinition(w: Writer, node: SnippetDefinitionNode, prefix: string, flags: number): void {
   const block = braceBlock(node)
   const marker = '{$' + node.name + (block === '' ? '' : ` ${block.slice(1, -1)}`) + '}: '
-  let children: Inline[] = node.children
-  if (children.some((child) => child.type === 'soft_break' || child.type === 'hard_break')) {
-    lose(w, node, null)
-    children = children.map((child) => child.type === 'soft_break' || child.type === 'hard_break'
-      ? { type: 'text', value: ' ' } satisfies TextNode : child)
-  }
+  const spaced = spacedBreaks(node.children)
+  if (spaced !== null) lose(w, node, null)
+  const children = spaced ?? node.children
   w.lead = (w.lead ?? prefix) + marker
   escapeBacktickKind(w, children)
   emitLines(w, prefix, '', planLeaf(w, children, flags, writeContent(w, children, flags), AS_CONTENT, AFTER_MARK))

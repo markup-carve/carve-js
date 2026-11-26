@@ -11,7 +11,7 @@ import { addFinding, type Diagnostic, type Findings, locateFindings } from './di
 import {
   definitionKeys, expandSnippets, holdsSnippetNode, holdsSnippetUse, refuseTransformSnippets,
 } from './snippet-expand.ts'
-import { carrySnippetMarks } from './snippet-marks.ts'
+import { carrySnippetBudget, carrySnippetMarks } from './snippet-marks.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
 import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
@@ -583,6 +583,15 @@ function applies(entry: DocumentTransform, view: DocumentNode): boolean {
   return entry.appliesTo === undefined || entry.appliesTo(view)
 }
 
+/** One transform of a copy of `view`; the copy carries the snippet side tables, and a new root the budget. */
+function runTransform(entry: DocumentTransform, view: DocumentNode): DocumentNode {
+  const input = cloneTree(view)
+  carrySnippetMarks(view, input)
+  const next = entry.transform(input)
+  if (next !== input) carrySnippetBudget(input, next)
+  return next
+}
+
 function applyDocumentTransforms(view: DocumentNode, transforms: readonly DocumentTransform[], extensions: Settings['extensions']): {
   view: DocumentNode, failures: Diagnostic[], validated: boolean, changed: boolean
 } {
@@ -594,9 +603,7 @@ function applyDocumentTransforms(view: DocumentNode, transforms: readonly Docume
   for (const entry of transforms) {
     try {
       if (!applies(entry, view)) continue
-      const input = cloneTree(view)
-      carrySnippetMarks(view, input)
-      const next = entry.transform(input)
+      const next = runTransform(entry, view)
       // A view the transform left as it was is checked once; its ids are those of its input.
       if (unchanged(next, view)) {
         if (!validated) validateTree(next, undefined, undefined, extensions)
@@ -656,6 +663,12 @@ function unchangedViewRender(resolved: ResolvedTree, sourceDiagnostics: Diagnost
   return { html: settings.strictLosses && lost ? '' : rendered.html, ...capped }
 }
 
+function expansionDiagnostics(resolved: ResolvedTree, findings: Findings): Diagnostic[] {
+  if (findings.entries.length === 0) return []
+  const allowed = resolved.settings.allowLosses
+  return locateFindings(resolved.document, findings).filter((entry) => !allowed.has(entry.code))
+}
+
 /** C2-N-095: the definitions of the resolved view the transforms receive, those with no use among them. */
 function transformBaseline(input: string | Uint8Array | DocumentNode, view: DocumentNode): string[] {
   return typeof input === 'string' && !input.includes('{$') ? [] : definitionKeys(view)
@@ -669,7 +682,8 @@ function transformedRender(
   const parsed = expanded.parsed
   const resolved = resolveStage(parsed, settings)
   appendFindings(resolved.losses, expanded.findings)
-  const sourceDiagnostics = parseDiagnostics(resolved, parsed)
+  // C2-N-093: the findings of the expansion stand for the view the transforms receive, whichever path renders it.
+  const sourceDiagnostics = [...parseDiagnostics(resolved, parsed), ...expansionDiagnostics(resolved, expanded.findings)]
   // C2-H-208: capture the shift's own above-six result before any host can change the level.
   const shiftLosses: Findings = { entries: [], nodes: [] }
   if (settings.headingShift !== 0) {
