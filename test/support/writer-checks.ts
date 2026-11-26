@@ -894,9 +894,6 @@ export const WRITER_GATE_HELD: ReadonlyMap<string, string> = new Map([
   ['CC-2430', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
   ['CC-2431', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
   ['CC-2432', 'carve#6848: the authored-block fallback of CC-2323; without the sidecar the tree keeps the loss (C2-W-117)'],
-  ['CC-2468', 'carve#6860: header-rows where the header marks cannot end the head (C2-W-066, C2-W-136)'],
-  ['CC-2469', 'carve#6860: header-rows where the header marks cannot end the head (C2-W-066, C2-W-136)'],
-  ['CC-2470', 'carve#6860: header-rows where the header marks cannot end the head (C2-W-066, C2-W-136)'],
 ])
 
 /** The result of the checks on one source: null, a failure, or `refused` (C2-W-016, C2-W-133). */

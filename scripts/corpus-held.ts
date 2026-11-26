@@ -6,7 +6,6 @@ import type { Holds } from './holds.ts'
 // Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
 const LOOSE_CARRIER = 'carve#6844 data-carve-loose carries the spacing of a loose list (C2-H-138, C2-H-186; spec carve#6862)'
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
-const HEADER_ROWS_HEAD = 'carve#6860 header-rows where the header marks cannot end the head (C2-W-066, C2-W-136; spec 5001ee27)'
 const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under normalize too (C2-W-088, C2-W-127; spec carve#6849)'
 
 /**
@@ -24,9 +23,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2409', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2410', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2412', { fields: ['children'], fix: IMAGE_PARAGRAPH }],
-  ['CC-2468', { fields: ['carve'], fix: HEADER_ROWS_HEAD }],
-  ['CC-2469', { fields: ['carve'], fix: HEADER_ROWS_HEAD }],
-  ['CC-2470', { fields: ['carve'], fix: HEADER_ROWS_HEAD }],
   ['CC-2428', { fields: ['carve', 'diagnosticsComplete'], fix: AUTHORED_FALLBACK }],
   ['CC-2414', { fields: ['html'], fix: LOOSE_CARRIER }],
   ['CC-2440', { fields: ['html'], fix: LOOSE_CARRIER }],
