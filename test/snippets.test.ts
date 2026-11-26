@@ -1,6 +1,6 @@
 // Named snippets beyond the clause cases: the marker parts and the carriers a document transform keeps.
 import { describe, expect, it } from 'vitest'
-import { CarveTreeError, decodeTree, type DocumentNode, type ExtensionDefinition, parse, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree, writeWithDiagnostics } from '../src/index.ts'
+import { CarveTreeError, decodeTree, type DocumentNode, type ExtensionDefinition, format, parse, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree, writeWithDiagnostics } from '../src/index.ts'
 import { withSnippetLimits } from '../src/harness-limits.ts'
 import { lint } from '../lint/lint.ts'
 
@@ -272,5 +272,26 @@ describe('named snippets', () => {
     const facts = parseTree('::: box\nx\n:::\n', { extensions: [extension] }).facts
     expect([facts?.snippets, facts?.snippetUses]).toEqual([true, true])
     expect([parseTree('::: box\nx\n:::\n').facts?.snippets, parseTree('{$x}: A\n').facts?.snippetUses]).toEqual([false, false])
+  })
+
+  it('C2-B-236, C2-W-090: format escapes paragraph text that would read back as a snippet definition', () => {
+    for (const marker of ['{$v}', '{$v .c}', '{$v}{.c}', '{$v .c}{.d}', '{$v key="a b"}']) {
+      const src = `\\${marker}: X\n`
+      expect(format(src)).toBe(src)
+      expect(format(`a\n\n${src}`)).toBe(`a\n\n${src}`)
+      expect(format(`{.k}\n${src}`)).toBe(`{.k}\n${src}`)
+    }
+  })
+
+  it('C2-B-236, C2-W-090: a line that opens no definition keeps its brace bare', () => {
+    for (const src of ['{$v}:x\n', '{$v #i}: X\n', '{#k}\n{$v}: X\n', '> {$v}: X\n', '- {$v}: X\n', '::: d\n{$v}: X\n:::\n', 'a\n{$v}: X\n']) {
+      expect(format(src)).toBe(src)
+    }
+  })
+
+  it('C2-W-140, C2-W-146: the pair rules read the value of a definition, and fmt escapes its pairs', () => {
+    const src = '{$v}: _e_ ~s~\n\n{{ $v }}\n'
+    expect(lint(src, { upgrade: true }).map((d) => d.code)).toEqual(['deprecated-bare-underline', 'deprecated-bare-strike'])
+    expect(format(src)).toBe('{$v}: \\_e_ \\~s~\n\n{{ $v }}\n')
   })
 })
