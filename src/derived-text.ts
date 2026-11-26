@@ -3,12 +3,15 @@ import { type DocumentNode, type Node } from './ast.ts'
 import { loss, type Render } from './html-attributes.ts'
 import { utf8Length } from './positions.ts'
 import { JSON_SOURCE_LENGTH } from './ast-json.ts'
+import { testDerivedTextBytes } from './harness-limits.ts'
 
 export const DERIVED_TEXT_BYTES = 1_000_000
 export const DERIVED_TEXT_FACTOR = 8
 
 /** The budget of one render; a supplied tree without `srcByteLength` has the fixed one. */
 export function derivedTextBudget(document: DocumentNode, source: string | number | undefined): number {
+  const lowered = testDerivedTextBytes()
+  if (lowered !== undefined) return lowered
   const supplied = document.srcByteLength ?? 0
   const jsonLength = (document as DocumentNode & { [JSON_SOURCE_LENGTH]?: number })[JSON_SOURCE_LENGTH]
   const bounded = jsonLength === undefined ? supplied : Math.min(supplied, jsonLength)

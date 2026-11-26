@@ -1,4 +1,5 @@
 // The block elements of spec/0.2/html.md, the sections of C2-H-026 and the footnote section.
+import { SNIPPET_BUDGETS } from './snippet-marks.ts'
 import {
   type AdmonitionNode, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
   type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
@@ -1017,6 +1018,13 @@ export function renderDocument(
     document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(), silenced: new Set(),
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
+  }
+  // C2-N-094: the snippet copies drew on the budget first; the renderer goes on from what they left.
+  const snippets = SNIPPET_BUDGETS.get(document)
+  if (snippets !== undefined) {
+    r.derivedBudget = snippets.budget
+    r.derivedLeft = snippets.left
+    r.derivedReported = snippets.reported
   }
   r.renderExtension = (node, level = 0) => {
     const renderer = settings.renderers[node.name]

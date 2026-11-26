@@ -7,7 +7,10 @@ import { type LayoutTrace } from './ast-inline.ts'
 import { validateTree } from './ast-validate.ts'
 import { renderDocument } from './html.ts'
 import { buildLayout, createLayoutTrace, type SourceLayout } from './layout.ts'
-import { type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
+import { addFinding, type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
+import {
+  expandSnippets, holdsSnippetNode, holdsSnippetUse, refuseTransformSnippets, SNIPPET_DEFINITIONS,
+} from './snippet-expand.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
 import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
@@ -486,11 +489,34 @@ export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode,
   return plainRender(input, settings)
 }
 
+/**
+ * C2-N-091: the snippet expansion of a render, on the render's own tree: a supplied tree is copied first. A view a
+ * transform returned is not expanded: its snippet nodes are refused (C2-N-095), `transformed` naming the definitions before.
+ */
+function expandStage(input: string | Uint8Array | DocumentNode, parsed: ParsedTree, settings: Settings,
+  transformed: readonly string[] | null = null): { parsed: ParsedTree, findings: Findings } {
+  const findings: Findings = { entries: [], nodes: [] }
+  if (typeof input === 'string' && !input.includes('{{') && (parsed.facts?.includes.length ?? 0) === 0) return { parsed, findings }
+  if (transformed !== null) {
+    if (holdsSnippetNode(parsed.document)) refuseTransformSnippets(parsed.document, transformed, findings)
+    return { parsed, findings }
+  }
+  if (!holdsSnippetUse(parsed.document)) return { parsed, findings }
+  const own = isSupplied(input) ? { ...parsed, document: cloneTree(parsed.document) } : parsed
+  const touched = expandSnippets(own.document, findings, { roundtrip: settings.roundtrip, source: parsed.source },
+    parsed.document)
+  const leaves = own.facts?.resolvableLeaves as Set<Node> | undefined
+  if (leaves !== undefined) for (const node of touched) leaves.add(node)
+  return { parsed: own, findings }
+}
+
 /** `shift`: the heading shift still to apply, 0 for a view that a transform has already shifted. */
 function plainRender(input: string | Uint8Array | DocumentNode, settings: Settings, validated = false,
-  shift = settings.headingShift, reportShift = true): RenderOutput {
-  const parsed = inputStage(input, settings, true, validated)
-  const resolved = shiftedResolve(parsed, settings, isSupplied(input), shift)
+  shift = settings.headingShift, reportShift = true, transformed: readonly string[] | null = null): RenderOutput {
+  const expanded = expandStage(input, inputStage(input, settings, true, validated), settings, transformed)
+  const parsed = expanded.parsed
+  const resolved = shiftedResolve(parsed, settings, isSupplied(input) && parsed.document === input, shift)
+  appendFindings(resolved.losses, expanded.findings)
   const rendered = renderStage(resolved, reportShift)
   const diagnostics = [...parseDiagnostics(resolved, parsed), ...locateFindings(resolved.document, rendered.losses)]
   if (settings.strictLosses) for (const entry of diagnostics) {
@@ -498,6 +524,10 @@ function plainRender(input: string | Uint8Array | DocumentNode, settings: Settin
   }
   return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html,
     ...capDiagnostics(diagnostics, settings) }
+}
+
+function appendFindings(to: Findings, from: Findings): void {
+  for (let at = 0; at < from.entries.length; at++) addFinding(to, from.nodes[at] ?? null, from.entries[at]!)
 }
 
 /** C2-X-053: one host transform of a copy of the resolved document view. */
@@ -618,8 +648,11 @@ function transformedRender(
   input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], settings: Settings, positions = true,
 ): RenderOutput {
   const authored = typeof input === 'string' || input instanceof Uint8Array ? input : cloneTree(input)
-  const parsed = inputStage(authored, settings, positions)
+  const expanded = expandStage(authored, inputStage(authored, settings, positions), settings)
+  const parsed = expanded.parsed
   const resolved = resolveStage(parsed, settings)
+  appendFindings(resolved.losses, expanded.findings)
+  const definitions = SNIPPET_DEFINITIONS.get(parsed.document) ?? []
   const sourceDiagnostics = parseDiagnostics(resolved, parsed)
   // C2-H-208: capture the shift's own above-six result before any host can change the level.
   const shiftLosses: Findings = { entries: [], nodes: [] }
@@ -633,7 +666,7 @@ function transformedRender(
     const direct = unchangedViewRender(resolved, sourceDiagnostics, failures, settings)
     if (direct !== undefined) return direct
   }
-  const rendered = plainRender(view, settings, validated, 0, false)
+  const rendered = plainRender(view, settings, validated, 0, false, definitions)
   const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
     entry.code, entry.channel, entry.message, entry.path,
   ])))
@@ -670,5 +703,9 @@ export function render(input: string | Uint8Array | DocumentNode, options?: Rend
     if (settings.strictLosses && lost.length > 0) throw new CarveRenderError(lost)
     return output.html
   }
-  return renderTree(shiftedResolve(inputStage(input, settings), settings, isSupplied(input), settings.headingShift))
+  const expanded = expandStage(input, inputStage(input, settings), settings)
+  const resolved = shiftedResolve(expanded.parsed, settings, isSupplied(input) && expanded.parsed.document === input,
+    settings.headingShift)
+  appendFindings(resolved.losses, expanded.findings)
+  return renderTree(resolved)
 }

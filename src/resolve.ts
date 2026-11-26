@@ -2,6 +2,8 @@
 // headings, footnote numbers, heading ids, caption numbers, cross-references and column alignment.
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
+import { snippetRegistry } from './snippet-expand.ts'
+import { COPY_SCOPE } from './snippet-marks.ts'
 import {
   type AbbreviationDefNode, type AbbreviationNode, type AdmonitionNode, type BlockExtensionNode,
   type BlockQuoteNode, type CaptionNode, type CodeBlockNode,
@@ -231,7 +233,11 @@ function visitReference(node: Reference, walk: Walk): void {
 
 /** C2-N-053: the scope of an included file, with its own definitions; the first of a key wins within the file (C2-N-060). */
 function fileScope(walk: Walk, node: IncludeNode, outer: Scope): Scope {
+  // A snippet copy that stands before the include asks for its scope first (C2-N-092).
+  const known = walk.scopes.get(node)
+  if (known !== undefined) return known
   const scope: Scope = { outer, definitions: new Map(), footnotes: new Map(), abbreviations: new Map() }
+  walk.scopes.set(node, scope)
   for (const child of node.children ?? []) {
     if (child.type === 'abbreviation_def') {
       define(walk, scope.abbreviations, child, 'duplicate-abbreviation-definition', ABBREVIATION_DUPLICATE)
@@ -384,6 +390,26 @@ function mayResolve(walk: Walk, node: Node): boolean {
  * resolution reads.
  */
 function visit(walk: Walk, node: Node, parent: Node | null): void {
+  const origin = COPY_SCOPE.get(node)
+  if (origin !== undefined) return visitCopy(walk, node, parent, origin)
+  visitNode(walk, node, parent)
+}
+
+/** C2-N-092: a snippet copy resolves against the definitions of the file that holds its snippet definition. */
+function visitCopy(walk: Walk, node: Node, parent: Node | null, origin: IncludeNode | null): void {
+  const saved = walk.scope
+  let top = saved
+  while (top.outer !== null) top = top.outer
+  walk.scope = origin === null ? top : fileScope(walk, origin, top)
+  try {
+    visitNode(walk, node, parent)
+  } finally {
+    walk.scope = saved
+  }
+}
+
+function visitNode(walk: Walk, node: Node, parent: Node | null): void {
+  if (node.type === 'snippet_definition') return visitSnippetDefinition(walk, node)
   if (node.attrs?.id !== undefined && attributesAct(node)) walk.identified.push(node)
   if (isCaptionedBlock(node)) {
     walk.parent = parent
@@ -738,6 +764,13 @@ export function resolve(
   const resolution = walk.resolution
   const top = walk.scope
   collectDefinitions(document, walk, facts)
+  // C2-N-090: a later snippet definition of a name stays, renders nothing and reports at its `$` and name.
+  snippetRegistry(document, (node) => {
+    const entry: Diagnostic = { code: 'duplicate-snippet', severity: 'warning', channel: 'parse',
+      message: `A snippet named ${node.name} is defined earlier; this definition is not used` }
+    if (node.pos !== undefined) entry.range = { startOffset: node.pos.startOffset + 1, endOffset: node.pos.startOffset + 2 + node.name.length }
+    addFinding(resolution.findings, node, entry)
+  })
   visit(walk, document, null)
   // C2-H-025: the content of the notes follows the document body, in the order of the footnote numbers.
   for (let at = 0; at < resolution.notes.length; at++) {
@@ -774,6 +807,15 @@ function resolveUnwrittenFootnote(walk: Walk, footnote: FootnoteNode, scope: Sco
     if (node.type === 'xref') walk.xrefs.push(node)
     if (node.type === 'table') alignColumns(node)
     if (node.attrs?.id !== undefined && attributesAct(node)) walk.unwrittenIds.push(node.attrs.id)
+    forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
+  }
+}
+
+/** C2-N-090: a snippet definition renders nothing; its references resolve, and its notes take no number. */
+function visitSnippetDefinition(walk: Walk, definition: Node): void {
+  const pending: Node[] = [...childNodes(definition)]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
     forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
   }
 }
