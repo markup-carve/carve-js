@@ -126,6 +126,15 @@ function combinedFacts(top: ParseFacts, files: readonly ParseFacts[], found: Fin
   }
 }
 
+/** An extension transform may return snippet nodes the tree builder never saw, so its output is searched for them. */
+function withExtensionSnippets(parsed: ParsedTree, transformed: boolean): ParsedTree {
+  const facts = parsed.facts
+  if (!transformed || facts === null) return parsed
+  const snippets = facts.snippets || holdsSnippetNode(parsed.document)
+  const snippetUses = facts.snippetUses || (snippets && holdsSnippetUse(parsed.document))
+  return { ...parsed, facts: { ...facts, snippets, snippetUses } }
+}
+
 /**
  * C2-N-003, C2-N-006: the parse of a top-level source, with its includes expanded when the options give a resolver.
  * Without one every include is reported, and a source without includes is returned as it was parsed.
@@ -134,10 +143,10 @@ function parseSource(src: string, settings: Settings, positions: boolean, trace:
   byteLength: number | null = null): ParsedTree {
   const names = settings.extensions.length > 0
   const parse = (text: string, outer: ParseFacts['scope'] | null, forced = false, frontmatterOpens = true,
-    bytes: number | null = null): ParsedTree => applyExtensions(
+    bytes: number | null = null): ParsedTree => withExtensionSnippets(applyExtensions(
     buildSource(text, positions || forced, null, outer === null ? trace : null, names, null, outer, frontmatterOpens, bytes),
     settings.extensions,
-  )
+  ), names)
   const parsed = parse(src, null, false, true, byteLength)
   const facts = parsed.facts
   const includes = settings.includes

@@ -1,6 +1,6 @@
 // Named snippets beyond the clause cases: the marker parts and the carriers a document transform keeps.
 import { describe, expect, it } from 'vitest'
-import { CarveTreeError, decodeTree, type DocumentNode, parse, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree, writeWithDiagnostics } from '../src/index.ts'
+import { CarveTreeError, decodeTree, type DocumentNode, type ExtensionDefinition, parse, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree, writeWithDiagnostics } from '../src/index.ts'
 import { withSnippetLimits } from '../src/harness-limits.ts'
 import { lint } from '../lint/lint.ts'
 
@@ -225,5 +225,14 @@ describe('named snippets', () => {
     expect(out.html).toBe('<p>Hello</p>')
     expect(out.diagnostics.map((entry) => entry.code)).toEqual(['duplicate-snippet'])
     expect(render('{{ d.crv @lines:1-1 }}\n\nSay {{ $x }}.\n', { includes: { resolver } })).toBe('<p>Hello</p>\n<p>Say A.</p>')
+  })
+
+  it('the parse facts count a snippet use that an extension transform returns', () => {
+    const extension: ExtensionDefinition = { name: 'test.box', version: '1', matcher: { form: 'div', name: 'box' }, props: {}, slots: {},
+      transform: (claim) => claim.form === 'div' ? { type: 'block_extension', name: 'test.box', version: '1', children: [],
+        fallback: [{ type: 'paragraph', children: [{ type: 'snippet_use', name: 'x', mode: 'inline' }] }] } : null }
+    const facts = parseTree('::: box\nx\n:::\n', { extensions: [extension] }).facts
+    expect([facts?.snippets, facts?.snippetUses]).toEqual([true, true])
+    expect([parseTree('::: box\nx\n:::\n').facts?.snippets, parseTree('{$x}: A\n').facts?.snippetUses]).toEqual([false, false])
   })
 })
