@@ -440,9 +440,13 @@ const XLINK_DECL = 'xmlns:xlink="http://www.w3.org/1999/xlink"'
 function strictStartTagProblems(attrs: string, scope: Set<string>): string[] {
   const problems: string[] = []
   const pairs = [...attrs.matchAll(/([^\s=/>]+)\s*=\s*"([^"]*)"/g)].map((a) => [a[1]!, a[2]!] as const)
-  for (const [name, value] of pairs.filter(([name]) => name.startsWith('xmlns:'))) {
+  for (const [name, value] of pairs.filter(([name]) => name === 'xmlns' || name.startsWith('xmlns:'))) {
     const read = value.replace(/&#x([0-9a-f]+);/gi, (_m, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
       .replace(/&#(\d+);/g, (_m, dec: string) => String.fromCodePoint(Number(dec)))
+    if (name === 'xmlns') {
+      if (/[ \t\n\r\u00a0]/.test(read)) problems.push(`whitespace in declaration ${name}`)
+      continue
+    }
     if (read.trim() === '') problems.push(`blank declaration ${name}`)
     else scope.add(name.slice(6))
   }
@@ -514,9 +518,27 @@ describe('sanitizeSvg namespace names (carve#6783)', () => {
     expect(sanitizeSvg('<svg><g xmlns:xlink="&#160;"/></svg>').svg).toBe(`${SVG_OPEN}><g/></svg>`)
   })
 
+  // carve#6843: the carve#6811 rule on a child's default namespace declaration; an empty one is a legal undeclaration.
+  it('drops a child xmlns whose value holds whitespace or a no-break space', () => {
+    expect(sanitizeSvg('<svg><g xmlns=" "><rect/></g><g xmlns="&#160;urn:x"/></svg>'))
+      .toEqual({ svg: `${SVG_OPEN}><g><rect/></g><g/></svg>`, ok: true })
+    const values = [' ', '\t', ' \n ', '\r', '&#32;', '&#x20;&#9;', '&#xA;', '&#13;', '&#x0D;', ' urn:x', 'urn:x ', 'urn: x', 'urn:x\tb',
+      '\u00a0', 'urn:\u00a0x', '&#160;', 'urn:&#xA0;x', '&#32;urn:x', 'urn:&nbsp;x', '&nbsp;', ' http://www.w3.org/2000/svg']
+    const shapes = ['<g xmlns="%s"/>', "<g><g><symbol xmlns='%s'><g/></symbol></g></g>", '<g><text xmlns="%s">t</text></g>']
+    for (const value of values) {
+      for (const shape of shapes) {
+        const expected = shape.replace(/ xmlns='%s'| xmlns="%s"/, '').replaceAll("'", '"')
+        expect(sanitizeSvg(`<svg>${shape.replace('%s', value)}</svg>`), `${value} in ${shape}`).toEqual({ svg: `${SVG_OPEN}>${expected}</svg>`, ok: true })
+      }
+    }
+    expect(sanitizeSvg('<svg><g xmlns=""/><g xmlns="urn:x"/><g xmlns="http://www.w3.org/2000/svg"/></svg>').svg)
+      .toBe(`${SVG_OPEN}><g xmlns=""/><g xmlns="urn:x"/><g xmlns="http://www.w3.org/2000/svg"/></svg>`)
+  })
+
   const NAMES = ['xmlns:xlink', 'XMLNS:XLINK', 'Xmlns:xlink', 'xmlns:XLINK', 'xlink:href', 'XLINK:HREF', 'Xlink:href', 'xml:space',
-    'XML:SPACE', 'data-a:b', 'aria-x:y', 'id', 'fill']
-  const VALUES = ['', ' ', '\t', ' \n', '&#32;', '&#x9;', '&#xa;', '#a', 'http://www.w3.org/1999/xlink', 'urn:x', ' urn:x', 'preserve', 'red']
+    'XML:SPACE', 'data-a:b', 'aria-x:y', 'id', 'fill', 'xmlns', 'XMLNS']
+  const VALUES = ['', ' ', '\t', ' \n', '&#32;', '&#x9;', '&#xa;', '#a', 'http://www.w3.org/1999/xlink', 'urn:x', ' urn:x', 'preserve', 'red',
+    '&#160;', '&nbsp;', 'urn:&#xA0;x', 'http://www.w3.org/2000/svg']
   sweep('namespace names and xlink scope', () => {
     const attrs = (): string => Array.from({ length: Math.floor(rnd() * 3) }, () => `${pick(NAMES)}=${quoted(pick(VALUES))}`).join(' ')
     const leaf = (): string => `<${pick(['use', 'rect', 'g', 'textPath'])} ${attrs()}/>`
