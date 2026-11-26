@@ -1611,7 +1611,11 @@ function authoredContent(w: Writer, leaf: Node): string | null {
   }
   text += withoutPrefixes(decode(at, to), prefix)
   // C2-W-016: a lone CR at the end of a written line has no spelling.
-  return /\r[ \t]*(?:\n|$)/u.test(text) ? null : text
+  if (/\r[ \t]*(?:\n|$)/u.test(text)) return null
+  // C2-W-022, C2-W-024: a line break inside a node, as in a wrapped label (C2-I-080), ends no line with a space and
+  // the writer indents the next line itself; a backslash keeps the one space that makes it a hard break (C2-I-011).
+  return text.replace(/(\\?)[ \t]+\n/gu, (_, slash: string) => (slash === '' ? '\n' : '\\ \n'))
+    .replace(/\n[ \t]+/gu, '\n')
 }
 
 /** The source bytes from the first of `nodes` to the end of the last, or null where their positions do not give them. */

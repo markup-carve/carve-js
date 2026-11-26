@@ -1,0 +1,11 @@
+{
+  "kind": "format-not-idempotent",
+  "detail": "normalize=false",
+  "seed": 1838231899,
+  "engineCommit": "334349ffafda3449e20145770ed7801a4405046c",
+  "inputJson": "- ``^[/`\"`[^\\\\/ \n`]^[[^*]\\`/=[^`[]]",
+  "originalBytes": 4096,
+  "minimizedBytes": 35,
+  "clause": "C2-W-024",
+  "id": "wrapped-label-indent"
+}
