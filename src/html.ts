@@ -3,7 +3,7 @@ import { SNIPPET_BUDGETS } from './snippet-marks.ts'
 import {
   type AdmonitionNode, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
   type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
-  forEachSlot, isBreak,
+  cloneTree, forEachSlot, isBreak,
   type FigureGroupNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
   type ListItemNode,
   type ImageNode, type ListNode, type Marker, type Node, type NodeOfType, type ParagraphNode, type RawBlockNode, type TableBodyNode,
@@ -945,12 +945,34 @@ function writeTemplate(r: Render, document: DocumentNode, nodes: readonly Node[]
 }
 
 /**
+ * C2-I-098: an abbreviation in a definition is its term as text in the template, which holds no abbreviation
+ * definition; the reader applies the document's abbreviations again.
+ */
+function plainAbbreviations(nodes: Node[], document: DocumentNode): void {
+  for (let at = 0; at < nodes.length; at++) {
+    const node = nodes[at]!
+    if (node.type === 'abbreviation') nodes[at] = { type: 'text', value: node.key }
+    else forEachSlot(node, (children) => { plainAbbreviations(children as Node[], document) }, undefined, document.extensions)
+  }
+  for (let at = nodes.length - 1; at > 0; at--) {
+    const before = nodes[at - 1]!
+    const node = nodes[at]!
+    if (before.type === 'text' && node.type === 'text' && Object.keys(before).length === 2 && Object.keys(node).length === 2) {
+      before.value += node.value
+      nodes.splice(at, 1)
+    }
+  }
+}
+
+/**
  * C2-H-216: under `roundtrip` a run of snippet definitions is one template that holds the run as the canonical writer
  * spells it, one blank line between two definitions. A run with a definition of an included file carries the scope.
  */
 function writeSnippetTemplate(r: Render, document: DocumentNode, run: readonly Node[], level: number,
   own: ReadonlySet<Node> | null): void {
-  const written = writeTree({ type: 'document', astVersion: document.astVersion, children: run as DocumentNode['children'] }, undefined)
+  const children = cloneTree(run) as DocumentNode['children']
+  plainAbbreviations(children, document)
+  const written = writeTree({ type: 'document', astVersion: document.astVersion, children }, undefined)
   for (const entry of written.diagnostics) loss(r, run[0] ?? null, entry.code, entry.message)
   const source = written.source.endsWith('\n') ? written.source.slice(0, -1) : written.source
   const scope = own !== null && run.some((node) => !own.has(node)) ? ' data-carve-snippet-scope="include"' : ''

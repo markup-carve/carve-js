@@ -9,7 +9,7 @@ import { harnessLimits } from './harness-limits.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { utf8Length } from './positions.ts'
 import {
-  COPY_SCOPE, SNIPPET_BUDGETS, type SnippetBudget, SNIPPET_CARRIERS, SNIPPET_DEFINITIONS, SNIPPET_MARKS, type SnippetCarrier,
+  COPY_SCOPE, SNIPPET_BUDGETS, type SnippetBudget, SNIPPET_CARRIERS, SNIPPET_MARKS, type SnippetCarrier,
 } from './snippet-marks.ts'
 import { snippetUseSpelling } from './snippets.ts'
 
@@ -23,7 +23,7 @@ export interface SnippetEntry {
   include: IncludeNode | null
 }
 
-export { COPY_SCOPE, SNIPPET_BUDGETS, SNIPPET_CARRIERS, SNIPPET_DEFINITIONS, SNIPPET_MARKS } from './snippet-marks.ts'
+export { COPY_SCOPE, SNIPPET_BUDGETS, SNIPPET_CARRIERS, SNIPPET_MARKS } from './snippet-marks.ts'
 
 /** C2-N-090: the registry of the expanded tree, in document order; each later definition of a name is passed to `duplicate`. */
 export function snippetRegistry(document: DocumentNode, duplicate?: (node: SnippetDefinitionNode) => void): Map<string, SnippetEntry> {
@@ -374,11 +374,11 @@ export function expandSnippets(document: DocumentNode, findings: Findings, setti
   }
   walkNode(pass, document)
   SNIPPET_BUDGETS.set(document, pass.budget)
-  SNIPPET_DEFINITIONS.set(document, definitionKeys(document))
   return pass.touched
 }
 
-function definitionKeys(document: DocumentNode): string[] {
+/** The definitions of a view as JSON, the baseline against which a transform's own definitions are told apart. */
+export function definitionKeys(document: DocumentNode): string[] {
   const keys: string[] = []
   snippetRegistry(document, (node) => keys.push(JSON.stringify(node)))
   for (const entry of snippetRegistry(document).values()) keys.push(JSON.stringify(entry.definition))

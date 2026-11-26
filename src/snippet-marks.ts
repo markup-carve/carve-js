@@ -26,8 +26,6 @@ export const SNIPPET_CARRIERS = new WeakMap<Node, SnippetCarrier>()
 export const SNIPPET_MARKS = new WeakMap<Node, number>()
 /** The budget each expanded document left. */
 export const SNIPPET_BUDGETS = new WeakMap<DocumentNode, SnippetBudget>()
-/** The definitions of each registry, so a later view can tell a transform's definition from an authored one. */
-export const SNIPPET_DEFINITIONS = new WeakMap<DocumentNode, string[]>()
 
 
 function carryNode(from: Node, to: Node): void {

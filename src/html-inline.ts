@@ -270,7 +270,7 @@ export function isEmptyDroppedLink(r: Render, node: LinkNode): boolean {
 function link(node: LinkNode, r: Render): string {
   const html = linkHtml(node, r)
   // C2-H-215: a link that carries the carriers of its use but writes no `<a>` puts them on a span.
-  if (!r.settings.roundtrip || html.startsWith('<a') || !SNIPPET_CARRIERS.has(node)) return html
+  if (!r.settings.roundtrip || html.startsWith('<a ') || !SNIPPET_CARRIERS.has(node)) return html
   return `<span${snippetCarriers(node)}>${html}</span>`
 }
 

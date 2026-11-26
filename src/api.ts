@@ -9,7 +9,7 @@ import { renderDocument } from './html.ts'
 import { buildLayout, createLayoutTrace, type SourceLayout } from './layout.ts'
 import { addFinding, type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
 import {
-  expandSnippets, holdsSnippetNode, holdsSnippetUse, refuseTransformSnippets, SNIPPET_DEFINITIONS,
+  definitionKeys, expandSnippets, holdsSnippetNode, holdsSnippetUse, refuseTransformSnippets,
 } from './snippet-expand.ts'
 import { carrySnippetMarks } from './snippet-marks.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
@@ -242,6 +242,15 @@ export function parseTree(src: string | Uint8Array, options?: ParseOptions): Par
  */
 export function resolveTree(input: ParsedTree | DocumentNode, options?: RenderOptions): ResolvedTree {
   const settings = readOptions(options, 'render')
+  // C2-N-091: the staged path expands on its own copy too; the parse facts name the authored nodes, so the copy has none.
+  const document = 'type' in input ? input : input.document
+  if (holdsSnippetUse(document)) {
+    const authored: ParsedTree = 'type' in input ? inputStage(input, settings) : { ...input, facts: null }
+    const expanded = expandStage(document, authored, settings)
+    const resolved = shiftedResolve(expanded.parsed, settings, expanded.parsed.document === document, settings.headingShift)
+    appendFindings(resolved.losses, expanded.findings)
+    return resolved
+  }
   if ('type' in input) return shiftedResolve(inputStage(input, settings), settings, true, settings.headingShift)
   // A parsed tree is resolved in place and its facts hold its nodes, so it is not copied: a second call shifts by the difference.
   const applied = PARSED_SHIFT.get(input.document) ?? 0
@@ -647,6 +656,11 @@ function unchangedViewRender(resolved: ResolvedTree, sourceDiagnostics: Diagnost
   return { html: settings.strictLosses && lost ? '' : rendered.html, ...capped }
 }
 
+/** C2-N-095: the definitions of the resolved view the transforms receive, those with no use among them. */
+function transformBaseline(input: string | Uint8Array | DocumentNode, view: DocumentNode): string[] {
+  return typeof input === 'string' && !input.includes('{$') ? [] : definitionKeys(view)
+}
+
 function transformedRender(
   input: string | Uint8Array | DocumentNode, transforms: readonly DocumentTransform[], settings: Settings, positions = true,
 ): RenderOutput {
@@ -655,7 +669,6 @@ function transformedRender(
   const parsed = expanded.parsed
   const resolved = resolveStage(parsed, settings)
   appendFindings(resolved.losses, expanded.findings)
-  const definitions = SNIPPET_DEFINITIONS.get(parsed.document) ?? []
   const sourceDiagnostics = parseDiagnostics(resolved, parsed)
   // C2-H-208: capture the shift's own above-six result before any host can change the level.
   const shiftLosses: Findings = { entries: [], nodes: [] }
@@ -664,6 +677,7 @@ function transformedRender(
     reportShiftAboveSix(resolved.document, settings.headingShift, shiftLosses)
   }
   const shiftDiagnostics = settings.allowLosses.has(HEADING_SHIFT_CODE) ? [] : locateFindings(resolved.document, shiftLosses)
+  const definitions = transformBaseline(input, resolved.document)
   const { view, failures, validated, changed } = applyDocumentTransforms(resolved.document, transforms, settings.extensions)
   if (!changed) {
     const direct = unchangedViewRender(resolved, sourceDiagnostics, failures, settings)
