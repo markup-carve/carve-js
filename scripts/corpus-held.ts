@@ -3,17 +3,12 @@
 // scripts/holds.ts.
 import type { Holds } from './holds.ts'
 
-// Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
-const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under normalize too (C2-W-088, C2-W-127; spec carve#6849)'
-
 /**
  * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
  * clause, or a ruling of the pin not yet implemented here, each with its ticket. The field must keep failing until it is
  * fixed, and every other field of the example is still checked.
  */
-export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['CC-2428', { fields: ['carve', 'diagnosticsComplete'], fix: AUTHORED_FALLBACK }],
-])
+export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map()
 
 /** The field each refused tree is refused at: the field its clauses decide. */
 export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
