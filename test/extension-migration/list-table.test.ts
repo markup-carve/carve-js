@@ -132,7 +132,8 @@ describe('list-table Tier-3 extension', () => {
     )
   })
 
-  it('treats {header-rows} with no value as the first row (boolean form)', () => {
+  // CC-2416: a key without a value has the empty value, which has no effect (C2-I-029, C2-X-078).
+  it('ignores {header-rows} with no value', () => {
     const src = [
       '{header-rows}',
       '::: list-table',
@@ -145,10 +146,8 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead>',
-        '    <tr><th scope="col">Region</th><th scope="col">Notes</th></tr>',
-        '  </thead>',
         '  <tbody>',
+        '    <tr><td>Region</td><td>Notes</td></tr>',
         '    <tr><td>EMEA</td><td>ok</td></tr>',
         '  </tbody>',
         '</table>',
@@ -156,7 +155,8 @@ describe('list-table Tier-3 extension', () => {
     )
   })
 
-  it('treats {header-cols} with no value as the first column (boolean form)', () => {
+  // CC-2417: a key without a value has no effect (C2-I-029, C2-X-078).
+  it('ignores {header-cols} with no value', () => {
     const src = [
       '{header-cols}',
       '::: list-table',
@@ -170,8 +170,8 @@ describe('list-table Tier-3 extension', () => {
       [
         '<table>',
         '  <tbody>',
-        '    <tr><th scope="row">Region</th><td>Notes</td></tr>',
-        '    <tr><th scope="row">EMEA</th><td>ok</td></tr>',
+        '    <tr><td>Region</td><td>Notes</td></tr>',
+        '    <tr><td>EMEA</td><td>ok</td></tr>',
         '  </tbody>',
         '</table>',
       ].join('\n'),
@@ -559,7 +559,8 @@ describe('list-table Tier-3 extension', () => {
   })
 
   it('treats a multi-block cell starting with a marker char as content', () => {
-    const src = ['::: list-table', '- - A', '- - ^', '', '  extra', ':::'].join('\n')
+    // The paragraph is indented into the cell: at the row's indent it would leave the div a core div (CC-2421).
+    const src = ['::: list-table', '- - A', '- - ^', '', '    extra', ':::'].join('\n')
     const html = h(src)
     expect(html).toBe(
       [
@@ -601,5 +602,59 @@ describe('list-table Tier-3 extension', () => {
     const out = h(src)
     expect(out.startsWith('<div class="list-table">')).toBe(true)
     expect(out).not.toContain('<table>')
+  })
+})
+
+describe('list-table: header keys and row items (carve#6835, C2-X-078)', () => {
+  const body = ['::: list-table', '- - a', '  - b', '- - c', '  - d', ':::'].join('\n')
+  const bare = ['<table>', '  <tbody>', '    <tr><td>a</td><td>b</td></tr>', '    <tr><td>c</td><td>d</td></tr>',
+    '  </tbody>', '</table>'].join('\n')
+
+  for (const key of ['header-rows', 'footer-rows', 'header-cols']) {
+    for (const part of [key, `${key}=""`, `${key}=''`, `${key}=0`, `${key}=00`, `${key}=-1`, `${key}=abc`, `${key}=1.0`,
+      `${key}=0x1`, `${key}=1e0`, `${key}=+1`, `${key}=" 1"`]) {
+      it(`gives {${part}} no effect and does not write it`, () => {
+        expect(h(`{${part}}\n${body}`)).toBe(bare)
+      })
+    }
+  }
+
+  it('reads a decimal integer with leading zeros and takes at most the rows there are', () => {
+    expect(h(`{header-rows=01 header-cols=007}\n${body}`)).toBe(['<table>', '  <thead>',
+      '    <tr><th scope="col">a</th><th scope="col">b</th></tr>', '  </thead>', '  <tbody>',
+      '    <tr><th scope="row">c</th><th scope="row">d</th></tr>', '  </tbody>', '</table>'].join('\n'))
+    expect(h(`{footer-rows=99999999999999999999}\n${body}`)).toBe(['<table>', '  <tfoot>',
+      '    <tr><td>a</td><td>b</td></tr>', '    <tr><td>c</td><td>d</td></tr>', '  </tfoot>', '</table>'].join('\n'))
+  })
+
+  const unclaimed: Array<[string, string[]]> = [
+    ['a paragraph after the list of the first row', ['- - a', '', '  extra', '- - b']],
+    ['a paragraph after the list of the last row', ['- - a', '- - b', '', '  extra']],
+    ['a second bullet list after the list', ['- - a', '', '  * b']],
+    ['an ordered list after the list', ['1. - a', '', '   1) b']],
+    ['a code block after the list', ['- - a', '', '  ```', '  x', '  ```']],
+    ['a quote after the list', ['- - a', '', '  > q']],
+    ['a paragraph before the list', ['- para', '', '  - a']],
+    ['a row item with no list', ['- - a', '- b']],
+  ]
+  for (const [name, rows] of unclaimed) {
+    it(`leaves a core div for ${name}`, () => {
+      const src = ['::: list-table', ...rows, ':::'].join('\n')
+      expect(h(src)).toBe(plain(src))
+      expect(h(src)).not.toContain('<table')
+    })
+  }
+
+  it('leaves a nested list-table with an extra block a core div and still claims the outer one', () => {
+    const src = ['::: list-table', '- - outer', '  - ::: list-table', '    - - a', '', '      extra', '    :::', ':::'].join('\n')
+    const html = h(src)
+    expect(html.startsWith('<table>')).toBe(true)
+    expect(html).toContain('<div class="list-table">')
+    expect(html.match(/<table/g)?.length).toBe(1)
+  })
+
+  it('claims a row whose extra block is indented into the cell', () => {
+    expect(h(['::: list-table', '- - a', '', '    extra', ':::'].join('\n')))
+      .toBe(['<table>', '  <tbody>', '    <tr><td><p>a</p>', '<p>extra</p></td></tr>', '  </tbody>', '</table>'].join('\n'))
   })
 })
