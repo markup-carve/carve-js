@@ -623,14 +623,15 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
 /**
  * C2-W-088, C2-W-125 case five: the first round writes the brackets of link text bare. A bare closer there can let a
  * construct form, as the link's closer taking a text `[` below it; where the round reports one, it escapes its kind
- * beside the case backslash (carve#6656) and the rounds go on from the bare text. Otherwise, or where the round asks
- * for a change inside a link, the brackets of link text without a partner take their backslash (`linkFallback`) and
- * the round is compared again.
+ * beside the case backslash (carve#6656) and the rounds go on from the bare text. Where it asks nothing and the bare
+ * text reads back, the brackets stay bare. Otherwise, or where the round asks for a change inside a link, the brackets
+ * of link text without a partner take their backslash (`linkFallback`) and the round is compared again.
  */
 function compareWithLinkFallback(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean, initial: boolean): Check {
   const attempts = initial && w.sawLink && !w.linkFallback ? copyAttempts(w.attempts) : null
   const check = compareGroup(w, document, group, first)
   if (attempts === null) return check
+  if (asksNothing(check) && readsBack(w, group, first)) return check
   if (reportsConstruct(check, group) && !linkRepairRequested(group, check)) {
     // C2-W-125: the case backslash is placed in this round, beside the kind escapes (carve#6656 ruling A, carve#6681).
     w.linkFallback = true
@@ -641,6 +642,11 @@ function compareWithLinkFallback(w: Writer, document: DocumentNode, group: reado
   resetLines(w)
   writeBlocks(w, group, '', 0, false)
   return compareGroup(w, document, group, first)
+}
+
+function asksNothing(check: Check): boolean {
+  return check.constructs.size === 0 && check.escapes.length === 0 && check.forms.length === 0 &&
+    check.retracted.length === 0 && check.losses.length === 0 && !check.misaligned
 }
 
 /**
