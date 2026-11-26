@@ -57,4 +57,12 @@ describe('carve#6834: only a kept node stands in a ranged comment range (C2-M-11
   it('an element around the end of the range is no inline in it', () => {
     expect(fromHtml(`<p>${START}<span title="k">${END}</span>y</p>`).messages).not.toContain(LOST)
   })
+
+  it('an empty reference to an inline footnote with a ranged comment in it is read once', () => {
+    const note = '<section role="doc-endnotes"><ol><li id="fn1" data-carve-inline-footnote><p>b '
+      + '<span class="comment-start" data-comment-id="2">m</span>c<span class="comment-end" data-comment-id="2"></span></p></li></ol></section>'
+    const result = fromHtml(`<p>${START}<a role="doc-noteref" href="#fn1"></a>${END}y</p>${note}`)
+    expect(result.source).toBe('{#n#}^[b {#m#}c]y\n')
+    expect(result.messages.filter((message) => message === LOST)).toHaveLength(2)
+  })
 })

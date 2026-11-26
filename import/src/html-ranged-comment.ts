@@ -169,6 +169,8 @@ function rangeEnd(index: DocumentIndex, id: string, last: number): Html.Element 
 
 /** C2-M-113: a point comment at the start; its end is dropped, and a range with an inline in it is reported as lost. */
 export function rangedComment(node: Html.Element, context: HtmlContext): Inline[] {
+  // The walk's own read, as through an inline footnote's body, only asks whether a node is kept.
+  if (context.dropped !== undefined) return plain(node) === '' ? [] : [{ type: 'critic_comment', value: plain(node) }]
   const index = documentIndex(node, context)
   const last = index.order.get(node)![1]
   const end = rangeEnd(index, attr(node, 'data-comment-id') ?? '\0', last)
