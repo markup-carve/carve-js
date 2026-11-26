@@ -10,7 +10,6 @@ const DJOT_STATUS = 'carve#6833 CC-1354 keeps the status 1 of the djot- gate tha
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
 const NOTE_CONDITIONALS = 'carve#6850 the Word conditional comments of a dropped note wrapper (C2-M-109; spec carve#6851)'
 const AUTHORED_FALLBACK = 'carve#6848 the authored-block fallback runs under normalize too (C2-W-088, C2-W-127; spec carve#6849)'
-const EMPTY_LIST_ROW = 'carve#6853 a list-table row with no cell is dropped and the counts skip it (C2-M-112; spec carve#6855)'
 const TRAILING_LINE_FEED = 'carve#6837 the render cases of carve#6816 expect a line feed after </table> (spec data)'
 const PIPE_CLAMP = 'carve#6838 the lint model skips the header-rows clamp of a pipe table (C2-B-209; spec data)'
 
@@ -46,9 +45,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2412', { fields: ['children'], fix: IMAGE_PARAGRAPH }],
   ['CC-1425', { fields: ['diagnostics:import-element-dropped'], fix: NOTE_CONDITIONALS }],
   ['CC-2428', { fields: ['carve', 'diagnosticsComplete'], fix: AUTHORED_FALLBACK }],
-  ['CC-2433', { fields: ['children', 'carve'], fix: EMPTY_LIST_ROW }],
-  ['CC-2434', { fields: ['children', 'carve'], fix: EMPTY_LIST_ROW }],
-  ['CC-2435', { fields: ['children', 'carve'], fix: EMPTY_LIST_ROW }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
