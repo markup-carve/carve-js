@@ -87,14 +87,16 @@ function holds(node: Html.Node, context: HtmlContext, walk: Walk): boolean {
 
 /**
  * C2-M-069: an inline element nothing in which gives an inline counts when the reader keeps a node for it, such as a span
- * with attributes. It is read without its content, which gives nothing.
+ * with attributes. One that gives nothing is skipped when an element around it is read, so each is read once.
  */
 function keepsEmpty(node: Html.Node, index: DocumentIndex, walk: Walk): boolean {
   if (!isElement(node as Html.ChildNode) || isOpaque(node, walk) || index.claimed.has(node as Html.Element)) return false
   const element = node as Html.Element
   if (isBlockElement(element) || isTaskBox(element)) return false
   walk.scratch.diagnostics.length = 0
-  return inline({ ...element, childNodes: [] }, walk.scratch).length > 0
+  if (inline(element, walk.scratch).length > 0) return true
+  walk.scratch.dropped!.add(element)
+  return false
 }
 
 function documentRoot(node: Html.Node): Html.Node {
@@ -109,7 +111,10 @@ function visit(index: DocumentIndex, walk: Walk, at: Html.Node, count: number, c
   const end = isRangeEndSpan(at)
   const claimed = end && walk.pending.delete(attr(at, 'data-comment-id') ?? '\0')
   if (claimed) index.claimed.add(at)
-  index.holding.push(index.holding[count]! + (!claimed && holds(at, context, walk) ? 1 : 0))
+  const held = !claimed && holds(at, context, walk)
+  index.holding.push(index.holding[count]! + (held ? 1 : 0))
+  // An opaque element or a claimed end that gives no inline here gives none to an element read around it.
+  if (!held && (claimed || isOpaque(at, walk))) walk.scratch.dropped!.add(at as Html.Element)
   if (isElement(at as Html.ChildNode) && isRangeStart(at as Html.Element)) {
     walk.pending.add(attr(at as Html.Element, 'data-comment-id') ?? '\0')
   }
@@ -126,7 +131,9 @@ function documentIndex(node: Html.Element, context: HtmlContext): DocumentIndex 
   if (known !== undefined && known.order.has(node)) return known
   const index: DocumentIndex = { order: new Map(), ends: new Map(), holding: [0], claimed: known?.claimed ?? new Set() }
   const ordinals = new Set<string>()
-  const scratch: HtmlContext = { ...context, diagnostics: [], definitions: new Map(), anchorKeys: new Set(), snippetOrdinals: ordinals }
+  const scratch: HtmlContext = {
+    ...context, diagnostics: [], definitions: new Map(), anchorKeys: new Set(), snippetOrdinals: ordinals, dropped: new WeakSet(),
+  }
   const walk: Walk = { pending: new Set(), ordinals, uses: new Set(), scratch }
   let count = 0
   const stack: [Html.Node, boolean][] = [[documentRoot(node), false]]

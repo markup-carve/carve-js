@@ -72,6 +72,8 @@ export interface HtmlContext extends Context {
   snippetOrdinals?: Set<string>
   /** C2-M-112: a table with a cell of blocks becomes a list table. */
   listTable?: boolean
+  /** Elements known to give no inline, which the reader skips: set only on the scratch context of the C2-M-113 range walk. */
+  dropped?: WeakSet<Html.Element>
 }
 
 export function attr(node: Html.Element, name: string): string | undefined {

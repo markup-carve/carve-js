@@ -32,6 +32,7 @@ describe('carve#6834: only a kept node stands in a ranged comment range (C2-M-11
     ['<span title="k"><em title="x"></em></span>', '{#n#}[]{title=k}y\n'],
     ['<span style="color:red" onclick="x"></span>', '{#n#}[]{style=color:red}y\n'],
     ['<cite title="x"></cite>', '{#n#}[]{title=x}y\n'],
+    ['<sup class="footnote-ref"><a href="#fn1"></a></sup>', '{#n#}[^1]y\n'],
   ])('a kept %s loses the range', (middle, source) => {
     const result = fromHtml(`<p>${START}${middle}${END}y</p>`)
     expect(result.source).toBe(source)
@@ -46,5 +47,14 @@ describe('carve#6834: only a kept node stands in a ranged comment range (C2-M-11
   it('a dropped element inside a kept inline counts as nothing, its text does', () => {
     expect(fromHtml(`<p>x<em>${START}<bdi></bdi>${END}</em>y</p>`).messages).not.toContain(LOST)
     expect(fromHtml(`<p>${START}<em>a<bdi></bdi></em>${END}y</p>`).messages).toContain(LOST)
+  })
+
+  it('a raw carrier the reader drops with its content counts as nothing', () => {
+    const html = `<p>${START}<span data-carve-raw="html"><em></em></span>${END}y</p>`
+    expect(importDocument(html, { from: 'html', rawHtml: true }).diagnostics.map((item) => item.message)).not.toContain(LOST)
+  })
+
+  it('an element around the end of the range is no inline in it', () => {
+    expect(fromHtml(`<p>${START}<span title="k">${END}</span>y</p>`).messages).not.toContain(LOST)
   })
 })
