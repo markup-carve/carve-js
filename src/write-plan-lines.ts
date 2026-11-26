@@ -471,8 +471,11 @@ function bracketLine(leaf: Leaf, at: number, place: LeafPlace, first: boolean): 
 /** C2-B-084, C2-B-081: on the first line outside every container, `*[` opens an abbreviation where its shape matches. */
 function starLine(leaf: Leaf, at: number, place: LeafPlace): number {
   if (code(leaf, at + 1) !== 91 || place.nested) return bullet(leaf, at)
-  const shape = lineShape(leaf, at)
-  return isAbbreviation(shape, 0, shape.length) ? at : NO_ESCAPE
+  // The opener of a strong is written as the `*`, so its bracket takes the backslash (C2-W-005).
+  const mark = leaf.kinds[at] !== TEXT
+  const shape = mark ? `*${lineShape(leaf, at + 1)}` : lineShape(leaf, at)
+  if (!isAbbreviation(shape, 0, shape.length)) return NO_ESCAPE
+  return mark ? at + 1 : at
 }
 
 /** C2-B-046: a task box stands directly after the marker, so only the first line of the first block of an item has one. */
