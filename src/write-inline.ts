@@ -110,6 +110,7 @@ export function escapeOffsets(w: Writer, node: TextNode, flags: number): readonl
 /** The text `value[from, to)` with the backslashes it needs. */
 function escaped(w: Writer, node: TextNode, value: string, from: number, to: number, flags: number): string {
   const escapes = w.escapes.get(node) ?? []
+  const trace = w.escapeTrace
   if (!mayAlwaysEscape(value, flags)) {
     let out = ''
     let start = from
@@ -117,12 +118,19 @@ function escaped(w: Writer, node: TextNode, value: string, from: number, to: num
     for (let index = firstFrom(escapes, from); index < escapes.length && escapes[index]! < to; index++) {
       const at = escapes[index]!
       if (at === previous) break
-      out += `${value.slice(start, at)}\\`
+      out += `${value.slice(start, at)}${backslash(trace, node, at)}`
       start = at
       previous = at
     }
     return out + value.slice(start, to)
   }
+  return escapedAlways(trace, node, escapes, from, to, flags)
+}
+
+/** `escaped` where the flags make some characters take a backslash whatever `escapes` holds. */
+function escapedAlways(trace: Writer['escapeTrace'], node: TextNode, escapes: readonly number[], from: number, to: number,
+  flags: number): string {
+  const value = node.value
   let out = ''
   let next = firstFrom(escapes, from)
   let start = from
@@ -131,10 +139,16 @@ function escaped(w: Writer, node: TextNode, value: string, from: number, to: num
     const asked = next < escapes.length && escapes[next] === at
     if (asked) next++
     if (!asked && !alwaysEscaped(value, at, flags, cursor)) continue
-    out += `${value.slice(start, at)}\\`
+    out += `${value.slice(start, at)}${asked ? backslash(trace, node, at) : '\\'}`
     start = at
   }
   return out + value.slice(start, to)
+}
+
+function backslash(trace: Writer['escapeTrace'], node: TextNode, at: number): string {
+  if (trace === null) return '\\'
+  trace.written.push([node, at])
+  return trace.mark
 }
 
 /** The index of the first entry of the ascending list `offsets` that is not below `from`. */

@@ -20,6 +20,7 @@ export const READ_TRIAL_LOG = 4
  */
 const FIELDS: Record<keyof Writer, 'state' | 'added' | 'mode' | 'cache' | 'fixed' | 'work'> = {
   extensions: 'fixed', lines: 'state', lead: 'state', leadSkip: 'state', bareDotLead: 'state', escapes: 'state',
+  escapeTrace: 'cache', prunedFrom: 'cache',
   reportedBraceKinds: 'state', forms: 'state', glued: 'state', bracedAnyway: 'state', caseEightLinks: 'state',
   openColons: 'state', starts: 'state', attempts: 'state', facts: 'fixed', verbatimRefs: 'state',
   treeReferences: 'state', wrapPoints: 'state', wrapStarts: 'state', alignTables: 'fixed', blankFirst: 'state',

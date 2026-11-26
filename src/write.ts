@@ -1421,6 +1421,7 @@ function compareWithRepair(
  */
 function clearGroupChoices(w: Writer): void {
   if (w.escapes.size > 0) w.escapes = new Map()
+  w.prunedFrom.clear()
   w.reportedBraceKinds.clear()
   if (w.forms.size > 0) w.forms.clear()
   if (w.attempts.size > 0) w.attempts.clear()
@@ -1705,7 +1706,7 @@ function takeVerbatimReferences(w: Writer, run: WriterRun, group: readonly Node[
   if (w.lost.size > 0 && groupNodes(group).some((node) => w.lost.has(node))) return
   const trial = groupTrial(w, group, first, tree)
   w.treeReferences.clear()
-  if (trial.rewrite()) return
+  if (trial.rewrite() || (dropPrunedEscapes(w, group, tree) && trial.rewrite())) return
   // A group the plan decided from the tree is checked by its plan with the verbatim texts, and parsed where the run checks.
   const decided = planned && plannedVerbatim(w, group, first, references)
   if (planned) trial.rewrite()
@@ -2912,6 +2913,7 @@ function pruneBatch(w: Writer, group: readonly Node[], source: string): { source
 
 /** C2-W-088 and C2-W-089: test candidate escapes within the group that wrote them. */
 function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): void {
+  const written = w.lines
   let { source, kept } = pruneBatch(w, group, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
   let at = source.indexOf('\\')
   // A pruned backslash at `at` leaves the source before `at` as it was, so the scan goes on from there.
@@ -2943,6 +2945,101 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
     at = source.indexOf('\\', at + 1)
   }
   w.lines = source.slice(first ? 0 : 1, -1).split('\n')
+  if (!sameLines(w.lines, written)) w.prunedFrom.set(w.lines.join('\n'), { group: [...group], written })
+}
+
+/**
+ * C2-W-003 (carve-js#5715): the prune takes backslashes out of the lines, not out of `escapes`. Before a later write of
+ * the group with the verbatim references of C2-W-075 the pruned ones leave `escapes` too, so that write does not bring
+ * them back. True where `escapes` changed; where the trace cannot place every pruned one, they stay.
+ */
+function dropPrunedEscapes(w: Writer, group: readonly Node[], lines: readonly string[]): boolean {
+  const from = w.prunedFrom.get(lines.join('\n'))
+  if (from === undefined || from.group.length !== group.length || from.group.some((node, at) => node !== group[at])) return false
+  const { lead, leadSkip, bareDotLead, verbatimRefs } = w
+  const kept = w.lines
+  const starts = new Map(w.starts)
+  const placed = new Map(w.escapes)
+  // The lines were written by the rounds, which read every reference from the tree.
+  w.verbatimRefs = false
+  try {
+    const written = tracedWrite(w, group, from.written.join('\n'))
+    const dropped = written === null ? null : prunedMarks(written.marked, written.mark, lines.join('\n'))
+    if (written === null || dropped === null || dropped.length === 0) return false
+    dropEscapes(w, dropped.map((index) => written.escapes[index]!))
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    if (sameLines(w.lines, lines)) return true
+    w.escapes = placed
+    return false
+  } finally {
+    w.verbatimRefs = verbatimRefs
+    w.lines = kept
+    w.lead = lead
+    w.leadSkip = leadSkip
+    w.bareDotLead = bareDotLead
+    w.starts.clear()
+    for (const [key, value] of starts) w.starts.set(key, value)
+  }
+}
+
+/** The group written with each backslash of `escapes` as a mark, where that write gives `full` with the marks read back. */
+function tracedWrite(w: Writer, group: readonly Node[], full: string):
+  { marked: string, mark: string, escapes: [TextNode, number][] } | null {
+  const trace = { mark: absentMark(full), written: [] as [TextNode, number][] }
+  w.escapeTrace = trace
+  try {
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+  } finally {
+    w.escapeTrace = null
+  }
+  const marked = w.lines.join('\n')
+  if (marked.replaceAll(trace.mark, '\\') !== full || marked.split(trace.mark).length - 1 !== trace.written.length) return null
+  return { marked, mark: trace.mark, escapes: trace.written }
+}
+
+/** A character that `text` does not hold, which stands for a traced backslash. */
+function absentMark(text: string): string {
+  let code = 0xe000
+  while (text.includes(String.fromCharCode(code))) code++
+  return String.fromCharCode(code)
+}
+
+/**
+ * The indexes of the marks of `marked` that `pruned` lacks. Pruning only takes backslashes out, and in a run of them
+ * which one went changes no byte, so a run gives up its marks first. Null where `pruned` is no such shortening.
+ */
+function prunedMarks(marked: string, mark: string, pruned: string): number[] | null {
+  const dropped: number[] = []
+  const cursor = { at: 0, to: 0, marks: 0 }
+  while (cursor.at < marked.length) {
+    const char = marked[cursor.at]
+    if (char === '\\' || char === mark) {
+      if (!dropRun(marked, mark, pruned, cursor, dropped)) return null
+    } else {
+      if (char !== pruned[cursor.to]) return null
+      cursor.at++
+      cursor.to++
+    }
+  }
+  return cursor.to === pruned.length ? dropped : null
+}
+
+/** The run of backslashes and marks at `cursor.at`, against the run of backslashes `pruned` keeps of it. */
+function dropRun(marked: string, mark: string, pruned: string, cursor: { at: number, to: number, marks: number },
+  dropped: number[]): boolean {
+  const first = cursor.marks
+  let end = cursor.at
+  for (; end < marked.length && (marked[end] === '\\' || marked[end] === mark); end++) if (marked[end] === mark) cursor.marks++
+  let kept = 0
+  while (pruned[cursor.to + kept] === '\\') kept++
+  const gone = end - cursor.at - kept
+  if (gone < 0 || gone > cursor.marks - first) return false
+  for (let index = first; index < first + gone; index++) dropped.push(index)
+  cursor.at = end
+  cursor.to += kept
+  return true
 }
 
 const NEXT_LINE_CONTROL = /%% carve-lint-disable-next-line(?![^ ,])/
