@@ -30,7 +30,7 @@ const FIELDS: Record<keyof Writer, 'state' | 'added' | 'mode' | 'cache' | 'fixed
   trialLog: 'mode', trialsRetested: 'mode', topBlocks: 'fixed', openerRuns: 'cache', planKinds: 'mode',
   planWhy: 'state', plan: 'state', parses: 'work', parseCache: 'cache', extensionSources: 'cache',
   verifiedSourceBytes: 'fixed', authored: 'fixed', authoredLeaves: 'state', collapsedLabels: 'cache',
-  labelReads: 'cache', probes: 'cache', nodeIds: 'cache', standIns: 'cache', lineOpens: 'cache', work: 'work',
+  labelReads: 'cache', readBacks: 'cache', probes: 'cache', nodeIds: 'cache', standIns: 'cache', lineOpens: 'cache', work: 'work',
   leadingFrontmatter: 'fixed', pass: 'work',
 }
 
@@ -43,10 +43,24 @@ const ROUND_FIELDS: ReadonlySet<keyof Writer> = new Set<keyof Writer>([
   'lines', 'lead', 'leadSkip', 'bareDotLead', 'glued', 'starts', 'prewrittenAttributes', 'parsed', 'escapes',
 ])
 
-/** Whether two snapshots hold the same state beside what each round writes anew and the escapes. */
-export function sameBesideRound(a: Snapshot, b: Snapshot): boolean {
-  for (const key of STATE) if (!ROUND_FIELDS.has(key) && !same(a.get(key), b.get(key))) return false
-  return true
+/**
+ * Whether two snapshots hold the same state beside what each round writes anew and the escapes. Where only
+ * `bracedAnyway` tells them apart, the pass notes the members that do (`bracedFits`).
+ */
+export function sameBesideRound(w: Writer, a: Snapshot, b: Snapshot): boolean {
+  for (const key of STATE) {
+    if (key !== 'bracedAnyway' && !ROUND_FIELDS.has(key) && !same(a.get(key), b.get(key))) return false
+  }
+  const before = a.get('bracedAnyway') as Set<Node>
+  const after = b.get('bracedAnyway') as Set<Node>
+  if (same(before, after)) return true
+  if (w.pass !== null) noteBraced(w.pass, before, after)
+  return false
+}
+
+function noteBraced(trace: PassTrace, before: Set<Node>, after: Set<Node>): void {
+  for (const node of after) if (!before.has(node)) trace.braced.add(node)
+  for (const node of before) if (!after.has(node)) trace.braced.add(node)
 }
 
 interface PassRecord {
@@ -176,19 +190,7 @@ export function memoPass<T>(w: Writer, memo: PassMemo, step: string, run: () => 
   const modes: [boolean, boolean, boolean] = [w.kindRounds, w.bareAlts, w.planKinds]
   const known = memo.find((record) => record.step === step && matches(w, record, modes, start))
   if (known !== undefined && fits(w, known)) {
-    restore(w, known.end)
-    for (const [node, offsets] of known.placed) {
-      const held = w.linkPlaced.get(node) ?? new Set<number>()
-      for (const at of offsets) held.add(at)
-      w.linkPlaced.set(node, held)
-    }
-    for (const trials of known.trace.logged) logTrials(w, trials)
-    w.trialsRetested = known.retested
-    // The parses the pass would make again are charged as `parseChunk` charges them; a kept probe makes none.
-    for (const [src, tree, cacheable] of known.trace.charges) chargeParse(w, src, tree, cacheable)
-    w.parses += known.trace.skipped[0]
-    w.work.chars += known.trace.skipped[1]
-    w.work.rewritten += known.rewritten
+    replay(w, known, start)
     return known.result as T
   }
   const outer = w.pass
@@ -196,7 +198,7 @@ export function memoPass<T>(w: Writer, memo: PassMemo, step: string, run: () => 
   const trialLog = w.trialLog === null ? null : w.trialLog.map((entry) => [...entry] as [TextNode, number])
   const trialsRetested = w.trialsRetested
   const linkPlaced = new Map([...w.linkPlaced].map(([node, offsets]) => [node, new Set(offsets)]))
-  const trace: PassTrace = { reads: 0, logged: [], checks: [], charges: [], skipped: [0, 0] }
+  const trace: PassTrace = { reads: 0, logged: [], checks: [], charges: [], skipped: [0, 0], braced: new Set() }
   w.pass = trace
   try {
     const { result, limited, budget } = run()
@@ -214,6 +216,26 @@ export function memoPass<T>(w: Writer, memo: PassMemo, step: string, run: () => 
   }
 }
 
+/** Puts the writer where the recorded pass left it, with what the pass added and charged. */
+function replay(w: Writer, known: PassRecord, start: Snapshot): void {
+  restore(w, known.end)
+  // The members the start holds beyond the record's are members the pass never found absent (`bracedFits`).
+  for (const node of start.get('bracedAnyway') as Set<Node>) w.bracedAnyway.add(node)
+  if (w.pass !== null) for (const node of known.trace.braced) w.pass.braced.add(node)
+  for (const [node, offsets] of known.placed) {
+    const held = w.linkPlaced.get(node) ?? new Set<number>()
+    for (const at of offsets) held.add(at)
+    w.linkPlaced.set(node, held)
+  }
+  for (const trials of known.trace.logged) logTrials(w, trials)
+  w.trialsRetested = known.retested
+  // The parses the pass would make again are charged as `parseChunk` charges them; a kept probe makes none.
+  for (const [src, tree, cacheable] of known.trace.charges) chargeParse(w, src, tree, cacheable)
+  w.parses += known.trace.skipped[0]
+  w.work.chars += known.trace.skipped[1]
+  w.work.rewritten += known.rewritten
+}
+
 /** A step run inside another reports to it too. */
 function mergeTrace(outer: PassTrace, inner: PassTrace): void {
   outer.reads |= inner.reads
@@ -223,6 +245,7 @@ function mergeTrace(outer: PassTrace, inner: PassTrace): void {
   outer.charges.push(...inner.charges)
   outer.skipped[0] += inner.skipped[0]
   outer.skipped[1] += inner.skipped[1]
+  for (const node of inner.braced) outer.braced.add(node)
 }
 
 function matches(w: Writer, record: PassRecord, modes: [boolean, boolean, boolean], start: Snapshot): boolean {
@@ -232,7 +255,25 @@ function matches(w: Writer, record: PassRecord, modes: [boolean, boolean, boolea
   if ((record.trace.reads & READ_TRIAL_LOG) !== 0 &&
     (record.trialsRetested !== w.trialsRetested || !same(record.trialLog, w.trialLog))) return false
   if (record.trace.checks.length > 0 && !closedAtChecks(w, record)) return false
-  return sameSnapshot(record.start, start)
+  return sameSnapshot(record.start, start) || (sameBesideBraced(record.start, start) && bracedFits(record, start))
+}
+
+/**
+ * `bracedAnyway` only grows, and a pass after another starts with the pairs that one braced. Its rounds are those of
+ * the record where the start holds every member the record's start held, and each further one is a node the recorded
+ * pass never found absent and that never alone told a chain step's states apart: no read or comparison then differs.
+ */
+function bracedFits(record: PassRecord, start: Snapshot): boolean {
+  const recorded = record.start.get('bracedAnyway') as Set<Node>
+  const held = start.get('bracedAnyway') as Set<Node>
+  for (const node of recorded) if (!held.has(node)) return false
+  for (const node of held) if (!recorded.has(node) && record.trace.braced.has(node)) return false
+  return true
+}
+
+function sameBesideBraced(a: Snapshot, b: Snapshot): boolean {
+  for (const key of STATE) if (key !== 'bracedAnyway' && !same(a.get(key), b.get(key))) return false
+  return true
 }
 
 function addedSince(before: Map<TextNode, Set<number>>, after: Map<TextNode, Set<number>>): Map<TextNode, number[]> {

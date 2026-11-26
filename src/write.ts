@@ -24,7 +24,8 @@ import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes
 import { escapeKinds, escapePartnerClosers, leavesKindBare, locateTexts, type TextStarts } from './write-kinds.ts'
 import { BRACED_MARKS, BRACED_NODES } from './inline-tables.ts'
 import {
-  type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains, openerOffsets,
+  chargeReadback, type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains,
+  openerOffsets,
   simpleSpanForest, earlyLoneNoteBrackets, earlyTextNoteClosers, holdsCaretPair,
   parseChunk, parseWritten,
 } from './write-check.ts'
@@ -32,7 +33,7 @@ import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { isAsciiPunctuation } from './unicode.ts'
 import {
-  createWriter, type LossMark, lose, markLosses, recordedRaw, rollBackLosses, type Writer, type WriterFacts,
+  createWriter, isBracedAnyway, type LossMark, lose, markLosses, recordedRaw, rollBackLosses, type Writer, type WriterFacts,
 } from './write-state.ts'
 import { createPlan, notePlaces, type Plan } from './write-plan.ts'
 import { plainParagraph } from './write-plain.ts'
@@ -903,7 +904,7 @@ function shapeOf(node: Node): string {
 }
 
 function writtenBraced(w: Writer, node: Node): boolean {
-  return (node.type === 'emphasis' || node.type === 'strong') && (w.bracedAnyway.has(node) || (w.forms.get(node) ?? 0) > 0)
+  return (node.type === 'emphasis' || node.type === 'strong') && (isBracedAnyway(w, node) || (w.forms.get(node) ?? 0) > 0)
 }
 
 /** The type and fields of `node` and of everything below it, without positions. */
@@ -1176,8 +1177,30 @@ function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   // Equality disregards positions (C2-A-161), so the readback builds none, and the last round's parse of the same source stands in.
   const last = w.parsed
-  const parsed = (last !== null && roundSources.get(last) === source ? last : parseChunk(w, source, w.linkKeys, false)).children
+  if (last !== null && roundSources.get(last) === source) return groupEqual(w, group, last.children)
+  // The passes of a repair write the same source again; its result is kept, and the parse is charged as it was made.
+  const kept = w.readBacks.get(source)
+    ?.find((entry) => entry.lineFeedValues === w.lineFeedValues && sameNodes(entry.group, group))
+  if (kept !== undefined) {
+    chargeReadback(w, source)
+    return kept.result
+  }
+  const result = groupEqual(w, group, parseChunk(w, source, w.linkKeys, false).children)
+  if (w.readBacks.size >= MAX_READ_BACKS) w.readBacks.clear()
+  const entries = w.readBacks.get(source) ?? []
+  entries.push({ group, lineFeedValues: w.lineFeedValues, result })
+  w.readBacks.set(source, entries)
+  return result
+}
+
+const MAX_READ_BACKS = 16
+
+function groupEqual(w: Writer, group: readonly Node[], parsed: readonly Node[]): boolean {
   return parsed.length === group.length && parsed.every((node, at) => writerEqual(w, group[at]!, node))
+}
+
+function sameNodes(a: readonly Node[], b: readonly Node[]): boolean {
+  return a === b || (a.length === b.length && a.every((node, at) => node === b[at]))
 }
 
 /**

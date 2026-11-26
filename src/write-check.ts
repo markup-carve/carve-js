@@ -18,7 +18,7 @@ import {
   spelledEnd,
   writeInline, writeInlines,
 } from './write-inline.ts'
-import { type Attempt, type ParseCache, PLACE_COLUMNS, recordedRaw, type Writer } from './write-state.ts'
+import { type Attempt, isBracedAnyway, type ParseCache, PLACE_COLUMNS, recordedRaw, type Writer } from './write-state.ts'
 import { braceBlock, isKey, spelledValue } from './write-attributes.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharacter } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
@@ -50,6 +50,13 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   else if (plain) rememberRecent(cache, src, parsed)
   keepCharged(charge, cacheable, parsed)
   return parsed
+}
+
+/** What `parseChunk` charges for a parse without positions, where a kept result of the same source stands in. */
+export function chargeReadback(w: Writer, src: string): void {
+  noteCharge(w, src, false)
+  w.parses++
+  w.work.chars += src.length
 }
 
 /** A short tree that `parseChunk` keeps is kept for the pass that stands in for this one too. */
@@ -400,7 +407,7 @@ function escapeAttributeLinesAbove(c: Check, nodes: readonly Node[], from: numbe
 function hasOtherForm(c: Check, node: Node): boolean {
   if ((c.w.forms.get(node) ?? 0) > 0 || c.respelled.has(node)) return false
   // C2-W-069: a pair braced for its content or place has no bare form; asking for one would only restart the rounds.
-  if (node.type === 'emphasis' || node.type === 'strong') return !c.w.bracedAnyway.has(node)
+  if (node.type === 'emphasis' || node.type === 'strong') return !isBracedAnyway(c.w, node)
   if (node.type === 'comment') return true
   return recordedRaw(c.w, node) !== undefined
 }

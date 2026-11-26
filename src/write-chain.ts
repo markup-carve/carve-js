@@ -95,7 +95,7 @@ function chainStep(w: Writer, step: RoundStep, before: Snapshot | null): boolean
   }
   if (before === null) return true
   const after = snapshot(w)
-  if (!sameBesideRound(before, after)) return false
+  if (!sameBesideRound(w, before, after)) return false
   return addedOnly(before.get('escapes') as Map<TextNode, number[]>, w.escapes, escape)
 }
 

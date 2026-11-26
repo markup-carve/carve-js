@@ -44,6 +44,11 @@ export interface PassTrace {
   charges: [string, DocumentNode | null, boolean][]
   /** The parses of rounds a chain step stood in for (write-chain.ts): their count and their characters. */
   skipped: [number, number]
+  /**
+   * The nodes of `bracedAnyway` it found absent, and those whose add alone told a chain step's states apart
+   * (write-chain.ts): a start that already holds one of them would change a read or a comparison.
+   */
+  braced: Set<Node>
 }
 
 export interface Attempt {
@@ -169,6 +174,8 @@ export interface Writer {
   collapsedLabels: Map<Node, Map<string, string>>
   /** C2-W-075: the inline read of each collapsed label candidate inside its brackets, by the candidate. */
   labelReads: Map<string, Inline[]>
+  /** C2-W-002: the read-back results of the last sources a group wrote (write.ts `readsBack`), by source. */
+  readBacks: Map<string, ReadBack[]>
   /** C2-W-088: the result of each probe of the repair by the state it reads (write-check.ts), and an id of each node it read. */
   probes: Map<string, ProbeResult>
   nodeIds: Map<Node, number>
@@ -187,6 +194,13 @@ export interface Writer {
   leadingFrontmatter: Node | null
   /** What the pass being run read and charged (write-passes.ts), shared with its probes; null outside a pass. */
   pass: PassTrace | null
+}
+
+/** Whether a source read back as `group`, with the setting the comparison read. */
+export interface ReadBack {
+  group: readonly Node[]
+  lineFeedValues: boolean
+  result: boolean
 }
 
 /** What one probe of the repair found: its result and the escapes it asked of the comparison, in order. */
@@ -217,7 +231,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
     parses: 0, parseCache: { trees: new Map(), treeChars: 0, recent: [] },
     extensionSources: new Map(), verifiedSourceBytes: undefined, authored: null, authoredLeaves: new Map(), collapsedLabels: new Map(),
-    labelReads: new Map(),
+    labelReads: new Map(), readBacks: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
     leadingFrontmatter: null, pass: null,
@@ -291,6 +305,13 @@ export function loseKey(w: Writer, node: Node, index: number, key: string): void
 export function recordedRaw(w: Writer, node: Node): string | undefined {
   if (!w.verbatimRefs || !('key' in node) || node.key === undefined || w.treeReferences.has(node)) return undefined
   return w.facts?.get(node)?.rawRef
+}
+
+/** Whether `node` is in `bracedAnyway`; a pass notes a node it finds absent, which a later member would change. */
+export function isBracedAnyway(w: Writer, node: Node): boolean {
+  if (w.bracedAnyway.has(node)) return true
+  w.pass?.braced.add(node)
+  return false
 }
 
 export function lose(w: Writer, node: Node, field: string | null): void {
