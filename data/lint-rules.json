@@ -10,7 +10,7 @@
       "messages": ["image has empty alternative text and is not marked decorative"],
       "message_origin": "engine_0_1",
       "change": "accessibility extension; severity warning, where the 0.1 source sets error",
-      "reports": "an image that is not decorative and whose alt text is empty or unknown, as `![](a.png)`, once per image; an image with any alt text is not reported; a parse of Carve source never marks an image decorative and never leaves its alt unknown, so in source the rule reports exactly the empty alt (C2-I-074, C2-A-115)",
+      "reports": "an image that is neither decorative nor carries alt text, once per image: its alt is empty, as `![](a.png)`, or unknown (C2-A-115 names the three states); an image with alt text or `decorative: true` is not reported; a parse of Carve source never marks an image decorative and never leaves its alt unknown, so in source the rule reports exactly the empty alt (C2-I-074, C2-A-115)",
       "clauses": ["C2-I-074", "C2-A-115"]
     },
     {
@@ -153,8 +153,8 @@
       "messages": [{"when": "a rendered id differs only in case from the fragment as written or percent-decoded", "text": "Link to \"${href}\" matches no id; the id \"${caseOnly}\" differs only in case, and fragment links are case-sensitive, so the link goes nowhere."}, {"when": "no rendered id differs only in case from either the fragment as written or percent-decoded", "text": "Link to \"${href}\" matches no id in this document, so the link goes nowhere."}],
       "message_origin": "engine_0_1",
       "message_notes": ["For case-only candidates, compare NFC-normalized keys by Unicode case folding without changing the source spelling. Order qualifying candidates by the start of their source range, then by their id spelling as Unicode code points; select the first for a singular placeholder.", "`${caseOnlyPhrase}` is `the id X differs only in case` for one candidate, `the ids X and Y differ only in case` for two, and `the ids X, Y, and Z differ only in case` for three; for more candidates extend the comma-separated list in source order with `and` before the last. For reference labels, use `label` or `labels` in place of `id` or `ids`. `${caseOnly}` is the source spelling of the first qualifying rendered id.", "For case-only comparison, test both the source fragment and its percent-decoded spelling. `${caseOnly}` names the first qualifying rendered id in source order; if both spellings find candidates, use the same order across their union."],
-      "reports": "a link whose destination starts with `#` and whose fragment, the part before any `:~:` and tested both as written and percent-decoded, is not empty, is not `top` in any letter case, and is no `id` (and no `name` of an `a` element) in the rendered HTML of the document under the `headingIds` of the run (C2-T-042), heading, footnote, note mark and raw HTML ids included; once per link; not reported at all while an extension that generates ids is registered for the run, whether or not the document contains a node of that extension (C2-I-066, C2-H-022, C2-H-088, C2-H-089)",
-      "clauses": ["C2-I-066", "C2-H-022", "C2-H-088", "C2-H-089"]
+      "reports": "a link whose destination starts with `#` and whose fragment, the part before any `:~:` and tested both as written and percent-decoded, is not empty, is not `top` in any letter case, and is no `id` (and no `name` of an `a` element) in the rendered HTML of the document under the `headingIds` of the run (C2-T-042), heading, footnote, note mark and raw HTML ids included; once per link; not reported at all while an extension that generates ids (C2-X-079) is registered for the run, whether or not the document contains a node of that extension; an extension that generates no ids changes nothing (C2-I-066, C2-H-022, C2-H-088, C2-H-089, C2-X-079)",
+      "clauses": ["C2-I-066", "C2-H-022", "C2-H-088", "C2-H-089", "C2-X-079"]
     },
     {
       "id": "caption-looking-paragraph",
@@ -585,7 +585,7 @@
       "severity": "hint",
       "channel": "lint",
       "status": "new",
-      "default": "upgrade",
+      "default": "off",
       "messages": ["Djot reads a line that starts with `: ` as the term of a definition list; Carve reads it as paragraph text. Write the term as `:: term` and the definition as `: definition` on the line below it."],
       "message_origin": "design",
       "change": "added with the ruling on #6522 (24 November): a Djot reading that Carve 0.2 changes with no other finding",
@@ -597,7 +597,7 @@
       "severity": "warning",
       "channel": "lint",
       "status": "kept",
-      "default": "upgrade",
+      "default": "off",
       "fix": {"before": "a _i_ b\n", "after": "a /i/ b\n"},
       "messages": ["Djot emphasis `_x_` is literal text in Carve. Carve emphasis is `/x/`."],
       "message_origin": "data_file",
@@ -610,7 +610,7 @@
       "severity": "hint",
       "channel": "lint",
       "status": "new",
-      "default": "upgrade",
+      "default": "off",
       "messages": ["Djot emphasis `{_x_}` is underline in Carve. Carve emphasis is `/x/` or the braced `{/x/}`."],
       "message_origin": "design",
       "change": "added with the ruling on #6522 (24 November): a Djot reading that Carve 0.2 changes with no other finding",
@@ -622,7 +622,7 @@
       "severity": "warning",
       "channel": "lint",
       "status": "kept",
-      "default": "upgrade",
+      "default": "off",
       "messages": ["Djot folds the line(s) below a heading INTO it (a plain line, or one with the same number of `#`); Carve takes only lines indented past the heading marker into the heading (C2-B-154), so a line at the marker column starts a separate block. A generated heading id is computed from the shorter Carve heading, so it can differ from Djot's id."],
       "message_origin": "data_file",
       "change": "opt-in Djot check",
@@ -646,7 +646,7 @@
       "severity": "warning",
       "channel": "lint",
       "status": "kept",
-      "default": "upgrade",
+      "default": "off",
       "fix": {"before": "snake_case_name\n", "after": "snake{/case/}name\n"},
       "messages": [
         "Djot emphasizes this intraword `_x_`; the migration leaves it literal, so the emphasis is lost. Brace it as `{/x/}` if it was meant."
@@ -661,7 +661,7 @@
       "severity": "hint",
       "channel": "lint",
       "status": "new",
-      "default": "upgrade",
+      "default": "off",
       "messages": ["Djot reads this line as an ordered list item; Carve reads it as paragraph text. Carve has no marker in parentheses such as `(1)`, and an uppercase marker with a dot needs two spaces before its text."],
       "message_origin": "design",
       "change": "added with the ruling on #6522 (24 November): a Djot reading that Carve 0.2 changes with no other finding",
@@ -673,7 +673,7 @@
       "severity": "warning",
       "channel": "lint",
       "status": "kept",
-      "default": "upgrade",
+      "default": "off",
       "fix": {"before": "+ item\n", "after": "- item\n"},
       "messages": ["Djot/Markdown `+` bullet is not a Carve bullet, so this line is a paragraph. Write `-` or `*`."],
       "message_origin": "data_file",
@@ -686,7 +686,7 @@
       "severity": "warning",
       "channel": "lint",
       "status": "kept",
-      "default": "upgrade",
+      "default": "off",
       "fix": {"before": "H~2~O\n", "after": "H{,2,}O\n"},
       "messages": ["Djot subscript `~x~` is literal text in Carve. Carve subscript is the braced `{,x,}`."],
       "message_origin": "data_file",
@@ -699,7 +699,7 @@
       "severity": "warning",
       "channel": "lint",
       "status": "kept",
-      "default": "upgrade",
+      "default": "off",
       "messages": ["Djot subscript `{~x~}` renders as *strikethrough* in Carve."],
       "message_origin": "engine_0_1",
       "change": "opt-in Djot check",
@@ -711,7 +711,7 @@
       "severity": "warning",
       "channel": "lint",
       "status": "kept",
-      "default": "upgrade",
+      "default": "off",
       "fix": {"before": "x^2^\n", "after": "x{^2^}\n"},
       "messages": ["Djot superscript `^x^` is literal text in Carve — Carve superscript is the braced `{^x^}` only."],
       "message_origin": "engine_0_1",
@@ -724,7 +724,7 @@
       "severity": "hint",
       "channel": "lint",
       "status": "new",
-      "default": "upgrade",
+      "default": "off",
       "messages": ["Djot reads `#word` and `@word` as text; Carve reads them as a tag or a mention. Escape the sigil as `\\#` or `\\@` to keep it as text."],
       "message_origin": "design",
       "change": "added with the ruling on #6522 (24 November): a Djot reading that Carve 0.2 changes with no other finding",
@@ -736,7 +736,7 @@
       "severity": "hint",
       "channel": "lint",
       "status": "new",
-      "default": "upgrade",
+      "default": "off",
       "messages": ["Djot keeps this run as typed; Carve smart typography writes it as a sign. Escape its punctuation characters to keep it as typed."],
       "message_origin": "design",
       "change": "added with the ruling on #6522 (24 November): a Djot reading that Carve 0.2 changes with no other finding",
@@ -1105,7 +1105,7 @@
       "default": "on",
       "messages": ["This document mixes the two heading markers. carve fmt rewrites the hash to the equals sign."],
       "message_origin": "design",
-      "reports": "a document with `=` headings and `#` headings, once; the range is the first heading of the document",
+      "reports": "a document with `=` headings and `#` headings, once; the range is the first heading of the document, from its start to its end, so an attribute line above it is included; a heading counts by the marker that opens it, behind any attribute lines above it",
       "clauses": ["C2-B-155"]
     },
     {
@@ -1141,6 +1141,14 @@
       "message_origin": "engine_0_1",
       "reports": "each `<!--` on a paragraph line, when `-->` follows later in the same paragraph, on that line or a later one; once per `<!--` (C2-I-124)",
       "clauses": ["C2-I-124"]
+    },
+    {
+      "id": "image-alt-unknown",
+      "severity": "warning",
+      "channel": "render-loss",
+      "status": "new",
+      "reports": "an image with neither `alt` nor `decorative`, whose alt text is unknown, which the writer writes with empty brackets; no code of C2-W-134, so a write returns the source and `carve import` does not fail on it (C2-W-011, C2-T-034)",
+      "clauses": ["C2-W-011", "C2-W-104"]
     },
     {
       "id": "import-attribute-dropped",
@@ -2073,7 +2081,7 @@
         "This attribute block is attached to nothing and renders as text. Glue it to a span, link or code span, or escape the brace."
       ],
       "message_origin": "design",
-      "reports": "a valid attribute block, or a run of glued ones, in an inline content (a paragraph, heading, term, description or table cell) that is glued to the end of no formed host (C2-I-036), so it is printed as written (C2-I-035); `{}`, an escaped brace, a line that holds nothing but blocks (an attribute line), a run at the start of a paragraph that `block-marker-as-text` reports and a table cell that `table-row-attribute-as-cell` reports are not reported; once per run, the range is the run (C2-I-028, C2-I-035, C2-I-036)",
+      "reports": "a valid attribute block, or a run of glued ones, in an inline content (a paragraph, heading, term, description or table cell) that is glued to the end of no formed host (C2-I-036), so it is printed as written (C2-I-035); a line of a line block is such an inline content too, and the text of a caption or a description is that of its paragraphs; `{}`, an escaped brace, a line that holds nothing but blocks (an attribute line), a run at the start of a paragraph or of a line of a line block that `block-marker-as-text` reports and a table cell that `table-row-attribute-as-cell` reports are not reported; once per run, the range is the run (C2-I-028, C2-I-035, C2-I-036)",
       "clauses": ["C2-I-028", "C2-I-035", "C2-I-036"]
     },
     {

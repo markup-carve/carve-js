@@ -27,6 +27,12 @@ function cli(args: string[], input = '', cwd = root): { status: number | null, s
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }) })
 
 describe('carve fix and carve lint --fix', () => {
+  // carve#6499: upgrade no longer turns the djot- rules on, so these fixes turn on by id the ones it turned on before. The
+  // -braced rules stay at their default: they report the braced spelling a fix writes.
+  const djot = Object.fromEntries(['djot-definition-list', 'djot-emphasis-underscore', 'djot-heading-continuation',
+    'djot-intraword-underscore', 'djot-ordered-marker', 'djot-plus-bullet', 'djot-subscript-tilde', 'djot-superscript-caret',
+    'djot-tag-mention', 'djot-typography-sign'].map((id) => [id, 'on' as const]))
+
   it('rewrites each habit to the replacement its rule documents', () => {
     const cases: [string, string][] = [
       ['a **b** c\n', 'a *b* c\n'],
@@ -41,7 +47,7 @@ describe('carve fix and carve lint --fix', () => {
       ['**a ~~b~~ c**\n', '*a {~b~} c*\n'],
       ['> - **ä😀**\n', '> - *ä😀*\n'],
     ]
-    for (const [input, output] of cases) expect(fixSource(input, { upgrade: true }).output, JSON.stringify(input)).toBe(output)
+    for (const [input, output] of cases) expect(fixSource(input, { upgrade: true, rules: djot }).output, JSON.stringify(input)).toBe(output)
   })
 
   it('keeps a 0.2 spelling that only a migration notice reports, unless the notice is on (C2-T-049)', () => {
@@ -56,9 +62,9 @@ describe('carve fix and carve lint --fix', () => {
 
   it('leaves a range that two rules would rewrite differently, and a fix that would not hold', () => {
     // djot-subscript-tilde reads `~t~` as subscript, deprecated-bare-strike as strike.
-    expect(fixSource('a ~t~ b\n', { upgrade: true }).output).toBe('a ~t~ b\n')
+    expect(fixSource('a ~t~ b\n', { upgrade: true, rules: djot }).output).toBe('a ~t~ b\n')
     // CC-1354: djot-subscript-tilde-braced then reports the strike, which does not withhold the fix.
-    expect(fixSource('a ~t~ b\n', { upgrade: true, rules: { 'djot-subscript-tilde': 'off' } }).output).toBe('a {~t~} b\n')
+    expect(fixSource('a ~t~ b\n', { upgrade: true, rules: { ...djot, 'djot-subscript-tilde': 'off' } }).output).toBe('a {~t~} b\n')
     // A `-` line directly below text opens no list, so the `+` stays.
     expect(fixSource('x\n+ y\n', {}).output).toBe('x\n+ y\n')
     expect(fixSource('a **b** c\n', { rules: { 'markdown-strong-double-star': 'off' } }).output).toBe('a **b** c\n')
@@ -67,13 +73,13 @@ describe('carve fix and carve lint --fix', () => {
   it('every fixable rule is in the catalog, and the fixed source no longer reports it', () => {
     for (const id of FIXES.keys()) expect(CATALOG[id], id).toBeDefined()
     const input = 'a **b** ~~c~~ _d_ x^2^ =e=\n\n+ item\n\n# T ##\n\n---\n'
-    const fixed = fixSource(input, { upgrade: true }).output
+    const fixed = fixSource(input, { upgrade: true, rules: djot }).output
     const left = lint(fixed, { rules: Object.fromEntries([...FIXES.keys()].map((id) => [id, 'on'])) })
     expect(left.filter((entry) => FIXES.has(entry.code as never)).map((entry) => entry.code)).toEqual([])
   })
 
   it('fix is lint --fix: source on standard output, remaining entries and the summary on standard error', () => {
-    const result = cli(['fix', '--upgrade'], 'a **b**\n\n# T ##\n\nx ~t~ y\n')
+    const result = cli(['fix', '--upgrade', '--rules', '{"djot-subscript-tilde":"on"}'], 'a **b**\n\n# T ##\n\nx ~t~ y\n')
     expect(result.stdout).toBe('a *b*\n\n# T\n\nx ~t~ y\n')
     expect(result.stderr).toContain('<stdin>: fixed markdown-strong-double-star 1, heading-closing-hashes 1')
     expect(result.stderr).toMatch(/<stdin>:5:3: warning deprecated-bare-strike /)

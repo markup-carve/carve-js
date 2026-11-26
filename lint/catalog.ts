@@ -427,7 +427,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-definition-list": { severity: "hint", default: "upgrade", messages: [
+  "djot-definition-list": { severity: "hint", default: "off", messages: [
     [
       "Djot reads a line that starts with `: ` as the term of a definition ",
       "list; Carve reads it as paragraph text. Write the term as `:: term` ",
@@ -436,7 +436,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-emphasis-underscore": { severity: "warning", default: "upgrade", messages: [
+  "djot-emphasis-underscore": { severity: "warning", default: "off", messages: [
     [
       "Djot emphasis `_x_` is literal text in Carve. Carve emphasis is `/x/",
       "`.",
@@ -444,7 +444,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-emphasis-underscore-braced": { severity: "hint", default: "upgrade", messages: [
+  "djot-emphasis-underscore-braced": { severity: "hint", default: "off", messages: [
     [
       "Djot emphasis `{_x_}` is underline in Carve. Carve emphasis is `/x/`",
       " or the braced `{/x/}`.",
@@ -452,7 +452,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-heading-continuation": { severity: "warning", default: "upgrade", messages: [
+  "djot-heading-continuation": { severity: "warning", default: "off", messages: [
     [
       "Djot folds the line(s) below a heading INTO it (a plain line, or one",
       " with the same number of `#`); Carve takes only lines indented past ",
@@ -471,7 +471,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-intraword-underscore": { severity: "warning", default: "upgrade", messages: [
+  "djot-intraword-underscore": { severity: "warning", default: "off", messages: [
     [
       "Djot emphasizes this intraword `_x_`; the migration leaves it litera",
       "l, so the emphasis is lost. Brace it as `{/x/}` if it was meant.",
@@ -479,7 +479,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-ordered-marker": { severity: "hint", default: "upgrade", messages: [
+  "djot-ordered-marker": { severity: "hint", default: "off", messages: [
     [
       "Djot reads this line as an ordered list item; Carve reads it as para",
       "graph text. Carve has no marker in parentheses such as `(1)`, and an",
@@ -488,7 +488,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-plus-bullet": { severity: "warning", default: "upgrade", messages: [
+  "djot-plus-bullet": { severity: "warning", default: "off", messages: [
     [
       "Djot/Markdown `+` bullet is not a Carve bullet, so this line is a pa",
       "ragraph. Write `-` or `*`.",
@@ -496,7 +496,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-subscript-tilde": { severity: "warning", default: "upgrade", messages: [
+  "djot-subscript-tilde": { severity: "warning", default: "off", messages: [
     [
       "Djot subscript `~x~` is literal text in Carve. Carve subscript is th",
       "e braced `{,x,}`.",
@@ -504,12 +504,12 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-subscript-tilde-braced": { severity: "warning", default: "upgrade", messages: [
+  "djot-subscript-tilde-braced": { severity: "warning", default: "off", messages: [
     "Djot subscript `{~x~}` renders as *strikethrough* in Carve.",
   ], conditions: [
     "",
   ] },
-  "djot-superscript-caret": { severity: "warning", default: "upgrade", messages: [
+  "djot-superscript-caret": { severity: "warning", default: "off", messages: [
     [
       "Djot superscript `^x^` is literal text in Carve — Carve superscript ",
       "is the braced `{^x^}` only.",
@@ -517,7 +517,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-tag-mention": { severity: "hint", default: "upgrade", messages: [
+  "djot-tag-mention": { severity: "hint", default: "off", messages: [
     [
       "Djot reads `#word` and `@word` as text; Carve reads them as a tag or",
       " a mention. Escape the sigil as `\\#` or `\\@` to keep it as text.",
@@ -525,7 +525,7 @@ export const CATALOG = {
   ], conditions: [
     "",
   ] },
-  "djot-typography-sign": { severity: "hint", default: "upgrade", messages: [
+  "djot-typography-sign": { severity: "hint", default: "off", messages: [
     [
       "Djot keeps this run as typed; Carve smart typography writes it as a ",
       "sign. Escape its punctuation characters to keep it as typed.",
