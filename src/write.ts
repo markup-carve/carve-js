@@ -1890,6 +1890,8 @@ interface SavedGroup {
   reportedBraceKinds: Set<string>
   forms: Map<Node, number>
   glued: Set<Node>
+  /** The pairs braced for their content or place: a pass that starts again from here writes them anew. */
+  bracedAnyway: Set<Node>
   attempts: Writer['attempts']
   blankFirst: boolean
   losses: LossMark
@@ -1900,7 +1902,8 @@ function saveGroup(w: Writer, end: number): SavedGroup {
   return {
     end, lines: [...w.lines], escapes: new Map([...w.escapes].map(([node, at]) => [node, [...at]])),
     reportedBraceKinds: new Set(w.reportedBraceKinds), forms: new Map(w.forms),
-    glued: new Set(w.glued), attempts: new Map(w.attempts), blankFirst: w.blankFirst, losses: markLosses(w), parsed: w.parsed,
+    glued: new Set(w.glued), bracedAnyway: new Set(w.bracedAnyway), attempts: new Map(w.attempts), blankFirst: w.blankFirst,
+    losses: markLosses(w), parsed: w.parsed,
   }
 }
 
@@ -1910,6 +1913,7 @@ function restoreGroup(w: Writer, saved: SavedGroup): number {
   w.reportedBraceKinds = saved.reportedBraceKinds
   w.forms = saved.forms
   w.glued = saved.glued
+  w.bracedAnyway = new Set(saved.bracedAnyway)
   w.attempts = saved.attempts
   w.blankFirst = saved.blankFirst
   rollBackLosses(w, saved.losses)
