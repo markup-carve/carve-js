@@ -45,6 +45,14 @@ describe('carve#6804: an image whose alt text is unknown', () => {
     expect(result.diagnostics.map((entry) => entry.path)).toEqual(['/children/0/children/0/children/0', '/children/0/children/1/children/3'])
   })
 
+  it('C2-W-011: an image object used twice is reported at each of its paths', () => {
+    const shared: ImageNode = { type: 'image', src: 'x' }
+    const result = writeWithDiagnostics(documentOf(paragraph(shared, ' ', shared), paragraph(shared)))
+    expect(result.source).toBe('![](x) ![](x)\n\n![](x)\n')
+    expect(result.diagnostics.filter((entry) => entry.code === 'image-alt-unknown').map((entry) => entry.path))
+      .toEqual(['/children/0/children/0', '/children/0/children/2', '/children/1/children/0'])
+  })
+
   it('C2-M-050, C2-H-080: render then import gives back each state', () => {
     for (const image of [UNKNOWN, DECORATIVE, TEXT]) {
       const back = importDocument(render(inParagraph(image)), { from: 'html' }).document
