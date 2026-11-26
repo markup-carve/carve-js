@@ -887,7 +887,6 @@ function checkWritten(
  * engine passes the clause case; a held case that passes the gate fails the run, so the hold goes with the model fix.
  */
 export const WRITER_GATE_HELD: ReadonlyMap<string, string> = new Map([
-  ['CC-2258', 'carve#6610: a column-0 div opener at block depth 200 (C2-B-190, C2-B-228; spec carve#6817), not in carve-js yet'],
   ['CC-2265', 'carve#6727: a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815), not in carve-js yet'],
   ['CC-2323', 'carve#6813: a key the escape rounds cannot spell is no loss (C2-W-075; spec carve#6825), not in carve-js yet'],
   ['CC-2324', 'carve#6813: a key the escape rounds cannot spell is no loss (C2-W-075; spec carve#6825), not in carve-js yet'],
