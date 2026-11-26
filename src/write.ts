@@ -39,6 +39,10 @@ import { plainParagraph } from './write-plain.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { sourceCoreEquivalent, withCoreInlines } from './write-extension-source.ts'
 import { caretLineEscapes } from './write-carets.ts'
+import {
+  logTrials, MAX_RETESTED_TRIALS, memoPass, noteLogClosed, noteRead, type PassMemo, type PassRun, READ_CLOSER_KINDS,
+  READ_TRIAL_LOG, READ_WHOLE_TRIALS,
+} from './write-passes.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
 export interface LayoutEntry extends WriterFacts {
@@ -448,7 +452,11 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
   const escaped = new Map(left)
   escaped.set(node, [...(left.get(node) ?? []), at])
   const without = groupTree(w, group, first, left)
-  const asked = !treesEqual(groupTree(w, group, first, escaped), without) || (w.wholeTrials && givesTree(w, group, first, placed, node, at))
+  let asked = !treesEqual(groupTree(w, group, first, escaped), without)
+  if (!asked) {
+    noteRead(w, READ_WHOLE_TRIALS)
+    asked = w.wholeTrials && givesTree(w, group, first, placed, node, at)
+  }
   w.escapes = placed
   w.lines = lines
   w.lead = lead
@@ -458,19 +466,6 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
   return asked
 }
 
-// The trials a pass tests together at most: the subsets grow as 2^n, and a group that needs more loses the node as before.
-const MAX_RETESTED_TRIALS = 8
-
-/** Records each trial and escape a `wholeTrials` pass asks for once, in the order the rounds asked for it. */
-function logTrials(w: Writer, trials: readonly [TextNode, number][]): void {
-  const log = w.trialLog
-  if (log === null) return
-  for (const [node, at] of trials) {
-    // Past the cap the pass is not retested, so the log stops growing and stays short.
-    if (log.length > MAX_RETESTED_TRIALS) return
-    if (!log.some((entry) => entry[0] === node && entry[1] === at)) log.push([node, at])
-  }
-}
 
 /**
  * C2-W-125: each trial was tested with only the escapes placed before it, so one that needs a closer escape placed in
@@ -481,7 +476,12 @@ function logTrials(w: Writer, trials: readonly [TextNode, number][]): void {
 function retestTrials(w: Writer, group: readonly Node[], first: boolean, check: Check): void {
   const log = w.trialLog
   if (check.escapes.length + check.forms.length + check.retracted.length > 0 || check.losses.length === 0) return
-  if (log === null || w.trialsRetested || log.length === 0 || log.length > MAX_RETESTED_TRIALS) return
+  if (log === null || w.trialsRetested || log.length > MAX_RETESTED_TRIALS) {
+    noteLogClosed(w)
+    return
+  }
+  noteRead(w, READ_TRIAL_LOG)
+  if (log.length === 0) return
   w.trialsRetested = true
   const placed = w.escapes
   const base = new Map<TextNode, number[]>()
@@ -541,7 +541,9 @@ function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): v
     const opened = parsedStarts(check.w.parsed)
     check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, located, opened))
   }
-  escapeKinds(check, group, w.closerKinds ? undefined : new Set([...check.closers, ...check.readOn]), located)
+  const closers = new Set([...check.closers, ...check.readOn])
+  if (closers.size > 0) noteRead(w, READ_CLOSER_KINDS)
+  escapeKinds(check, group, w.closerKinds ? undefined : closers, located)
   escapePartnerClosers(check, group)
 }
 
@@ -997,6 +999,8 @@ interface RepairHistory {
   rounds: number
   /** The budget of the document when this repair started (C2-W-133). */
   budget: number
+  /** Whether a limit of C2-W-133 stopped the rounds. */
+  limited: boolean
 }
 // C2-W-133: the parses of all repairs, their probes included, read at most this many characters per character of
 // the document, or the floor for a short one, so the repairs take time linear in the document however many groups
@@ -1018,6 +1022,7 @@ function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistor
   // The writes of the rounds draw on a pool of the same size, so a round whose parse is cached still counts.
   w.work.rewritten += chars
   if (spent || history.rounds > 8192 || w.work.rewritten > history.budget || exhausted(w)) {
+    history.limited = true
     const host = group[0]
     if (host !== undefined) refuseRepair(w, host)
     return true
@@ -1938,6 +1943,7 @@ function repairBareAlts(w: Writer, document: DocumentNode, from: number, first: 
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
 function repairGroup(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+  const memo: PassMemo = []
   dropLinkFallback(w)
   // A bracket left open in a bracketed node's content would consume that node's closer.
   // Collect these independent escapes before the readback instead of discovering one nest per parse.
@@ -1950,15 +1956,15 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
     .filter(([node]) => !(w.escapes.get(node) ?? []).includes(0)))
   addEscapes(w, earlyLoneNoteBrackets(w, group).filter(([node, at]) => !(w.escapes.get(node) ?? []).includes(at)))
   const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
-  const end = repairOnce(w, document, from, first, reported)
-  if (saved === null || passSettled(w, group, first, reported)) return end
+  const end = repairOnce(w, document, from, first, reported, memo)
+  if (saved === null || settledPass(w, memo, group, first, reported)) return end
   restoreGroup(w, saved)
   const before = saveGroup(w, saved.end)
   // C2-W-005: where that loses a node, the closer repairs give their kind too, the smallest departure that keeps it.
   w.closerKinds = true
   try {
-    const kinds = repairOnce(w, document, from, first, reported)
-    if (passSettled(w, group, first, reported)) return kinds
+    const kinds = repairOnce(w, document, from, first, reported, memo)
+    if (settledPass(w, memo, group, first, reported)) return kinds
   } finally {
     w.closerKinds = false
   }
@@ -1968,8 +1974,8 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   const unrepaired = saveGroup(w, saved.end)
   w.kindRounds = false
   try {
-    const openers = repairOnce(w, document, from, first, reported)
-    if (passSettled(w, group, first, reported)) return openers
+    const openers = repairOnce(w, document, from, first, reported, memo)
+    if (settledPass(w, memo, group, first, reported)) return openers
   } finally {
     w.kindRounds = true
   }
@@ -1985,8 +1991,8 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
       w.trialsRetested = false
       w.kindRounds = kinds
       try {
-        const trials = repairOnce(w, document, from, first, reported)
-        if (passSettled(w, group, first, reported)) return trials
+        const trials = repairOnce(w, document, from, first, reported, memo)
+        if (settledPass(w, memo, group, first, reported)) return trials
       } finally {
         w.wholeTrials = false
         w.kindRounds = true
@@ -1998,43 +2004,52 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   restoreGroup(w, last)
   w.kindRounds = false
   try {
-    return repairOnce(w, document, from, first, reported)
+    return repairOnce(w, document, from, first, reported, memo)
   } finally {
     w.kindRounds = true
   }
 }
 
-function repairOnce(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+/** `passSettled` after a pass of `repairGroup`; a pass that took an earlier pass's result takes its check too. */
+function settledPass(w: Writer, memo: PassMemo, group: readonly Node[], first: boolean, reported: number): boolean {
+  return memoPass(w, memo, 'settled', () => ({ result: passSettled(w, group, first, reported), limited: false, budget: Infinity }))
+}
+
+function repairOnce(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number,
+  memo: PassMemo): number {
   const start = w.work.chars
-  const end = repairRounds(w, document, from, first, reported)
+  const end = memoPass(w, memo, 'rounds', () => repairRounds(w, document, from, first, reported))
   w.work.spent += w.work.chars - start
   w.work.limit = Infinity
   return end
 }
 
-function repairRounds(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+function repairRounds(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): PassRun<number> {
   const nodes = document.children
   w.cappedRuns = []
   w.contentKeys.clear()
-  const history: RepairHistory = { ids: new Map(), end: -1, nodes: [], deep: false, recent: [], seen: new Set(), rounds: 0, budget: 0 }
+  const history: RepairHistory = {
+    ids: new Map(), end: -1, nodes: [], deep: false, recent: [], seen: new Set(), rounds: 0, budget: 0, limited: false,
+  }
   w.linkFallback = false
   w.sawLink = false
+  const ran = (result: number): PassRun<number> => ({ result, limited: history.limited || exhausted(w), budget: history.budget })
   try {
     for (let round = 0; ; round++) {
       const end = groupEnd(w, nodes, from)
       const group = nodes.slice(from, end)
       resetLines(w)
       writeBlocks(w, group, '', 0, false)
-      if (w.lines.length === 0) return end
+      if (w.lines.length === 0) return ran(end)
       takeGroupFacts(history, group, end)
       if (history.deep) {
         refuseDeepGroup(w, group)
-        return end
+        return ran(end)
       }
-      if (repeatedRepair(w, group, history)) return end
+      if (repeatedRepair(w, group, history)) return ran(end)
       if (!settle(w, document, group, first && !w.blankFirst, round === 0) && !exhausted(w)) {
         finishRounds(w, group, first && !w.blankFirst, reported)
-        return end
+        return ran(end)
       }
     }
   } finally {

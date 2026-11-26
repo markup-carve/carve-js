@@ -1,6 +1,6 @@
 // What one run of the writer holds (spec/0.2/writer.md): the lines written so far, the escapes
 // and spellings the reparse asked for (C2-W-089), the facts of the sidecar and the losses.
-import { type DocumentNode, type Node, type ParagraphNode, type TextNode } from './ast.ts'
+import { type DocumentNode, type Inline, type Node, type ParagraphNode, type TextNode } from './ast.ts'
 import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { type Plan } from './write-plan.ts'
@@ -32,6 +32,18 @@ export interface WriterFacts {
 }
 
 /** One node that did not read back, and how far the writer is in the ways to make it form. */
+/** What a pass of the repair read and charged, so a later pass can stand in for it (write-passes.ts). */
+export interface PassTrace {
+  /** The switches its rounds read (`READ_*`). */
+  reads: number
+  /** The trials it handed to `logTrials`, in order. */
+  logged: [TextNode, number][][]
+  /** Where it found the trial log closed to a retest, as the number of `logged` entries before each check. */
+  checks: number[]
+  /** Its parses outside a kept probe: the source, and the tree where `parseChunk` keeps short ones (C2-W-133). */
+  charges: [string, DocumentNode | null, boolean][]
+}
+
 export interface Attempt {
   step: number
   escapes: [TextNode, number][]
@@ -152,7 +164,9 @@ export interface Writer {
   /** C2-W-088: the leaf blocks written with their authored content instead of their spelling, while that fallback tries them. */
   authoredLeaves: Map<Node, string>
   /** C2-W-075: the label of a collapsed reference whose content does not fold to its key, by the content written. */
-  collapsedLabels: Map<Node, [string, string]>
+  collapsedLabels: Map<Node, Map<string, string>>
+  /** C2-W-075: the inline read of each collapsed label candidate inside its brackets, by the candidate. */
+  labelReads: Map<string, Inline[]>
   /** C2-W-088: the result of each probe of the repair by the state it reads (write-check.ts), and an id of each node it read. */
   probes: Map<string, ProbeResult>
   nodeIds: Map<Node, number>
@@ -169,6 +183,8 @@ export interface Writer {
   work: { chars: number, limit: number, spent: number, source: number, written: number, rewritten: number }
   /** Prototype: the frontmatter that stands first in the document and may use the bare opener (C2-B-161). */
   leadingFrontmatter: Node | null
+  /** What the pass being run read and charged (write-passes.ts), shared with its probes; null outside a pass. */
+  pass: PassTrace | null
 }
 
 /** What one probe of the repair found: its result and the escapes it asked of the comparison, in order. */
@@ -199,9 +215,10 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
     parses: 0, parseCache: { trees: new Map(), treeChars: 0, recent: [] },
     extensionSources: new Map(), verifiedSourceBytes: undefined, authored: null, authoredLeaves: new Map(), collapsedLabels: new Map(),
+    labelReads: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
-    leadingFrontmatter: null,
+    leadingFrontmatter: null, pass: null,
   }
 }
 
