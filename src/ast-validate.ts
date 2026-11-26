@@ -1341,7 +1341,17 @@ function checkReferences(document: Fields, tree: TreeFacts): void {
 
 /** C2-A-203, C2-A-214: ranges for an unchanged tree, addressed by node pointer and UTF-8 byte offset of annotation text. */
 export interface AnnotationRangeSidecar {
-  ranges: { id: string, start: { path: string, offset: number }, end: { path: string, offset: number } }[]
+  ranges: { id: string, start: { path: string, offset: number }, end: { path: string, offset: number },
+    data?: Record<string, unknown> }[]
+}
+
+function checkRangeData(value: Value, path: string, tree: TreeFacts): void {
+  checkObject(value, path)
+  if (!isRecord(value)) return
+  for (const name of Object.keys(value)) {
+    if (!validName(name, true)) fail(`${path}/${pointerKey(name)}`, 'not a qualified data name')
+    if (!tree.declarations.has(name)) fail(`${path}/${pointerKey(name)}`, 'an undeclared data name')
+  }
 }
 
 function checkAnnotations(sidecar: AnnotationRangeSidecar, tree: TreeFacts): void {
@@ -1349,7 +1359,7 @@ function checkAnnotations(sidecar: AnnotationRangeSidecar, tree: TreeFacts): voi
     fail('', 'not an annotation-range sidecar with ranges')
   }
   sidecar.ranges.forEach((range, index) => {
-    if (!isRecord(range) || Object.keys(range).some((key) => !['id', 'start', 'end'].includes(key)) ||
+    if (!isRecord(range) || Object.keys(range).some((key) => !['id', 'start', 'end', 'data'].includes(key)) ||
       typeof range.id !== 'string' || range.id.length === 0) fail(`/ranges/${index}`, 'invalid annotation range')
     for (const side of ['start', 'end'] as const) {
       const endpoint = range[side]
@@ -1357,6 +1367,8 @@ function checkAnnotations(sidecar: AnnotationRangeSidecar, tree: TreeFacts): voi
         typeof endpoint.path !== 'string' || !/^(?:|\/(?:[^~/]|~[01])*)*$/.test(endpoint.path) ||
         !Number.isInteger(endpoint.offset) || endpoint.offset < 0) fail(`/ranges/${index}/${side}`, 'invalid annotation endpoint')
     }
+    // C2-A-214: range data follows the node data rules of C2-A-029.
+    if (range.data !== undefined) checkRangeData(range.data, `/ranges/${index}/data`, tree)
   })
   const ranges = new Map<string, AnnotationRangeSidecar['ranges'][number]>()
   sidecar.ranges.forEach((range, index) => {
