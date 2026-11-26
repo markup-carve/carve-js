@@ -5,6 +5,7 @@ import {
   isLeaf, PARAGRAPH, ROW,
   TABLE,
 } from './kinds.ts'
+import { countValue } from './lines.ts'
 import { bodyPartition, bodyStarts } from './table-bodies.ts'
 
 
@@ -208,8 +209,17 @@ function tableAttributes(table: BlockNode, src: string): Attributes | null {
   return table.attributes === null || table.attributes.length === 0 || src === '' ? null : readAttributeLines(src, table.attributes)
 }
 
-/** C2-B-187: an empty `body-rows` ends the head above a footer count smaller than the rows. Returns the head rows. */
+/**
+ * The head rows of a pipe table. C2-B-186: a valid `header-rows` count sets them, the first N rows whatever their cells.
+ * C2-B-187: otherwise an empty `body-rows` ends the head of header cells above a footer count smaller than the rows.
+ */
 function endHead(table: BlockNode, attributes: Attributes | null, rows: number): number {
+  const declared = countValue(attributes?.keyValues.find((pair) => pair[0] === 'header-rows')?.[1] ?? null)
+  if (declared >= 0) {
+    // C2-B-209: a count past the last row is the number of rows.
+    table.facts = Math.min(declared, rows)
+    return table.facts
+  }
   if (table.aux < rows && table.facts > rows - table.aux && bodyPartition(attributes, 0)?.data.length === 0) {
     table.facts = rows - table.aux
   }

@@ -411,25 +411,25 @@ describe('C2-M-037: leading column-heading rows of a table with no thead (carve#
 describe('C2-M-037: the data cells of a thead (carve#6663)', () => {
   const head = (html: string): { source: string, codes: string[] } => ({ source: source(html), codes: codes(html) })
 
-  it('a td of the thead is a header cell, reported once at the thead', () => {
+  it('a td of the thead stays a data cell of the head, written with header-rows and not reported', () => {
     expect(head('<table><thead><tr><td>a</td><td>b</td></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>'))
-      .toEqual({ source: '|= a |= b |\n| 1 | 2 |\n', codes: ['import-structure-repaired'] })
+      .toEqual({ source: '{header-rows=1}\n| a | b |\n| 1 | 2 |\n', codes: [] })
     expect(head('<table><thead><tr><th>a</th><td>b</td></tr><tr><td>c</td></tr></thead></table>'))
-      .toEqual({ source: '|= a |= b |\n|= c |\n', codes: ['import-structure-repaired'] })
+      .toEqual({ source: '{header-rows=2}\n|= a | b |\n| c |\n', codes: [] })
     expect(head('<table><thead><tr><th>a</th></tr></thead><tr><td>1</td></tr></table>'))
       .toEqual({ source: '|= a |\n| 1 |\n', codes: [] })
   })
 
-  it('an empty corner td of the thead is an empty header cell', () => {
+  it('an empty corner td of the thead stays an empty data cell', () => {
     const html = '<table><thead><tr><td></td><td>Q1</td><td>Q2</td></tr></thead>'
       + '<tbody><tr><th>North</th><td>1</td><td>2</td></tr></tbody></table>'
     expect(head(html))
-      .toEqual({ source: '|= |= Q1 |= Q2 |\n|= North | 1 | 2 |\n', codes: ['import-structure-repaired'] })
+      .toEqual({ source: '{header-rows=1}\n| | Q1 | Q2 |\n|= North | 1 | 2 |\n', codes: [] })
   })
 
   it('a thead of td rows above a header-cell foot reads back as head and foot', () => {
     expect(source('<table><thead><tr><td>a</td></tr></thead><tfoot><tr><th>F</th></tr></tfoot></table>'))
-      .toBe('{footer-rows=1 body-rows}\n|= a |\n|= F |\n')
+      .toBe('{header-rows=1 footer-rows=1}\n| a |\n|= F |\n')
   })
 
   it('a foot keeps its rows and cell kinds', () => {

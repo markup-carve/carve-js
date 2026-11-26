@@ -417,12 +417,12 @@ function groupNode(
 }
 
 /**
- * C2-B-227: `aligns`, `valigns`, `widths`, `header-rows` and `footer-rows` are read here. A valid key that applies to the
- * table form is consumed; an invalid one, and `header-rows` on a pipe table (C2-B-186), stays in `attrs`.
+ * C2-B-227: `aligns`, `valigns`, `widths`, `header-rows` and `footer-rows` are read here. A valid key is consumed, and
+ * an invalid one stays in `attrs`; `header-rows` sets the head of a pipe table too (C2-B-186).
  */
-function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null, delimited: boolean): TableNode {
+function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null): TableNode {
   consumed(attributes, 'footer-rows', count(keyOf(attributes, 'footer-rows')))
-  if (delimited) consumed(attributes, 'header-rows', count(keyOf(attributes, 'header-rows')))
+  consumed(attributes, 'header-rows', count(keyOf(attributes, 'header-rows')))
   const aligns = consumed(attributes, 'aligns', columnEntries(keyOf(attributes, 'aligns'), alignEntry))
   const valigns = consumed(attributes, 'valigns', columnEntries(keyOf(attributes, 'valigns'), valignEntry))
   const widths = consumed(attributes, 'widths', columnEntries(keyOf(attributes, 'widths'), columnWidth))
@@ -455,7 +455,7 @@ function bodyNodes(ctx: TreeContext, groups: Groups, bodies: GroupRows[], attrib
 /** A pipe table. `comment` builds the node of a comment-only line between two rows. */
 export function tableNode(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): TableNode {
   const attributes = readAttributeLines(ctx.src, node.attributes)
-  return tableOf(ctx, sortRows(ctx, node, comment, attributes), attributes, false)
+  return tableOf(ctx, sortRows(ctx, node, comment, attributes), attributes)
 }
 
 function delimitedRow(cells: string[], header: boolean): TableRowNode {
@@ -488,7 +488,7 @@ export function delimitedTableNode(ctx: TreeContext, node: BlockNode): TableNode
     const group = index < head ? groups.head : index < rows.length - footer ? body : groups.foot
     group.push(delimitedRow(cells, index < head || (header && group === body)))
   })
-  const table = tableOf(ctx, groups, attributes, true)
+  const table = tableOf(ctx, groups, attributes)
   // C2-B-181: a quote that never closes is reported, and the block stays a table.
   if (source.malformed) ctx.notes.push({ what: DELIMITED_MALFORMED, node: table, block: node,
     from: source.malformedSourceAt })

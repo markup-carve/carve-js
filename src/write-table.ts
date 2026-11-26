@@ -62,8 +62,8 @@ function columnList(table: TableNode, field: 'align' | 'valign' | 'width'): stri
  * The keys of the attribute line that the tree holds in the columns and the groups of the table. C2-W-136: a key
  * that `attrs` holds too is written from the fields, and the key in `attrs` is reported where `w` is given.
  */
-function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly [string, string])[]): BlockParts {
-  const leadingKeys = first.length === 0 ? first : [first[0]!]
+function tableKeys(w: Writer | null, table: TableNode, leadingKeys: readonly (readonly [string, string])[],
+  header: number | undefined): BlockParts {
   const keys: (readonly [string, string])[] = []
   const aligns = columnList(table, 'align')
   const valigns = columnList(table, 'valign')
@@ -74,7 +74,7 @@ function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly
   if (aligns !== null) keys.push(['aligns', aligns])
   if (valigns !== null) keys.push(['valigns', valigns])
   if (widths !== null) keys.push(['widths', widths])
-  if (first.length > 1) keys.push(first[1]!)
+  if (header !== undefined) keys.push(['header-rows', String(header)])
   if (footRows > 0) keys.push(['footer-rows', String(footRows)])
   pushAll(keys, bodyKeys(table))
   const skipKeys: string[] = []
@@ -112,6 +112,12 @@ function partitioned(bodies: readonly TableBodyNode[]): boolean {
 /** C2-B-178: a head row is written with header marks only; a row of span marks continues the head. */
 function isHeadRow(row: TableRowNode): boolean {
   return row.children.every((cell) => cell.header || cell.span !== undefined)
+}
+
+/** C2-W-066, C2-B-186: a pipe table takes `header-rows`, the rows of its head, only where a head row holds a data cell. */
+function pipeHeaderRows(table: TableNode): number | undefined {
+  const head = rowsOf(table, 'table_head')
+  return head.every(isHeadRow) ? undefined : head.length
 }
 
 function headEndsAboveFoot(table: TableNode): boolean {
@@ -290,7 +296,7 @@ function tableEntries(w: Writer, table: TableNode, flags: number): (WrittenRow |
 }
 
 function pipeTable(w: Writer, table: TableNode, prefix: string, flags: number): void {
-  const block = braceBlock(table, tableKeys(w, table, []))
+  const block = braceBlock(table, tableKeys(w, table, [], pipeHeaderRows(table)))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
   else if (block !== '') emit(w, prefix, block)
   const entries = tableEntries(w, table, flags)
@@ -449,10 +455,7 @@ function delimitedTable(w: Writer, table: TableNode, prefix: string, format: str
   if (table.children.every((group) => group.type === 'comment' || group.children.every((row) => row.type !== 'table_row'))) {
     loseEmptyGroups(w, table)
   }
-  const first: (readonly [string, string])[] = [['table', '']]
-  const declared = headerRows(w, table)
-  if (declared !== undefined) first.push(['header-rows', String(declared)])
-  const block = braceBlock(table, tableKeys(w, table, first))
+  const block = braceBlock(table, tableKeys(w, table, [['table', '']], headerRows(w, table)))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
   else emit(w, prefix, block)
   const body = delimitedBody(table, separator)
@@ -472,9 +475,6 @@ export function writeTable(w: Writer, table: TableNode, prefix: string, flags: n
 /** C2-W-122: the same table attribute line before an intervening comment as before the table itself. */
 export function tableAttribute(w: Writer, table: TableNode): string {
   const format = tableFormat(w, table)
-  if (format === 'pipe') return braceBlock(table, tableKeys(null, table, []))
-  const first: (readonly [string, string])[] = [['table', '']]
-  const declared = headerRows(w, table)
-  if (declared !== undefined) first.push(['header-rows', String(declared)])
-  return braceBlock(table, tableKeys(null, table, first))
+  if (format === 'pipe') return braceBlock(table, tableKeys(null, table, [], pipeHeaderRows(table)))
+  return braceBlock(table, tableKeys(null, table, [['table', '']], headerRows(w, table)))
 }
