@@ -261,9 +261,9 @@ function equalPlainFields(a: Record<string, unknown>, b: Record<string, unknown>
     const value = a[name]
     if (value === undefined || !comparedField(a, left, name, inner)) continue
     count++
+    if (!Object.hasOwn(b, name)) return false
     const other = b[name]
-    if (other === undefined || !Object.hasOwn(b, name) || !comparedField(b, right, name, inner) ||
-      !equalValues(value, other, inner)) return false
+    if (other === undefined || !comparedField(b, right, name, inner) || !equalValues(value, other, inner)) return false
   }
   for (const name in b) if (b[name] !== undefined && comparedField(b, right, name, inner)) count--
   return count === 0
@@ -275,9 +275,9 @@ function equalFields(a: Record<string, unknown>, b: Record<string, unknown>, lef
     const value = a[name]
     if (value === undefined || !comparedField(a, left, name, inner)) continue
     count++
+    if (!Object.hasOwn(b, name)) return false
     const other = b[name]
-    if (other === undefined || !Object.hasOwn(b, name) || !comparedField(b, right, name, inner) ||
-      !equalValues(value, other, inner)) return false
+    if (other === undefined || !comparedField(b, right, name, inner) || !equalValues(value, other, inner)) return false
   }
   for (const name of Object.keys(b)) if (b[name] !== undefined && comparedField(b, right, name, inner)) count--
   return count === 0

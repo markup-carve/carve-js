@@ -33,6 +33,16 @@ describe('a key a record inherits', () => {
     })
   })
 
+  it('is not read where only one record holds the key as its own', () => {
+    Object.defineProperty(Object.prototype, 'extra', { configurable: true, get() { throw new Error('inherited getter read') } })
+    try {
+      const tree = (text: object) => ({ type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [text] }] })
+      expect(treesEqual(tree({ type: 'text', value: 'x', extra: 1 }) as never, tree({ type: 'text', value: 'x' }) as never)).toBe(false)
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['extra']
+    }
+  })
+
   it('leaves an own key that is not a field refused', () => {
     const document = parseTree('a\n').document as unknown as { children: Record<string, unknown>[] }
     document.children[0]!['unknown'] = 1
