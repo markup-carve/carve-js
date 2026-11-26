@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, next2]
+    branches: [main]
   pull_request:
-    branches: [main, next2]
+    branches: [main]
   schedule:
     - cron: '40 4 * * *'
   workflow_dispatch:
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   git-consumer:
     name: git dependency consumer on Node ${{ matrix.node-version }}
-    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -46,7 +46,7 @@ jobs:
 
   mutation:
     name: parser and HTML mutation gate
-    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -59,7 +59,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node scripts/mutation-gate.mjs --base=origin/next2
+      - run: node scripts/mutation-gate.mjs --base=origin/main
 
   # THE PIN RESOLVES BY SHA, SO NOTHING ELSE HERE CAN SEE A DANGLING ONE. Every
   # other job checks the spec submodule out and runs against whatever tree the
@@ -86,7 +86,7 @@ jobs:
 
       - name: Spec pin ancestry
         env:
-          SPEC_DEFAULT_BRANCH: ${{ (github.ref_name == 'next2' || github.head_ref == 'next2' || github.base_ref == 'next2') && 'next2' || 'main' }}
+          SPEC_DEFAULT_BRANCH: main
         run: ./scripts/check-spec-pin-ancestry.sh spec
 
   typecheck:
@@ -112,7 +112,7 @@ jobs:
         run: npm run typecheck
 
       - name: Public declarations with both TypeScript versions
-        if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+        if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
         run: npm run check-public-types
       - run: npm run test:cli
 
@@ -160,7 +160,7 @@ jobs:
 
   lint-suite:
     name: lint suite
-    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -176,7 +176,7 @@ jobs:
 
   migrate-suite:
     name: migration suite
-    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -192,7 +192,7 @@ jobs:
 
   proptest-suite:
     name: property regression suite
-    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

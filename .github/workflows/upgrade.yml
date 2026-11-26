@@ -4,13 +4,13 @@ name: upgrade tool
 # engine in `src/`, so a change to either runs it too.
 on:
   push:
-    branches: [next2]
+    branches: [main]
     paths:
       - 'upgrade/**'
       - 'src/**'
       - '.github/workflows/upgrade.yml'
   pull_request:
-    branches: [next2]
+    branches: [main]
     paths:
       - 'upgrade/**'
       - 'src/**'
