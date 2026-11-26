@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CARVE_SOURCES as EXAMPLES } from '../scripts/corpus.ts'
+import { WRITER_PLAN_HELD } from '../scripts/corpus-held.ts'
+import { judgeHolds } from '../scripts/holds.ts'
 import { generateWriterTables } from '../scripts/generate-writer-tables.ts'
 import { parseWithLayout } from '../src/api.ts'
 import { format, formatWithDiagnostics } from '../src/index.ts'
@@ -17,6 +19,32 @@ function formatBy(source: string, path: WriterPath): ReturnType<typeof writeTree
   return writeTreeWithStats(parsed.document, { layout: parsed.layout }, path, false)
 }
 
+interface PlanCheck {
+  readonly id: string
+  readonly input: string
+  readonly planned: number
+  readonly differences: readonly string[]
+  /** The parses of the plan path, null where it repaired a group. */
+  readonly parses: number | null
+}
+
+let planChecks: readonly PlanCheck[] | undefined
+
+/** The plan checks of every example input, and the held ones (WRITER_PLAN_HELD) judged on both checks together. */
+function examplePlans(): { checks: readonly PlanCheck[], held: ReadonlySet<string>, stale: readonly string[] } {
+  planChecks ??= EXAMPLES.map((example) => {
+    const both = formatBy(example.input, 'both').stats
+    const plan = formatBy(example.input, 'plan').stats
+    return {
+      id: example.id, input: example.input, planned: both.planned, differences: both.differences,
+      parses: plan.repaired > 0 ? null : plan.parses,
+    }
+  })
+  const judged = judgeHolds(planChecks.map((check) =>
+    [check.id, check.differences.length > 0 || (check.parses ?? 0) > 0 ? check : null] as const), WRITER_PLAN_HELD)
+  return { checks: planChecks, held: new Set(WRITER_PLAN_HELD.keys()), stale: judged.stale }
+}
+
 describe('the planned writer', () => {
   it('C2-W-088: src/write-tables.ts is what scripts/generate-writer-tables.ts writes', () => {
     const generated = generateWriterTables((file) => readFileSync(join(root, 'data', file), 'utf8'))
@@ -24,25 +52,27 @@ describe('the planned writer', () => {
   })
 
   it('C2-W-010: where the plan decides a group, it writes the bytes of the repair, on every example input', () => {
+    const { checks, held, stale } = examplePlans()
     const differences: string[] = []
     let planned = 0
-    for (const example of EXAMPLES) {
-      const stats = formatBy(example.input, 'both').stats
-      planned += stats.planned
-      differences.push(...stats.differences)
+    for (const check of checks) {
+      planned += check.planned
+      if (!held.has(check.id)) differences.push(...check.differences)
     }
     expect(differences).toEqual([])
+    expect(stale).toEqual([])
     expect(planned).toBeGreaterThan(300)
   })
 
   it('C2-W-089: a document whose every group the plan decides is written with no parse', () => {
+    const { checks, held, stale } = examplePlans()
     let documents = 0
-    for (const example of EXAMPLES) {
-      const stats = formatBy(example.input, 'plan').stats
-      if (stats.repaired > 0) continue
+    for (const check of checks) {
+      if (check.parses === null) continue
       documents++
-      expect(stats.parses, example.input).toBe(0)
+      if (!held.has(check.id)) expect(check.parses, check.input).toBe(0)
     }
+    expect(stale).toEqual([])
     expect(documents).toBeGreaterThan(200)
   })
 

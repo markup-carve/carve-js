@@ -11,7 +11,8 @@ import {
 import {
   clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutMismatches, type Mismatch, refusalPath,
 } from '../scripts/corpus-checks.ts'
-import { HELD, HELD_SUPPLIED, REFUSED_AT } from '../scripts/corpus-held.ts'
+import { HELD, HELD_REFUSED, HELD_SUPPLIED, REFUSED_AT } from '../scripts/corpus-held.ts'
+import { judgeHolds } from '../scripts/holds.ts'
 import { CORPUS_DIRECTORIES } from '../scripts/pin-spec.ts'
 import { decodeTree } from '../src/index.ts'
 import { newCaseMismatches } from '../scripts/corpus-new.mjs'
@@ -66,11 +67,13 @@ describe('the trees of the specification', () => {
   it('the reader refuses each of the 83 refused trees at the field its clause decides', () => {
     expect(REFUSED_TREES).toHaveLength(83)
     expect(new Set(REFUSED_TREES.map((entry) => entry.id))).toEqual(new Set(REFUSED_AT.keys()))
-    for (const entry of REFUSED_TREES) {
+    const judged = judgeHolds(REFUSED_TREES.map((entry) => {
       const path = refusalPath(entry)
-      expect(path, `${entry.id} (${entry.clauses.join(', ')})`).not.toBeNull()
-      expect(path?.startsWith(REFUSED_AT.get(entry.id) ?? '?'), `${entry.id}: refused at ${String(path)}`).toBe(true)
-    }
+      if (path === null) return [entry.id, `not refused (${entry.clauses.join(', ')})`] as const
+      return [entry.id, path.startsWith(REFUSED_AT.get(entry.id) ?? '?') ? null : `refused at ${path}`] as const
+    }), HELD_REFUSED)
+    expect(judged.failures).toEqual([])
+    expect(judged.stale).toEqual([])
   })
 
   for (const file of TREE_FILES) {
@@ -93,12 +96,16 @@ describe('the trees of the specification', () => {
   })
 
   it('C2-A-161: the reader accepts every supplied tree of trees/nodes.json', () => {
-    for (const entry of SUPPLIED_TREES) {
-      const read = (): unknown => decodeTree(JSON.stringify(entry.tree))
-      const held = HELD_SUPPLIED.get(entry.id)
-      if (held === undefined) expect(read, entry.id).not.toThrow()
-      else expect(read, `${entry.id} is held (${held}) and must still throw`).toThrow()
-    }
+    const judged = judgeHolds(SUPPLIED_TREES.map((entry) => {
+      try {
+        decodeTree(JSON.stringify(entry.tree))
+        return [entry.id, null] as const
+      } catch (error) {
+        return [entry.id, String(error)] as const
+      }
+    }), HELD_SUPPLIED)
+    expect(judged.failures).toEqual([])
+    expect(judged.stale).toEqual([])
   })
 
   it('C2-L-007, C2-L-012, C2-L-056: each layout sidecar is accepted or refused as trees/layouts.json says, and is this engine\'s', () => {

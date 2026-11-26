@@ -3,6 +3,7 @@
 // scripts/writer-gates.ts.
 import { describe, expect, it } from 'vitest'
 import { CARVE_SOURCES, CLAUSE_CASES } from '../scripts/corpus.ts'
+import { judgeHolds } from '../scripts/holds.ts'
 import { LINE_SHAPES } from './support/enumerate.ts'
 import { INLINE_TOKENS, WRITER_TOKENS } from './support/inline-enumerate.ts'
 import { checkGates, checkWriter, enumerateWriter, seededRandom, WRITER_GATE_HELD } from './support/writer-checks.ts'
@@ -14,8 +15,9 @@ describe('the gates of the writer', () => {
       .diagnostics?.some((found) => found.code === 'writer-refused') === true).map((entry) => entry.id))
     const results = CARVE_SOURCES.filter((example) => !refusing.has(example.id))
       .map((example) => [example.id, checkWriter(example.input)] as const)
-    expect(results.filter(([id, failure]) => failure !== null && !WRITER_GATE_HELD.has(id))).toEqual([])
-    expect(results.filter(([id, failure]) => failure === null && WRITER_GATE_HELD.has(id)).map(([id]) => id)).toEqual([])
+    const judged = judgeHolds(results, WRITER_GATE_HELD)
+    expect(judged.failures).toEqual([])
+    expect(judged.stale).toEqual([])
   })
 
   it('C2-W-002, C2-W-003, C2-W-088: every document of up to 2 lines', () => {
