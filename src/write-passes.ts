@@ -36,7 +36,18 @@ const FIELDS: Record<keyof Writer, 'state' | 'added' | 'mode' | 'cache' | 'fixed
 
 const STATE = (Object.keys(FIELDS) as (keyof Writer)[]).filter((key) => FIELDS[key] === 'state')
 
-type Snapshot = Map<keyof Writer, unknown>
+export type Snapshot = Map<keyof Writer, unknown>
+
+// The fields each round writes anew, and the escapes, which a chain step compares itself (write-chain.ts).
+const ROUND_FIELDS: ReadonlySet<keyof Writer> = new Set<keyof Writer>([
+  'lines', 'lead', 'leadSkip', 'bareDotLead', 'glued', 'starts', 'prewrittenAttributes', 'parsed', 'escapes',
+])
+
+/** Whether two snapshots hold the same state beside what each round writes anew and the escapes. */
+export function sameBesideRound(a: Snapshot, b: Snapshot): boolean {
+  for (const key of STATE) if (!ROUND_FIELDS.has(key) && !same(a.get(key), b.get(key))) return false
+  return true
+}
 
 interface PassRecord {
   /** Which step of the repair this records: a pass of the rounds or the check after one. */
@@ -119,7 +130,7 @@ function sameMaps(a: Map<unknown, unknown>, b: Map<unknown, unknown>): boolean {
   return true
 }
 
-function snapshot(w: Writer): Snapshot {
+export function snapshot(w: Writer): Snapshot {
   const taken: Snapshot = new Map()
   for (const key of STATE) taken.set(key, copy(w[key]))
   return taken
@@ -131,7 +142,7 @@ function sameSnapshot(a: Snapshot, b: Snapshot): boolean {
 }
 
 /** Puts a snapshot back, into the containers the writer holds where it has them, as the rounds change them in place. */
-function restore(w: Writer, taken: Snapshot): void {
+export function restore(w: Writer, taken: Snapshot): void {
   const target = w as unknown as Record<string, unknown>
   for (const key of STATE) {
     const value = copy(taken.get(key))
@@ -175,6 +186,8 @@ export function memoPass<T>(w: Writer, memo: PassMemo, step: string, run: () => 
     w.trialsRetested = known.retested
     // The parses the pass would make again are charged as `parseChunk` charges them; a kept probe makes none.
     for (const [src, tree, cacheable] of known.trace.charges) chargeParse(w, src, tree, cacheable)
+    w.parses += known.trace.skipped[0]
+    w.work.chars += known.trace.skipped[1]
     w.work.rewritten += known.rewritten
     return known.result as T
   }
@@ -183,7 +196,7 @@ export function memoPass<T>(w: Writer, memo: PassMemo, step: string, run: () => 
   const trialLog = w.trialLog === null ? null : w.trialLog.map((entry) => [...entry] as [TextNode, number])
   const trialsRetested = w.trialsRetested
   const linkPlaced = new Map([...w.linkPlaced].map(([node, offsets]) => [node, new Set(offsets)]))
-  const trace: PassTrace = { reads: 0, logged: [], checks: [], charges: [] }
+  const trace: PassTrace = { reads: 0, logged: [], checks: [], charges: [], skipped: [0, 0] }
   w.pass = trace
   try {
     const { result, limited, budget } = run()
@@ -208,6 +221,8 @@ function mergeTrace(outer: PassTrace, inner: PassTrace): void {
   outer.logged.push(...inner.logged)
   outer.checks.push(...inner.checks.map((at) => at + logged))
   outer.charges.push(...inner.charges)
+  outer.skipped[0] += inner.skipped[0]
+  outer.skipped[1] += inner.skipped[1]
 }
 
 function matches(w: Writer, record: PassRecord, modes: [boolean, boolean, boolean], start: Snapshot): boolean {

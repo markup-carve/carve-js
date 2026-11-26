@@ -43,6 +43,7 @@ import {
   logTrials, MAX_RETESTED_TRIALS, memoPass, noteLogClosed, noteRead, type PassMemo, type PassRun, READ_CLOSER_KINDS,
   READ_TRIAL_LOG, READ_WHOLE_TRIALS,
 } from './write-passes.ts'
+import { advanceChain, createChain, type RoundStep, startRound, watchRound } from './write-chain.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
 export interface LayoutEntry extends WriterFacts {
@@ -591,7 +592,8 @@ function parsedStarts(parsed: DocumentNode | null): ParsedStarts {
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
  * false when the group reads back as its blocks. C2-W-088 places all escapes reported by the same read-back parse.
  */
-function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean, initial: boolean): boolean {
+function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean, initial: boolean,
+  step: RoundStep | null = null): boolean {
   const check = compareWithLinkFallback(w, document, group, first, initial)
   // C2-W-125 tries to form a missing node separately from the constructs C2-W-088 found in the
   // read-back parse. A lone ineffective trial takes no escape. Multiple trials can work together.
@@ -619,7 +621,17 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     w.blankFirst = compareGroup(w, document, group, false).losses.length === 0
     if (w.blankFirst) return true
   }
+  if (step !== null) step.escape = openerOnly(check)
   return applyChanges(w, check)
+}
+
+/** The escape of a round that asks for nothing but the escape of one construct's `[` (write-chain.ts). */
+function openerOnly(check: Check): [TextNode, number] | null {
+  if (check.escapes.length !== 1 || check.forms.length + check.retracted.length + check.trials.length > 0 ||
+    check.losses.length > 0 || check.misaligned || check.constructs.size !== 1) return null
+  const escape = check.escapes[0]!
+  const [node, at] = escape
+  return check.constructs.has(escape) && node.value[at] === '[' ? escape : null
 }
 
 /**
@@ -2034,10 +2046,12 @@ function repairRounds(w: Writer, document: DocumentNode, from: number, first: bo
   w.linkFallback = false
   w.sawLink = false
   const ran = (result: number): PassRun<number> => ({ result, limited: history.limited || exhausted(w), budget: history.budget })
+  const chain = createChain()
   try {
     for (let round = 0; ; round++) {
       const end = groupEnd(w, nodes, from)
       const group = nodes.slice(from, end)
+      const before = watchRound(w, chain)
       resetLines(w)
       writeBlocks(w, group, '', 0, false)
       if (w.lines.length === 0) return ran(end)
@@ -2046,8 +2060,17 @@ function repairRounds(w: Writer, document: DocumentNode, from: number, first: bo
         refuseDeepGroup(w, group)
         return ran(end)
       }
-      if (repeatedRepair(w, group, history)) return ran(end)
-      if (!settle(w, document, group, first && !w.blankFirst, round === 0) && !exhausted(w)) {
+      const step = startRound(w)
+      if (repeatedRepair(w, group, history)) {
+        if (!advanceChain(w, chain, history, group, before, step, false)) continue
+        return ran(end)
+      }
+      const lead = first && !w.blankFirst
+      step.written = w.lines.reduce((total, line) => total + line.length + 1, 0)
+      step.source = step.written + (lead ? 0 : 1)
+      const settled = settle(w, document, group, lead, round === 0, step)
+      if (!advanceChain(w, chain, history, group, before, step, settled)) continue
+      if (!settled && !exhausted(w)) {
         finishRounds(w, group, first && !w.blankFirst, reported)
         return ran(end)
       }
