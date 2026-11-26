@@ -83,6 +83,10 @@ export interface Writer {
   bareDotLead: string | null
   /** C2-W-088: the offsets in the value of a text node that take a backslash, in ascending order. */
   escapes: Map<TextNode, number[]>
+  /** While set, each backslash of `escapes` is written as `mark` and listed in `written`, in the order written. */
+  escapeTrace: { mark: string, written: [TextNode, number][] } | null
+  /** The lines the last prune of `escapes` gave, with the group and the lines it started from (carve-js#5715). */
+  prunedFrom: { group: readonly Node[], written: readonly string[], lines: readonly string[] } | null
   /** Braced kinds reported by this group's repair rounds. */
   reportedBraceKinds: Set<string>
   /** The spelling of a node that has more than one: 0 is the first choice of its clause. */
@@ -227,7 +231,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
   extensions: readonly ExtensionDefinition[] = []): Writer {
   return {
     extensions,
-    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), reportedBraceKinds: new Set(),
+    lines: [], lead: null, leadSkip: 0, bareDotLead: null, escapes: new Map(), escapeTrace: null, prunedFrom: null,
+    reportedBraceKinds: new Set(),
     forms: new Map(), glued: new Set(),
     bracedAnyway: new Set(), caseEightLinks: new Set(),
     openColons: new Set(), starts: new Map(),
