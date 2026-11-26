@@ -10,8 +10,6 @@ const UNSCOPED_TH = 'carve#6623 an unscoped th of a leading th row (C2-M-037; sp
 const COL_WIDTH = 'carve-js#5574 the width a col style gives (C2-M-041; spec carve#6816)'
 const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute beside the key (C2-M-047; spec carve#6814)'
 const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
-const METADATA_FIELDS = 'carve#3598 root metadata fields beside a frontmatter node (C2-A-193, C2-W-011; spec carve#6815)'
-const REGION_MARKER = 'carve#6727 a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815)'
 const DJOT_STATUS = 'carve#6833 CC-1354 keeps the status 1 of the djot- gate that carve#6499 turned off (C2-T-049, C2-T-050)'
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
 const NOTE_CONDITIONALS = 'carve#6850 the Word conditional comments of a dropped note wrapper (C2-M-109; spec carve#6851)'
@@ -57,10 +55,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2234', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
   ['CC-2235', { fields: ['diagnostics:import-element-dropped', 'diagnosticsComplete'], fix: NOTE_COMMENTS }],
   ['CC-2236', { fields: ['children', 'carve'], fix: NOTE_COMMENTS }],
-  ['CC-501', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: METADATA_FIELDS }],
-  ['CC-2265', { fields: ['carve'], fix: REGION_MARKER }],
-  ['CC-2266', { fields: ['carve'], fix: REGION_MARKER }],
-  ['CC-2267', { fields: ['carve'], fix: REGION_MARKER }],
   ['CC-1354', { fields: ['status'], fix: DJOT_STATUS }],
   ['CC-2398', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2399', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
