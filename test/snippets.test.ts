@@ -1,6 +1,6 @@
 // Named snippets beyond the clause cases: the marker parts and the carriers a document transform keeps.
 import { describe, expect, it } from 'vitest'
-import { CarveTreeError, decodeTree, type DocumentNode, parse, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree, writeWithDiagnostics } from '../src/index.ts'
+import { CarveTreeError, decodeTree, type DocumentNode, type ExtensionDefinition, parse, parseTree, render, renderTree, renderWithDiagnostics, renderWithDocumentTransforms, resolveTree, writeWithDiagnostics } from '../src/index.ts'
 import { withSnippetLimits } from '../src/harness-limits.ts'
 import { lint } from '../lint/lint.ts'
 
@@ -202,5 +202,37 @@ describe('named snippets', () => {
       return view
     } }]
     expect(renderWithDocumentTransforms('{{ a.crv }}\n\n{{ $s }}\n', add, { includes }).html).toBe('<p><a href="/from-a">x</a></p>\n<p>e</p>')
+  })
+
+  it('the staged path keeps the parse facts of a document that defines a snippet and uses none', () => {
+    const source = '{$x}: hi\n\n{#x}\n```js\nx\n```\n^ cap\n'
+    const staged = renderTree(resolveTree(parseTree(source), { sourceLines: true }))
+    expect(staged).toBe(render(source, { sourceLines: true }))
+    expect(staged).toContain('data-source-line="4"')
+  })
+
+  it('a document with an include and no snippet renders as it did, with and without a snippet in the include', () => {
+    const files: Record<string, string> = { 'a.crv': 'A *b*\n', 's.crv': '{$x}: Hi\n' }
+    const resolver = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    expect(render('See {{ a.crv }} here.\n\n{{ a.crv }}\n', { includes: { resolver } })).toBe('<p>See {{ a.crv }} here.</p>\n<p>A <strong>b</strong></p>')
+    expect(render('{{ s.crv }}\n\nSay {{ $x }}.\n', { includes: { resolver } })).toBe('<p>Say Hi.</p>')
+  })
+
+  it('a line selection without snippet syntax keeps the snippet definitions it appends from its file', () => {
+    const files: Record<string, string> = { 'd.crv': 'Hello\n\n{$x}: A\n\n{$x}: B\n' }
+    const resolver = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    const out = renderWithDiagnostics('{{ d.crv @lines:1-1 }}\n', { includes: { resolver } })
+    expect(out.html).toBe('<p>Hello</p>')
+    expect(out.diagnostics.map((entry) => entry.code)).toEqual(['duplicate-snippet'])
+    expect(render('{{ d.crv @lines:1-1 }}\n\nSay {{ $x }}.\n', { includes: { resolver } })).toBe('<p>Hello</p>\n<p>Say A.</p>')
+  })
+
+  it('the parse facts count a snippet use that an extension transform returns', () => {
+    const extension: ExtensionDefinition = { name: 'test.box', version: '1', matcher: { form: 'div', name: 'box' }, props: {}, slots: {},
+      transform: (claim) => claim.form === 'div' ? { type: 'block_extension', name: 'test.box', version: '1', children: [],
+        fallback: [{ type: 'paragraph', children: [{ type: 'snippet_use', name: 'x', mode: 'inline' }] }] } : null }
+    const facts = parseTree('::: box\nx\n:::\n', { extensions: [extension] }).facts
+    expect([facts?.snippets, facts?.snippetUses]).toEqual([true, true])
+    expect([parseTree('::: box\nx\n:::\n').facts?.snippets, parseTree('{$x}: A\n').facts?.snippetUses]).toEqual([false, false])
   })
 })

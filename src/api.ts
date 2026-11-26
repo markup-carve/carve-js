@@ -108,6 +108,8 @@ function combinedFacts(top: ParseFacts, files: readonly ParseFacts[], found: Fin
     sourceNames: names,
     resolvableLeaves: leaves,
     bidi: all.some((facts) => facts.bidi),
+    snippets: all.some((facts) => facts.snippets),
+    snippetUses: all.some((facts) => facts.snippetUses),
     addFindings: (findings) => {
       for (const facts of all) facts.addFindings(findings)
       append(findings.entries, found.entries)
@@ -124,6 +126,15 @@ function combinedFacts(top: ParseFacts, files: readonly ParseFacts[], found: Fin
   }
 }
 
+/** An extension transform may return snippet nodes the tree builder never saw, so its output is searched for them. */
+function withExtensionSnippets(parsed: ParsedTree, transformed: boolean): ParsedTree {
+  const facts = parsed.facts
+  if (!transformed || facts === null) return parsed
+  const snippets = facts.snippets || holdsSnippetNode(parsed.document)
+  const snippetUses = facts.snippetUses || (snippets && holdsSnippetUse(parsed.document))
+  return { ...parsed, facts: { ...facts, snippets, snippetUses } }
+}
+
 /**
  * C2-N-003, C2-N-006: the parse of a top-level source, with its includes expanded when the options give a resolver.
  * Without one every include is reported, and a source without includes is returned as it was parsed.
@@ -132,10 +143,10 @@ function parseSource(src: string, settings: Settings, positions: boolean, trace:
   byteLength: number | null = null): ParsedTree {
   const names = settings.extensions.length > 0
   const parse = (text: string, outer: ParseFacts['scope'] | null, forced = false, frontmatterOpens = true,
-    bytes: number | null = null): ParsedTree => applyExtensions(
+    bytes: number | null = null): ParsedTree => withExtensionSnippets(applyExtensions(
     buildSource(text, positions || forced, null, outer === null ? trace : null, names, null, outer, frontmatterOpens, bytes),
     settings.extensions,
-  )
+  ), names)
   const parsed = parse(src, null, false, true, byteLength)
   const facts = parsed.facts
   const includes = settings.includes
@@ -244,7 +255,8 @@ export function resolveTree(input: ParsedTree | DocumentNode, options?: RenderOp
   const settings = readOptions(options, 'render')
   // C2-N-091: the staged path expands on its own copy too; the parse facts name the authored nodes, so the copy has none.
   const document = 'type' in input ? input : input.document
-  if (holdsSnippetUse(document)) {
+  const facts = 'type' in input ? null : input.facts
+  if (facts === null ? holdsSnippetUse(document) : facts.snippetUses) {
     const authored: ParsedTree = 'type' in input ? inputStage(input, settings) : { ...input, facts: null }
     const expanded = expandStage(document, authored, settings)
     const resolved = shiftedResolve(expanded.parsed, settings, expanded.parsed.document === document, settings.headingShift)
@@ -511,7 +523,7 @@ function expandStage(input: string | Uint8Array | DocumentNode, parsed: ParsedTr
     if (holdsSnippetNode(parsed.document)) refuseTransformSnippets(parsed.document, findings)
     return { parsed, findings }
   }
-  if (!holdsSnippetUse(parsed.document)) return { parsed, findings }
+  if (parsed.facts === null ? !holdsSnippetUse(parsed.document) : !parsed.facts.snippetUses) return { parsed, findings }
   const own = isSupplied(input) ? { ...parsed, document: cloneTree(parsed.document) } : parsed
   const touched = expandSnippets(own.document, findings, { roundtrip: settings.roundtrip, source: parsed.source },
     parsed.document)
