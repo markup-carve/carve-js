@@ -526,15 +526,21 @@ function ordinalStart(bare: string, at: number): number {
 function kindTargets(source: BareText, added: readonly number[], at: number, targets: number[]): void {
   const bare = source.bare
   const ch = bare[at]!
-  if ('{/*-`'.includes(ch) || lineOpener(source, at)) return
+  if ('{-'.includes(ch) || lineOpener(source, at)) return
   const block = source.blocks.find((ranges) => ranges.some(([start, end]) => at >= start && at < end))
   if (block === undefined) return
   for (const [start, end] of block) {
     for (let k = start; k < end; k++) {
-      if (bare[k] !== ch || (k > start && bare[k - 1] === ch) || lineStart(source, k)) continue
-      if (!added.includes(k) && !targets.includes(k)) targets.push(k)
+      if (potentialOpener(source, ch, start, k) && !added.includes(k) && !targets.includes(k)) targets.push(k)
     }
   }
+}
+
+/** C2-W-088: a potential opener of the kind `ch` at `k`; for `/` and `*` only a delimiter its neighbors let open. */
+function potentialOpener(source: BareText, ch: string, start: number, k: number): boolean {
+  const bare = source.bare
+  if (bare[k] !== ch || (k > start && bare[k - 1] === ch) || lineStart(source, k)) return false
+  return (ch !== '/' && ch !== '*') || canOpenDelimiter(bare, k)
 }
 
 /**
@@ -703,10 +709,44 @@ export function referenceForm(written: string, tree: DocumentNode): ReferenceFor
     }
     // C2-W-125 (carve#6656): the case backslash goes beside the kinds its round reports and does not cancel them.
     const kinds = result.first.filter((at) => at !== extra && !seeds.includes(at))
-    if (kinds.length > 0 && 'form' in runProcedure(source, tree, [...seeds, extra, ...kinds])) seeds.push(...kinds)
-    seeds.push(extra)
+    const kept = kinds.length > 0 ? keptKinds(source, tree, [...seeds, extra, ...kinds]) : null
+    seeds.push(...(kept ?? [extra]).filter((at) => !seeds.includes(at)))
   }
   return { gap: `no fixed point for ${JSON.stringify(written)}` }
+}
+
+/**
+ * C2-W-125 case five, beside the kinds of the round (carve#6656): from `seeds`, each `]` of link text that the kinds
+ * leave without a partner takes its backslash, one by one. The backslashes placed where the procedure then reaches
+ * the tree, or null.
+ */
+function keptKinds(source: BareText, tree: DocumentNode, seeds: readonly number[]): number[] | null {
+  const placed = [...seeds]
+  for (let step = 0; step <= source.bare.length; step++) {
+    if ('form' in runProcedure(source, tree, placed)) return placed
+    const seeded = withEscapes(source.bare, [...placed].sort((x, y) => x - y))
+    const missing = missingConstructs(parse(seeded.text), seeded.text, seeded.toBare, source.held)
+    const lone = [...missing].map(([key, end]) => loneLinkCloser(source.bare, placed, key, end)).filter((at) => at >= 0)
+    if (lone.length === 0) return null
+    placed.push(Math.min(...lone))
+  }
+  return null
+}
+
+/** The first bare `]` of the text of the link `key` that closes it before the closer of its text, or -1. */
+function loneLinkCloser(bare: string, added: readonly number[], key: string, end: number): number {
+  if (!key.startsWith('link@') || bare[end - 1] !== ']') return -1
+  const start = Number(key.slice(key.lastIndexOf('@') + 1))
+  const closers: number[] = []
+  let depth = 0
+  for (let at = start + 1; at < end - 1; at++) {
+    if (added.includes(at) || (bare[at] !== '[' && bare[at] !== ']')) continue
+    if (bare[at] === '[') depth++
+    else if (depth > 0) depth--
+    else closers.push(at)
+  }
+  // The last unpaired `]` closes the text, and the label of a full reference follows it.
+  return closers.length > 1 ? closers[0]! : -1
 }
 
 /**
@@ -843,10 +883,7 @@ function checkWritten(
  * Clause cases whose written form the C2-W-088 reference procedure here does not reach yet, each with its ruling. The
  * engine passes the clause case; a held case that passes the gate fails the run, so the hold goes with the model fix.
  */
-export const WRITER_GATE_HELD: ReadonlyMap<string, string> = new Map([
-  ['CC-2165', 'carve#6772: the escape rounds read references from the tree, which the reference procedure does not model'],
-  ['CC-2166', 'carve#6772: the escape rounds read references from the tree, which the reference procedure does not model'],
-])
+export const WRITER_GATE_HELD: ReadonlyMap<string, string> = new Map()
 
 /** The result of the checks on one source: null, a failure, or `refused` (C2-W-016, C2-W-133). */
 export function checkWriter(src: string, undecided: string[] = []): string | null {
