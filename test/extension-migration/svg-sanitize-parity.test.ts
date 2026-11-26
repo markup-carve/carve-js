@@ -407,7 +407,17 @@ describe('sanitizeSvg empty prefixed namespace declarations (carve#6779)', () =>
     expect(sanitizeSvg('<svg><g xmlns:xlink=" "/></svg>').svg).toBe('<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>')
   })
 
-  const DECLS = ['xmlns:xlink=""', "xmlns:xlink=''", 'xmlns:xlink = ""', 'xmlns:xlink="http://www.w3.org/1999/xlink"', 'xmlns:xlink="x"',
+  // carve#6811: a value holding whitespace or a no-break space anywhere is no URI reference libxml2 accepts.
+  it.each([' urn:x', 'urn:x ', 'urn: x', 'urn:x\tb', '\u00a0', 'urn:\u00a0x', '&#160;', 'urn:&#xA0;x', '&#32;urn:x', 'urn:&nbsp;x'])(
+    'drops xmlns:xlink="%s"', (value) => {
+      expect(sanitizeSvg(`<svg><g xmlns:xlink="${value}"/></svg>`)).toEqual({ svg: '<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>', ok: true })
+    })
+
+  it('keeps a clean value that is not the XLink namespace', () => {
+    expect(sanitizeSvg('<svg><g xmlns:xlink="urn:x"/></svg>').svg).toBe('<svg xmlns="http://www.w3.org/2000/svg"><g xmlns:xlink="urn:x"/></svg>')
+  })
+
+  const DECLS = ['xmlns:xlink=""', "xmlns:xlink=''", 'xmlns:xlink = ""', 'xmlns:xlink="http://www.w3.org/1999/xlink"', 'xmlns:xlink="x"', 'xmlns:xlink=" urn:x"', 'xmlns:xlink="&#160;"',
     'xmlns:xlink', 'xmlns:foo=""', 'xmlns:foo="urn:a"', 'xmlns=""', 'xmlns="urn:a"', 'id="a"', 'fill="red"']
   const XLINK = 'xmlns:xlink="http://www.w3.org/1999/xlink"'
   sweep('empty prefixed namespace declarations', () => {
@@ -499,8 +509,9 @@ describe('sanitizeSvg namespace names (carve#6783)', () => {
     for (const value of ['\t', ' \n ', '\r', '&#32;', '&#x20;&#9;', '&#xA;', '&#13;', '&#x0D;']) {
       expect(sanitizeSvg(`<svg><g xmlns:xlink="${value}"/></svg>`).svg, value).toBe(`${SVG_OPEN}><g/></svg>`)
     }
-    expect(sanitizeSvg('<svg><g xmlns:xlink=" urn:x "/></svg>').svg).toBe(`${SVG_OPEN}><g xmlns:xlink=" urn:x "/></svg>`)
-    expect(sanitizeSvg('<svg><g xmlns:xlink="&#160;"/></svg>').svg).toBe(`${SVG_OPEN}><g xmlns:xlink="&#160;"/></svg>`)
+    // carve#6811 replaces the carve#6783 reading that kept these two.
+    expect(sanitizeSvg('<svg><g xmlns:xlink=" urn:x "/></svg>').svg).toBe(`${SVG_OPEN}><g/></svg>`)
+    expect(sanitizeSvg('<svg><g xmlns:xlink="&#160;"/></svg>').svg).toBe(`${SVG_OPEN}><g/></svg>`)
   })
 
   const NAMES = ['xmlns:xlink', 'XMLNS:XLINK', 'Xmlns:xlink', 'xmlns:XLINK', 'xlink:href', 'XLINK:HREF', 'Xlink:href', 'xml:space',
