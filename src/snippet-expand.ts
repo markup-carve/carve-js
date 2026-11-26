@@ -30,15 +30,26 @@ export function snippetRegistry(document: DocumentNode, duplicate?: (node: Snipp
   const registry = new Map<string, SnippetEntry>()
   const collect = (children: readonly Node[], include: IncludeNode | null): void => {
     for (const child of children) {
-      if (child.type === 'include' && child.children !== undefined) collect(child.children, child)
-      if (child.type !== 'snippet_definition') continue
-      if (registry.has(child.name)) duplicate?.(child)
-      else registry.set(child.name, { definition: child, include })
+      if (child.type === 'snippet_definition') {
+        if (registry.has(child.name)) duplicate?.(child)
+        else registry.set(child.name, { definition: child, include })
+      } else if (child.type === 'include') {
+        if (child.children !== undefined) collect(child.children, child)
+      } else if (!HOLDS_NO_INCLUDE.has(child.type)) {
+        // An include may stand in a container, as `- {{ a.crv }}`; its definitions count where it stands.
+        forEachSlot(child, (nodes) => { collect(nodes as Node[], include) }, undefined, document.extensions)
+      }
     }
   }
   collect(document.children, null)
   return registry
 }
+
+/** The nodes no include stands inside, which the registry does not enter. */
+const HOLDS_NO_INCLUDE: ReadonlySet<string> = new Set([
+  'paragraph', 'heading', 'code_block', 'comment', 'raw_block', 'thematic_break', 'line_block', 'snippet_use',
+  'cell_paragraph', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter',
+])
 
 /** Whether `document` holds a snippet use anywhere, definitions included. */
 export function holdsSnippetUse(document: DocumentNode, definitions = false): boolean {
@@ -56,6 +67,21 @@ const ONE_ELEMENT: ReadonlySet<string> = new Set([
   'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete', 'span', 'code',
 ])
 const DROPPED = new Set(['pos', 'segments'])
+
+/**
+ * Whether `node` renders as one element that can take the carriers: a link only where no note mark moves out behind
+ * it. A link that renders no `<a>` gets the carrier span from the renderer.
+ */
+function rendersAsOne(node: Node, extensions: DocumentNode['extensions']): boolean {
+  if (ONE_ELEMENT.has(node.type)) return true
+  if (node.type !== 'link') return false
+  const pending: Node[] = [node]
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (next.type === 'footnote_ref' || next.type === 'inline_footnote') return false
+    forEachSlot(next, (nodes) => { for (const child of nodes) pending.push(child) }, undefined, extensions)
+  }
+  return true
+}
 const OPAQUE = new Set(['data', 'metadata', 'props', 'payload'])
 
 /** The resolution fields of each node type (C2-A-158, AST_RESULTS), which a copy drops. */
@@ -114,6 +140,11 @@ function isNode(value: unknown): value is Node {
 function copyField(copy: Copy, field: string, value: unknown, clone: (node: Node) => Node): unknown {
   if (field === 'attrs') return copyAttrs(copy, value as Record<string, unknown>)
   if (field === 'data') return copyData(copy, value as Record<string, unknown>)
+  // The slots of an extension node hold nodes of the copy; the names of the slots are no string of the tree.
+  if (field === 'slots') {
+    const slots = value as Record<string, Node[]>
+    return Object.fromEntries(Object.entries(slots).map(([name, nodes]) => [name, nodes.map(clone)]))
+  }
   if (!OPAQUE.has(field)) {
     if (Array.isArray(value) && value.every(isNode)) return value.map(clone)
     if (isNode(value)) return clone(value)
@@ -216,7 +247,7 @@ function shapeOf(pass: Pass, use: SnippetUseNode, definition: SnippetDefinitionN
   const attrs = definition.attrs === undefined ? undefined : { ...definition.attrs }
   // C2-H-215: under roundtrip a copy that renders as one element carries the carriers itself; any other gets a span.
   const single = use.mode === 'inline' && attrs === undefined && pass.settings.roundtrip && copy.nodes.length === 1 &&
-    ONE_ELEMENT.has(copy.nodes[0]!.type) ? copy.nodes[0]! : null
+    rendersAsOne(copy.nodes[0]!, pass.extensions) ? copy.nodes[0]! : null
   const wraps = use.mode === 'block' || attrs !== undefined || (pass.settings.roundtrip && single === null)
   const bytes = copy.bytes + (wraps ? wrapperBytes(use, attrs) : 0)
   return { attrs, single, wraps, count: copy.count + (wraps ? 1 : 0), bytes }

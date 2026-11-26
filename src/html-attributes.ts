@@ -613,7 +613,7 @@ export function attributes(r: Render, node: Node | null, parts: TagParts): strin
 }
 
 /** C2-H-215: the carriers of an expanded snippet use, or nothing. */
-function snippetCarriers(node: Node | null): string {
+export function snippetCarriers(node: Node | null): string {
   const carrier = node === null ? undefined : SNIPPET_CARRIERS.get(node)
   if (carrier === undefined) return ''
   const scope = carrier.include ? ' data-carve-snippet-scope="include"' : ''

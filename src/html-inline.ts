@@ -8,7 +8,7 @@ import {
 } from './ast.ts'
 import {
   attributeBlockText, attributes, deniesUrl, destination, escapeCarrierText, escapeText, escapeTextNode, isDenied, keyValue, loss,
-  type Pair, type Render, type TagParts,
+  type Pair, type Render, snippetCarriers, type TagParts,
 } from './html-attributes.ts'
 import { inlinesText } from './profile.ts'
 import { kindGlyph, smartGlyph } from './ast-text.ts'
@@ -16,7 +16,7 @@ import { type SocialRequest } from './options.ts'
 import { drawDerivedText } from './derived-text.ts'
 import { withoutUnpairedSurrogates } from './unicode.ts'
 import { utf8Length } from './positions.ts'
-import { SNIPPET_MARKS } from './snippet-marks.ts'
+import { SNIPPET_CARRIERS, SNIPPET_MARKS } from './snippet-marks.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
 
@@ -268,6 +268,13 @@ export function isEmptyDroppedLink(r: Render, node: LinkNode): boolean {
 }
 
 function link(node: LinkNode, r: Render): string {
+  const html = linkHtml(node, r)
+  // C2-H-215: a link that carries the carriers of its use but writes no `<a>` puts them on a span.
+  if (!r.settings.roundtrip || html.startsWith('<a') || !SNIPPET_CARRIERS.has(node)) return html
+  return `<span${snippetCarriers(node)}>${html}</span>`
+}
+
+function linkHtml(node: LinkNode, r: Render): string {
   const key = node.key
   const href = node.href
   const definition = definitionFor(r, node, key)
