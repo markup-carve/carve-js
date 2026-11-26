@@ -17,7 +17,6 @@ const DJOT_GATE = 'carve#6499 the djot- rules default to off (C2-T-031, C2-T-049
 const QUOTE_LOCALE = 'carve-rs#4838 a smart quotes locale outside its row falls back (C2-X-075; spec carve#6824)'
 const SNIPPET_SPAN = 'carve#6395 an ignored snippet carrier leaves a plain span (C2-H-185, C2-M-044; spec carve#6847)'
 const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
-const LIST_TABLE = 'carve#6835 a valueless header-rows and a row item with a block after its list (C2-X-078; spec carve#6842)'
 
 /**
  * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
@@ -79,13 +78,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2409', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2410', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
   ['CC-2412', { fields: ['children'], fix: IMAGE_PARAGRAPH }],
-  ['CC-2416', { fields: ['html'], fix: LIST_TABLE }],
-  ['CC-2417', { fields: ['html'], fix: LIST_TABLE }],
-  ['CC-2418', { fields: ['html'], fix: LIST_TABLE }],
-  ['CC-2419', { fields: ['html'], fix: LIST_TABLE }],
-  ['CC-2420', { fields: ['html'], fix: LIST_TABLE }],
-  ['CC-2421', { fields: ['html'], fix: LIST_TABLE }],
-  ['CC-2423', { fields: ['html'], fix: LIST_TABLE }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */

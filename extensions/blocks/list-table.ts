@@ -19,11 +19,10 @@ interface TableData {
 }
 
 function rowCells(row: ListItemNode): ListItemNode[] | null {
-  if (row.children[0]?.type !== 'list') return null
+  // C2-X-078: a row item holds one list and nothing else.
+  if (row.children.length !== 1 || row.children[0]?.type !== 'list') return null
   const items = row.children[0].children.map((item) => structuredClone(item))
-  if (items.length === 0) return null
-  items[items.length - 1]?.children.push(...row.children.slice(1))
-  return items
+  return items.length === 0 ? null : items
 }
 
 function tableList(body: Block[]): ListNode | null {
@@ -59,11 +58,10 @@ export const listTableExtension: ExtensionDefinition = {
 }
 
 function headerCount(attrs: Attrs | undefined, key: string): number {
+  // C2-X-078: a decimal integer above 0; any other value, the empty one included, has no effect.
   const value = attrValue(attrs, key)
-  if (value === undefined) return 0
-  if (value === '') return 1
-  const count = Number(value)
-  return Number.isInteger(count) && count >= 0 && count <= 10_000 ? count : 0
+  if (value === undefined || !/^[0-9]+$/.test(value)) return 0
+  return Math.min(Number(value), 10_000)
 }
 
 function marker(item: ListItemNode): '<' | '^' | null {
