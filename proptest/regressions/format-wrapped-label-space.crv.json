@@ -1,0 +1,11 @@
+{
+  "kind": "format-trailing-space",
+  "detail": "normalize=false",
+  "seed": 1838231899,
+  "engineCommit": "334349ffafda3449e20145770ed7801a4405046c",
+  "inputJson": "``^[/`\"`[^\\\\/ \n`]^[[^*]\\`/=[^`[]]",
+  "originalBytes": 4096,
+  "minimizedBytes": 33,
+  "clause": "C2-W-022",
+  "id": "92914ffeec90a196"
+}

@@ -1598,6 +1598,7 @@ function authoredContent(w: Writer, leaf: Node): string | null {
   // A line break inside a node that holds no break node, as the alternative text of an image, loses the prefix the
   // break before it shows, or the first one, where its line holds it.
   let prefix = firstPrefix(breaks, decode)
+  const quotes = quoteMarkers(source, from)
   let text = ''
   let at = from
   for (const node of breaks) {
@@ -1605,13 +1606,17 @@ function authoredContent(w: Writer, leaf: Node): string | null {
     const spelled = decode(node.pos.startOffset, node.pos.endOffset)
     const end = spelled.indexOf('\n')
     if (end < 0) return null
-    text += `${withoutPrefixes(decode(at, node.pos.startOffset), prefix)}${spelled.slice(0, end).replace(/[ \t\r]+$/u, '')}\n`
+    text += `${withoutPrefixes(decode(at, node.pos.startOffset), prefix, quotes)}${spelled.slice(0, end).replace(/[ \t\r]+$/u, '')}\n`
     prefix = spelled.slice(end + 1)
     at = node.pos.endOffset
   }
-  text += withoutPrefixes(decode(at, to), prefix)
+  text += withoutPrefixes(decode(at, to), prefix, quotes)
   // C2-W-016: a lone CR at the end of a written line has no spelling.
-  return /\r[ \t]*(?:\n|$)/u.test(text) ? null : text
+  if (/\r[ \t]*(?:\n|$)/u.test(text)) return null
+  // C2-W-022, C2-W-024: a line break inside a node, as in a wrapped label (C2-I-080), ends no line with a space and
+  // the writer indents the next line itself; a backslash keeps the one space that makes it a hard break (C2-I-011).
+  return text.replace(/(\\*)[ \t]+\n/gu, (_, slashes: string) => (slashes.length % 2 === 0 ? `${slashes}\n` : `${slashes} \n`))
+    .replace(/\n[ \t]+/gu, '\n')
 }
 
 /** The source bytes from the first of `nodes` to the end of the last, or null where their positions do not give them. */
@@ -1621,10 +1626,24 @@ function byteRange(nodes: readonly Node[]): [number, number] | null {
   return from === undefined || to === undefined || to < from ? null : [from, to]
 }
 
-/** `text` with `prefix` taken off each line after the first that holds it; a lazy line keeps its spelling. */
-function withoutPrefixes(text: string, prefix: string): string {
-  if (prefix === '' || !text.includes('\n')) return text
-  return text.split('\n').map((line, at) => (at > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line)).join('\n')
+/**
+ * `text` with `prefix` taken off each line after the first that holds it. A line that does not, as one whose prefix
+ * no break node showed, drops the leading quote markers `quotes` matches; a lazy line has none.
+ */
+function withoutPrefixes(text: string, prefix: string, quotes: RegExp | null): string {
+  if (!text.includes('\n') || (prefix === '' && quotes === null)) return text
+  return text.split('\n').map((line, at) => {
+    if (at === 0) return line
+    if (prefix !== '' && line.startsWith(prefix)) return line.slice(prefix.length)
+    return quotes === null ? line : line.replace(quotes, '')
+  }).join('\n')
+}
+
+/** The leading quote markers of a line, as many as stand before byte `from` on its line; null where none do. */
+function quoteMarkers(source: Uint8Array, from: number): RegExp | null {
+  let depth = 0
+  for (let at = source.lastIndexOf(0x0a, from - 1) + 1; at < from; at++) if (source[at] === 0x3e) depth++
+  return depth === 0 ? null : new RegExp(`^(?:[ \\t]*>[ \\t]?){1,${depth}}`, 'u')
 }
 
 /** The container prefix the first line break of `breaks` spells behind its line end, or '' where it shows none. */
