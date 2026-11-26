@@ -373,7 +373,7 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
     for (let pending = above.heldBlankLine; pending < line; pending++) {
       const pendingEnd = lineEndAt(state.src, state.lineStarts, state.lineCount, pending)
       matchContainers(state, state.lineStarts[pending]!, pendingEnd)
-      writeBodySpan(state, opaqueContentStart(state, pendingEnd), pendingEnd)
+      writeBodySpan(state, bodyContentStart(state, pendingEnd), pendingEnd)
     }
     above.heldBlankLine = NO_LINE
     matchContainers(state, lineStart, end)
@@ -388,7 +388,13 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
     above.captionDepth = kind === CODE && !leaf.raw ? state.containers.depth : NO_DEPTH
     return
   }
-  writeBodySpan(state, opaqueContentStart(state, end), end)
+  writeBodySpan(state, bodyContentStart(state, end), end)
+}
+
+/** C2-B-029: a comment block open in a line block body is stripped by at most its opener's indent, as outside one. */
+function bodyContentStart(state: BlockState, end: number): number {
+  const leaf = state.leaf
+  return leaf.kind === LINE_BLOCK && leaf.commentRun > 0 ? contentStart(state, end, leaf.commentColumn) : opaqueContentStart(state, end)
 }
 
 function writeBodySpan(state: BlockState, start: number, end: number): void {
@@ -410,6 +416,16 @@ function noteStanza(state: BlockState, start: number, end: number): void {
   }
   leaf.commentRun = fenceRunLength(src, pos, end, PERCENT)
   if (leaf.commentRun === 0) leaf.stanzaOpen = pos < end
+  else leaf.commentColumn = columnAt(state, pos)
+}
+
+/** The column of `pos` past the line's container origin, `pos` standing in the spaces and tabs after its prefixes. */
+function columnAt(state: BlockState, pos: number): number {
+  const cursor = state.cursor
+  const src = state.src
+  let column = cursor.origin
+  for (let at = cursor.prefixEnd; at < pos; at++) column = advanceColumn(column, src.charCodeAt(at))
+  return column - cursor.origin
 }
 
 /**
@@ -1194,6 +1210,7 @@ function openOpaqueLeaf(state: BlockState, kind: number, fenceChar: number, leng
   leaf.fenceColumn = cursor.column - cursor.origin
   leaf.stanzaOpen = false
   leaf.commentRun = 0
+  leaf.commentColumn = 0
   state.above.heldBlankLine = NO_LINE
 }
 
