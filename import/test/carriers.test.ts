@@ -119,6 +119,7 @@ describe('C2-H-186 carriers', () => {
     ['<ul data-carve-loose><li><blockquote><p>a</p></blockquote></li></ul>', 'tight'],
     ['<ul data-carve-loose><li>a</li><li>b</li></ul>', 'tight'],
     ['<ul data-carve-loose><li><p>a</p></li><li><p>b</p> c</li></ul>', 'loose'],
+    ['<ul data-carve-loose><li><input type="text"><img src="x" alt="x"></li><li><p>b</p></li></ul>', 'loose'],
   ])('C2-H-186 data-carve-loose is ignored on a one-item list and over a bare run: %s', (html, spacing) => {
     const list = first(html)
     expect(list?.type === 'list' ? list.spacing : undefined).toBe(spacing)

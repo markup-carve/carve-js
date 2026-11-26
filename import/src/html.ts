@@ -619,7 +619,7 @@ function contradictsTight(node: Html.Element): boolean {
 
 /**
  * C2-H-186: `data-carve-loose` is ignored where an item holds a run that C2-M-012 reads as a paragraph, other than an
- * image run of C2-M-013, since a loose list writes every paragraph in `<p>`. The task box is no part of the run.
+ * image run of C2-M-013, since a loose list writes every paragraph in `<p>`. A checkbox is no part of the run (C2-M-032).
  */
 function hasBareRun(node: Html.Element): boolean {
   return elements(node).some(item => {
@@ -632,7 +632,7 @@ function hasBareRun(node: Html.Element): boolean {
         && !(solid.some(isImage) && solid.every(entry => isImage(entry) || isComment(entry)))
     }
     for (const entry of content(item)) {
-      if (isElement(entry) && entry.tagName === 'input') continue
+      if (isElement(entry) && entry.tagName === 'input' && attr(entry, 'type') === 'checkbox') continue
       if (isPhrasing(entry) || isImage(entry) || isComment(entry)) run.push(entry)
       else if (paragraph()) return true
     }
