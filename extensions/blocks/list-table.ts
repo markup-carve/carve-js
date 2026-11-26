@@ -1,5 +1,7 @@
 import type { ExtensionBundle } from '../../src/extensions/standard/bundle.ts'
 import type { Attrs, Block, ExtensionClaim, ExtensionDefinition, ExtensionRenderer, ExtensionRenderHost, ListItemNode, ListNode, Node } from '../../src/index.ts'
+import { type ColumnLists, readColumnLists } from '../../src/ast-table.ts'
+import { percentageText } from '../../src/decimal.ts'
 import { attrValue, authorAttrs, withStyle } from '../common/attrs.ts'
 
 interface Cell {
@@ -150,54 +152,60 @@ function cellContent(item: ListItemNode, host: ExtensionRenderHost): string {
   return item.children.map((block) => host.blocks([block])).join('\n')
 }
 
-function alignment(value: string | undefined, allowed: readonly string[]): string | undefined {
-  const folded = value?.trim().toLowerCase()
-  return folded !== undefined && allowed.includes(folded) ? folded : undefined
+const CELL_ALIGNS = ['left', 'right', 'center']
+const CELL_VALIGNS = ['top', 'middle', 'bottom', 'baseline']
+
+/** C2-X-078: a cell value read as C2-H-015 reads `align`; another value is no mark. */
+function cellMark(value: string | undefined, allowed: readonly string[]): string | undefined {
+  if (value === undefined) return undefined
+  const folded = value.replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '').replace(/[A-Z]/g, (letter) => letter.toLowerCase())
+  return allowed.includes(folded) ? folded : undefined
 }
 
-function cellStyle(cell: Cell, col: number, tableAttrs: Attrs | undefined): string {
-  const aligns = attrValue(tableAttrs, 'aligns')?.split(',') ?? []
-  const valigns = attrValue(tableAttrs, 'valigns')?.split(',') ?? []
-  const h = alignment(attrValue(cell.item.attrs, 'align') ?? aligns[col], ['left', 'right', 'center'])
-  const v = alignment(attrValue(cell.item.attrs, 'valign') ?? valigns[col], ['top', 'middle', 'bottom'])
+function cellStyle(cell: Cell, col: number, columns: ColumnLists): string {
+  const h = cellMark(attrValue(cell.item.attrs, 'align'), CELL_ALIGNS) ?? columns.aligns?.[col]
+  const v = cellMark(attrValue(cell.item.attrs, 'valign'), CELL_VALIGNS) ?? columns.valigns?.[col]
   return `${h === undefined ? '' : `text-align: ${h};`}${h !== undefined && v !== undefined ? ' ' : ''}` +
     `${v === undefined ? '' : `vertical-align: ${v};`}`
 }
 
 function cellHtml(cell: Cell, col: number, row: number, head: number, headCols: number, rowHead: boolean,
-  tableAttrs: Attrs | undefined, host: ExtensionRenderHost): string {
+  columns: ColumnLists, host: ExtensionRenderHost): string {
   if (cell.skip) return ''
   const heading = row < head || rowHead || col < headCols || attrValue(cell.item.attrs, 'header') !== undefined
   const tag = heading ? 'th' : 'td'
   const scope = heading ? ` scope="${row < head || rowHead ? 'col' : 'row'}"` : ''
   const spans = `${cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : ''}${cell.colspan > 1 ? ` colspan="${cell.colspan}"` : ''}`
-  const attrs = authorAttrs(withStyle(cell.item.attrs, cellStyle(cell, col, tableAttrs)), host,
+  const attrs = authorAttrs(withStyle(cell.item.attrs, cellStyle(cell, col, columns)), host,
     ['rowspan', 'colspan', 'scope', 'header', 'header-row', 'align', 'valign'])
   return `<${tag}${scope}${spans}${attrs}>` +
     `${cellContent(cell.item, host)}</${tag}>`
 }
 
 function rowHtml(cells: Cell[], row: number, head: number, headCols: number, rowHead: boolean, width: number,
-  tableAttrs: Attrs | undefined, host: ExtensionRenderHost): string {
-  const content = cells.map((cell, col) => cellHtml(cell, col, row, head, headCols, rowHead, tableAttrs, host)).join('')
+  columns: ColumnLists, host: ExtensionRenderHost): string {
+  const content = cells.map((cell, col) => cellHtml(cell, col, row, head, headCols, rowHead, columns, host)).join('')
   const padding = Array.from({ length: Math.max(0, width - cells.length) }, () => '<td></td>').join('')
   const annotation = host.attributes(cells[0]?.item ?? null, { block: true, bare: true })
   return `    <tr${annotation}>${content}${padding}</tr>`
 }
 
 function groupHtml(table: TableData, start: number, end: number, name: string, head: number, headCols: number,
-  width: number, host: ExtensionRenderHost): string {
+  width: number, columns: ColumnLists, host: ExtensionRenderHost): string {
   if (start >= end) return ''
   const rendered = table.rows.slice(start, end).map((cells, index) =>
-    rowHtml(cells, start + index, head, headCols, table.rowHeads[start + index] ?? false, width, table.attrs, host)).join('\n')
+    rowHtml(cells, start + index, head, headCols, table.rowHeads[start + index] ?? false, width, columns, host)).join('\n')
   const annotation = host.attributes(table.rows[start]?.[0]?.item ?? null, { block: true, bare: true })
   return `  <${name}${annotation}>\n${rendered}\n  </${name}>\n`
 }
 
-function columnsHtml(attrs: Attrs | undefined, host: ExtensionRenderHost): string {
-  const values = attrValue(attrs, 'widths')?.split(',')
-  if (values === undefined || values.length === 0 || !values.every((value) => /^\d+(?:\.\d+)?$/.test(value.trim()))) return ''
-  const columns = values.map((value) => `    <col style="width: ${host.escapeAttribute(value.trim())}%;">`).join('\n')
+/** C2-H-152: one `<col>` per column once any column of the table has a width. */
+function columnsHtml(widths: number[] | null, count: number): string {
+  if (widths === null || count === 0) return ''
+  const columns = Array.from({ length: count }, (_, at) => {
+    const width = widths[at]
+    return width === undefined ? '    <col>' : `    <col style="width: ${percentageText(width)}%;">`
+  }).join('\n')
   return `  <colgroup>\n${columns}\n  </colgroup>\n`
 }
 
@@ -214,15 +222,16 @@ export const listTableRenderer: ExtensionRenderer = { version: '1', render(node,
   const label = table.label === undefined || table.label === '' ? '' :
     `<p class="div-label">${host.escapeText(table.label)}</p>\n`
   const caption = table.title.length === 0 ? '' : `  <caption>${host.inlines(table.title)}</caption>\n`
+  const columns = readColumnLists((name) => attrValue(table.attrs, name) ?? null)
   const consumed = ['header-rows', 'header-cols', 'footer-rows', 'aligns', 'valigns', 'widths']
   if (host.sourceLines) consumed.push('data-source-line')
   const attrs = authorAttrs(table.attrs, host, consumed) + host.attributes(node, { block: true, bare: true })
   const bodies = boundaries.slice(0, -1).map((start, index) =>
-    groupHtml(table, start, boundaries[index + 1] ?? start, 'tbody', head, headCols, width, host)).join('')
-  const html = `${label}<table${attrs}>\n${caption}${columnsHtml(table.attrs, host)}` +
-    groupHtml(table, 0, head, 'thead', head, headCols, width, host) +
+    groupHtml(table, start, boundaries[index + 1] ?? start, 'tbody', head, headCols, width, columns, host)).join('')
+  const html = `${label}<table${attrs}>\n${caption}${columnsHtml(columns.widths, width)}` +
+    groupHtml(table, 0, head, 'thead', head, headCols, width, columns, host) +
     bodies +
-    groupHtml(table, bodyEnd, table.rows.length, 'tfoot', head, headCols, width, host) + '</table>'
+    groupHtml(table, bodyEnd, table.rows.length, 'tfoot', head, headCols, width, columns, host) + '</table>'
   const indent = '  '.repeat(host.blockDepth)
   return indent === '' ? html : html.replaceAll('\n', `\n${indent}`)
 } }
