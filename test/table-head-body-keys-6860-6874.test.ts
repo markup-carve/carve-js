@@ -11,6 +11,7 @@ describe('carve#6860, carve#6874: header-rows ends the head the written rows and
     ['{header-rows=0 body-header-cols=1}\n|= h |\n', '{body-header-cols=1 header-rows=0}\n|= h |\n'],
     ['{header-rows=1 body-rows=x}\n|= h |\n|= a |\n| 1 |\n', '{body-rows=x header-rows=1}\n|= h |\n|= a |\n| 1 |\n'],
     ['{footer-rows=1 body-rows}\n|= A |\n|= ^ |\n|= F |\n', '{footer-rows=1 body-rows}\n|= A |\n|= ^ |\n|= F |\n'],
+    ['{header-rows=1 footer-rows=1 body-rows="\u00a0"}\n|= a |\n|= b |\n', '{body-rows=\u00a0 header-rows=1 footer-rows=1}\n|= a |\n|= b |\n'],
     ['- {header-rows=0 body-header-rows=1}\n  |= h |\n', '- {body-header-rows=1 header-rows=0}\n  |= h |\n'],
   ])('writes %j as %j with no report, and it reads back', (source, expected) => {
     const written = formatWithDiagnostics(source)

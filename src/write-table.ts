@@ -13,6 +13,7 @@ import { type Wrap } from './layout.ts'
 import { longestBareRun } from './write-fences.ts'
 import { displayWidth } from './width.ts'
 import { percentageText } from './decimal.ts'
+import { trimSpaces } from './source.ts'
 
 const ALIGN_MARKS = new Map([['left', '<'], ['right', '>'], ['center', '~']])
 const VALIGN_MARKS = new Map([['top', '^'], ['middle', '~'], ['bottom', 'v']])
@@ -177,7 +178,8 @@ function writtenEmptyBodyRows(table: TableNode, plan: BodyPlan): boolean {
   const value = (key: string): string | undefined =>
     plan.keys.find((pair) => pair[0] === key)?.[1] ?? (plan.loseKept ? undefined : keptValue(table, key))
   const headerList = value('body-header-rows')
-  return value('body-rows')?.trim() === '' && (headerList === undefined || headerList.trim() === '') &&
+  const rows = value('body-rows')
+  return rows !== undefined && trimSpaces(rows) === '' && (headerList === undefined || trimSpaces(headerList) === '') &&
     value('body-header-cols') === undefined
 }
 
