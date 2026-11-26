@@ -29,3 +29,32 @@ export const SNIPPET_BUDGETS = new WeakMap<DocumentNode, SnippetBudget>()
 /** The definitions of each registry, so a later view can tell a transform's definition from an authored one. */
 export const SNIPPET_DEFINITIONS = new WeakMap<DocumentNode, string[]>()
 
+
+function carryNode(from: Node, to: Node): void {
+  const carrier = SNIPPET_CARRIERS.get(from)
+  if (carrier !== undefined) SNIPPET_CARRIERS.set(to, carrier)
+  const mark = SNIPPET_MARKS.get(from)
+  if (mark !== undefined) SNIPPET_MARKS.set(to, mark)
+  if (COPY_SCOPE.has(from)) COPY_SCOPE.set(to, COPY_SCOPE.get(from)!)
+}
+
+/**
+ * Carries the side tables of an expanded view onto `copy`, a clone of it of the same shape, so the nodes a document
+ * transform keeps still carry their snippet carriers and note marks (C2-H-215).
+ */
+export function carrySnippetMarks(view: DocumentNode, copy: DocumentNode): void {
+  const budget = SNIPPET_BUDGETS.get(view)
+  if (budget === undefined) return
+  SNIPPET_BUDGETS.set(copy, budget)
+  const pending: [unknown, unknown][] = [[view, copy]]
+  for (let pair = pending.pop(); pair !== undefined; pair = pending.pop()) {
+    const [from, to] = pair
+    if (typeof from !== 'object' || from === null || typeof to !== 'object' || to === null) continue
+    if (Array.isArray(from)) {
+      for (let at = 0; at < from.length; at++) pending.push([from[at], (to as unknown[])[at]])
+      continue
+    }
+    carryNode(from as Node, to as Node)
+    for (const key of Object.keys(from)) pending.push([(from as Record<string, unknown>)[key], (to as Record<string, unknown>)[key]])
+  }
+}

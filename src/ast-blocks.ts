@@ -273,9 +273,11 @@ function snippetDefinitionNode(ctx: TreeContext, node: BlockNode): DocumentChild
   const marker = readSnippetMarker(src, start, end)!
   const attributes = emptyAttributes()
   const sink = attributeSink(attributes)
-  if (src.charCodeAt(marker.nameEnd) === SPACE) readAttributeBlock(src, marker.nameEnd - 1, end, emptyMemo(), sink)
-  const close = src.indexOf('}', marker.nameEnd)
-  readGluedBlocks(src, close + 1, marker.markerEnd - 1, attributes)
+  // The marker's own `}` ends its first block; a quoted value may hold a `}` of its own.
+  const glued = src.charCodeAt(marker.nameEnd) === SPACE
+    ? readAttributeBlock(src, marker.nameEnd - 1, end, emptyMemo(), sink)
+    : marker.nameEnd + 1
+  readGluedBlocks(src, glued, marker.markerEnd - 1, attributes)
   const valueStart = snippetValueStart(src, end, marker)
   const children = leafChildren(ctx, { ...node, spans: [valueStart, end] }, FLOW_PLAIN)
   const name = src.slice(marker.nameStart, marker.nameEnd)

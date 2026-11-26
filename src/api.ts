@@ -11,6 +11,7 @@ import { addFinding, type Diagnostic, type Findings, locateFindings } from './di
 import {
   expandSnippets, holdsSnippetNode, holdsSnippetUse, refuseTransformSnippets, SNIPPET_DEFINITIONS,
 } from './snippet-expand.ts'
+import { carrySnippetMarks } from './snippet-marks.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
 import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
@@ -584,7 +585,9 @@ function applyDocumentTransforms(view: DocumentNode, transforms: readonly Docume
   for (const entry of transforms) {
     try {
       if (!applies(entry, view)) continue
-      const next = entry.transform(cloneTree(view))
+      const input = cloneTree(view)
+      carrySnippetMarks(view, input)
+      const next = entry.transform(input)
       // A view the transform left as it was is checked once; its ids are those of its input.
       if (unchanged(next, view)) {
         if (!validated) validateTree(next, undefined, undefined, extensions)
