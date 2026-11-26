@@ -41,8 +41,8 @@ import { type ExtensionDefinition } from './extensions/types.ts'
 import { sourceCoreEquivalent, withCoreInlines } from './write-extension-source.ts'
 import { caretLineEscapes } from './write-carets.ts'
 import {
-  logTrials, MAX_RETESTED_TRIALS, memoPass, type Snapshot, noteLogClosed, noteRead, type PassMemo, type PassRun, READ_CLOSER_KINDS,
-  READ_TRIAL_LOG, READ_WHOLE_TRIALS,
+  logTrials, MAX_RETESTED_TRIALS, memoPass, type Snapshot, noteLogClosed, noteRead, noteWholeTest, type PassMemo, type PassRun,
+  READ_CLOSER_KINDS, READ_TRIAL_LOG, READ_WHOLE_TRIALS,
 } from './write-passes.ts'
 import { advanceChain, type Chain, createChain, type RoundStep, startRound, watchRound } from './write-chain.ts'
 
@@ -458,6 +458,10 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
   if (!asked) {
     noteRead(w, READ_WHOLE_TRIALS)
     asked = w.wholeTrials && givesTree(w, group, first, placed, node, at)
+    if (!w.wholeTrials) {
+      const kept = new Map([...placed].map(([text, offsets]) => [text, [...offsets]]))
+      noteWholeTest(w, () => givesTree(w, group, first, kept, node, at))
+    }
   }
   w.escapes = placed
   w.lines = lines
