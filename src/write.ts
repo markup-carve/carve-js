@@ -1612,6 +1612,9 @@ function authoredContent(w: Writer, leaf: Node): string | null {
   text += withoutPrefixes(decode(at, to), prefix)
   // C2-W-016: a lone CR at the end of a written line has no spelling.
   if (/\r[ \t]*(?:\n|$)/u.test(text)) return null
+  // A line whose prefix no break node showed, as one behind a lazy line, drops the quote markers of the first line.
+  const depth = quoteDepth(source, from)
+  if (depth > 0) text = text.replace(new RegExp(`\n(?:[ \t]*>[ \t]?){1,${depth}}`, 'gu'), '\n')
   // C2-W-022, C2-W-024: a line break inside a node, as in a wrapped label (C2-I-080), ends no line with a space and
   // the writer indents the next line itself; a backslash keeps the one space that makes it a hard break (C2-I-011).
   return text.replace(/(\\?)[ \t]+\n/gu, (_, slash: string) => (slash === '' ? '\n' : '\\ \n'))
@@ -1629,6 +1632,13 @@ function byteRange(nodes: readonly Node[]): [number, number] | null {
 function withoutPrefixes(text: string, prefix: string): string {
   if (prefix === '' || !text.includes('\n')) return text
   return text.split('\n').map((line, at) => (at > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line)).join('\n')
+}
+
+/** The number of quote markers before byte `from` on its line. */
+function quoteDepth(source: Uint8Array, from: number): number {
+  let depth = 0
+  for (let at = source.lastIndexOf(0x0a, from - 1) + 1; at < from; at++) if (source[at] === 0x3e) depth++
+  return depth
 }
 
 /** The container prefix the first line break of `breaks` spells behind its line end, or '' where it shows none. */

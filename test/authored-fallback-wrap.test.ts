@@ -18,4 +18,18 @@ describe('C2-W-088: the authored slice of a node that wraps', () => {
     expect(once).toBe('- ``^[/`"`[^\\\\/\n  `]^[[^*]\\`/=[^`[]]\n')
     expect(formatWithDiagnostics(once).source).toBe(once)
   })
+
+  it('C2-W-024: drops the quote markers a later line repeats, and keeps a lazy line', () => {
+    for (const [input, expected] of [
+      [`> > ${wrapped.replace('\n', '\n> > ')}`, '> > ``^[/`"`[^\\\\/\n> > `]^[[^*]\\`/=[^`[]]\n'],
+      ['- > ``^[/`"`[^\\\\/\n  > `]^[[^*]\\`/=[^`[]]\n', '- > ``^[/`"`[^\\\\/\n  > `]^[[^*]\\`/=[^`[]]\n'],
+      [' > ^[/\\[^}[^}]*\\][^[\n> ]/', '> ^[/\\[^}[^}]*\\][^[\n> ]/\n'],
+      ['> :n[\n{[]``\n> ``@\\`~]`', '> :n[\n> {[]``\n> ``@\\`~]`\n'],
+    ]) {
+      const result = formatWithDiagnostics(input!)
+      expect(result.source, input).toBe(expected)
+      expect(result.diagnostics, input).toEqual([])
+      expect(formatWithDiagnostics(result.source).source, input).toBe(expected)
+    }
+  })
 })
