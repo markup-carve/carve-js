@@ -1538,23 +1538,59 @@ function holdsLoss(lost: ReadonlySet<Node | null>, block: Node): boolean {
  */
 function authoredContent(w: Writer, leaf: Node): string | null {
   const children = childNodes(leaf)
-  const from = children[0]?.pos?.startOffset
-  const to = children.at(-1)?.pos?.endOffset
+  const range = byteRange(children)
   const source = w.authored
-  if (source === null || from === undefined || to === undefined || to < from) return null
+  if (source === null || range === null) return null
+  const [from, to] = range
   const decode = (start: number, end: number): string => new TextDecoder().decode(source.subarray(start, end))
+  const breaks = lineBreaks(children)
+  // A line break inside a node that holds no break node, as the alternative text of an image, takes the prefix the
+  // break before it shows, or the first one.
+  let prefix = firstPrefix(breaks, decode)
   let text = ''
   let at = from
-  for (const node of lineBreaks(children)) {
+  for (const node of breaks) {
     if (node.pos === undefined || node.pos.startOffset < at) return null
     const spelled = decode(node.pos.startOffset, node.pos.endOffset)
     const end = spelled.indexOf('\n')
-    if (end < 0) return null
-    text += `${decode(at, node.pos.startOffset)}${spelled.slice(0, end).replace(/[ \t\r]+$/u, '')}\n`
+    const before = withoutPrefixes(decode(at, node.pos.startOffset), prefix)
+    if (end < 0 || before === null) return null
+    text += `${before}${spelled.slice(0, end).replace(/[ \t\r]+$/u, '')}\n`
+    prefix = spelled.slice(end + 1)
     at = node.pos.endOffset
   }
-  text += decode(at, to)
+  const rest = withoutPrefixes(decode(at, to), prefix)
+  if (rest === null) return null
+  text += rest
   return text.includes('\r') ? null : text
+}
+
+/** The source bytes from the first of `nodes` to the end of the last, or null where their positions do not give them. */
+function byteRange(nodes: readonly Node[]): [number, number] | null {
+  const from = nodes[0]?.pos?.startOffset
+  const to = nodes.at(-1)?.pos?.endOffset
+  return from === undefined || to === undefined || to < from ? null : [from, to]
+}
+
+/** `text` with `prefix` taken off each line after the first; null where a line does not start with it. */
+function withoutPrefixes(text: string, prefix: string | null): string | null {
+  if (!text.includes('\n')) return text
+  if (prefix === null) return null
+  const lines = text.split('\n')
+  for (let line = 1; line < lines.length; line++) {
+    if (!lines[line]!.startsWith(prefix)) return null
+    lines[line] = lines[line]!.slice(prefix.length)
+  }
+  return lines.join('\n')
+}
+
+/** The container prefix the first line break of `breaks` spells behind its line end, or '' where there is none. */
+function firstPrefix(breaks: readonly Node[], decode: (start: number, end: number) => string): string | null {
+  const first = breaks[0]?.pos
+  if (first === undefined) return breaks.length === 0 ? '' : null
+  const spelled = decode(first.startOffset, first.endOffset)
+  const end = spelled.indexOf('\n')
+  return end < 0 ? null : spelled.slice(end + 1)
 }
 
 /** The soft and hard breaks below `nodes`, in document order. */
