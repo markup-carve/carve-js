@@ -3052,30 +3052,51 @@ function prepareDocumentWriter(w: Writer, document: DocumentNode, layout: WriteO
   w.openerRuns = null
 }
 
-function lacksAlt(item: Node): boolean {
-  if (item.type === 'image' && item.alt === undefined) return true
-  let found = false
-  forEachSlot(item, (children) => { found ||= children.some(lacksAlt) })
-  return found
-}
-
 /**
- * C2-W-011: a copy of `document` in which each image without `alt` has the empty alt that `![](URL)` reads back as.
+ * C2-W-011: `document` with each image without `alt` given the empty alt that `![](URL)` reads back as.
  * A decorative image is no loss; one whose alt text is unknown is reported with `image-alt-unknown` at the image.
+ * Only the ancestors of such images are copied.
  */
 function withSourceAlts(w: Writer, document: DocumentNode): DocumentNode {
-  if (!lacksAlt(document)) return document
-  const copy = structuredClone(document)
-  const visit = (item: Node): void => {
-    if (item.type === 'image' && item.alt === undefined) {
-      if (item.decorative !== true) addFinding(w.losses, item, { code: 'image-alt-unknown', severity: 'warning',
-        channel: 'render-loss', message: 'Carve source cannot spell an unknown alt text; the image is written with an empty one' })
-      delete item.decorative
-      item.alt = ''
-    }
-    forEachSlot(item, (children) => { for (const child of children) visit(child) })
+  const lacking: Node[] = []
+  const spine = new Set<object>()
+  const visit = (item: Node): boolean => {
+    let below = item.type === 'image' && item.alt === undefined
+    if (below) lacking.push(item)
+    forEachSlot(item, (children) => { for (const child of children) below = visit(child) || below })
+    if (below) spine.add(item)
+    return below
   }
-  visit(copy)
+  if (!visit(document)) return document
+  const replaced = new Map<object, object>()
+  for (const item of lacking) {
+    const image: Record<string, unknown> = { ...item, alt: '' }
+    delete image['decorative']
+    replaced.set(item, image)
+  }
+  const rewrite = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') return value
+    const known = replaced.get(value)
+    if (known !== undefined) return known
+    const fields = value as Record<string, unknown>
+    // A node off the spine holds no image to rewrite; the fields between two nodes (slot arrays, records) are walked.
+    if (typeof fields['type'] === 'string' && !spine.has(value)) return value
+    let copy: Record<string, unknown> | null = null
+    for (const key of Object.keys(fields)) {
+      const next = rewrite(fields[key])
+      if (next === fields[key]) continue
+      copy ??= Array.isArray(value) ? [...(value as unknown[])] as unknown as Record<string, unknown> : { ...fields }
+      copy[key] = next
+    }
+    if (copy !== null) replaced.set(value, copy)
+    return copy ?? value
+  }
+  const copy = rewrite(document) as DocumentNode
+  for (const item of lacking) {
+    if (item.type === 'image' && item.decorative !== true) addFinding(w.losses, replaced.get(item) as Node, {
+      code: 'image-alt-unknown', severity: 'warning', channel: 'render-loss',
+      message: 'Carve source cannot spell an unknown alt text; the image is written with an empty one' })
+  }
   return copy
 }
 
