@@ -24,7 +24,7 @@ export function wantsListTable(table: TableNode): boolean {
 
 interface Slot { cell: TableCellNode, mark: '<' | '^' | undefined }
 
-/** The rows of the table in group order, each with its slots: a cell, or the cell a span mark continues (C2-W-145). */
+/** The rows of the table that give an item, in group order, each with its slots: a cell, or the cell a span mark continues (C2-W-145). */
 function slotRows(table: TableNode, node: Html.Element, context: HtmlContext): { rows: Slot[][], head: number, foot: number } {
   const originals = new Map<TableCellNode, TableCellNode>()
   const copy = (row: TableRowNode): TableRowNode => ({ ...row, children: row.children.map((cell) => {
@@ -51,6 +51,11 @@ function slotRows(table: TableNode, node: Html.Element, context: HtmlContext): {
   for (const group of groups) {
     for (const row of group.children) {
       if (row.type !== 'table_row') continue
+      // C2-M-112: a row with no cell and no covered slot gives no item, and the counts skip it.
+      if (row.children.length === 0) {
+        report(context, node, 'import-structure-repaired', 'A list table row with no cell dropped')
+        continue
+      }
       rows.push(row.children.map((cell) => {
         const own = originals.get(cell)
         if (own !== undefined) return { cell: own, mark: undefined }
@@ -151,10 +156,6 @@ export function listTable(table: TableNode, node: Html.Element, context: HtmlCon
   const headerCols = headerColumns(rows, head)
   const items: ListItemNode[] = []
   rows.forEach((slots, index) => {
-    if (slots.length === 0) {
-      report(context, node, 'import-structure-repaired', 'A list table row with no cell dropped')
-      return
-    }
     const cells = slots.map((slot, column) => slot.mark !== undefined ? textItem(slot.mark)
       : cellItem(slot.cell, slot.cell.header && index >= head && column >= headerCols, node, context))
     // C2-B-062: a list with one item is tight.
