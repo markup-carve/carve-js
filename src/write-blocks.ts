@@ -8,7 +8,7 @@ import {
   type FigureGroupNode, type FootnoteNode, type FrontmatterNode, type HeadingNode, type IncludeNode,
   type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
   type ParagraphNode, type RawBlockNode, type TableNode, type BlockExtensionNode, type Inline, type SnippetDefinitionNode,
-  type SnippetUseNode, type TextNode,
+  type SnippetUseNode, type TextNode, cloneTree, forEachSlot,
 } from './ast.ts'
 import { isClaimableName } from './ast-validate.ts'
 import { treesEqual } from './ast-json.ts'
@@ -458,21 +458,33 @@ function abbreviationDefinition(w: Writer, node: AbbreviationDefNode, prefix: st
   emit(w, prefix, `*[${node.key}]: ${expansion.slice(0, end)}`)
 }
 
-/** The inline nodes with every line break, at any depth, as one space, or null where there is none. */
+function isLineBreak(node: Node): boolean {
+  return node.type === 'soft_break' || node.type === 'hard_break'
+}
+
+function holdsBreak(nodes: readonly Node[]): boolean {
+  return nodes.some((node) => isLineBreak(node) || holdsInSlot(node))
+}
+
+function holdsInSlot(node: Node): boolean {
+  let found = false
+  forEachSlot(node, (nodes) => { if (!found && holdsBreak(nodes as Node[])) found = true })
+  return found
+}
+
+function spaceBreaks(nodes: Node[]): void {
+  for (let at = 0; at < nodes.length; at++) {
+    if (isLineBreak(nodes[at]!)) nodes[at] = { type: 'text', value: ' ' } satisfies TextNode
+    else forEachSlot(nodes[at]!, (inner) => { spaceBreaks(inner as Node[]) })
+  }
+}
+
+/** A copy of the inline nodes with every line break, in any slot, as one space, or null where there is none. */
 function spacedBreaks(nodes: readonly Inline[]): Inline[] | null {
-  let out: Inline[] | null = null
-  nodes.forEach((child, at) => {
-    let next: Inline | null = null
-    if (child.type === 'soft_break' || child.type === 'hard_break') next = { type: 'text', value: ' ' } satisfies TextNode
-    else if ('children' in child && Array.isArray(child.children)) {
-      const inner = spacedBreaks(child.children as Inline[])
-      if (inner !== null) next = { ...child, children: inner } as Inline
-    }
-    if (next === null) return
-    out ??= nodes.slice()
-    out[at] = next
-  })
-  return out
+  if (!holdsBreak(nodes)) return null
+  const copy = cloneTree(nodes as Inline[])
+  spaceBreaks(copy)
+  return copy
 }
 
 /**

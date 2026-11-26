@@ -8,6 +8,7 @@ import { fileLines, type LineRange, lineRange, regionRange } from '../src/includ
 import { CarveOptionError } from '../src/options.ts'
 import { unitBytes, utf8Length } from '../src/positions.ts'
 import { usedNames } from './snippets.ts'
+import { snippetRegistry } from '../src/snippet-expand.ts'
 
 /** The text the resolver returned for each id, as the expansion read it. */
 function recording(config: IncludeSettings, texts: Map<string, string>): IncludeConfig {
@@ -149,6 +150,12 @@ function referenceFindings(document: DocumentNode): ReferenceFindings {
 
 const RECONCILED: ReadonlySet<string> = new Set(['unresolved-reference-link', 'unresolved-footnote',
   'unused-link-reference-definition', 'unused-footnote-definition', 'unused-snippet'])
+
+/** The file and start of the `$` of each winning snippet definition, as a lint finding about it names them. */
+function winningKeys(document: DocumentNode): string[] {
+  return [...snippetRegistry(document).values()].flatMap(({ definition, include }) => definition.pos === undefined ? []
+    : [`${include?.file ?? ''}\u0000${definition.pos.startOffset + 1}`])
+}
 
 const SNIPPET_NAME = /"\$([^"]+)"/u
 
@@ -317,6 +324,8 @@ export function lintIncludes(source: string, value: unknown, own: Diagnostic[], 
   const references = referenceFindings(expanded.document)
   const duplicates = expanded.diagnostics.filter((entry) => entry.code === 'duplicate-snippet')
   for (const entry of duplicates) references.losing.add(`${entry.file ?? ''}\u0000${entry.range?.startOffset ?? -1}`)
+  // A file included twice repeats its definitions at one offset: the winning one keeps its hint.
+  for (const key of winningKeys(expanded.document)) references.losing.delete(key)
   const visit: Visit = { texts, lintFile, lintPayload, references, seen: new Set(), out: [], codePaths: [] }
   walk(visit, expanded.document, '', undefined, [])
   // The file lint pass selects source lines and sections. Keep only expansion findings that it cannot produce.

@@ -159,4 +159,29 @@ describe('named snippets', () => {
     expect(renderWithDocumentTransforms('{$x}: Hello\n\nA\n', add).diagnostics.map((entry) => entry.code))
       .toEqual(['snippet-unexpanded-transform'])
   })
+
+  it('C2-N-095: a definition an include brings is the transforms\' own input, no finding', () => {
+    const resolver = ({ path }: { path: string }) => path === 'd.crv' ? { text: '{$x}: Hi\n', id: path } : { error: 'not_found' as const }
+    const add = [{ name: 'add', transform: (view: DocumentNode) => {
+      view.children.push({ type: 'paragraph', children: [{ type: 'text', value: 'e' }] })
+      return view
+    } }]
+    const result = renderWithDocumentTransforms('{{ d.crv }}\n', add, { includes: resolver, strictLosses: true })
+    expect([result.html, result.diagnostics]).toEqual(['<p>e</p>', []])
+  })
+
+  it('C2-N-096: a file included twice keeps the unused hint of its winning definition', () => {
+    const resolver = ({ path }: { path: string }) => path === 'c.crv' ? { text: '{$x}: X\n', id: path } : { error: 'not_found' as const }
+    const found = lint('{{ c.crv }}\n\n{{ c.crv }}\n', { includes: { resolver } }).map((entry) => entry.code)
+    expect(found.sort()).toEqual(['duplicate-snippet', 'unused-snippet'])
+  })
+
+  it('C2-W-159: a break in a ruby base of a supplied definition is written as a space', () => {
+    const tree = { type: 'document', astVersion: '2.0', children: [{ type: 'snippet_definition', name: 'x', children: [{ type: 'ruby',
+      pairs: [{ type: 'ruby_pair', base: [{ type: 'text', value: 'a' }, { type: 'soft_break' }, { type: 'text', value: 'b' }],
+        annotation: [{ type: 'text', value: 'c' }] }] }] }] }
+    const written = writeWithDiagnostics(tree as unknown as DocumentNode)
+    expect(written.source.split('\n')).toHaveLength(2)
+    expect(parse(written.source).children).toHaveLength(1)
+  })
 })

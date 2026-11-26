@@ -671,7 +671,8 @@ function expansionDiagnostics(resolved: ResolvedTree, findings: Findings): Diagn
 
 /** C2-N-095: the definitions of the resolved view the transforms receive, those with no use among them. */
 function markTransformBaseline(input: string | Uint8Array | DocumentNode, view: DocumentNode): void {
-  if (typeof input !== 'string' || input.includes('{$')) markDefinitions(view)
+  // An include may bring definitions the source does not spell.
+  if (typeof input !== 'string' || input.includes('{$') || input.includes('{{')) markDefinitions(view)
 }
 
 function transformedRender(
