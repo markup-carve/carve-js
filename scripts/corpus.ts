@@ -96,6 +96,9 @@ export const EXAMPLE_TREES: ReadonlyMap<string, readonly ExampleTree[]> = new Ma
   TREE_FILES.map((file) => [file, read<ExampleTree>(`trees/${file}.json`, 'trees')]),
 )
 export const SUPPLIED_TREES: readonly SuppliedTree[] = read('trees/nodes.json', 'trees')
+/** trees/positions.json: the positioned trees for the exemptions of C2-A-145; an entry with `fails` is one the spec's own
+ * position check refuses, so only the others are trees a parser builds. */
+export const POSITION_TREES: readonly (ExampleTree & { fails?: string })[] = read('trees/positions.json', 'trees')
 export const LAYOUT_FIXTURES: readonly LayoutFixture[] = read('trees/layouts.json', 'layouts')
 
 /** The bytes of a hex string such as `61 FF 62`. */

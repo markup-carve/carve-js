@@ -588,9 +588,15 @@ function cappedLineEscape(leaf: Leaf, at: number, place: LeafPlace): number | nu
     return UNDECIDED
   }
   if (opensContainer(leaf, at)) return NO_ESCAPE
+  return value === 58 ? cappedColonEscape(leaf, at) : null
+}
+
+function cappedColonEscape(leaf: Leaf, at: number): number {
+  // C2-B-190, C2-B-228 (carve#6610): past the cap a run with words behind it opens nothing, and only a bare run closes.
+  const end = runEnd(leaf, at, 58)
+  if (end - at >= 3 && !restIsBlank(leaf, end)) return NO_ESCAPE
   // C2-B-125: past the cap a colon line still meets the fences of the outer divs, whose length the writer picks.
-  if (value === 58) return leaf.kinds[at] === TEXT ? at : UNDECIDED
-  return null
+  return leaf.kinds[at] === TEXT ? at : UNDECIDED
 }
 
 export function lineEscape(leaf: Leaf, at: number, first: boolean, place: LeafPlace): number {

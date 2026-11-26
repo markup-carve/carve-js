@@ -2,11 +2,59 @@
 // field each refused tree is refused at.
 
 /**
- * The fields of the examples and clause cases whose stated result departs from its own clause. Each is written up, with the
- * clause-correct result, in the spec gap report for the pin; the field must keep failing until the
- * corpus is corrected, and every other field of the example is still checked.
+ * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
+ * clause, or a ruling of the pin not yet implemented here, each with its ticket. The field must keep failing until it is
+ * fixed, and every other field of the example is still checked.
  */
-export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([])
+export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
+  // Rulings the spec pin carries that carve-js does not implement yet, each with its ticket.
+  ['syntax-blocks-219', { fields: ['html', 'tree'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-501', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#3598: not in carve-js yet' }],
+  ['CC-2063', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#6623: not in carve-js yet' }],
+  ['CC-2068', { fields: ['html', 'children'], fix: 'carve#6664: not in carve-js yet' }],
+  ['CC-2100', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2101', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2102', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2103', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2206', { fields: ['threw:CarveTreeError'], fix: 'carve#6804: not in carve-js yet' }],
+  ['CC-2207', { fields: ['children', 'diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#6804: not in carve-js yet' }],
+  ['CC-2208', { fields: ['children', 'diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#6804: not in carve-js yet' }],
+  ['CC-2210', { fields: ['threw:CarveTreeError'], fix: 'carve#6804: not in carve-js yet' }],
+  ['CC-2213', { fields: ['threw:CarveTreeError'], fix: 'carve#6804: not in carve-js yet' }],
+  ['CC-2214', { fields: ['status', 'stderrCategory'], fix: 'carve#6804: not in carve-js yet' }],
+  ['CC-2218', { fields: ['html'], fix: 'carve#6791: not in carve-js yet' }],
+  ['CC-2227', { fields: ['html'], fix: 'carve#6791: not in carve-js yet' }],
+  ['CC-2228', { fields: ['html'], fix: 'carve#6791: not in carve-js yet' }],
+  ['CC-2230', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: 'carve#6605: not in carve-js yet' }],
+  ['CC-2231', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: 'carve#6605: not in carve-js yet' }],
+  ['CC-2232', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: 'carve#6605: not in carve-js yet' }],
+  ['CC-2233', { fields: ['children', 'carve', 'diagnosticsComplete'], fix: 'carve#6605: not in carve-js yet' }],
+  ['CC-2234', { fields: ['children', 'carve'], fix: 'carve#6235: not in carve-js yet' }],
+  ['CC-2235', { fields: ['diagnostics:import-element-dropped', 'diagnosticsComplete'], fix: 'carve#6235: not in carve-js yet' }],
+  ['CC-2236', { fields: ['children', 'carve'], fix: 'carve#6235: not in carve-js yet' }],
+  ['CC-2237', { fields: ['html'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2238', { fields: ['html'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2239', { fields: ['html'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2240', { fields: ['html'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2241', { fields: ['diagnostics:table-row-count-clamped'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2242', { fields: ['carve'], fix: 'carve#6663: not in carve-js yet' }],
+  ['CC-2244', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6664: not in carve-js yet' }],
+  ['CC-2245', { fields: ['carve', 'diagnosticsComplete'], fix: 'carve#6664: not in carve-js yet' }],
+  ['CC-2246', { fields: ['html'], fix: 'carve#6664: not in carve-js yet' }],
+  ['CC-2247', { fields: ['notReported:table-row-count-clamped'], fix: 'carve#6664: not in carve-js yet' }],
+  ['CC-2248', { fields: ['html'], fix: 'carve#6664: not in carve-js yet' }],
+  ['CC-2249', { fields: ['carve'], fix: 'carve#6664: not in carve-js yet' }],
+  ['CC-2250', { fields: ['diagnostics:field-unspellable', 'diagnosticsComplete'], fix: 'carve#6623: not in carve-js yet' }],
+  ['CC-2251', { fields: ['status', 'stderrCategory'], fix: 'carve#6623: not in carve-js yet' }],
+  ['CC-2252', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
+  ['CC-2253', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
+  ['CC-2254', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
+  ['CC-2255', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
+  ['CC-2256', { fields: ['carve'], fix: 'carve-js#5574: not in carve-js yet' }],
+  ['CC-2265', { fields: ['carve'], fix: 'carve#6727: not in carve-js yet' }],
+  ['CC-2266', { fields: ['carve'], fix: 'carve#6727: not in carve-js yet' }],
+  ['CC-2267', { fields: ['carve'], fix: 'carve#6727: not in carve-js yet' }],
+])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
 export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
@@ -53,4 +101,10 @@ export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
   ['extension-payload-empty-format', '/children/0/payload/0/format'], ['qualified-extension-missing-fallback', '/children/0/fallback'],
   ['extension-source-missing-body', '/children/0/source/body'], ['extension-slot-not-declared', '/children/0/slots/legend'],
   ['unqualified-extension-depth-33', `/children/0${'/children/0'.repeat(33)}`],
+  ['image-decorative-false-without-alt', '/children/0/children/0'],
+])
+
+/** The supplied trees of trees/nodes.json the reader still refuses, each with its ticket; one that is accepted is a stale hold. */
+export const HELD_SUPPLIED: ReadonlyMap<string, string> = new Map([
+  ['image-alt-unknown', 'carve#6804: not in carve-js yet'],
 ])

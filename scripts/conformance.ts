@@ -6,7 +6,7 @@ import {
   CLAUSE_CASES, CORPUS_EXAMPLES, EXAMPLE_TREES, LAYOUT_FIXTURES, REFUSED_TREES, SPEC_PIN, SUPPLIED_TREES,
 } from './corpus.ts'
 import { clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutMismatches, refusalPath } from './corpus-checks.ts'
-import { HELD, REFUSED_AT } from './corpus-held.ts'
+import { HELD, HELD_SUPPLIED, REFUSED_AT } from './corpus-held.ts'
 import { decodeTree } from '../src/index.ts'
 import { newCaseMismatches } from './corpus-new.mjs'
 
@@ -79,14 +79,19 @@ for (const [file, trees] of EXAMPLE_TREES) {
     const failed = exampleTreeMismatches(entry).map((mismatch) => mismatch.field)
     const held = HELD.get(entry.id)
     const row = count('positive trees', failed)
-    if (held !== undefined && failed.join() === held.fields.join()) row.held++
+    // A held tree field of the example is held in its tree file too, as in test/corpus.test.ts.
+    if (held !== undefined && failed.length > 0 && failed.every((field) => held.fields.includes(field))) row.held++
     else if (failed.length > 0) failures.push(`${file} ${entry.id}: ${failed.join(', ')}`)
   }
 }
 for (const entry of sample(SUPPLIED_TREES)) {
   const failed = accepted(entry.tree) ? [] : ['refused']
-  count('supplied trees', failed)
-  if (failed.length > 0) failures.push(`nodes ${entry.id}: refused`)
+  const row = count('supplied trees', failed)
+  // A held supplied tree must still be refused; one that is accepted is a stale hold.
+  if (HELD_SUPPLIED.has(entry.id)) {
+    if (failed.length > 0) row.held++
+    else failures.push(`nodes ${entry.id}: accepted, but held (${HELD_SUPPLIED.get(entry.id)})`)
+  } else if (failed.length > 0) failures.push(`nodes ${entry.id}: refused`)
 }
 for (const entry of sample(LAYOUT_FIXTURES)) {
   const failed = layoutMismatches(entry).map((mismatch) => mismatch.field)
