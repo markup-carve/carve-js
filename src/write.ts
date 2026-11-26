@@ -1475,7 +1475,7 @@ function takeVerbatimReferences(w: Writer, run: WriterRun, group: readonly Node[
   const decided = planned && plannedVerbatim(w, group, first, references)
   if (planned) trial.rewrite()
   if (decided && !run.check) return
-  const paragraphs = referenceParagraphs(w, group, references)
+  const paragraphs = referenceParagraphs(group, references)
   if (verbatimReads(w, paragraphs, trial)) return
   // As with a loss above: where the tree spelling itself does not read back, no trial can check a verbatim text.
   w.lines = tree
@@ -1525,9 +1525,10 @@ function takeOneByOne(w: Writer, references: readonly Node[], trial: GroupTrial)
   else if (!read) trial.rewrite()
 }
 
-/** The paragraphs below a group that hold its references, with the lines each takes from the tree. */
+/** The paragraphs below a group that hold its references, with the lines each takes from the tree once written. */
 interface ReferenceParagraphs {
   of: Map<Node, Node>
+  held: Map<Node, Node[]>
   tree: Map<Node, string[]>
 }
 
@@ -1562,11 +1563,24 @@ function writeParagraph(w: Writer, paragraph: Node): string[] {
 }
 
 function paragraphReads(w: Writer, paragraphs: ReferenceParagraphs, paragraph: Node): boolean {
-  return sameLines(writeParagraph(w, paragraph), paragraphs.tree.get(paragraph)!) || readsBack(w, [paragraph], true)
+  const tree = paragraphTree(w, paragraphs, paragraph)
+  return sameLines(writeParagraph(w, paragraph), tree) || readsBack(w, [paragraph], true)
+}
+
+function paragraphTree(w: Writer, paragraphs: ReferenceParagraphs, paragraph: Node): string[] {
+  let tree = paragraphs.tree.get(paragraph)
+  if (tree !== undefined) return tree
+  const held = paragraphs.held.get(paragraph)!
+  const verbatim = held.filter((node) => !w.treeReferences.has(node))
+  for (const node of verbatim) w.treeReferences.add(node)
+  tree = writeParagraph(w, paragraph)
+  for (const node of verbatim) w.treeReferences.delete(node)
+  paragraphs.tree.set(paragraph, tree)
+  return tree
 }
 
 function paragraphsRead(w: Writer, paragraphs: ReferenceParagraphs): boolean {
-  for (const paragraph of paragraphs.tree.keys()) if (!paragraphReads(w, paragraphs, paragraph)) return false
+  for (const paragraph of paragraphs.held.keys()) if (!paragraphReads(w, paragraphs, paragraph)) return false
   return true
 }
 
@@ -1574,15 +1588,18 @@ function paragraphsRead(w: Writer, paragraphs: ReferenceParagraphs): boolean {
  * The paragraph below the group that holds each reference. Null where one is outside a paragraph, or where the group
  * is a single paragraph and so its own check.
  */
-function referenceParagraphs(w: Writer, group: readonly Node[], references: readonly Node[]): ReferenceParagraphs | null {
+function referenceParagraphs(group: readonly Node[], references: readonly Node[]): ReferenceParagraphs | null {
   if (group.length === 1 && group[0]!.type === 'paragraph') return null
   const of = paragraphsOf(group, new Set(references))
   if (of === null) return null
-  const tree = new Map<Node, string[]>()
-  for (const node of references) w.treeReferences.add(node)
-  for (const paragraph of of.values()) if (!tree.has(paragraph)) tree.set(paragraph, writeParagraph(w, paragraph))
-  w.treeReferences.clear()
-  return { of, tree }
+  const held = new Map<Node, Node[]>()
+  for (const node of references) {
+    const paragraph = of.get(node)!
+    const list = held.get(paragraph)
+    if (list === undefined) held.set(paragraph, [node])
+    else list.push(node)
+  }
+  return { of, held, tree: new Map() }
 }
 
 function paragraphsOf(group: readonly Node[], wanted: ReadonlySet<Node>): Map<Node, Node> | null {
