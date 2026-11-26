@@ -453,15 +453,17 @@ function splitLineOptions(attrs: Attrs | undefined): [Attrs | undefined, Attrs |
   if (attrs === undefined) return [undefined, undefined]
   const classes = attrs.classes ?? []
   const keyValues = attrs.keyValues ?? []
-  if (!classes.includes(LINE_NUMBERS) && !keyValues.some(([key]) => LINE_KEYS.has(key))) return [attrs, undefined]
+  // C2-H-013: attribute names compare without regard to ASCII letter case.
+  const isLineKey = ([key]: readonly [string, string]): boolean => LINE_KEYS.has(key.replace(/[A-Z]/g, (c) => c.toLowerCase()))
+  if (!classes.includes(LINE_NUMBERS) && !keyValues.some(isLineKey)) return [attrs, undefined]
   const outer: Attrs = {}
   const kept: Attrs = {}
   if (attrs.id !== undefined) outer.id = attrs.id
   const outerClasses = classes.filter((name) => name !== LINE_NUMBERS)
   if (outerClasses.length > 0) outer.classes = outerClasses
   if (outerClasses.length < classes.length) kept.classes = [LINE_NUMBERS]
-  const outerKeys = keyValues.filter(([key]) => !LINE_KEYS.has(key))
-  const keptKeys = keyValues.filter(([key]) => LINE_KEYS.has(key))
+  const outerKeys = keyValues.filter((pair) => !isLineKey(pair))
+  const keptKeys = keyValues.filter(isLineKey)
   if (outerKeys.length > 0) outer.keyValues = outerKeys
   if (keptKeys.length > 0) kept.keyValues = keptKeys
   return [Object.keys(outer).length === 0 ? undefined : outer, kept]

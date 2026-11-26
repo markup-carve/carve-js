@@ -28,6 +28,12 @@ describe('C2-H-063: the line options of a captioned code block', () => {
     )
   })
 
+  it('match the keys without regard to ASCII letter case (C2-H-013)', () => {
+    expect(render(`{DATA-LINE-START=5 Data-Highlight=2}\n${F}js\nx\n${F}\n^ cap\n`)).toBe(
+      '<figure>\n  <pre DATA-LINE-START="5" Data-Highlight="2"><code class="language-js">x\n</code></pre>\n  <figcaption>cap</figcaption>\n</figure>',
+    )
+  })
+
   it('are no exception for a captioned quote', () => {
     expect(render('{.line-numbers}\n> q\n^ cap\n')).toBe(
       '<figure class="line-numbers">\n  <blockquote><p>q</p></blockquote>\n  <figcaption>cap</figcaption>\n</figure>',
