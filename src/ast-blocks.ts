@@ -265,13 +265,14 @@ function abbreviationParts(src: string, node: BlockNode): [string, string] {
   return [src.slice(start, end), expansion]
 }
 
-/** C2-B-236, C2-A-220: a snippet definition, its name, the attributes of its marker and its value as inline content. */
-function snippetDefinitionNode(ctx: TreeContext, node: BlockNode): DocumentChild {
+/** C2-B-236, C2-A-220: a snippet definition, its name, its attributes and its value as inline content. */
+function snippetDefinitionNode(ctx: TreeContext, node: BlockNode, _flow: number, lines: Attributes | null): DocumentChild {
   const src = ctx.src
   const start = node.spans![0]!
   const end = node.spans![1]!
   const marker = readSnippetMarker(src, start, end)!
-  const attributes = emptyAttributes()
+  // C2-B-095, C2-B-093: the attribute lines first, then the marker's parts and glued blocks; the caller sets `lines`.
+  const attributes = lines ?? emptyAttributes()
   const sink = attributeSink(attributes)
   // The marker's own `}` ends its first block; a quoted value may hold a `}` of its own.
   const glued = src.charCodeAt(marker.nameEnd) === SPACE
@@ -283,7 +284,7 @@ function snippetDefinitionNode(ctx: TreeContext, node: BlockNode): DocumentChild
   const name = src.slice(marker.nameStart, marker.nameEnd)
   ctx.snippets = true
   const out: SnippetDefinitionNode = noteLeaf(ctx, { type: 'snippet_definition', name, children })
-  setAttributes(out, attributes)
+  if (lines === null) setAttributes(out, attributes)
   return out
 }
 

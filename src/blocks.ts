@@ -33,7 +33,7 @@ import {
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
-import { isBlockSnippetUse, readSnippetMarker, snippetValueStart } from './snippets.ts'
+import { attributeLinesHoldId, isBlockSnippetUse, readSnippetMarker, snippetValueStart } from './snippets.ts'
 import { readInclude } from './include.ts'
 import { isRegionMarkerLine } from './include-source.ts'
 import { isImageOnly } from './image-line.ts'
@@ -1147,6 +1147,8 @@ function openSnippetDefinition(state: BlockState, lineStart: number, end: number
   const src = state.src
   if (state.containers.depth !== 1 || cursor.pos !== lineStart) return false
   if (snippetValueStart(src, end, readSnippetMarker(src, cursor.pos, end)) < 0) return false
+  const above = state.above
+  if (above.takeAttributes && attributeLinesHoldId(src, above.attributesStart, above.attributesEnd)) return false
   writeLeafLine(state, enterTag(state, SNIPPET_DEFINITION, 0), SNIPPET_DEFINITION, end)
   return true
 }

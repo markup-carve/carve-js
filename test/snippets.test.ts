@@ -19,6 +19,26 @@ describe('named snippets', () => {
     expect(definition?.attrs).toEqual({ classes: ['foo'], keyValues: [['title', 'a}b']] })
   })
 
+  it('C2-B-095, C2-B-236: the attribute lines come first, then the marker parts and its glued blocks', () => {
+    const definition = parseTree('{.a}\n{.b k=1}\n{$x .c}{.d k=2}: Hi', { positions: false }).document.children[0]
+    expect(definition?.type).toBe('snippet_definition')
+    expect(definition?.attrs).toEqual({ classes: ['a', 'b', 'c', 'd'], keyValues: [['k', '2']] })
+  })
+
+  it('C2-B-236: an id key in an attribute line above the marker makes the line text, with the marker reported', () => {
+    const src = '{.a}\n{id=i}\n{$x}: Hi\n'
+    expect(parseTree(src, { positions: false }).document.children.map((child) => child.type)).toEqual(['paragraph'])
+    expect(lint(src).filter((d) => d.code === 'snippet-definition-id').map((d) => d.range)).toEqual([{ startOffset: 12, endOffset: 17 }])
+  })
+
+  it('C2-B-236: a comment line between the attribute lines holds no id, and an id above it still refuses the marker', () => {
+    const kept = parseTree('{.a}\n%% {#z}\n{.b}\n{$x}: Hi\n', { positions: false }).document.children
+    expect(kept.map((child) => child.type)).toEqual(['comment', 'snippet_definition'])
+    expect(kept[1]?.attrs).toEqual({ classes: ['a', 'b'] })
+    const src = '{#z}\n%% c\n{.a}\n{$x}: Hi\n'
+    expect(lint(src).filter((d) => d.code === 'snippet-definition-id').map((d) => d.range)).toEqual([{ startOffset: 15, endOffset: 20 }])
+  })
+
   it('C2-H-215: a document transform that changes the view keeps the carriers of the uses', () => {
     const result = renderWithDocumentTransforms('{$x}: Hello\n\n{{ $x }}\n', [{ name: 'append', transform: (view) => {
       view.children.push({ type: 'paragraph', children: [{ type: 'text', value: 'end' }] })
