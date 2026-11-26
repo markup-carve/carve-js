@@ -69,6 +69,19 @@ export function readSnippetMarker(src: string, pos: number, end: number): Snippe
   return { nameStart: pos + 2, nameEnd, markerEnd: p + 1, hasId: found.id }
 }
 
+/** C2-B-236: whether the attribute lines between `pos` and `end` hold an id, which refuses the definition below them. */
+export function attributeLinesHoldId(src: string, pos: number, end: number): boolean {
+  const found = { id: false }
+  const sink = ID_SINK(found)
+  const memo = emptyMemo()
+  let p = pos
+  while (p < end && !found.id) {
+    const after = src.charCodeAt(p) === BRACE_OPEN ? readAttributeBlock(src, p, end, memo, sink) : NONE
+    p = after === NONE ? p + 1 : after
+  }
+  return found.id
+}
+
 /**
  * C2-B-236: the start of the value of the snippet definition whose line is `[pos, end)`, or NONE: a marker without
  * an id, one space, and a value that holds a character other than a space or a tab.
