@@ -1,12 +1,12 @@
 name: engine
 
-# Full engine checks after next2 pushes and manual dispatch. The default-branch
-# nightly dispatcher starts this workflow on next2. Three-line enumeration stays in `npm test`.
+# Full engine checks after main pushes, nightly and on manual dispatch.
+# Three-line enumeration stays in `npm test`.
 on:
   schedule:
     - cron: '15 3 * * *'
   push:
-    branches: [next2]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

@@ -2,14 +2,14 @@ name: import tool
 
 on:
   push:
-    branches: [next2]
+    branches: [main]
     paths:
       - 'import/**'
       - 'src/**'
       - 'eslint.config.mjs'
       - '.github/workflows/import.yml'
   pull_request:
-    branches: [next2]
+    branches: [main]
     paths:
       - 'import/**'
       - 'src/**'
