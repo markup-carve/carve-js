@@ -311,6 +311,8 @@ function sanitizeAttribute(name: string, n: string, value: string | null, opts: 
 }
 
 function namespaceUnwritable(name: string, value: string): boolean {
+  // An empty default `xmlns=""` is a legal undeclaration (carve#6843).
+  if (name === 'xmlns') return value !== '' && UNWRITABLE_NAMESPACE_RE.test(decodeEntities(value))
   if (!name.includes(':')) return false
   // Namespaces in XML forbids undeclaring a prefix (carve#6779).
   return !PREFIXED_NAMES.has(name) || (name === 'xmlns:xlink' && UNWRITABLE_NAMESPACE_RE.test(decodeEntities(value)))
