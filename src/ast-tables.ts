@@ -129,6 +129,10 @@ export const AST_RESULTS: ReadonlyMap<string, readonly ResultField[]> = new Map(
   ]],
   ["smart_punctuation", [
   ]],
+  ["snippet_definition", [
+  ]],
+  ["snippet_use", [
+  ]],
   ["soft_break", [
   ]],
   ["span", [
@@ -554,6 +558,15 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
     "metadata.subtitle",
     "metadata.bibliography.title",
     "metadata.bibliography.containerTitle",
+  ]],
+  ["snippet_definition", [
+    "children",
+    "metadata.title",
+    "metadata.subtitle",
+    "metadata.bibliography.title",
+    "metadata.bibliography.containerTitle",
+  ]],
+  ["snippet_use", [
   ]],
   ["soft_break", [
     "metadata.title",
