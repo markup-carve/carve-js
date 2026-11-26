@@ -26,6 +26,8 @@ export const SNIPPET_CARRIERS = new WeakMap<Node, SnippetCarrier>()
 export const SNIPPET_MARKS = new WeakMap<Node, number>()
 /** C2-N-095: the definitions of the view the transforms received, followed through every copy of it. */
 export const AUTHORED_DEFINITIONS = new WeakSet<Node>()
+/** C2-N-095: the definitions a transform added, which enter no registry. */
+export const TRANSFORM_DEFINITIONS = new WeakSet<Node>()
 /** The views whose definitions are marked, so a copy of one carries the marks. */
 export const MARKED_VIEWS = new WeakSet<DocumentNode>()
 /** The budget each expanded document left. */

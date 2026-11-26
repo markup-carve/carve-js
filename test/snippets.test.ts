@@ -137,4 +137,26 @@ describe('named snippets', () => {
     const html = render('{$n}: x[^f]\n\n{$l}: [a {{ $n }}](/u)\n\nB {{ $l }}\n\n[^f]: F\n', { roundtrip: true })
     expect(html).toContain('<span data-carve-snippet="1:inline:$l"><a href="/u">')
   })
+
+  it('C2-N-090, C2-N-096: across files the losing definition reports duplicate-snippet and no unused hint', () => {
+    const files: Record<string, string> = { 'c.crv': '{$x}: B\n' }
+    const resolver = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    const found = lint('{$x}: A\n\n{{ c.crv }}\n', { includes: { resolver } }).map((entry) => [entry.code, entry.file])
+    expect(found).toEqual([['unused-snippet', undefined], ['duplicate-snippet', 'c.crv']])
+  })
+
+  it('C2-N-020: a section include does not lint past its section for an appended definition', () => {
+    const files: Record<string, string> = { 's.crv': '# Pick\n\nP\n\n# Else\n\n> {$v}:x\n\n{$w}: W\n' }
+    const resolver = ({ path }: { path: string }) => Object.hasOwn(files, path) ? { text: files[path]!, id: path } : { error: 'not_found' as const }
+    expect(lint('{{ s.crv#Pick }}\n', { includes: { resolver } }).filter((entry) => entry.file === 's.crv')).toEqual([])
+  })
+
+  it('C2-N-095: a definition a transform adds enters no registry, so it reports no duplicate', () => {
+    const add = [{ name: 'add', transform: (view: DocumentNode) => {
+      view.children.push({ type: 'snippet_definition', name: 'x', children: [{ type: 'text', value: 'Y' }] })
+      return view
+    } }]
+    expect(renderWithDocumentTransforms('{$x}: Hello\n\nA\n', add).diagnostics.map((entry) => entry.code))
+      .toEqual(['snippet-unexpanded-transform'])
+  })
 })

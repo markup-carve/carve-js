@@ -9,7 +9,8 @@ import { harnessLimits } from './harness-limits.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { utf8Length } from './positions.ts'
 import {
-  COPY_SCOPE, SNIPPET_BUDGETS, type SnippetBudget, SNIPPET_CARRIERS, SNIPPET_MARKS, type SnippetCarrier, AUTHORED_DEFINITIONS, MARKED_VIEWS,
+  AUTHORED_DEFINITIONS, COPY_SCOPE, MARKED_VIEWS, SNIPPET_BUDGETS, type SnippetBudget, SNIPPET_CARRIERS, SNIPPET_MARKS,
+  type SnippetCarrier, TRANSFORM_DEFINITIONS,
 } from './snippet-marks.ts'
 import { snippetUseSpelling } from './snippets.ts'
 
@@ -31,6 +32,7 @@ export function snippetRegistry(document: DocumentNode, duplicate?: (node: Snipp
   const collect = (children: readonly Node[], include: IncludeNode | null): void => {
     for (const child of children) {
       if (child.type === 'snippet_definition') {
+        if (TRANSFORM_DEFINITIONS.has(child)) continue
         if (registry.has(child.name)) duplicate?.(child)
         else registry.set(child.name, { definition: child, include })
       } else if (child.type === 'include') {
@@ -422,6 +424,7 @@ export function refuseTransformSnippets(view: DocumentNode, findings: Findings):
       }
       if (node.type === 'snippet_definition') {
         if (!top || !AUTHORED_DEFINITIONS.has(node)) {
+          TRANSFORM_DEFINITIONS.add(node)
           addFinding(findings, node, { code: 'snippet-unexpanded-transform', severity: 'warning', channel: 'render-loss', message })
         }
         continue
