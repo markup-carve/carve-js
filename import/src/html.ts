@@ -579,11 +579,42 @@ function listStart(node: Html.Element, context: HtmlContext, least: number): num
   return undefined
 }
 
+/** C2-H-034: the attribute-free first `<p>` of an item, after whitespace and the task box, which a tight list leaves bare. */
+function firstParagraph(item: Html.Element): Html.Element | undefined {
+  for (const entry of content(item)) {
+    if (isBlank(entry)) continue
+    if (!isElement(entry)) return undefined
+    if (entry.tagName === 'p') return entry.attrs.length === 0 ? entry : undefined
+    if (entry.tagName !== 'input') return undefined
+  }
+  return undefined
+}
+
 /** C2-H-034: a loose list writes the first paragraph of an item as `<p>`, which a tight list leaves bare. */
 function hasLooseItem(node: Html.Element): boolean {
-  return elements(node).some(item => item.tagName === 'li' && elements(item).some(child => child.tagName === 'p' &&
-    child.attrs.length === 0 && content(item).slice(0, content(item).indexOf(child)).every(entry => isBlank(entry) ||
-    (isElement(entry) && entry.tagName === 'input'))))
+  return elements(node).some(item => item.tagName === 'li' && firstParagraph(item) !== undefined)
+}
+
+/**
+ * C2-H-018: a `<p>` that a tight list keeps because its bare run would not import as that paragraph: its content is
+ * only `<img>` elements, whitespace and comments (C2-M-013), or the next block of the item is a bare `<img>` (C2-M-012).
+ */
+function isKeptParagraph(item: Html.Element, paragraph: Html.Element): boolean {
+  const solid = content(paragraph).filter(entry => !isBlank(entry))
+  if (solid.some(isImage) && solid.every(entry => isImage(entry) || isComment(entry))) return true
+  const siblings = content(item)
+  // A comment is part of a run (C2-M-012), so it does not stand between the paragraph and the image.
+  const next = siblings.slice(siblings.indexOf(paragraph) + 1).find(entry => !isBlank(entry) && !isComment(entry))
+  return next !== undefined && isImage(next)
+}
+
+/** C2-H-186: `data-carve-tight` is ignored where an item writes its first paragraph as an element it does not keep. */
+function contradictsTight(node: Html.Element): boolean {
+  return elements(node).some(item => {
+    if (item.tagName !== 'li') return false
+    const paragraph = firstParagraph(item)
+    return paragraph !== undefined && !isKeptParagraph(item, paragraph)
+  })
 }
 
 /**
@@ -591,14 +622,13 @@ function hasLooseItem(node: Html.Element): boolean {
  * C2-M-033: a list with one item is tight (C2-B-062).
  */
 function listSpacing(node: Html.Element, items: ListItemNode[], context: HtmlContext): 'tight' | 'loose' {
-  const loose = hasLooseItem(node)
   if (has(node, 'data-carve-tight')) {
-    if (!loose) return 'tight'
+    if (!contradictsTight(node)) return 'tight'
     ignoredCarrier(context, node, 'data-carve-tight', 'an item writes its first paragraph as an element')
     return items.length > 1 ? 'loose' : 'tight'
   }
   if (items.length <= 1) return 'tight'
-  if (loose) return 'loose'
+  if (hasLooseItem(node)) return 'loose'
   return items.some(item => item.children.filter(child => child.type !== 'list').length > 1) ? 'loose' : 'tight'
 }
 

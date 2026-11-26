@@ -187,10 +187,10 @@ function container(name: string): (r: Render, node: Parent, level: number) => vo
 
 const BLOCKQUOTE = container('blockquote')
 
-function paragraphHtml(r: Render, node: ParagraphNode): string {
+function paragraphHtml(r: Render, node: ParagraphNode, inner = inlineHtml(r, node.children)): string {
   const tail = r.backlinkHost === node ? r.backlinks : ''
   const open = isPlain(r, node) ? '<p>' : `<p${tag(r, node, { alignStyle: true })}>`
-  return `${open}${inlineHtml(r, node.children)}${tail}</p>`
+  return `${open}${inner}${tail}</p>`
 }
 
 function paragraph(r: Render, node: ParagraphNode, level: number): void {
@@ -301,9 +301,11 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
   let open = itemOpen(r, node, bullet)
   let rest = blocks
   if (isTextParagraph(first)) {
-    // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`.
-    const bare = tight && !carriesAttributes(r, first)
-    open += bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
+    // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`, and so does
+    // one that a following bare block image would join into its run (C2-H-018, C2-M-012).
+    const next = blocks[1]
+    const joins = next?.type === 'paragraph' && next.caption === undefined && isBareImage(next)
+    open += tight && !carriesAttributes(r, first) && !joins ? bareParagraph(r, first) : paragraphHtml(r, first)
     rest = blocks.slice(1)
   } else if (isIncludeParagraph(first)) {
     open += includeParagraph(r, first, tight)
@@ -318,6 +320,20 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
   line(r, level, '</li>')
 }
 
+const HTML_COMMENT = /<!--[\s\S]*?-->/g
+const IMG_TAG = /<img(?:\s+[^\s"'>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*\s*\/?>/g
+
+/** C2-H-018: the content of a paragraph written bare, or its `<p>` where the bare run would import as image paragraphs. */
+function bareParagraph(r: Render, node: ParagraphNode): string {
+  const html = inlineHtml(r, node.children)
+  if (!html.includes('<img')) return html
+  // Exception C2-M-013: a run of only `<img>` elements, whitespace and comments imports as one image paragraph per image.
+  const solid = html.replace(HTML_COMMENT, '')
+  const rest = solid.replace(IMG_TAG, '')
+  if (rest.length === solid.length || rest.replaceAll('&nbsp;', ' ').trim() !== '') return html
+  return paragraphHtml(r, node, html)
+}
+
 /** C2-H-040: a description with one visible block writes a paragraph bare, unless it carries attributes (C2-H-018). */
 function description(r: Render, node: DefinitionDescriptionNode, level: number): void {
   const blocks = visibleBlocks(r, node.children)
@@ -328,8 +344,7 @@ function description(r: Render, node: DefinitionDescriptionNode, level: number):
   }
   if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
     let text = ''
-    const bare = first !== undefined && !carriesAttributes(r, first)
-    if (first !== undefined) text = bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
+    if (first !== undefined) text = carriesAttributes(r, first) ? paragraphHtml(r, first) : bareParagraph(r, first)
     line(r, level, `<dd${tag(r, node)}>${text}</dd>`)
     return
   }
