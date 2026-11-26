@@ -434,6 +434,8 @@ describe('C2-M-037: the data cells of a thead (carve#6663)', () => {
 
   it('a foot keeps its rows and cell kinds', () => {
     expect(source('<table><tr><td>1</td></tr><tfoot><tr><th>F</th></tr></tfoot></table>')).toBe('{footer-rows=1}\n| 1 |\n|= F |\n')
-    expect(codes('<table><tfoot><tr><th scope="row">F</th></tr></tfoot></table>')).toContain('structure-unspellable')
+    // carve#6664: a table of only a foot led by a row of header cells is spelled with an empty body-rows.
+    expect(head('<table><tfoot><tr><th scope="row">F</th></tr></tfoot></table>'))
+      .toEqual({ source: '{footer-rows=1 body-rows}\n|= F |\n', codes: [] })
   })
 })

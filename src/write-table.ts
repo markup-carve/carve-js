@@ -123,13 +123,14 @@ function pipeHeaderRows(table: TableNode): number | undefined {
 function headEndsAboveFoot(table: TableNode): boolean {
   const head = rowsOf(table, 'table_head')
   const foot = rowsOf(table, 'table_foot')
-  return head.length > 0 && head.every(isHeadRow) && foot.length > 0 && isHeaderRow(foot[0]!)
+  // C2-B-187: with no head too, where the count of all the rows makes every row a footer row.
+  return head.every(isHeadRow) && foot.length > 0 && isHeaderRow(foot[0]!)
 }
 
 /** C2-W-136, C2-B-230: `body-rows`, and `body-header-rows` and `body-header-cols` where a body needs them. */
 function bodyKeys(table: TableNode): (readonly [string, string])[] {
   const bodies = bodiesOf(table)
-  // C2-W-136, C2-B-187: an empty `body-rows` ends the head above a foot that leads with a row of header cells.
+  // C2-W-136, C2-B-187: an empty `body-rows` ends the head, if any, above a foot that leads with a row of header cells.
   if (bodies.length === 0) return headEndsAboveFoot(table) ? [['body-rows', '']] : []
   if (!partitioned(bodies)) return []
   const header = bodies.map(leadingHeaderRows)

@@ -4,7 +4,6 @@
 import type { Holds } from './holds.ts'
 
 // Rulings of the spec pin that carve-js does not implement yet; each hold goes with its port.
-const TABLE_FOOT = 'carve#6664 a table of only a foot (C2-B-187, C2-W-136; spec carve#6816)'
 const KEY_ATTRIBUTES = 'carve#6605 an authored abbr, kbd or time attribute beside the key (C2-M-047; spec carve#6814)'
 const NOTE_COMMENTS = 'carve#6235 the comments of a wrapper the note pass drops (C2-M-109; spec carve#6814)'
 const DJOT_STATUS = 'carve#6833 CC-1354 keeps the status 1 of the djot- gate that carve#6499 turned off (C2-T-049, C2-T-050)'
@@ -26,13 +25,8 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2239', { fields: ['html'], fix: TRAILING_LINE_FEED }],
   ['CC-2240', { fields: ['html'], fix: TRAILING_LINE_FEED }],
   ['CC-2241', { fields: ['diagnostics:table-row-count-clamped'], fix: PIPE_CLAMP }],
-  ['CC-2068', { fields: ['html', 'children'], fix: TABLE_FOOT }],
-  ['CC-2244', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_FOOT }],
-  ['CC-2245', { fields: ['carve', 'diagnosticsComplete'], fix: TABLE_FOOT }],
-  ['CC-2246', { fields: ['html'], fix: TABLE_FOOT }],
-  ['CC-2247', { fields: ['notReported:table-row-count-clamped'], fix: TABLE_FOOT }],
-  ['CC-2248', { fields: ['html'], fix: TABLE_FOOT }],
-  ['CC-2249', { fields: ['carve'], fix: TABLE_FOOT }],
+  ['CC-2246', { fields: ['html'], fix: TRAILING_LINE_FEED }],
+  ['CC-2248', { fields: ['html'], fix: TRAILING_LINE_FEED }],
   ['CC-2230', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
   ['CC-2231', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],
   ['CC-2232', { fields: ['children', 'carve', 'notReported:import-attribute-dropped'], fix: KEY_ATTRIBUTES }],

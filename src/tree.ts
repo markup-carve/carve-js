@@ -211,7 +211,8 @@ function tableAttributes(table: BlockNode, src: string): Attributes | null {
 
 /**
  * The head rows of a pipe table. C2-B-186: a valid `header-rows` count sets them, the first N rows whatever their cells.
- * C2-B-187: otherwise an empty `body-rows` ends the head of header cells above a footer count smaller than the rows.
+ * C2-B-187: otherwise an empty `body-rows` ends the head of header cells above a footer count up to the rows, so a
+ * count of all the rows leaves no head.
  */
 function endHead(table: BlockNode, attributes: Attributes | null, rows: number): number {
   const declared = countValue(attributes?.keyValues.find((pair) => pair[0] === 'header-rows')?.[1] ?? null)
@@ -220,7 +221,7 @@ function endHead(table: BlockNode, attributes: Attributes | null, rows: number):
     table.facts = Math.min(declared, rows)
     return table.facts
   }
-  if (table.aux < rows && table.facts > rows - table.aux && bodyPartition(attributes, 0)?.data.length === 0) {
+  if (table.aux <= rows && table.facts > rows - table.aux && bodyPartition(attributes, 0)?.data.length === 0) {
     table.facts = rows - table.aux
   }
   return table.facts
