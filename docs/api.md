@@ -48,6 +48,10 @@ HTML importer uses.
 | `validateLayout` | a sidecar value | the sidecar | `CarveLayoutError` |
 | `writeDocument`, `createWriterRegistry` | a target name and a tree | `{ output, diagnostics }` | `CarveOptionError`, and the errors of the writer |
 
+The `annotations` sidecar is `{ ranges }`; each range has `id`, `start` and `end`, and may carry a `data` object
+whose keys are qualified names declared on the tree's root or envelope (C2-A-214, C2-A-029). The reader checks it and
+leaves it unchanged.
+
 Helpers: `fixableRules` lists the lint rules that `fix` rewrites. `isUrlAllowed` and `urlScheme` test a URL against a
 URL policy (for an extension renderer that writes a link), `DEFAULT_DENIED_SCHEMES` is the default deny list, `utf8Length` and `stringOffsetOfByte` turn the byte
 ranges of diagnostics and positions into string offsets. `AST_VERSION`, `LAYOUT_VERSION` and `MAX_TREE_DEPTH` are
