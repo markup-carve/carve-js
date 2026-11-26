@@ -105,7 +105,7 @@ describe('lists', () => {
     ['C2-H-034: in a tight list only the first paragraph of an item is bare', '- a\n\n  b\n- > q\n\n  c', '<ul>\n  <li>a\n    <p>b</p>\n  </li>\n  <li>\n    <blockquote><p>q</p></blockquote>\n    <p>c</p>\n  </li>\n</ul>'],
     ['C2-H-035: in a loose list every paragraph gets p', '- a\n\n- b', '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>'],
     ['C2-H-037: the bullet character adds nothing by default and is carried by data-marker under roundtrip', '* a', '<ul>\n  <li>a</li>\n</ul>'],
-    ['C2-H-037, C2-H-138: under roundtrip a star list carries data-marker and every tight list data-carve-tight', '* a\n\n- b\n\n- c', '<ul data-marker="*" data-carve-tight>\n  <li>a</li>\n</ul>\n<ul>\n  <li><p>b</p></li>\n  <li><p>c</p></li>\n</ul>', { roundtrip: true }],
+    ['C2-H-037, C2-H-138: under roundtrip a star list carries data-marker, a tight list data-carve-tight and a loose one data-carve-loose', '* a\n\n- b\n\n- c', '<ul data-marker="*" data-carve-tight>\n  <li>a</li>\n</ul>\n<ul data-carve-loose>\n  <li><p>b</p></li>\n  <li><p>c</p></li>\n</ul>', { roundtrip: true }],
   ])
 
   it('C2-H-036: the renderer reads list.spacing and derives nothing from the blocks of an item', () => {

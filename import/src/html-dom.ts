@@ -11,7 +11,7 @@ export const CARRIERS: ReadonlySet<string> = new Set([
   'data-carve-ref-shortcut', 'data-carve-autolink', 'data-carve-footnote-label', 'data-carve-inline-footnote',
   'data-carve-raw', 'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight', 'data-carve-xref',
   'data-carve-caption-number', 'data-carve-div', 'data-carve-line-block', 'data-carve-src', 'data-carve-source-level',
-  'data-carve-snippet', 'data-carve-snippet-mark', 'data-carve-snippet-scope', 'data-carve-snippets',
+  'data-carve-snippet', 'data-carve-snippet-mark', 'data-carve-snippet-scope', 'data-carve-snippets', 'data-carve-loose',
 ])
 
 /** C2-H-186: the level of a heading before `headingShift` (C2-H-208); only a heading reads it. */
@@ -32,6 +32,7 @@ const CARRIER_READ_ON: Readonly<Record<string, readonly string[]>> = {
   'data-carve-abbreviations': ['template'],
   'data-carve-label': ['pre'],
   'data-carve-tight': ['ul', 'ol'],
+  'data-carve-loose': ['ul', 'ol'],
   'data-carve-xref': ['a'],
   'data-carve-caption-number': ['span'],
   'data-carve-div': ['div'],

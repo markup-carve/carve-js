@@ -498,7 +498,7 @@ function stanzaLines(stanza: Html.Element, context: HtmlContext): LineNode[] {
     current = []
     // carve#6785: a `<br>` with only whitespace after it is the hard break of the stanza's last line.
     const last = index === end
-    // carve#6786, C2-H-195 row 18: keep the break where the line cannot be written without it.
+    // carve#6786, C2-H-195 row 17: keep the break where the line cannot be written without it.
     if (last || needsBreak(children)) children.push({ type: 'hard_break' })
     lines.push({ type: 'line', children })
     if (last) return lines
@@ -618,15 +618,55 @@ function contradictsTight(node: Html.Element): boolean {
 }
 
 /**
- * C2-H-138: a tight list says so with its carrier; without it the HTML is read as it stands (C2-H-195 row 6, C2-H-197).
- * C2-M-033: a list with one item is tight (C2-B-062).
+ * C2-H-186: `data-carve-loose` is ignored where an item holds a run that C2-M-012 reads as a paragraph, other than an
+ * image run of C2-M-013, since a loose list writes every paragraph in `<p>`. The task box is no part of the run.
  */
-function listSpacing(node: Html.Element, items: ListItemNode[], context: HtmlContext): 'tight' | 'loose' {
-  if (has(node, 'data-carve-tight')) {
+function hasBareRun(node: Html.Element): boolean {
+  return elements(node).some(item => {
+    if (item.tagName !== 'li') return false
+    let run: Html.ChildNode[] = []
+    const paragraph = (): boolean => {
+      const solid = run.filter(entry => !isBlank(entry))
+      run = []
+      return solid.length > 0 && !solid.every(isRaw)
+        && !(solid.some(isImage) && solid.every(entry => isImage(entry) || isComment(entry)))
+    }
+    for (const entry of content(item)) {
+      if (isElement(entry) && entry.tagName === 'input') continue
+      if (isPhrasing(entry) || isImage(entry) || isComment(entry)) run.push(entry)
+      else if (paragraph()) return true
+    }
+    return paragraph()
+  })
+}
+
+/** C2-H-185, C2-H-186: the spacing an accepted carrier gives, or undefined where neither is accepted. */
+function carriedSpacing(node: Html.Element, items: ListItemNode[], context: HtmlContext): 'tight' | 'loose' | undefined {
+  const tight = has(node, 'data-carve-tight')
+  const loose = has(node, 'data-carve-loose')
+  if (tight && loose) {
+    ignoredCarrier(context, node, 'data-carve-tight and data-carve-loose', 'the two spacing carriers contradict each other')
+    return undefined
+  }
+  if (tight) {
     if (!contradictsTight(node)) return 'tight'
     ignoredCarrier(context, node, 'data-carve-tight', 'an item writes its first paragraph as an element')
-    return items.length > 1 ? 'loose' : 'tight'
+    return undefined
   }
+  if (!loose) return undefined
+  if (items.length > 1 && !hasBareRun(node)) return 'loose'
+  ignoredCarrier(context, node, 'data-carve-loose',
+    items.length > 1 ? 'an item holds a bare paragraph run' : 'a list with one item is tight')
+  return undefined
+}
+
+/**
+ * C2-H-138: a spacing carrier says how the list was spaced; without an accepted one the HTML is read as it stands
+ * (C2-M-033, C2-H-197). A list with one item is tight (C2-B-062).
+ */
+function listSpacing(node: Html.Element, items: ListItemNode[], context: HtmlContext): 'tight' | 'loose' {
+  const carried = carriedSpacing(node, items, context)
+  if (carried !== undefined) return carried
   if (items.length <= 1) return 'tight'
   if (hasLooseItem(node)) return 'loose'
   return items.some(item => item.children.filter(child => child.type !== 'list').length > 1) ? 'loose' : 'tight'

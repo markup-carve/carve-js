@@ -20,7 +20,7 @@ describe('C2-H-197: no document-wide round-trip mode', () => {
     expect(blocks(`<p>a\n<br>\nb</p>${CARRIER}`)[0]).toEqual(paragraph)
   })
 
-  it('C2-H-195 row 7: a line break in a cell reads as a space in every document', () => {
+  it('C2-H-195 row 6: a line break in a cell reads as a space in every document', () => {
     const cell = (html: string): unknown => (blocks(html)[0] as { children: { children: { children: { children: unknown[] }[] }[] }[] })
       .children[0]!.children[0]!.children[0]!.children
     const spaced = [{ type: 'cell_paragraph', children: [{ type: 'text', value: 'a b' }] }]
@@ -28,7 +28,7 @@ describe('C2-H-197: no document-wide round-trip mode', () => {
     expect(cell(`<table><tr><td>a<br>b</td></tr></table>${CARRIER}`)).toEqual(cell('<table><tr><td>a<br>b</td></tr></table>'))
   })
 
-  it('C2-H-195 row 6: a list without data-carve-tight is read by its structure, also beside a carrier', () => {
+  it('C2-M-033: a list without a spacing carrier is read by its structure, also beside a carrier', () => {
     expect(blocks(`<ul><li>a</li><li>b</li></ul>${CARRIER}`)[0]).toMatchObject({ type: 'list', spacing: 'tight' })
   })
 
@@ -60,7 +60,7 @@ describe('C2-H-198: rebuilt link definitions and the heading lookup', () => {
     ])
   })
 
-  it('C2-H-195 row 15: a key that finds the heading itself gets none', () => {
+  it('C2-H-195 row 13: a key that finds the heading itself gets none', () => {
     expect(definitions('[Intro][]\n\n[Intro]: #intro\n\n{#intro}\n# Intro')).toEqual([])
   })
 
