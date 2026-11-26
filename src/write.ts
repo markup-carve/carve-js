@@ -40,10 +40,10 @@ import { type ExtensionDefinition } from './extensions/types.ts'
 import { sourceCoreEquivalent, withCoreInlines } from './write-extension-source.ts'
 import { caretLineEscapes } from './write-carets.ts'
 import {
-  logTrials, MAX_RETESTED_TRIALS, memoPass, noteLogClosed, noteRead, type PassMemo, type PassRun, READ_CLOSER_KINDS,
+  logTrials, MAX_RETESTED_TRIALS, memoPass, type Snapshot, noteLogClosed, noteRead, type PassMemo, type PassRun, READ_CLOSER_KINDS,
   READ_TRIAL_LOG, READ_WHOLE_TRIALS,
 } from './write-passes.ts'
-import { advanceChain, createChain, type RoundStep, startRound, watchRound } from './write-chain.ts'
+import { advanceChain, type Chain, createChain, type RoundStep, startRound, watchRound } from './write-chain.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
 export interface LayoutEntry extends WriterFacts {
@@ -2060,24 +2060,27 @@ function repairRounds(w: Writer, document: DocumentNode, from: number, first: bo
         refuseDeepGroup(w, group)
         return ran(end)
       }
-      const step = startRound(w)
-      if (repeatedRepair(w, group, history)) {
-        if (!advanceChain(w, chain, history, group, before, step, false)) continue
-        return ran(end)
-      }
-      const lead = first && !w.blankFirst
-      step.written = w.lines.reduce((total, line) => total + line.length + 1, 0)
-      step.source = step.written + (lead ? 0 : 1)
-      const settled = settle(w, document, group, lead, round === 0, step)
-      if (!advanceChain(w, chain, history, group, before, step, settled)) continue
-      if (!settled && !exhausted(w)) {
-        finishRounds(w, group, first && !w.blankFirst, reported)
-        return ran(end)
-      }
+      if (!nextRound(w, document, group, first, round === 0, reported, history, chain, before)) return ran(end)
     }
   } finally {
     w.linkFallback = true
   }
+}
+
+/** Compares the written group and places what it asks for; false where the rounds end. */
+function nextRound(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean, initial: boolean,
+  reported: number, history: RepairHistory, chain: Chain, before: Snapshot | null): boolean {
+  const step = startRound(w)
+  // A batch of a chain that a limit stops is taken back, and the rounds go on from where it started.
+  if (repeatedRepair(w, group, history)) return !advanceChain(w, chain, history, group, before, step, false)
+  const lead = first && !w.blankFirst
+  step.written = w.lines.reduce((total, line) => total + line.length + 1, 0)
+  step.source = step.written + (lead ? 0 : 1)
+  const settled = settle(w, document, group, lead, initial, step)
+  if (!advanceChain(w, chain, history, group, before, step, settled)) return true
+  if (settled || exhausted(w)) return true
+  finishRounds(w, group, first && !w.blankFirst, reported)
+  return false
 }
 
 /** The tree does not change between rounds, so the depth and nodes of a group are taken once. */
