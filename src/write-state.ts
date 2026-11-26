@@ -151,6 +151,8 @@ export interface Writer {
   authored: Uint8Array | null
   /** C2-W-088: the leaf blocks written with their authored content instead of their spelling, while that fallback tries them. */
   authoredLeaves: Map<Node, string>
+  /** C2-W-075: the label of a collapsed reference whose content does not fold to its key, by the content written. */
+  collapsedLabels: Map<Node, [string, string]>
   /** C2-W-088: the result of each probe of the repair by the state it reads (write-check.ts), and an id of each node it read. */
   probes: Map<string, ProbeResult>
   nodeIds: Map<Node, number>
@@ -196,7 +198,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     topBlocks: new Map(),
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
     parses: 0, parseCache: { trees: new Map(), treeChars: 0, recent: [] },
-    extensionSources: new Map(), verifiedSourceBytes: undefined, authored: null, authoredLeaves: new Map(),
+    extensionSources: new Map(), verifiedSourceBytes: undefined, authored: null, authoredLeaves: new Map(), collapsedLabels: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
     leadingFrontmatter: null,

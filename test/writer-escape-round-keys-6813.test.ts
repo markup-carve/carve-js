@@ -31,4 +31,12 @@ describe('C2-W-075: a key the escape rounds cannot spell is no loss where the ou
     expect(codes.length).toBeGreaterThan(0)
     expect(new Set(codes)).toEqual(new Set(['field-unspellable']))
   })
+
+  it('a tree edited between two writes is written as edited', () => {
+    const tree = parse('[a\\*][]\n')
+    writeWithDiagnostics(tree)
+    const link = (tree.children[0] as { children: { key?: string }[] }).children[0]!
+    link.key = 'a\\*x'
+    expect(writeWithDiagnostics(tree).source).toBe(writeWithDiagnostics(structuredClone(tree)).source)
+  })
 })
