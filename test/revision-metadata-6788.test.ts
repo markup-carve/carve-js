@@ -119,3 +119,18 @@ describe('carve-js#5661: a non-task input in a ranged comment (C2-M-113)', () =>
       + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).not.toContain('import-structure-repaired')
   })
 })
+
+describe('carve-js#5661: a snippet use in a ranged comment (C2-M-113, C2-H-186)', () => {
+  const range = (inner: string) => '<p><span class="comment-start" data-comment-id="1">n</span>' + inner
+    + '<span class="comment-end" data-comment-id="1"></span>y</p>'
+
+  it('an input carrier is a kept inline with rawHtml off', () => {
+    const { source, codes } = fromHtml(range('<input data-carve-snippet="1:inline:$foo">'))
+    expect(source).toBe('{#n#}{{ $foo }}y\n')
+    expect(codes).toEqual(['import-structure-repaired'])
+  })
+
+  it('a raw element carrier is a kept inline with rawHtml off', () => {
+    expect(fromHtml(range('<script data-carve-snippet="1:inline:$foo">x()</script>')).codes).toEqual(['import-structure-repaired'])
+  })
+})

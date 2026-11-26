@@ -6,6 +6,7 @@ import {
   type HtmlContext,
 } from './html-dom.ts'
 import { treatment } from './html-elements.ts'
+import { isInlineCarrier } from './html-snippets.ts'
 
 const RANGED_KEYS = { 'data-author': 'author', 'data-date': 'datetime' }
 
@@ -43,15 +44,16 @@ function isRaw(node: Html.Element): boolean {
 function isOpaque(node: Html.Node): boolean {
   if (!isElement(node as Html.ChildNode)) return false
   const element = node as Html.Element
-  return treatment(element) === 'drop' || isRaw(element) || isRangeStart(element)
+  return isInlineCarrier(element) || treatment(element) === 'drop' || isRaw(element) || isRangeStart(element)
 }
 
-/** Whether a node gives an inline by itself: text, a comment or raw element kept, a comment, or an empty element the import keeps. */
+/** Whether a node gives an inline by itself: text, a snippet use, a comment or raw element kept, a comment, or a kept empty element. */
 function holds(node: Html.Node, context: HtmlContext): boolean {
   const child = node as Html.ChildNode
   if (isText(child)) return child.value !== ''
   if (isComment(child)) return context.rawHtml === true
   if (!isElement(child)) return false
+  if (isInlineCarrier(child)) return true
   if (treatment(child) === 'drop') return false
   if (isRaw(child)) return context.rawHtml === true
   if (isRangeStart(child)) return plain(child) !== ''
