@@ -13,10 +13,9 @@ const METADATA_FIELDS = 'carve#3598 root metadata fields beside a frontmatter no
 const REGION_MARKER = 'carve#6727 a region marker keeps the closer of the last fence (C2-W-123; spec carve#6815)'
 const DJOT_GATE = 'carve#6499 the djot- rules default to off (C2-T-031, C2-T-049; spec carve#6824)'
 const QUOTE_LOCALE = 'carve-rs#4838 a smart quotes locale outside its row falls back (C2-X-075; spec carve#6824)'
-const BINARY64 = 'carve#6099 a tree number is a binary64 value (C2-A-219; spec carve#6819)'
-const ESCAPE_ROUND_KEYS = 'carve#6813 a key the escape rounds cannot spell is no loss where the output reads back'
-  + ' (C2-W-075; spec carve#6825)'
 const SNIPPET_SPAN = 'carve#6395 an ignored snippet carrier leaves a plain span (C2-H-185, C2-M-044; spec carve#6847)'
+const IMAGE_PARAGRAPH = 'carve#6832 an image-only paragraph that would not import back keeps its p (C2-H-018; spec carve#6836)'
+const LIST_TABLE = 'carve#6835 a valueless header-rows and a row item with a block after its list (C2-X-078; spec carve#6842)'
 
 /**
  * The fields of the examples and clause cases that this engine does not pass yet: a stated result that departs from its own
@@ -68,18 +67,23 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-2148', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2298', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
   ['CC-2299', { fields: ['status', 'stdout', 'stderrCategory'], fix: QUOTE_LOCALE }],
-  ['CC-2313', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2314', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2315', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2316', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2318', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2319', { fields: ['refusal'], fix: BINARY64 }],
-  ['CC-2320', { fields: ['threw:TypeError'], fix: BINARY64 }],
-  ['CC-2321', { fields: ['threw:TypeError'], fix: BINARY64 }],
-  ['CC-2322', { fields: ['threw:TypeError'], fix: BINARY64 }],
-  ['CC-2323', { fields: ['diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
-  ['CC-2324', { fields: ['carve', 'diagnosticsComplete'], fix: ESCAPE_ROUND_KEYS }],
   ['CC-2395', { fields: ['children'], fix: SNIPPET_SPAN }],
+  ['CC-2398', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2399', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2402', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2403', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2406', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2407', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2409', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2410', { fields: ['html'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2412', { fields: ['children'], fix: IMAGE_PARAGRAPH }],
+  ['CC-2416', { fields: ['html'], fix: LIST_TABLE }],
+  ['CC-2417', { fields: ['html'], fix: LIST_TABLE }],
+  ['CC-2418', { fields: ['html'], fix: LIST_TABLE }],
+  ['CC-2419', { fields: ['html'], fix: LIST_TABLE }],
+  ['CC-2420', { fields: ['html'], fix: LIST_TABLE }],
+  ['CC-2421', { fields: ['html'], fix: LIST_TABLE }],
+  ['CC-2423', { fields: ['html'], fix: LIST_TABLE }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
@@ -128,9 +132,12 @@ export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
   ['extension-source-missing-body', '/children/0/source/body'], ['extension-slot-not-declared', '/children/0/slots/legend'],
   ['unqualified-extension-depth-33', `/children/0${'/children/0'.repeat(33)}`],
   ['image-decorative-false-without-alt', '/children/0/children/0'],
-  ['snippet-definition-id', '/children/0/attrs/id'], ['snippet-definition-empty', '/children/0/children'],
+  ['snippet-definition-id', '/children/0'], ['snippet-definition-empty', '/children/0'],
   ['snippet-use-mode-mismatch', '/children/0/children/0'],
 ])
 
+/** The rows of the pinned lint catalog this engine does not implement yet, each with its ticket; one it implements is a stale hold. */
+export const HELD_RULES: ReadonlyMap<string, string> = new Map<string, string>([])
+
 /** The supplied trees of trees/nodes.json the reader still refuses, each with its ticket; one that is accepted is a stale hold. */
-export const HELD_SUPPLIED: ReadonlyMap<string, string> = new Map([])
+export const HELD_SUPPLIED: ReadonlyMap<string, string> = new Map<string, string>([])
