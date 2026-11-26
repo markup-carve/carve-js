@@ -1,0 +1,8 @@
+findings/*
+!findings/.gitkeep
+run-logs/
+coverage-logs/
+coverage/
+coverage-before/
+.nyc_output/
+.nyc_output-before/

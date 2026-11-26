@@ -1,0 +1,69 @@
+import { describe, expect, it } from 'vitest'
+import { carveToHtml } from '../../build/engine-0.1/index.js'
+import { render } from '../../src/index.ts'
+import { upgrade } from '../src/index.ts'
+
+describe('U-258: an unclosed 0.1 inline run', () => {
+  it.each(['$`\n', '$$``\n'])(
+    'reports an empty value that a closing run cannot spell: %s', (source) => {
+      const result = upgrade(source)
+      expect(result.output).toBe(source)
+      expect(result.check).toBe('explained')
+      expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-396', class: 'report', line: 1,
+        range: { startOffset: 0, endOffset: source.trimEnd().length } }))
+    },
+  )
+
+  it.each(['`\n', 'a ``\n', '> a `\n', '| a ` |\n'])('U-439 reports an empty unclosed code run: %j', (source) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(source)
+    expect(result.check).toBe('explained')
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-439', class: 'report', line: 1 }))
+    expect(result.records.map((record) => record.entry)).not.toContain('U-258')
+  })
+
+  it.each([['`\n', 0, 1], ['!``\n', 0, 3], ['a !`\n', 2, 4]])('U-439 reports the parsed range of %j',
+    (source, startOffset, endOffset) => {
+      const result = upgrade(source)
+      expect(result.output).toBe(source)
+      expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-439', class: 'report', line: 1,
+        range: { startOffset, endOffset } }))
+    })
+
+  it.each([
+    ['```=html[^n]\n<b>x</b>\n```\n\n', '{%%}```=html[^n]\n<b>x</b>```\n```\n\n```\n'],
+    ['- [^a]: note\n  ```=html[^n]\n- ```=html[^n]\n\n', '[^a]: note\n```=html[^n]```\n\n- {%%}\n- {%%}```=html[^n]```\n\n'],
+  ])('closes a run whose fence opener U-105 keeps as text: %j', (source, output) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(output)
+    expect(result.check).toBe('pass')
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-258', class: 'rewrite' }))
+    expect(render(result.output)).toBe(carveToHtml(source))
+  })
+
+  it('closes a nonempty math run using its 0.1 parse position', () => {
+    const result = upgrade('$`x\n')
+    expect(result.output).toBe('$`x`\n')
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-258')
+  })
+
+  it('explains two empty parsed runs without changing the source', () => {
+    const source = '$`\n\n$$``\n'
+    const result = upgrade(source)
+    expect(result.output).toBe(source)
+    expect(result.check).toBe('explained')
+    expect(result.records.filter((record) => record.entry === 'U-396')).toHaveLength(2)
+  })
+
+  it('leaves the same bytes inside a fenced code block', () => {
+    const source = '```\n$`x\n```\n'
+    expect(upgrade(source).output).toBe(source)
+  })
+
+  it('keeps an authored closed run distinct from the empty report case', () => {
+    const result = upgrade('$` x`\n')
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).not.toContain('U-258')
+  })
+})

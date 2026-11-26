@@ -1,0 +1,16 @@
+---
+title: Coverage
+---
+
+{{ "my file.crv"#Intro@shift:+2@lines:1-5 }}
+
+{{ data.csv@code:csv }}
+
+{{ table.crv@rows:2-4@cols:"Name,Value" }}
+
+$$`x^2`
+^ Equation
+
+| Name | 値 |
+|:-----|---:|
+| 😀 | 👩‍💻 |

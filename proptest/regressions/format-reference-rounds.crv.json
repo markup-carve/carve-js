@@ -1,0 +1,11 @@
+{
+  "id": "reference-rounds",
+  "kind": "format-not-idempotent",
+  "detail": "normalize=false",
+  "seed": 482097794,
+  "engineCommit": "ba51e9e5",
+  "inputJson": "^[/\\`[`[/[^]]][<]",
+  "originalBytes": 4096,
+  "minimizedBytes": 17,
+  "clause": "C2-W-088"
+}

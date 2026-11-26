@@ -1,0 +1,141 @@
+// The continuation rows of a pipe table for the source-layout record (C2-L-019 to C2-L-021): how
+// many each row has, and where each fragment starts in the content of its cell.
+import { type Inline, isInlineParent, type TableCellNode } from './ast.ts'
+import { type LayoutTrace } from './ast-inline.ts'
+import { GREATER, PLUS } from './chars.ts'
+import { ROW } from './kinds.ts'
+import type { Wrap } from './layout.ts'
+import { lineEndOf } from './layout-lines.ts'
+import { skipSpaces } from './lines.ts'
+import { utf8Length } from './positions.ts'
+import { isSpaceOrTab } from './source.ts'
+import { type BlockNode } from './tree.ts'
+
+/** The rows of one table in source order, with the ranges of the continuation rows of each, read on demand. */
+export interface TableRows {
+  rows: BlockNode[]
+  index: Map<BlockNode, number>
+  continuations: (number[] | undefined)[]
+}
+
+export function tableRows(table: BlockNode): TableRows {
+  const rows = table.children!.filter((child) => child.kind === ROW)
+  const index = new Map<BlockNode, number>()
+  rows.forEach((row, at) => index.set(row, at))
+  return { rows, index, continuations: [] }
+}
+
+/** C2-B-175: the start and the end of each continuation row of row `at`. A comment-only line between them is none. */
+export function continuationRows(src: string, table: TableRows, at: number): number[] {
+  const known = table.continuations[at]
+  if (known !== undefined) return known
+  const row = table.rows[at]!
+  const found: number[] = []
+  for (let feed = src.indexOf('\n', row.start); feed >= 0 && feed < row.end; feed = src.indexOf('\n', feed + 1)) {
+    let pos = feed + 1
+    while (pos < row.end && (isSpaceOrTab(src.charCodeAt(pos)) || src.charCodeAt(pos) === GREATER)) pos++
+    if (src.charCodeAt(pos) === PLUS) found.push(pos, lineEndOf(src, pos))
+  }
+  table.continuations[at] = found
+  return found
+}
+
+/** The first and the last source offset of the pieces of a cell, between the pipes around them (C2-L-013). */
+export function cellRange(src: string, table: TableRows, row: number, cell: BlockNode): [number, number] {
+  const spans = cell.spans!
+  // A cell that a continuation row formed starts behind its pipe; any other starts at it (C2-B-176).
+  const formed = cell.start >= lineEndOf(src, table.rows[row]!.start)
+  // carve#6691: a cell over several columns holds its pieces in column order, so the last piece in the source can be any of them.
+  let last = spans.length === 0 ? cell.end : spans[1]!
+  for (let at = 3; at < spans.length; at += 2) if (spans[at]! > last) last = spans[at]!
+  return [formed ? cell.start : cell.start + 1, Math.max(cell.end, skipSpaces(src, last, lineEndOf(src, last)))]
+}
+
+/** A walk over the content of one cell. The fragments it meets move forward, except where a wide cell starts its next column. */
+interface CellWalk {
+  src: string
+  trace: LayoutTrace
+  table: TableRows
+  home: number
+  spanning: boolean
+  spans: number[]
+  /** C2-L-020: the covered column of each pair of `spans`, for a cell over several columns. */
+  columns: number[] | undefined
+  spanAt: number
+  row: number
+  line: number
+  wraps: Wrap[]
+}
+
+/** Adds the wrap of the fragment that starts at the source offset `fragment`. */
+function addWrap(walk: CellWalk, fragment: number, path: string, offset: number): void {
+  const rows = walk.table.rows
+  // carve#6691: a cell over several columns holds them in column order, so a fragment can lie before the last one.
+  if (rows[walk.row]!.start > fragment || (walk.line > 0 && continuationRows(walk.src, walk.table, walk.row)[walk.line]! > fragment)) {
+    walk.row = walk.home
+    walk.line = 0
+  }
+  let row = walk.row
+  while (row < rows.length && rows[row]!.end < fragment) row++
+  if (row >= rows.length || rows[row]!.start > fragment) return
+  if (row !== walk.row) walk.line = 0
+  walk.row = row
+  const lines = continuationRows(walk.src, walk.table, row)
+  while (walk.line < lines.length && lines[walk.line + 1]! < fragment) walk.line += 2
+  if (walk.line >= lines.length || lines[walk.line]! > fragment) return
+  const wrap: Wrap = { line: walk.line / 2 + 1, path, offset }
+  // C2-L-020: the rows below the cell's own row, and the covered column counted from the cell's own.
+  if (walk.spanning) wrap.row = row - walk.home
+  if (walk.columns !== undefined) wrap.col = columnOf(walk, fragment)
+  walk.wraps.push(wrap)
+}
+
+/** The fragments come in the order of `spans`, so the pair that starts at `fragment` is found moving forward. */
+function columnOf(walk: CellWalk, fragment: number): number {
+  const spans = walk.spans
+  while (walk.spanAt < spans.length && spans[walk.spanAt] !== fragment) walk.spanAt += 2
+  return walk.columns![walk.spanAt / 2] ?? 0
+}
+
+/** C2-L-021: a joining space is the character before the offset, which counts UTF-8 bytes of the value. */
+function textWraps(walk: CellWalk, value: string, path: string, breaks: number[]): void {
+  let from = 0
+  let bytes = 0
+  for (let at = 0; at < breaks.length; at += 2) {
+    bytes += utf8Length(value.slice(from, breaks[at]))
+    from = breaks[at]!
+    addWrap(walk, breaks[at + 1]!, path, bytes)
+  }
+}
+
+/** C2-L-020: a wrap names a text node among the children of the cell's paragraph (C2-L-048). */
+function walkList(walk: CellWalk, nodes: readonly Inline[], base: string): void {
+  for (let at = 0; at < nodes.length; at++) {
+    const node = nodes[at]!
+    const breaks = walk.trace.breaks.get(node)
+    if (breaks !== undefined && node.type === 'text') textWraps(walk, node.value, `${base}/${at}`, breaks)
+  }
+}
+
+/** C2-L-020: the wraps of the cell at `path`, whose own row is row `home` of `table`. */
+export function cellWraps(
+  src: string, trace: LayoutTrace, table: TableRows, home: number, node: TableCellNode, cell: BlockNode, path: string,
+): Wrap[] {
+  const walk: CellWalk = {
+    src, trace, table, home, spanning: (node.rowspan ?? 1) > 1, spans: cell.spans!,
+    columns: (node.colspan ?? 1) > 1 ? cell.spanColumns ?? [] : undefined, spanAt: 0, row: home, line: 0, wraps: [],
+  }
+  const paragraph = node.children[0]
+  const content = paragraph !== undefined && isInlineParent(paragraph) ? paragraph.children : []
+  const base = `${path}/children/0/children`
+  // C2-L-021: a cell whose first piece stands in a continuation row starts with that fragment, at offset 0.
+  if (content.length > 0 && cell.spans!.length > 0 && cell.spans![0]! >= lineEndOf(src, table.rows[home]!.start)) {
+    addWrap(walk, cell.spans![0]!, `${base}/0`, 0)
+  }
+  walkList(walk, content, base)
+  // C2-L-048: the walk gives them by row, then line, and a wide cell by column; the clause sorts by line, row, col.
+  if (walk.spanning || walk.columns !== undefined) {
+    walk.wraps.sort((a, b) => a.line - b.line || (a.row ?? 0) - (b.row ?? 0) || (a.col ?? 0) - (b.col ?? 0))
+  }
+  return walk.wraps
+}

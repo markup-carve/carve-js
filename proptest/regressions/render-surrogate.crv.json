@@ -1,0 +1,11 @@
+{
+  "kind": "render-invalid-html",
+  "detail": "surrogate-in-input-stream",
+  "seed": 1793289774,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "\uddf5",
+  "originalBytes": 3446,
+  "minimizedBytes": 3,
+  "clause": "C2-H-002",
+  "id": "001c36e398d50e80"
+}

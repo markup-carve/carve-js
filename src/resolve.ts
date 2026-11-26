@@ -1,0 +1,901 @@
+// Resolution (C2-A-103 to C2-A-117, C2-A-133 to C2-A-135): references against definitions and
+// headings, footnote numbers, heading ids, caption numbers, cross-references and column alignment.
+// The results are written into the tree beside the authored constructs; what a renderer needs
+// besides them is returned.
+import { snippetRegistry } from './snippet-expand.ts'
+import { COPY_SCOPE } from './snippet-marks.ts'
+import {
+  type AbbreviationDefNode, type AbbreviationNode, type AdmonitionNode, type BlockExtensionNode,
+  type BlockQuoteNode, type CaptionNode, type CodeBlockNode,
+  type DirectiveNode, type DivNode, type InlineExtensionNode,
+  type DocumentNode, type ExtensionDeclaration, type FigureGroupNode, type FootnoteNode, type FootnoteRefNode,
+  type HeadingNode, type ImageNode, type IncludeNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
+  captionOf, CHILDREN_ONLY, childNodes, forEachSlot, NO_SLOTS, slotShape, SOURCE_ORDER, type MathNode, type Node, isNodeOfType,
+  type NodeOfType, type ParagraphNode,
+  type TableCellNode, type TableNode,
+  type TableRowNode, type XrefNode,
+} from './ast.ts'
+import { inlineContent, type ParseFacts } from './ast-blocks.ts'
+import { foldLabel } from './ast-attributes.ts'
+import { captionLabelText, plainText } from './ast-text.ts'
+import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
+import { type HeadingIds } from './options.ts'
+import { attributesAct } from './include.ts'
+import { slugify } from './slug.ts'
+import { trimEndWhitespace } from './source.ts'
+
+export { type Diagnostic } from './diagnostics.ts'
+
+/** One numbered footnote: a definition that a reference uses, or an inline footnote. */
+export interface Note {
+  number: number
+  id: string
+  definition: FootnoteNode | null
+  inline: InlineFootnoteNode | null
+  /** The ids of its references in the order of the document, for the backlinks (C2-H-091). */
+  refIds: string[]
+}
+
+export interface Resolution {
+  definitions: Map<string, LinkReferenceDefinitionNode>
+  /** The definition's expansion for rendering, including uses whose parse-budget copy was omitted. */
+  expansionOf: Map<Node, string>
+  /** C2-N-054: the definition a reference in an included file resolved to, where it is not the document's own. */
+  definitionOf: Map<Node, LinkReferenceDefinitionNode>
+  notes: Note[]
+  noteOf: Map<Node, Note>
+  refIds: Map<Node, string>
+  /** The generated text of each resolved cross-reference (C2-H-096). */
+  xrefText: Map<Node, string>
+  /** C2-I-096, C2-B-207: the ids a cross-reference can reach: of headings and of numbered caption hosts and panels. */
+  xrefIds: Set<string>
+  /** C2-H-156: the generated id of the title of each admonition and of the directive that places the notes. */
+  labelIds: Map<Node, string>
+  /** The findings of resolution, each with its node. `diagnostics` is the list of its entries. */
+  findings: Findings
+  diagnostics: Diagnostic[]
+  /** C2-H-177: for a render under a profile, the `#id` targets of the degraded headings. */
+  goneTargets?: ReadonlySet<string>
+  /** C2-H-062: the line of the own markup of each captioned block of a parse that took attribute lines. */
+  markupLines: Map<Node, number>
+}
+
+/** C2-A-082: a block that carries its caption in its own slot. */
+type CaptionHost = FigureGroupNode | TableNode | ParagraphNode | CodeBlockNode | BlockQuoteNode | IncludeNode
+
+/** One taker of a sequence number: a caption with its host, or a numbered equation of a supplied tree (C2-H-151). */
+type CaptionUse =
+  | { caption: CaptionNode, host: CaptionHost, panel: boolean }
+  | { caption: null, host: MathNode, prefix: string }
+
+/** A link or an image written as a reference (C2-A-105). */
+type Reference = LinkNode | ImageNode
+
+/** C2-N-053 to C2-N-055: the definitions of one file, and the scope of the file that includes it. */
+interface Scope {
+  outer: Scope | null
+  definitions: Map<string, LinkReferenceDefinitionNode>
+  footnotes: Map<string, FootnoteNode>
+  abbreviations: Map<string, AbbreviationDefNode>
+}
+
+interface Walk {
+  declarations: readonly ExtensionDeclaration[]
+  /** False for a parsed tree that holds no snippet node, which then has no copy and no definition (C2-N-090, C2-N-092). */
+  snippets: boolean
+  resolution: Resolution
+  footnotes: Map<string, FootnoteNode>
+  /** The scope of the file of the node that is visited. */
+  scope: Scope
+  /** The scope of each reference and note body that stands in an included file. */
+  scopes: Map<Node, Scope>
+  document: DocumentNode
+  /** The include around each include, found once a snippet copy needs the scope of a file not yet visited. */
+  includeParents: Map<IncludeNode, IncludeNode | null> | null
+  headings: HeadingNode[]
+  references: Reference[]
+  xrefs: XrefNode[]
+  captions: CaptionUse[]
+  identified: Node[]
+  /** C2-H-024: the authored ids in footnote definitions that are not written, which generated ids still avoid. */
+  unwrittenIds: string[]
+  noteRefs: { node: FootnoteRefNode | InlineFootnoteNode, note: Note, ordinal: number, authored: boolean }[]
+  /** C2-H-156: the titled admonitions and the titled top-level `footnotes` directives, in the order of the walk. */
+  titled: (AdmonitionNode | DirectiveNode)[]
+  /** C2-H-093: the first top-level `footnotes` directive. */
+  notesDirective: DirectiveNode | null
+  /** C2-H-151: the figures and figure groups around the node that is visited whose caption has a number mark. */
+  numberedFigures: number
+  symbols: Readonly<Record<string, string>>
+  /** The leaves of a parsed tree that the walk goes into, or null for a tree of which nothing is known. */
+  resolvableLeaves: ReadonlySet<Node> | null
+  /** The parent of the node whose visitor runs. A visitor reads it before it visits anything below. */
+  parent: Node | null
+  markupLine: ((node: Node) => number | undefined) | null
+  /** C2-X-032: the versions of the registered renderers, by extension name. */
+  renderers: Readonly<Record<string, { version: string }>>
+  /** C2-X-032: whether the profile admits a block and an inline extension node, which a renderer then writes. */
+  admitted: Admitted
+  /** Whether the walk is in the slots of an extension node that a renderer writes. */
+  rendered: boolean
+  /** The extension nodes around the visited node: a transform builds their nodes after the inline scan noted its leaves. */
+  extensionDepth: number
+}
+
+/** C2-W-113: a duplicate is a finding of the parse channel, reported on the later node. */
+function report(resolution: Resolution, node: Node, code: string, message: string): void {
+  addFinding(resolution.findings, node, { code, severity: 'warning', channel: 'parse', message })
+}
+
+/** C2-H-087, C2-H-088: the note of a reference takes the next number at its first reference. */
+function useNote(walk: Walk, node: FootnoteRefNode | InlineFootnoteNode, definition: FootnoteNode | null): void {
+  const resolution = walk.resolution
+  let note = definition === null ? undefined : resolution.noteOf.get(definition)
+  if (note === undefined) {
+    const number = resolution.notes.length + 1
+    note = { number, id: `fn${number}`, definition, inline: node.type === 'inline_footnote' ? node : null, refIds: [] }
+    resolution.notes.push(note)
+    if (definition !== null) resolution.noteOf.set(definition, note)
+  }
+  const ordinal = note.refIds.length + 1
+  const id = node.attrs?.id ?? (ordinal === 1 ? `fnref${note.number}` : `fnref${note.number}-${ordinal}`)
+  note.refIds.push(id)
+  walk.noteRefs.push({ node, note, ordinal, authored: node.attrs?.id !== undefined })
+  resolution.noteOf.set(node, note)
+  resolution.refIds.set(node, id)
+  node.number = note.number
+}
+
+/** C2-N-055: the definition of `key` in the file of the walk, then in each file further out. */
+function lookUp<T>(scope: Scope, key: string, table: (scope: Scope) => Map<string, T>): T | undefined {
+  for (let at: Scope | null = scope; at !== null; at = at.outer) {
+    const found = table(at).get(key)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
+const FOOTNOTES = (scope: Scope): Map<string, FootnoteNode> => scope.footnotes
+const DEFINITIONS = (scope: Scope): Map<string, LinkReferenceDefinitionNode> => scope.definitions
+const ABBREVIATIONS = (scope: Scope): Map<string, AbbreviationDefNode> => scope.abbreviations
+
+/** C2-A-135: the expansion of an abbreviation is its definition's, never the one the tree holds. */
+function visitAbbreviation(node: AbbreviationNode, walk: Walk): void {
+  const expansion = lookUp(walk.scope, node.key, ABBREVIATIONS)?.expansion
+  if (expansion === undefined) delete node.expansion
+  else {
+    if (node.expansion === undefined) walk.resolution.expansionOf.set(node, expansion)
+    else node.expansion = expansion
+  }
+}
+
+function visitFootnoteRef(node: FootnoteRefNode, walk: Walk): void {
+  const scope = walk.scope
+  const definition = scope.outer === null ? scope.footnotes.get(node.key) : lookUp(scope, node.key, FOOTNOTES)
+  if (definition === undefined) {
+    delete node.number
+    return
+  }
+  useNote(walk, node, definition)
+  if (walk.scope.outer !== null) walk.scopes.set(node, walk.scope)
+}
+
+function visitHost(node: CaptionHost, walk: Walk): void {
+  // C2-A-084: the panels of a group are its tables and its captioned blocks; a nested group is a group of its own.
+  const panel = walk.parent?.type === 'figure_group' && node.type !== 'figure_group'
+  if (node.type === 'table') alignColumns(node)
+  if (node.caption !== undefined) walk.captions.push({ caption: node.caption, host: node, panel })
+  const line = node.caption === undefined || node.type === 'table' ? undefined : walk.markupLine?.(node)
+  if (line !== undefined) walk.resolution.markupLines.set(node, line)
+  visitSlots(walk, node)
+}
+
+/** C2-H-151: a display equation with a prefix takes a number, unless the caption of a figure around it owns the number. */
+function visitMath(node: MathNode, walk: Walk): void {
+  delete node.number
+  if (node.display && node.numberPrefix !== undefined && walk.numberedFigures === 0) {
+    walk.captions.push({ caption: null, host: node, prefix: node.numberPrefix })
+  }
+}
+
+/** The inline content of the paragraph of a caption (C2-A-081), or none. */
+function captionInlines(caption: CaptionNode): Inline[] {
+  const first = caption.children[0]
+  return first?.type === 'paragraph' || first?.type === 'heading' ? first.children : []
+}
+
+/** True for a captioned block or a figure group whose caption, `caption`, has a number mark. A table owns no number of an equation. */
+function ownsNumber(node: Node, caption: CaptionNode): boolean {
+  if (node.type === 'table') return false
+  return captionInlines(caption).some((child) => child.type === 'caption_number')
+}
+
+const NAMING_KEYS = ['aria-label', 'aria-labelledby']
+
+/** C2-H-155: true when the attribute line names the node itself, so the renderer generates no name and no id. */
+export function hasAuthoredName(node: Node): boolean {
+  return node.attrs?.keyValues?.some(([key]) => NAMING_KEYS.includes(key.toLowerCase())) === true
+}
+
+function visitAdmonition(node: AdmonitionNode, walk: Walk): void {
+  if (node.title !== undefined && !hasAuthoredName(node)) walk.titled.push(node)
+  visitSlots(walk, node)
+}
+
+function visitDirective(node: DirectiveNode, walk: Walk): void {
+  if (node.kind === 'footnotes' && walk.parent?.type === 'document') {
+    walk.notesDirective ??= node
+    if (node.title !== undefined) walk.titled.push(node)
+  }
+  visitSlots(walk, node)
+}
+
+function visitReference(node: Reference, walk: Walk): void {
+  if (node.key === undefined) return
+  walk.references.push(node)
+  if (walk.scope.outer !== null) walk.scopes.set(node, walk.scope)
+}
+
+/** C2-N-053: the scope of an included file, with its own definitions; the first of a key wins within the file (C2-N-060). */
+function fileScope(walk: Walk, node: IncludeNode, outer: Scope): Scope {
+  // A snippet copy that stands before the include asks for its scope first (C2-N-092).
+  const known = walk.scopes.get(node)
+  if (known !== undefined) return known
+  const scope: Scope = { outer, definitions: new Map(), footnotes: new Map(), abbreviations: new Map() }
+  walk.scopes.set(node, scope)
+  for (const child of node.children ?? []) {
+    if (child.type === 'abbreviation_def') {
+      define(walk, scope.abbreviations, child, 'duplicate-abbreviation-definition', ABBREVIATION_DUPLICATE)
+    }
+    if (child.type === 'link_reference_definition') {
+      define(walk, scope.definitions, child, 'duplicate-link-reference-definition', LINK_DUPLICATE)
+    } else if (child.type === 'footnote') {
+      define(walk, scope.footnotes, child, 'duplicate-footnote-definition', footnoteDuplicate(null))
+      walk.scopes.set(child, scope)
+    }
+  }
+  return scope
+}
+
+/** C2-N-053, C2-N-072: the children of an expanded include are read in the scope of their file; its own attributes are inert. */
+function visitInclude(node: IncludeNode, walk: Walk): void {
+  const children = node.children
+  // C2-N-074: the caption of an unexpanded include is numbered where it stands; that of an expanded one is not.
+  if (children === undefined) {
+    if (node.caption !== undefined) {
+      walk.captions.push({ caption: node.caption, host: node, panel: false })
+      visit(walk, node.caption, node)
+    }
+    return
+  }
+  const outer = walk.scope
+  walk.scope = fileScope(walk, node, outer)
+  walk.scopes.set(node, walk.scope)
+  for (const child of children) visit(walk, child, node)
+  walk.scope = outer
+}
+
+// What the walk does below a node of a type, besides its visitor. A note is opaque: its content is
+// visited with the notes. A leaf is inline content that a parse may know to hold nothing that
+// resolution reads. A node with a title or a caption visits them in its visitor.
+const NOTHING = 0
+const CHILDREN = 1
+const LEAF = 2
+
+interface Step {
+  visit: ((node: Node, walk: Walk) => void) | null
+  below: number
+}
+
+/** The step of `type`: `visit` takes a node of that type. */
+function on<T extends keyof NodeOfType>(type: T, below: number, visit: ((node: NodeOfType[T], walk: Walk) => void) | null): [string, Step] {
+  if (visit === null) return [type, { visit: null, below }]
+  return [type, {
+    visit: (node, walk) => {
+      if (isNodeOfType(node, type)) visit(node, walk)
+    },
+    below,
+  }]
+}
+
+/** The steps of the node types the walk does more at than visit the children. */
+const STEPS = new Map<string, Step>([
+  on('footnote_ref', NOTHING, visitFootnoteRef),
+  on('inline_footnote', NOTHING, (node, walk) => {
+    useNote(walk, node, null)
+    if (walk.scope.outer !== null) walk.scopes.set(node, walk.scope)
+  }),
+  on('footnote', NOTHING, null),
+  on('heading', LEAF, (node, walk) => void walk.headings.push(node)),
+  on('paragraph', LEAF, null),
+  on('definition_term', LEAF, null),
+  on('cell_paragraph', LEAF, null),
+  on('line', LEAF, null),
+  on('link', CHILDREN, visitReference),
+  on('image', NOTHING, visitReference),
+  on('xref', NOTHING, (node, walk) => void walk.xrefs.push(node)),
+  on('abbreviation', NOTHING, visitAbbreviation),
+  on('figure_group', NOTHING, visitHost),
+  on('table', NOTHING, visitHost),
+  on('math', NOTHING, visitMath),
+  on('admonition', NOTHING, visitAdmonition),
+  on('directive', NOTHING, visitDirective),
+  on('div', NOTHING, (node, walk) => visitSlots(walk, node)),
+  on('include', NOTHING, visitInclude),
+  on('block_extension', NOTHING, visitExtension),
+  on('inline_extension', NOTHING, visitExtension),
+])
+
+type Renderers = Readonly<Record<string, { version: string }>>
+export interface Admitted { block: boolean, inline: boolean }
+const ALL_ADMITTED: Admitted = { block: true, inline: true }
+
+/**
+ * C2-X-032: one view of an extension node, its children and named slots when a renderer is registered for it or for an
+ * extension node whose slots hold it, and its fallback otherwise.
+ */
+function visitExtension(node: BlockExtensionNode | InlineExtensionNode, walk: Walk): void {
+  const renderer = walk.renderers[node.name]
+  const admitted = node.type === 'block_extension' ? walk.admitted.block : walk.admitted.inline
+  const rendered = walk.rendered || (renderer !== undefined && renderer.version === node.version && admitted)
+  const outer = walk.rendered
+  walk.extensionDepth++
+  forEachSlot(node, (nodes, step) => {
+    if (node.type === 'inline_extension' && !node.name.includes('.')) {
+      if (step !== 'children') return
+    } else if ((step === 'fallback') === rendered) return
+    walk.rendered = rendered
+    for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
+    walk.rendered = outer
+  }, SOURCE_ORDER, walk.declarations)
+  walk.extensionDepth--
+}
+
+/**
+ * Visits the nodes of every slot of `node`, in document order: a title before the children, as
+ * C2-L-011 orders the slots, since numbers count in document order (C2-H-024, C2-H-149). Text is
+ * skipped here and not in the call: half of the nodes of a document are text.
+ */
+function visitChildren(walk: Walk, node: Node): void {
+  const shape = slotShape(node)
+  if (shape === NO_SLOTS) return
+  if (shape === CHILDREN_ONLY) {
+    for (const child of childNodes(node)) if (child.type !== 'text') visit(walk, child, node)
+    return
+  }
+  forEachSlot(node, (nodes) => {
+    for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
+  }, SOURCE_ORDER, walk.declarations)
+}
+
+/** The slots of a node that may carry a title or a caption (C2-A-025); a caption that owns a number counts the figures below it. */
+function visitSlots(walk: Walk, node: CaptionHost | AdmonitionNode | DirectiveNode | DivNode): void {
+  const caption = 'caption' in node ? node.caption : undefined
+  const owns = caption !== undefined && ownsNumber(node, caption)
+  forEachSlot(node, (nodes, step) => {
+    if (owns && step === 'children') walk.numberedFigures++
+    for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
+    if (owns && step === 'children') walk.numberedFigures--
+  }, SOURCE_ORDER, walk.declarations)
+}
+
+/** C2-A-082: an image paragraph, a math block, a code block or a quote that carries a caption. */
+function isCaptionedBlock(node: Node): node is ParagraphNode | CodeBlockNode | BlockQuoteNode {
+  return (node.type === 'paragraph' || node.type === 'code_block' || node.type === 'block_quote') && node.caption !== undefined
+}
+
+/** Whether the leaf `node` may hold a node that resolution reads: any leaf of a supplied tree, and the noted leaves of a parse. */
+function mayResolve(walk: Walk, node: Node): boolean {
+  return walk.resolvableLeaves === null || walk.extensionDepth > 0 || walk.resolvableLeaves.has(node)
+}
+
+/**
+ * Visits `node` and the nodes below it in document order. A note is visited with the notes, not
+ * where it stands, and a leaf of a parsed tree is entered only where the parse saw a node that
+ * resolution reads.
+ */
+function visit(walk: Walk, node: Node, parent: Node | null): void {
+  if (!walk.snippets) return visitNode(walk, node, parent)
+  const origin = COPY_SCOPE.get(node)
+  if (origin !== undefined) return visitCopy(walk, node, parent, origin)
+  visitNode(walk, node, parent)
+}
+
+/** C2-N-092: a snippet copy resolves against the definitions of the file that holds its snippet definition. */
+function visitCopy(walk: Walk, node: Node, parent: Node | null, origin: IncludeNode | null): void {
+  const saved = walk.scope
+  let top = saved
+  while (top.outer !== null) top = top.outer
+  walk.scope = origin === null ? top : copyScope(walk, origin, top)
+  try {
+    visitNode(walk, node, parent)
+  } finally {
+    walk.scope = saved
+  }
+}
+
+/** The scope of the file `include` reads, inside the scopes of the includes around it, before the walk reaches them. */
+function copyScope(walk: Walk, include: IncludeNode, top: Scope): Scope {
+  const known = walk.scopes.get(include)
+  if (known !== undefined) return known
+  const parent = (walk.includeParents ??= includeParents(walk.document)).get(include) ?? null
+  return fileScope(walk, include, parent === null ? top : copyScope(walk, parent, top))
+}
+
+function includeParents(document: DocumentNode): Map<IncludeNode, IncludeNode | null> {
+  const parents = new Map<IncludeNode, IncludeNode | null>()
+  const pending: [Node, IncludeNode | null][] = [[document, null]]
+  for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
+    const [node, around] = entry
+    let inner = around
+    if (node.type === 'include') {
+      parents.set(node, around)
+      inner = node
+    }
+    forEachSlot(node, (nodes) => { for (const child of nodes) pending.push([child, inner]) }, undefined, document.extensions)
+  }
+  return parents
+}
+
+function visitNode(walk: Walk, node: Node, parent: Node | null): void {
+  if (node.type === 'snippet_definition') return visitSnippetDefinition(walk, node)
+  if (node.attrs?.id !== undefined && attributesAct(node)) walk.identified.push(node)
+  if (isCaptionedBlock(node)) {
+    walk.parent = parent
+    return visitHost(node, walk)
+  }
+  const step = STEPS.get(node.type)
+  if (step === undefined) return visitChildren(walk, node)
+  if (step.visit !== null) {
+    walk.parent = parent
+    step.visit(node, walk)
+  }
+  if (step.below === CHILDREN || (step.below === LEAF && mayResolve(walk, node))) visitChildren(walk, node)
+}
+
+/**
+ * The marks of one head row, each at the column its cell starts in (C2-A-092, C2-A-093). `covered`
+ * counts the rows a cell above still spans.
+ */
+function rowMarks<F extends 'align' | 'valign'>(row: TableRowNode, field: F, covered: number[], marks: TableCellNode[F][]): void {
+  const cells = row.children
+  const marked = cells.some((cell) => cell.span !== undefined)
+  let column = 0
+  for (const cell of cells) {
+    while (!marked && (covered[column] ?? 0) > 0) covered[column++]!--
+    const mark = cell[field]
+    if (mark !== undefined) marks[column] = mark
+    const colspan = cell.colspan ?? 1
+    if (!marked) for (let more = 0; more < colspan; more++) covered[column + more] = (cell.rowspan ?? 1) - 1
+    column += marked ? 1 : colspan
+  }
+}
+
+/**
+ * C2-B-213: the mark each column takes from the head, on one axis: that of the last head cell
+ * that starts in the column and has one. A cell that spans several columns marks only the first.
+ */
+export function headMarks<F extends 'align' | 'valign'>(table: TableNode, field: F): TableCellNode[F][] {
+  const marks: TableCellNode[F][] = []
+  for (const group of table.children) {
+    if (group.type !== 'table_head') continue
+    const covered: number[] = []
+    for (const row of group.children) if (row.type === 'table_row') rowMarks(row, field, covered, marks)
+  }
+  return marks
+}
+
+/**
+ * C2-B-213, C2-A-089: on each axis the resolved alignment of a column is the mark of its head cell, or else what
+ * `aligns` or `valigns` spelled.
+ */
+function alignColumns(table: TableNode): void {
+  const columns = table.columns
+  if (columns.length === 0) return
+  const fromHead = headMarks(table, 'align')
+  const verticalFromHead = headMarks(table, 'valign')
+  columns.forEach((column, at) => {
+    const align = fromHead[at] ?? column.align
+    if (align === undefined) delete column.resolvedAlign
+    else column.resolvedAlign = align
+    const valign = verticalFromHead[at] ?? column.valign
+    if (valign === undefined) delete column.resolvedValign
+    else column.resolvedValign = valign
+  })
+}
+
+
+/** Enters `node` under its key in `table`, unless an earlier definition holds the key, which is reported with `message`. */
+function define<N extends FootnoteNode | LinkReferenceDefinitionNode | AbbreviationDefNode>(
+  walk: Walk, table: Map<string, N>, node: N, code: string, message: (node: N) => string,
+): void {
+  if (table.has(node.key)) report(walk.resolution, node, code, message(node))
+  else table.set(node.key, node)
+}
+
+const LINK_DUPLICATE = (): string => 'Duplicate link definition (label) is ignored; the first definition for a label wins.'
+const ABBREVIATION_DUPLICATE = (): string => 'Duplicate abbreviation definition (label) is ignored; the first definition for a label wins.'
+
+/** C2-B-085: a losing footnote definition takes its content with it, which the message counts past the first line. */
+function footnoteDuplicate(facts: ParseFacts | null): (node: FootnoteNode) => string {
+  return (node) => {
+    void facts
+    return `Duplicate footnote definition [^${node.key}] is ignored; the first definition for a label wins.`
+  }
+}
+
+/** C2-B-085: the first definition of a key wins, and each later one is reported. */
+function collectDefinitions(document: DocumentNode, walk: Walk, facts: ParseFacts | null): void {
+  const abbreviations = walk.scope.abbreviations
+  const definitions = walk.resolution.definitions
+  for (const child of document.children) {
+    if (child.type === 'link_reference_definition') define(walk, definitions, child, 'duplicate-link-reference-definition', LINK_DUPLICATE)
+    else if (child.type === 'footnote') define(walk, walk.footnotes, child, 'duplicate-footnote-definition', footnoteDuplicate(facts))
+    else if (child.type === 'abbreviation_def') {
+      define(walk, abbreviations, child, 'duplicate-abbreviation-definition', ABBREVIATION_DUPLICATE)
+    }
+  }
+}
+
+function headingId(heading: HeadingNode): string | undefined {
+  return heading.attrs?.id ?? heading.generatedId
+}
+
+/**
+ * C2-I-084: the folded plain text of each heading that can be a target; the first heading wins. The tree alone gives
+ * it, so a tree resolves the same with and without its source.
+ */
+function headingIndex(walk: Walk, mode: HeadingIds): Map<string, HeadingNode> {
+  const index = new Map<string, HeadingNode>()
+  for (const heading of walk.headings) {
+    if (mode === 'off' && heading.attrs?.id === undefined) continue
+    const text = foldLabel(plainText(heading.children)).normalize('NFC')
+    if (text !== '' && !index.has(text)) index.set(text, heading)
+  }
+  return index
+}
+
+/** C2-I-084: the stored key read as inline content of its own, then its plain text, folded and in NFC. Empty matches nothing. */
+function keyText(key: string): string {
+  return foldLabel(plainText(inlineContent(key))).normalize('NFC')
+}
+
+/** The heading `key` names; a document without headings reads no key text. */
+function headingFor(headings: Map<string, HeadingNode>, key: string): HeadingNode | undefined {
+  return headings.size === 0 ? undefined : headings.get(keyText(key))
+}
+
+/** What a reference resolves to: a definition, or a heading (C2-I-084). */
+type Target = LinkReferenceDefinitionNode | HeadingNode
+
+/** C2-A-109: the definition or the heading each reference resolves to. An image never resolves to a heading (C2-I-083). */
+function findTargets(walk: Walk, mode: HeadingIds): Map<Reference, Target> {
+  const targets = new Map<Reference, Target>()
+  // The headings are indexed when the first reference finds no definition, which most documents never need.
+  let headings: Map<string, HeadingNode> | null = null
+  for (const reference of walk.references) {
+    const key = reference.key
+    if (key === undefined) continue
+    const scope = walk.scopes.size === 0 ? undefined : walk.scopes.get(reference)
+    let target: Target | undefined = scope === undefined ? walk.resolution.definitions.get(key) : lookUp(scope, key, DEFINITIONS)
+    if (scope !== undefined && target !== undefined) walk.resolution.definitionOf.set(reference, target)
+    // C2-I-081, C2-A-213: a heading alone never forms a shortcut reference, so a supplied one stays unresolved.
+    if (target === undefined && reference.type === 'link' && reference.refForm !== 'shortcut') {
+      headings ??= headingIndex(walk, mode)
+      target = headingFor(headings, key)
+    }
+    if (target !== undefined) targets.set(reference, target)
+  }
+  return targets
+}
+
+function duplicateIdMessage(id: string): string {
+  return `Duplicate authored id "${id}": the first node in document order wins id lookup. Change one id.`
+}
+
+/**
+ * C2-H-024: authored ids are reserved first, in document order, also that of an unresolved reference,
+ * which writes its block as text (C2-I-085). C2-A-039: the first node of an id wins, whatever its type.
+ */
+function reserveIds(walk: Walk): Set<string> {
+  const taken = new Set<string>()
+  for (const node of walk.identified) {
+    const id = node.attrs?.id
+    if (id === undefined) continue
+    if (taken.has(id)) report(walk.resolution, node, 'duplicate-id', duplicateIdMessage(id))
+    else taken.add(id)
+  }
+  return taken
+}
+
+/** C2-H-022, C2-H-024: a slug that is taken gets the suffix `-2`, then `-3`, and so on. */
+function generateIds(walk: Walk, mode: HeadingIds, taken: Set<string>): void {
+  const suffixes = new Map<string, number>()
+  for (const heading of walk.headings) {
+    delete heading.generatedId
+    if (mode === 'off' || heading.attrs?.id !== undefined) continue
+    const slug = slugify(plainText(heading.children), mode)
+    let id = slug
+    let suffix = suffixes.get(slug) ?? 1
+    while (taken.has(id)) id = `${slug}-${++suffix}`
+    suffixes.set(slug, suffix)
+    taken.add(id)
+    heading.generatedId = id
+  }
+}
+
+/**
+ * C2-H-156: `adm-1`, `adm-2` and so on, in the order of the walk, which has the bodies of the notes
+ * behind the document. A directive counts only when it places the footnote section.
+ */
+function generateLabelIds(walk: Walk, taken: Set<string>): void {
+  const resolution = walk.resolution
+  let count = 0
+  for (const node of walk.titled) {
+    if (node.type === 'directive' && (node !== walk.notesDirective || resolution.notes.length === 0)) continue
+    const base = `adm-${++count}`
+    let id = base
+    for (let suffix = 2; taken.has(id); suffix++) id = `${base}-${suffix}`
+    taken.add(id)
+    resolution.labelIds.set(node, id)
+  }
+}
+
+/** C2-H-202: note and reference ids take the next free suffix after all other generated ids. */
+function generateNoteIds(walk: Walk, taken: Set<string>): void {
+  function free(base: string): string {
+    let id = base
+    for (let suffix = 2; taken.has(id); suffix++) id = `${base}-${suffix}`
+    taken.add(id)
+    return id
+  }
+  for (const { node, note, ordinal, authored } of walk.noteRefs) {
+    if (ordinal === 1) note.id = free(`fn${note.number}`)
+    if (authored) continue
+    const id = free(ordinal === 1 ? `fnref${note.number}` : `fnref${note.number}-${ordinal}`)
+    note.refIds[ordinal - 1] = id
+    walk.resolution.refIds.set(node, id)
+  }
+}
+
+/** C2-A-107: sets or clears the destination of `reference`: `href` of a link, `src` of an image. */
+function setDestination(reference: Reference, destination: string | undefined): void {
+  if (reference.type === 'link') {
+    if (destination === undefined) delete reference.href
+    else reference.href = destination
+  } else if (destination === undefined) {
+    delete reference.src
+  } else {
+    reference.src = destination
+  }
+}
+
+/** C2-A-135: no result field is read from the tree; C2-A-115: the tooltip of a use is its definition's, at render. */
+function setDestinations(walk: Walk, targets: Map<Reference, Target>): void {
+  for (const reference of walk.references) {
+    const target = targets.get(reference)
+    delete reference.tooltip
+    if (target === undefined) {
+      // C2-A-107: an absent destination means unresolved.
+      setDestination(reference, undefined)
+    } else if (target.type === 'heading') {
+      setDestination(reference, `#${headingId(target) ?? ''}`)
+    } else {
+      setDestination(reference, target.href)
+    }
+  }
+}
+
+/**
+ * C2-B-208: the sequence key of a caption: the plain text of its label, which is what stands before
+ * the mark, without trailing whitespace.
+ */
+function captionKey(walk: Walk, children: Inline[], mark: number): string {
+  return trimEndWhitespace(captionLabelText(children.slice(0, mark), walk.symbols))
+}
+
+/** C2-H-149: the next number of the sequence of `key`. */
+function nextNumber(sequences: Map<string, number>, key: string): number {
+  const n = (sequences.get(key) ?? 0) + 1
+  sequences.set(key, n)
+  return n
+}
+
+/**
+ * C2-H-149, C2-H-151: each caption with a mark and each numbered equation takes the next number of
+ * the sequence of its key, in the order of the walk. A panel caption takes none (C2-H-066).
+ */
+function numberCaptions(walk: Walk, anchors: Map<string, string>): void {
+  const sequences = new Map<string, number>()
+  for (const use of walk.captions) {
+    if (use.caption === null) {
+      use.host.number = nextNumber(sequences, use.prefix)
+      continue
+    }
+    const children = captionInlines(use.caption)
+    const mark = children.findIndex((child) => child.type === 'caption_number')
+    const number = children[mark]
+    if (number?.type !== 'caption_number') continue
+    if (use.panel) {
+      delete number.n
+      continue
+    }
+    const label = captionKey(walk, children, mark)
+    const n = nextNumber(sequences, label)
+    number.n = n
+    captionAnchors(use.host, label === '' ? String(n) : `${label} ${n}`, anchors)
+  }
+}
+
+/** C2-H-095: the id of a numbered caption's host is a target, and so is each panel of a group. */
+function captionAnchors(host: CaptionHost, text: string, anchors: Map<string, string>): void {
+  const id = attributesAct(host) ? host.attrs?.id : undefined
+  if (id !== undefined && !anchors.has(id)) anchors.set(id, text)
+  if (host.type === 'figure_group') panelAnchors(host, text, anchors)
+}
+
+/** C2-H-096: `a` to `z`, then `aa`, `ab` and so on. */
+function panelLetter(index: number): string {
+  let out = ''
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) out = String.fromCharCode(97 + ((n - 1) % 26)) + out
+  return out
+}
+
+/** C2-H-095, C2-A-084: each panel of a numbered group is a target, its text the group's and its letter in panel order. */
+function panelAnchors(group: FigureGroupNode, text: string, anchors: Map<string, string>): void {
+  let index = 0
+  for (const child of group.children) {
+    if (child.type === 'figure_group' || (child.type !== 'table' && captionOf(child) === undefined)) continue
+    const id = attributesAct(child) ? child.attrs?.id : undefined
+    if (id !== undefined && !anchors.has(id)) anchors.set(id, `${text}${panelLetter(index)}`)
+    index++
+  }
+}
+
+/** The id of each heading with its text; the text is read only where a cross-reference may point at it. */
+function headingAnchors(walk: Walk): Map<string, string> {
+  const anchors = new Map<string, string>()
+  for (const heading of walk.headings) {
+    const id = headingId(heading)
+    if (id !== undefined && !anchors.has(id)) anchors.set(id, walk.xrefs.length === 0 ? '' : plainText(heading.children))
+  }
+  return anchors
+}
+
+/** C2-H-095, C2-H-096: a cross-reference resolves against the ids of headings and of numbered captions. */
+function resolveXrefs(walk: Walk): void {
+  const anchors = headingAnchors(walk)
+  numberCaptions(walk, anchors)
+  for (const id of anchors.keys()) walk.resolution.xrefIds.add(id)
+  // C2-I-097: the ids match under NFC; the href names the target's own id, and the key stays as typed.
+  const normalized = new Map<string, string>()
+  for (const id of anchors.keys()) {
+    const form = id.normalize('NFC')
+    if (!normalized.has(form)) normalized.set(form, id)
+  }
+  for (const xref of walk.xrefs) {
+    const id = normalized.get(xref.key.normalize('NFC'))
+    const text = id === undefined ? undefined : anchors.get(id)
+    if (id === undefined || text === undefined) {
+      delete xref.href
+      continue
+    }
+    xref.href = `#${id}`
+    walk.resolution.xrefText.set(xref, text)
+  }
+}
+
+/**
+ * Resolves `document` in place. `facts` is what the parse knows of a tree it built from source;
+ * without it a heading matches by its plain text alone (C2-I-084), and every node is walked.
+ * `symbols` is the table of a render, which the key of a caption sequence reads (C2-B-208).
+ */
+export function resolve(
+  document: DocumentNode, mode: HeadingIds, facts: ParseFacts | null, symbols: Readonly<Record<string, string>> = {},
+  renderers: Renderers = {}, admitted: Admitted = ALL_ADMITTED,
+): Resolution {
+  const walk = newWalk(document, facts, symbols, renderers, admitted)
+  const resolution = walk.resolution
+  const top = walk.scope
+  collectDefinitions(document, walk, facts)
+  // C2-N-090: a later snippet definition of a name stays, renders nothing and reports at its `$` and name.
+  if (walk.snippets) snippetRegistry(document, (node) => {
+    const entry: Diagnostic = { code: 'duplicate-snippet', severity: 'warning', channel: 'parse',
+      message: `A snippet named ${node.name} is defined earlier; this definition is not used` }
+    const start = node.pos?.startOffset
+    if (start !== undefined) entry.range = { startOffset: start + 1, endOffset: start + 2 + node.name.length }
+    addFinding(resolution.findings, node, entry)
+  })
+  visit(walk, document, null)
+  // C2-H-025: the content of the notes follows the document body, in the order of the footnote numbers.
+  for (let at = 0; at < resolution.notes.length; at++) {
+    const note = resolution.notes[at]!
+    const body = note.definition ?? note.inline
+    if (body === null) continue
+    walk.scope = walk.scopes.get(body) ?? top
+    for (const child of body.children) visit(walk, child, body)
+  }
+  visitUnwritten(walk, document.children, top)
+  const targets = findTargets(walk, mode)
+  const taken = reserveIds(walk)
+  for (const id of walk.unwrittenIds) taken.add(id)
+  generateIds(walk, mode, taken)
+  generateLabelIds(walk, taken)
+  generateNoteIds(walk, taken)
+  setDestinations(walk, targets)
+  resolveXrefs(walk)
+  // C2-N-006: a tree in which expansion ran keeps it among its stages.
+  document.stages = document.stages?.[0] === 'includeExpansion'
+    ? ['includeExpansion', 'referenceResolution', 'tableAlignment'] : ['referenceResolution', 'tableAlignment']
+  return resolution
+}
+
+/**
+ * C2-A-109: a reference in a footnote definition that no reference uses, or that a duplicate lost to (C2-B-085), still
+ * resolves, although the note is not written. Only its references and authored ids are read: it takes no number and no id.
+ */
+function resolveUnwrittenFootnote(walk: Walk, footnote: FootnoteNode, scope: Scope): void {
+  walk.scope = walk.scopes.get(footnote) ?? scope
+  const pending: Node[] = [...footnote.children]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
+    if (node.type === 'xref') walk.xrefs.push(node)
+    if (node.type === 'table') alignColumns(node)
+    if (node.attrs?.id !== undefined && attributesAct(node)) walk.unwrittenIds.push(node.attrs.id)
+    forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
+  }
+}
+
+/** C2-N-090: a snippet definition renders nothing; its references resolve, and its notes take no number. */
+function visitSnippetDefinition(walk: Walk, definition: Node): void {
+  const pending: Node[] = [...childNodes(definition)]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
+    forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
+  }
+}
+
+function visitUnwritten(walk: Walk, children: readonly Node[], scope: Scope): void {
+  for (const child of children) {
+    if (child.type === 'include') visitUnwritten(walk, child.children ?? [], walk.scopes.get(child) ?? scope)
+    if (child.type === 'footnote' && !walk.resolution.noteOf.has(child)) resolveUnwrittenFootnote(walk, child, scope)
+  }
+}
+
+function newWalk(
+  document: DocumentNode, facts: ParseFacts | null, symbols: Readonly<Record<string, string>>, renderers: Renderers = {},
+  admitted: Admitted = ALL_ADMITTED,
+): Walk {
+  const findings: Findings = { entries: [], nodes: [] }
+  const resolution: Resolution = {
+    definitions: new Map(), expansionOf: new Map(), definitionOf: new Map(), notes: [], noteOf: new Map(),
+    refIds: new Map(), xrefText: new Map(), xrefIds: new Set(),
+    labelIds: new Map(), findings, diagnostics: findings.entries, markupLines: new Map(),
+  }
+  const footnotes = new Map<string, FootnoteNode>()
+  return {
+    declarations: document.extensions ?? [], resolution, footnotes,
+    scope: { outer: null, definitions: resolution.definitions, footnotes, abbreviations: new Map() }, scopes: new Map(),
+    document, includeParents: null,
+    headings: [], references: [], xrefs: [], captions: [], identified: [], unwrittenIds: [], noteRefs: [], titled: [],
+    notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
+    markupLine: facts?.markupLine ?? null, renderers, admitted, rendered: false, extensionDepth: 0, snippets: facts?.snippets ?? true,
+  }
+}
+
+/** C2-N-027: the id of each heading of a file as its own parse gives it, before it meets the ids of another file. */
+export function headingIdsAlone(document: DocumentNode, mode: HeadingIds): Map<Node, string> {
+  const walk = newWalk(document, null, {})
+  visit(walk, document, null)
+  // No note is resolved here, so every footnote definition is read as unwritten and its ids are reserved (C2-H-024).
+  visitUnwritten(walk, document.children, walk.scope)
+  const taken = reserveIds(walk)
+  for (const id of walk.unwrittenIds) taken.add(id)
+  generateIds(walk, mode, taken)
+  const ids = new Map<Node, string>()
+  for (const heading of walk.headings) {
+    const id = headingId(heading)
+    if (id !== undefined) ids.set(heading, id)
+  }
+  return ids
+}

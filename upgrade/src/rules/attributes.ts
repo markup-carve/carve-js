@@ -1,0 +1,181 @@
+// Contract 2.3: attribute lines, and what follows a fence language or a div name.
+import { change, type Context, note, type Visit } from '../context.ts'
+import { type Node01 } from '../engines.ts'
+import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
+import { quotePrefix } from './blank-lines.ts'
+import { insideQuotes, isAttributeGap, isBlankInQuotes, isGap, quoteDepth, removeLine } from './lines.ts'
+
+/** Whether `text` is blank inside `depth` quotes; quote marks past that depth open an empty quote. */
+function blankAt(text: string, depth: number): boolean {
+  return isBlankInQuotes(text) && quoteDepth(text) <= depth
+}
+
+/** The first line after `line` that is not blank inside `depth` quotes, or 0 at the end of the text. */
+function nextText(ctx: Context, line: number, depth: number): number {
+  for (let at = line + 1; at <= ctx.lines.count; at++) {
+    if (!blankAt(lineText(ctx.lines, at), depth)) return at
+  }
+  return 0
+}
+
+/**
+ * U-031, U-034: an attribute line that no block takes is a paragraph in 0.2 (C2-B-092), so the
+ * blank lines between it and its block go, and a line that reaches no block goes itself.
+ */
+function detached(ctx: Context, line: number): void {
+  const attribute = line
+  const depth = quoteDepth(lineText(ctx.lines, line))
+  // The repairs read past comment lines, which 0.2 removes in place (C2-B-138).
+  if (ctx.repairs === true) while (line < ctx.lines.count && insideQuotes(lineText(ctx.lines, line + 1)).trim().startsWith('%%')) line++
+  if (!blankAt(lineText(ctx.lines, line + 1), depth) && line < ctx.lines.count) return
+  const next = nextText(ctx, line, depth)
+  if (keptQuote(ctx, attribute, line, next, depth)) return
+  if (next === 0) {
+    removeToEnd(ctx, line)
+    return
+  }
+  // A line of no leaf block, a div opener among them, is taken by the late pass, which verifies it.
+  if (!ctx.late && isGap(ctx, next) && !isAttributeGap(ctx, next)) return
+  for (let at = line + 1; at < next; at++)
+    removeLine(ctx, 'U-031', at, 'blank line between the attribute line and its block removed')
+}
+
+/** U-034: the attribute line reaches no block, so it goes with the blank lines around it. */
+function removeToEnd(ctx: Context, line: number): void {
+  let first = line
+  while (first > 1 && isGap(ctx, first - 1) && isBlank(lineText(ctx.lines, first - 1))) first--
+  for (let at = first; at <= ctx.lines.count; at++)
+    removeLine(ctx, 'U-034', at, 'attribute line that reaches no block removed')
+}
+
+/** Whether the quote of an attribute line at `depth` ends before `next`, its first line that is not blank. */
+function quoteEnds(ctx: Context, line: number, next: number, depth: number): boolean {
+  if (next === 0) return true
+  for (let at = line + 1; at < next; at++) if (quoteDepth(lineText(ctx.lines, at)) < depth) return true
+  return false
+}
+
+/**
+ * 0.1 kept the quote of an attribute line that reaches no block in it, as an empty quote: only the attribute
+ * text goes. Below a paragraph line the late pass keeps it (emptyAttributeQuote).
+ */
+function keptQuote(ctx: Context, attribute: number, line: number, next: number, depth: number): boolean {
+  if (depth === 0 || !quoteEnds(ctx, line, next, depth) || ctx.blocks.leaf[attribute - 1]?.node.type === 'paragraph') return false
+  const text = lineText(ctx.lines, attribute)
+  const start = lineStart(ctx.lines, attribute) + quotePrefix(text, depth).length
+  change(ctx, 'U-034', start, lineEnd(ctx.lines, attribute), '', 'attribute line that reaches no block of its quote removed')
+  return true
+}
+
+/** U-032: a valid attribute block is all on one line (C2-I-028). */
+function wrapped(ctx: Context, line: number): number {
+  const text = insideQuotes(lineText(ctx.lines, line)).trim()
+  if (
+    !isGap(ctx, line) ||
+    !text.startsWith('{') ||
+    text.startsWith('{{') ||
+    text.startsWith('{%') ||
+    text.endsWith('}')
+  )
+    return line
+  let last = line + 1
+  while (isGap(ctx, last) && !lineText(ctx.lines, last).trimEnd().endsWith('}') && !isBlank(lineText(ctx.lines, last)))
+    last++
+  if (!isGap(ctx, last) || isBlank(lineText(ctx.lines, last))) return line
+  for (let at = line; at < last; at++) {
+    const next = lineStart(ctx.lines, at + 1)
+    change(
+      ctx,
+      'U-032',
+      lineEnd(ctx.lines, at),
+      next + indentOf(lineText(ctx.lines, at + 1)),
+      ' ',
+      'attribute block joined onto one line'
+    )
+  }
+  return last
+}
+
+export function attributeLines(ctx: Context): void {
+  for (let line = 1; line <= ctx.lines.count; line++) {
+    if (isAttributeGap(ctx, line)) { detached(ctx, line); continue }
+    const last = wrapped(ctx, line)
+    // A joined block is detached from its block like a one-line block.
+    if (ctx.repairs === true && last > line) detached(ctx, last)
+    line = last
+  }
+}
+
+const OPENER_HOSTS = new Set(['code_block', 'admonition', 'div'])
+
+function isFenceCode(code: number): boolean {
+  return code === 0x60 || code === 0x7e || code === 0x3a
+}
+
+/** Offset after the fence run and the word that follows it on the opener line of `node`, or -1. */
+function afterName(ctx: Context, node: Node01): number {
+  const line = node.pos!.startLine
+  let at = node.pos!.startOffset
+  const end = lineEnd(ctx.lines, line)
+  while (at < end && !isFenceCode(ctx.src.charCodeAt(at))) at++
+  const fence = at
+  while (at < end && ctx.src.charCodeAt(at) === ctx.src.charCodeAt(fence)) at++
+  if (at - fence < 3) return -1
+  while (at < end && ctx.src.charCodeAt(at) === 0x20) at++
+  const name = at
+  while (at < end && ctx.src.charCodeAt(at) > 0x20 && ctx.src[at] !== '{') at++
+  return at > name ? at : -1
+}
+
+/**
+ * U-037: a brace suffix can become part of the 0.2 fence language (C2-B-105).
+ */
+function openerTail(ctx: Context, node: Node01): void {
+  if (node.label !== undefined || node.header !== undefined || node.title !== undefined || node.attrs !== undefined)
+    return
+  const at = afterName(ctx, node)
+  const end = lineEnd(ctx.lines, node.pos!.startLine)
+  if (at < 0) return
+  const rest = ctx.src.slice(at, end).trim()
+  if (rest === '' || rest.startsWith('"')) return
+  if (!rest.startsWith('{')) return
+  change(ctx, 'U-037', at, end, '', 'attribute block after the fence language or div name removed, as 0.1 dropped it')
+  // The map requires the spelling change even when both renderers give the same HTML.
+  const edit = ctx.findings[ctx.findings.length - 1]?.edit
+  if (edit !== null && edit !== undefined) edit.diagnosed = true
+}
+
+function rank(name: string): number {
+  if (name.startsWith('#')) return 0
+  return name.startsWith('.') ? 1 : 2
+}
+
+/** Whether the authored order of the attributes of `node` is not the order 0.2 writes (C2-H-009). */
+function isReordered(node: Node01): boolean {
+  const order = node.attrs?.order
+  if (!Array.isArray(order)) return false
+  let highest = 0
+  for (const name of order as unknown[]) {
+    const at = typeof name === 'string' ? rank(name) : 2
+    if (at < highest) return true
+    highest = at
+  }
+  return false
+}
+
+export function openers(ctx: Context): void {
+  let reordered: Visit | null = null
+  for (const visit of ctx.visits) {
+    if (visit.node.pos === undefined) continue
+    if (OPENER_HOSTS.has(visit.node.type)) openerTail(ctx, visit.node)
+    if (reordered === null && isReordered(visit.node)) reordered = visit
+  }
+  // U-036: once per file.
+  if (reordered !== null)
+    note(
+      ctx,
+      'U-036',
+      reordered.node.pos!.startLine,
+      'attributes are written in the order id, classes, keys in 0.2, not as authored'
+    )
+}

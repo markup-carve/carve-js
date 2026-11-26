@@ -1,0 +1,11 @@
+{
+  "kind": "format-not-idempotent",
+  "detail": "normalize=false",
+  "seed": 1169021744,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "- `c`:n[\\``a`\\<a:b>`{`![][\n*]@{%#%}{-\\`\\-}]",
+  "originalBytes": 4096,
+  "minimizedBytes": 43,
+  "clause": "C2-W-003",
+  "id": "2009cee10d351060"
+}

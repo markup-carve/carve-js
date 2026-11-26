@@ -1,6 +1,32 @@
-import type { AstJsonBlock, AstJsonDocument } from './ast-json.js'
-import type { ParseOptions } from './parse.js'
-import { astNodePaths, nodeIdentityForPaths, type NodeIdentitySidecar } from './ast-sidecars.js'
+/* eslint-disable complexity, sonarjs/cognitive-complexity -- preserve the 0.1 editor session's mapping and atomic update behavior */
+import type { DocumentNode } from './ast.ts'
+import type { ParseOptions } from './options.ts'
+import { parse } from './api.ts'
+import { utf8Length } from './positions.ts'
+import { NODE_TABLE } from './ast-validate.ts'
+
+const INLINE_TYPES: ReadonlySet<string> = new Set(NODE_TABLE.INLINES)
+
+type AstJsonDocument = DocumentNode
+type AstJsonBlock = DocumentNode['children'][number]
+export interface NodeIdentitySidecar { version: 1; session: string; nodes: { id: string; path: string }[] }
+const astNodePaths = (ast: DocumentNode): string[] => {
+  const paths: string[] = []
+  const visit = (value: unknown, path: string): void => {
+    if (!value || typeof value !== 'object') return
+    if ('type' in value && typeof value.type === 'string') paths.push(path)
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'pos' || key === 'segments') continue
+      if (Array.isArray(child)) child.forEach((item, index) => visit(item, `${path}/${key}/${index}`))
+      else if (child && typeof child === 'object') visit(child, `${path}/${key}`)
+    }
+  }
+  visit(ast, '')
+  return paths
+}
+const nodeIdentityForPaths = (paths: readonly string[], session: string, ids: ReadonlyMap<string, string>): NodeIdentitySidecar => ({
+  version: 1, session, nodes: paths.map(path => ({ id: ids.get(path)!, path })),
+})
 
 export interface EditorRange { start: number; end: number }
 export interface EditorToken extends EditorRange {
@@ -30,15 +56,22 @@ export class EditorChangeError extends RangeError {
 
 type Positioned = { type?: unknown; attrs?: unknown; pos?: { startOffset?: unknown; endOffset?: unknown } }
 
-function codepointToUtf16(source: string): number[] {
-  const result = [0]
-  let utf16 = 0
-  for (const point of source) { utf16 += point.length; result.push(utf16) }
+function byteToUtf16(source: string): Uint32Array {
+  const result = new Uint32Array(utf8Length(source) + 1)
+  let byte = 0
+  for (let at = 0; at < source.length;) {
+    const point = String.fromCodePoint(source.codePointAt(at)!)
+    const length = utf8Length(point)
+    result.fill(at, byte, byte + length)
+    byte += length
+    at += point.length
+  }
+  result[byte] = source.length
   return result
 }
 
 function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
-  const offsets = codepointToUtf16(source)
+  const offsets = byteToUtf16(source)
   const lineStarts = new Int32Array(source.length + 1)
   let lineStart = 0
   for (let i = 0; i < source.length; i++) {
@@ -54,7 +87,8 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
     const start = node.pos?.startOffset
     const end = node.pos?.endOffset
     if (typeof start === 'number' && typeof end === 'number' && offsets[start] !== undefined && offsets[end] !== undefined) {
-      result.push({ path, start: offsets[start], end: offsets[end], ...(typeof node.type === 'string' ? { type: node.type } : {}), tokens: [] })
+      result.push({ path, start: offsets[start], end: offsets[end],
+        ...(typeof node.type === 'string' ? { type: node.type } : {}), tokens: [] })
       if (node.attrs && typeof node.attrs === 'object') hasAttrs.add(path)
     }
     if (Array.isArray(value)) value.forEach((child, index) => walk(child, `${path}/${index}`))
@@ -62,51 +96,83 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
   }
   walk(ast, '')
   const byPath = new Map(result.map((node) => [node.path, node]))
-  const textByAncestor = new Map<string, { start: number; end: number }>()
+  const labelByLink = new Map<string, EditorRange>()
   for (const node of result) {
-    if (node.type !== 'text') continue
-    let ancestor = node.path.slice(0, node.path.lastIndexOf('/'))
-    while (ancestor) {
-      const previous = textByAncestor.get(ancestor)
-      textByAncestor.set(ancestor, previous
-        ? { start: Math.min(previous.start, node.start), end: Math.max(previous.end, node.end) }
-        : { start: node.start, end: node.end })
-      ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'))
-    }
+    const split = node.path.lastIndexOf('/children/')
+    if (split < 0 || byPath.get(node.path.slice(0, split))?.type !== 'link') continue
+    const link = node.path.slice(0, split)
+    const previous = labelByLink.get(link)
+    labelByLink.set(link, previous
+      ? { start: Math.min(previous.start, node.start), end: Math.max(previous.end, node.end) }
+      : { start: node.start, end: node.end })
+  }
+  const cellsByRow = new Map<string, EditorRange[]>()
+  for (const node of result) {
+    if (node.type !== 'table_cell') continue
+    const row = node.path.slice(0, node.path.lastIndexOf('/children/'))
+    const cells = cellsByRow.get(row)
+    if (cells) cells.push(node)
+    else cellsByRow.set(row, [node])
   }
   for (const node of result) {
     const tokens: EditorToken[] = []
-    const authored = source.slice(node.start, node.end)
     const token = (role: EditorToken['role'], start: number, end: number): void => { if (end > start) tokens.push({ role, start, end }) }
+    // The attribute lines above a block lie inside its range; the block's own markers start behind them.
+    let contentStart = node.start
+    if (hasAttrs.has(node.path) && !INLINE_TYPES.has(node.type ?? '')) {
+      // An attribute line is followed by the rest of its block, so the last line of the range never is one.
+      // A later line carries the container prefixes the first one stands behind.
+      const column = node.start - lineStarts[node.start]!
+      for (let line = attributeLine(source, contentStart); line !== null && line.next + column < node.end;) {
+        token('attribute', contentStart, line.end)
+        contentStart = line.next + column
+        line = attributeLine(source, contentStart)
+      }
+    }
+    const authored = source.slice(contentStart, node.end)
     if (node.type === 'heading') {
-      const marker = /^(#{1,6})[ \t]+/.exec(authored)
-      if (marker) token('block-marker', node.start, node.start + marker[0].length)
+      const marker = /^([ \t]*)(?:={1,6}|#{1,6})[ \t]+/.exec(authored)
+      if (marker) token('block-marker', contentStart + marker[1]!.length, contentStart + marker[0].length)
     } else if (node.type === 'list_item') {
       const content = byPath.get(`${node.path}/children/0`)
-      if (content && content.start > node.start) token('block-marker', node.start, content.start)
+      if (content && content.start > contentStart) token('block-marker', contentStart, content.start)
     } else if (node.type === 'link') {
-      const text = textByAncestor.get(node.path)
-      if (text) {
-        const { start, end } = text
-        token('open-marker', node.start, start)
-        const destination = /^\]\((.*)\)$/.exec(source.slice(end, node.end))
-        if (destination) {
-          token('close-marker', end, end + 2)
-          token('destination', end + 2, node.end - 1)
-          token('close-marker', node.end - 1, node.end)
-        } else token('close-marker', end, node.end)
+      // The label ends at the `]` behind the link's last child, whatever kind of node that is.
+      const label = labelByLink.get(node.path) ?? { start: node.start + 1, end: node.start + 1 }
+      if (source[node.start] === '[' && source[label.end] === ']') {
+        token('open-marker', node.start, label.start)
+        const tail = source.slice(label.end, node.end)
+        const close = tail.startsWith('](') ? closingParen(tail) : tail.startsWith('][') ? referenceClose(tail) : 0
+        const end = close < 0 ? node.end : label.end + close + 1
+        if (close > 0 && tail[1] === '(') {
+          token('close-marker', label.end, label.end + 2)
+          token('destination', label.end + 2, label.end + 2 + destinationLength(tail.slice(2, close)))
+          token('close-marker', end - 1, end)
+        } else token('close-marker', label.end, end)
+        if (end < node.end && hasAttrs.has(node.path) && source[end] === '{') token('attribute', end, node.end)
+        else if (end < node.end) token('close-marker', end, node.end)
       }
     } else if (node.type === 'code_block') {
       const first = authored.indexOf('\n')
       const last = authored.lastIndexOf('\n')
-      if (first >= 0 && last > first) {
-        token('fence-open', node.start, node.start + first + 1)
-        token('fence-close', node.start + last, node.end)
+      if (first >= 0) token('fence-open', contentStart, contentStart + first + 1)
+      const opener = /`{3,}/.exec(authored)?.[0].length ?? 3
+      // The closer stands alone on its line, behind the quote marks of the opener's line and indentation only.
+      const closer = first >= 0 ? /^([ \t>]*)(`{3,})[ \t]*$/.exec(authored.slice(last + 1)) : null
+      const quotes = (text: string): number => text.split('>').length - 1
+      if (closer && closer[2]!.length >= opener && quotes(closer[1]!) === quotes(source.slice(lineStarts[contentStart], contentStart))) {
+        token('fence-close', contentStart + last + 1 + closer[1]!.length, node.end)
       }
     } else if (node.type === 'table_row') {
-      for (let index = 0; index < authored.length; index++) if (authored[index] === '|') token('table-marker', node.start + index, node.start + index + 1)
+      const cells = (cellsByRow.get(node.path) ?? []).sort((a, b) => a.start - b.start)
+      let cell = 0
+      for (let index = contentStart; index < node.end; index++) {
+        while (cell < cells.length && cells[cell]!.end <= index) cell++
+        const inCell = cell < cells.length && cells[cell]!.start <= index
+        if (source[index] === '|' && !inCell) token('table-marker', index, index + 1)
+      }
     }
-    if (hasAttrs.has(node.path)) {
+    if (hasAttrs.has(node.path) && contentStart === node.start) {
       let end = node.start
       if (source[end - 1] === '\n') { end--; if (source[end - 1] === '\r') end-- }
       else if (source[end - 1] === '\r') end--
@@ -119,6 +185,67 @@ function mappedNodes(source: string, ast: AstJsonDocument): EditorMappedNode[] {
   return result.sort((a, b) => a.path.localeCompare(b.path))
 }
 
+/** The attribute line `{...}` that starts at `start`: where its text ends and where the next line starts. */
+function attributeLine(source: string, start: number): { end: number; next: number } | null {
+  if (source[start] !== '{' || source[start + 1] === '{') return null
+  let end = start
+  while (end < source.length && source[end] !== '\n' && source[end] !== '\r') end++
+  if (end === start || source[end - 1] !== '}' || end >= source.length) return null
+  return { end, next: end + (source.startsWith('\r\n', end) ? 2 : 1) }
+}
+
+/** The index of the unescaped `]` that closes the reference of the link tail `][...`, or -1. */
+function referenceClose(tail: string): number {
+  for (let at = 2; at < tail.length; at++) {
+    if (tail[at] === '\\') at++
+    else if (tail[at] === ']') return at
+  }
+  return -1
+}
+
+/** The index of the `)` that closes the destination and title of the link tail `](...`, or -1. */
+function closingParen(tail: string): number {
+  let at = 2
+  // A `<` without its `>` opens no angle destination.
+  const angle = tail[at] === '<' ? tail.indexOf('>', at) : -1
+  if (angle >= 0) at = angle + 1
+  else {
+    for (let depth = 0; at < tail.length; at++) {
+      const char = tail[at]
+      if (char === '\\') at++
+      else if (char === '(') depth++
+      else if (char === ')' && depth-- === 0) return at
+      else if (depth === 0 && (char === ' ' || char === '\t' || char === '\n' || char === '\r')) break
+    }
+  }
+  for (let quote = ''; at < tail.length; at++) {
+    const char = tail[at]!
+    if (char === '\\') at++
+    else if (quote !== '') { if (char === quote) quote = '' }
+    else if (char === '"' || char === "'") quote = char
+    else if (char === '(') quote = ')'
+    else if (char === ')') return at
+  }
+  return -1
+}
+
+/** The length of the destination at the start of the inside of `(...)`: up to a space or tab outside parentheses. */
+function destinationLength(inside: string): number {
+  if (inside.startsWith('<')) {
+    const close = inside.indexOf('>')
+    return close < 0 ? inside.length : close + 1
+  }
+  let depth = 0
+  for (let at = 0; at < inside.length; at++) {
+    const char = inside[at]
+    if (char === '\\') at++
+    else if (char === '(') depth++
+    else if (char === ')') depth--
+    else if (depth === 0 && (char === ' ' || char === '\t' || char === '\n' || char === '\r')) return at
+  }
+  return inside.length
+}
+
 function scalarBoundary(source: string, offset: number): boolean {
   if (offset <= 0 || offset >= source.length) return true
   const before = source.charCodeAt(offset - 1)
@@ -129,11 +256,14 @@ function scalarBoundary(source: string, offset: number): boolean {
 function validateChanges(source: string, changes: readonly EditorChange[]): void {
   let previousEnd = 0
   changes.forEach((change, index) => {
-    if (!Number.isInteger(change.from) || !Number.isInteger(change.to) || change.from < 0 || change.to < change.from || change.to > source.length) {
+    if (!Number.isInteger(change.from) || !Number.isInteger(change.to) || change.from < 0 || change.to < change.from ||
+      change.to > source.length) {
       throw new EditorChangeError(`change ${index} has an invalid range`)
     }
     if (index > 0 && change.from < previousEnd) throw new EditorChangeError(`change ${index} overlaps or is out of order`)
-    if (!scalarBoundary(source, change.from) || !scalarBoundary(source, change.to)) throw new EditorChangeError(`change ${index} splits a Unicode scalar`)
+    if (!scalarBoundary(source, change.from) || !scalarBoundary(source, change.to)) {
+      throw new EditorChangeError(`change ${index} splits a Unicode scalar`)
+    }
     previousEnd = change.to
   })
 }
@@ -145,7 +275,8 @@ function nodeSignatures(ast: AstJsonDocument, nodePaths: readonly string[]): Map
     if (!value || typeof value !== 'object') return value
     const reduced = Array.isArray(value)
       ? value.map((child, index) => visit(child, `${path}/${index}`))
-      : Object.fromEntries(Object.entries(value).map(([key, child]) => [key, visit(child, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`)]))
+      : Object.fromEntries(Object.entries(value).map(([key, child]) =>
+        [key, visit(child, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`)]))
     if (!paths.has(path)) return reduced
     signatures.set(path, JSON.stringify(reduced))
     return { type: (value as { type: string }).type }
@@ -173,7 +304,8 @@ function reusableParagraphs(source: string, ast: AstJsonDocument): boolean {
   return /^[\p{L}\p{N}\p{M} .,!?\n]*$/u.test(source) && ast.children.length > 0 && ast.children.every(block =>
     block.type === 'paragraph' && !block.attrs && block.pos?.startColumn === 1 && block.pos.startLine === block.pos.endLine &&
     typeof block.pos.startOffset === 'number' && typeof block.pos.endOffset === 'number' &&
-    block.children.every(inline => inline.type === 'text' && typeof inline.pos?.startOffset === 'number' && typeof inline.pos?.endOffset === 'number'))
+    block.children.every(inline => inline.type === 'text' && typeof inline.pos?.startOffset === 'number' &&
+      typeof inline.pos?.endOffset === 'number'))
 }
 
 function shiftParagraph(block: AstJsonBlock, offset: number, lines: number): void {
@@ -191,7 +323,7 @@ function freezeAst(ast: AstJsonDocument): void {
   while (pending.length) {
     const value = pending.pop()!
     if (Object.isFrozen(value)) continue
-    for (const child of Object.values(value)) if (child && typeof child === 'object') pending.push(child)
+    for (const child of Object.values(value) as unknown[]) if (child && typeof child === 'object') pending.push(child)
     Object.freeze(value)
   }
 }
@@ -205,25 +337,34 @@ function reparseParagraph(
   if (changes.length !== 1) return undefined
   const change = changes[0]!
   if (!/^[\p{L}\p{N}\p{M} .,!?]*$/u.test(change.insert) || change.insert.includes('\n')) return undefined
-  const offsets = codepointToUtf16(previous.source)
+  const offsets = byteToUtf16(previous.source)
   for (const [index, block] of previous.ast.children.entries()) {
-    if (block.type !== 'paragraph' || !block.pos || block.pos.startOffset === undefined || block.pos.endOffset === undefined) return undefined
+    if (block.type !== 'paragraph' || !block.pos || block.pos.startOffset === undefined ||
+      block.pos.endOffset === undefined) return undefined
     const start = offsets[block.pos.startOffset]!, end = offsets[block.pos.endOffset]!
     if (change.from < start || change.to > end) continue
     const fragment = previous.source.slice(start, change.from) + change.insert + previous.source.slice(change.to, end)
     if (!fragment || fragment.includes('\n') || fragment.startsWith(' ') || fragment.endsWith(' ')) return undefined
     const replacement = parseDocument(fragment)
     if (replacement.children.length !== 1 || !reusableParagraphs(fragment, replacement)) return undefined
-    const delta = [...fragment].length - (block.pos.endOffset - block.pos.startOffset)
+    const delta = utf8Length(fragment) - (block.pos.endOffset - block.pos.startOffset)
     const children = [...previous.ast.children]
     const edited = replacement.children[0]!
     shiftParagraph(edited, block.pos.startOffset, block.pos.startLine - 1)
     children[index] = edited
     for (let following = index + 1; following < children.length; following++) {
-      children[following] = structuredClone(children[following]!)
-      shiftParagraph(children[following]!, delta, 0)
+      const paragraph = children[following]!
+      if (paragraph.type !== 'paragraph') return undefined
+      children[following] = {
+        ...paragraph,
+        pos: { ...paragraph.pos!, startOffset: paragraph.pos!.startOffset + delta, endOffset: paragraph.pos!.endOffset + delta },
+        children: paragraph.children.map(inline => ({
+          ...inline,
+          pos: { ...inline.pos!, startOffset: inline.pos!.startOffset + delta, endOffset: inline.pos!.endOffset + delta },
+        })),
+      }
     }
-    return { ...previous.ast, children, srcByteLength: new TextEncoder().encode(source).length }
+    return { ...previous.ast, children, srcByteLength: utf8Length(source) }
   }
   return undefined
 }
@@ -232,7 +373,7 @@ function reparseParagraph(
  * Create a source-authoritative editing session. Updates use UTF-16 offsets,
  * apply atomically, and always produce the same AST/map as a fresh parse.
  */
-export function createEditorSession(
+export function createEditorSessionInternal(
   initialSource: string,
   parseDocument: (source: string, options?: ParseOptions) => AstJsonDocument,
   options: ParseOptions = {},
@@ -247,7 +388,7 @@ export function createEditorSession(
       parsedSourceBytes += new TextEncoder().encode(text).length
       return parseDocument(text, { ...options, positions: true })
     }
-    const incremental = allowParagraphReuse && previous && !options.extensions?.length && !options.onUnclosedContainer
+    const incremental = allowParagraphReuse && previous && !options.extensions?.length && !options.includes
       ? reparseParagraph(source, previous, changes, parse) : undefined
     const ast = incremental ?? parse(source)
     const reusedPreviousTree = incremental !== undefined && (changes.length === 0 || ast.children.length > 1)
@@ -290,7 +431,7 @@ export function createEditorSession(
     return Object.freeze({ revision, source, ast, nodes, identity, parsedSourceBytes, reusedPreviousTree })
   }
   let current = build(initialSource, 0)
-  let signatures = nodeSignatures(current.ast, pathsByAst.get(current.ast)!)
+  let signatures: Map<string, string> | null = nodeSignatures(current.ast, pathsByAst.get(current.ast)!)
   return {
     snapshot: () => current,
     update(changes) {
@@ -303,10 +444,30 @@ export function createEditorSession(
       }
       parts.push(current.source.slice(cursor))
       const source = parts.join('')
+      if (source === current.source) {
+        const unchanged = Object.freeze({ ...current, revision: current.revision + 1, parsedSourceBytes: 0,
+          reusedPreviousTree: true, changedPaths: Object.freeze([] as string[]) })
+        current = unchanged
+        return unchanged
+      }
       const next = build(source, current.revision + 1, current, changes)
-      const nextSignatures = nodeSignatures(next.ast, pathsByAst.get(next.ast)!)
-      const update = Object.freeze({ ...next, changedPaths: Object.freeze(changedPaths(signatures, nextSignatures)) })
-      signatures = nextSignatures
+      let paths: string[]
+      if (next.reusedPreviousTree && changes.length === 1) {
+        const at = changes[0]!.from
+        const edited = current.nodes.find(node => /^\/children\/\d+$/u.test(node.path) && node.start <= at && at <= node.end)
+        const index = edited === undefined ? -1 : Number(edited.path.slice('/children/'.length))
+        const delta = source.length - current.source.length
+        paths = index < 0 ? [''] : ['', ...pathsByAst.get(next.ast)!.filter(path => {
+          const match = /^\/children\/(\d+)(?:\/|$)/u.exec(path)
+          return match !== null && (Number(match[1]) === index || (delta !== 0 && Number(match[1]) > index))
+        })]
+        signatures = null
+      } else {
+        const nextSignatures = nodeSignatures(next.ast, pathsByAst.get(next.ast)!)
+        paths = changedPaths(signatures ?? nodeSignatures(current.ast, pathsByAst.get(current.ast)!), nextSignatures)
+        signatures = nextSignatures
+      }
+      const update = Object.freeze({ ...next, changedPaths: Object.freeze(paths.sort()) })
       current = next
       return update
     },
@@ -314,3 +475,8 @@ export function createEditorSession(
 }
 
 let sessionCounter = 0
+
+/** Create a source-authoritative editor session backed by the 0.2 parser. */
+export function createEditorSession(source: string, options: ParseOptions = {}): EditorSession {
+  return createEditorSessionInternal(source, (text, parseOptions) => parse(text, parseOptions), options, true)
+}

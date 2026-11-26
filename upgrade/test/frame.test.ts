@@ -1,0 +1,267 @@
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { compareHtml } from '../src/compare.ts'
+import { applyEdits, type Edit, offsetBefore, selectEdits } from '../src/edits.ts'
+import { ENTRIES, EXTENSIONS, upgrade } from '../src/index.ts'
+import { lineEnd, lineOf, lineStart, lineText, readLines } from '../src/source.ts'
+
+function edit(start: number, end: number, text: string, entry: string, sequence = 0): Edit {
+  return { start, end, text, entry, sequence }
+}
+
+describe('the edit list', () => {
+  it('applies from the end backward, so offsets of the input stay valid', () => {
+    const edits = selectEdits([edit(6, 6, '{', 'U-065'), edit(0, 1, 'X', 'U-044'), edit(9, 9, '}', 'U-065', 1)])
+    expect(applyEdits('a b c _u_ d', edits)).toBe('X b c {_u_} d')
+  })
+
+  it('keeps the lower entry id of two edits that share a character', () => {
+    const edits = selectEdits([edit(2, 6, '', 'U-038'), edit(4, 5, 'x', 'U-065'), edit(8, 9, 'y', 'U-066')])
+    expect(edits.map((kept) => kept.entry)).toEqual(['U-038', 'U-066'])
+  })
+
+  it('drops an insertion inside a replaced span and keeps one at its edge', () => {
+    const edits = selectEdits([
+      edit(2, 6, '', 'U-038'),
+      edit(4, 4, '{', 'U-065'),
+      edit(6, 6, '}', 'U-065', 1),
+      edit(2, 2, '>', 'U-016')
+    ])
+    expect(edits.map((kept) => [kept.start, kept.entry])).toEqual([
+      [2, 'U-016'],
+      [2, 'U-038'],
+      [6, 'U-065']
+    ])
+  })
+
+  it('puts an insertion before a span replaced from the same offset, whatever the entry ids', () => {
+    const edits = selectEdits([edit(2, 4, '', 'U-038'), edit(2, 2, '>\n', 'U-106', 1)])
+    expect(applyEdits('01xx45', edits)).toBe('01>\n45')
+  })
+
+  it('orders two insertions at one offset by entry id, then by collection', () => {
+    const edits = selectEdits([edit(3, 3, 'b', 'U-065', 0), edit(3, 3, 'a', 'U-001', 1), edit(3, 3, 'c', 'U-065', 2)])
+    expect(applyEdits('012345', edits)).toBe('012abc345')
+  })
+
+  it('maps an offset of the output back to the input', () => {
+    const edits = selectEdits([edit(2, 2, 'XX', 'U-001'), edit(5, 7, '', 'U-002')])
+    expect(applyEdits('0123456789', edits)).toBe('01XX234789')
+    expect([0, 2, 3, 4, 6, 7, 9].map((offset) => offsetBefore(edits, offset))).toEqual([0, 2, 2, 2, 4, 7, 9])
+  })
+})
+
+describe('the line table', () => {
+  it('counts lines from 1 and leaves the line ending out of the text', () => {
+    const lines = readLines('ab\r\n\ncd')
+    expect(lines.count).toBe(3)
+    expect([1, 2, 3].map((line) => lineText(lines, line))).toEqual(['ab', '', 'cd'])
+    expect([lineStart(lines, 3), lineEnd(lines, 3), lineStart(lines, 4), lineOf(lines, 4), lineOf(lines, 6)]).toEqual([
+      5, 7, 7, 2, 3
+    ])
+  })
+
+  it('has no line after a final line ending, and none in an empty text', () => {
+    expect(readLines('a\n').count).toBe(1)
+    expect(readLines('').count).toBe(0)
+  })
+})
+
+describe('the comparison of section 1', () => {
+  it('sorts attributes and drops whitespace between tags', () => {
+    expect(compareHtml('<p class="a" id="b">x</p>\n<hr>', '<p id="b" class="a">x</p><hr>').equal).toBe(true)
+  })
+
+  it('C2-H-032: generated task presentation is ignored but authored style is compared', () => {
+    expect(compareHtml('<li>x</li>', '<li class="task" style="list-style: none">x</li>').equal).toBe(true)
+    expect(
+      compareHtml('<li style="color: red">x</li>', '<li class="task" style="list-style: none; color: red">x</li>').equal
+    ).toBe(true)
+    expect(
+      compareHtml('<li style="color: blue">x</li>', '<li class="task" style="list-style: none; color: red">x</li>')
+        .equal
+    ).toBe(false)
+  })
+
+  it('compares text as it is', () => {
+    const compared = compareHtml('<p>a  b</p>', '<p>a b</p>')
+    expect(compared.equal).toBe(false)
+    expect(compared.difference).toEqual({ line: 0, expected: '<p>a  b</p>', actual: '<p>a b</p>' })
+  })
+
+  it('compares the inside of pre as it is', () => {
+    expect(compareHtml('<pre><code>a\n  b\n</code></pre>', '<pre><code>a\n b\n</code></pre>').equal).toBe(false)
+    expect(compareHtml('<pre><code> a\n</code></pre>', '<pre><code> a\n</code></pre>').equal).toBe(true)
+  })
+
+  it('keeps a space next to a tag on one line', () => {
+    expect(compareHtml('<p>a <em>b</em></p>', '<p>a<em>b</em></p>').equal).toBe(false)
+  })
+
+  it('reads over a quoted `>` in an attribute value', () => {
+    expect(compareHtml('<a title="a>b" href="x">t</a>', '<a href="x" title="a>b">t</a>').equal).toBe(true)
+  })
+
+  it('takes a later paragraph of an item with or without its element, and counts the gain (ruling on U-019)', () => {
+    const old = '<ul>\n  <li>a\n    second\n  </li>\n</ul>'
+    const next = '<ul>\n  <li data-source-line="1">a\n    <p data-source-line="3">second</p>\n  </li>\n</ul>'
+    expect(compareHtml(old, next)).toEqual({ equal: true, difference: null, gainedParagraphs: 1 })
+    expect(compareHtml('<ul><li><p>a</p></li></ul>', '<ul><li>a</li></ul>').equal).toBe(false)
+  })
+
+  it('on request takes the only item of a list with or without its paragraph elements (U-021)', () => {
+    const old = '<ul><li><p>a</p><hr></li></ul>'
+    const next = '<ul><li>a<hr></li></ul>'
+    expect(compareHtml(old, next).equal).toBe(false)
+    expect(compareHtml(old, next, true).equal).toBe(true)
+    // Two items: a loose list stays different from a tight one.
+    expect(
+      compareHtml('<ul><li><p>a</p></li><li><p>b</p></li></ul>', '<ul><li>a</li><li>b</li></ul>', true).equal
+    ).toBe(false)
+    // A nested list of one item inside a list of two is taken on its own.
+    expect(
+      compareHtml(
+        '<ul><li>x<ol><li><p>a</p></li></ol></li><li>y</li></ul>',
+        '<ul><li>x<ol><li>a</li></ol></li><li>y</li></ul>',
+        true
+      ).equal
+    ).toBe(true)
+  })
+
+  it('names the source line of the 0.2 element at the difference', () => {
+    const compared = compareHtml('<p>a</p><p>b</p>', '<p data-source-line="1">a</p><p data-source-line="3">c</p>')
+    expect(compared.difference?.line).toBe(3)
+  })
+})
+
+describe('the report', () => {
+  it('holds the 338 entries of the upgrade map with their classes', () => {
+    const count = (name: string): number => ENTRIES.filter((entry) => entry.class === name).length
+    expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([
+      338, 153, 28, 128, 29
+    ])
+    // The tool's own entries, for cases the specification does not decide, stand apart.
+    expect(EXTENSIONS.map((entry) => entry.id)).toEqual(['X-001', 'X-002', 'X-003'])
+  })
+
+  it('gives every record the entry id, the class, the line of the input and the lint rule', () => {
+    const result = upgrade('one\n\ntwo _u_ and ~s~\n\nSome text\n# Heading\n')
+    expect(result.records).toEqual([
+      {
+        entry: 'U-001',
+        class: 'rewrite',
+        line: 6,
+        message: 'blank line put above a block that 0.2 reads as a lazy line directly under text',
+        lint: 'block-opener-without-blank-line'
+      },
+      {
+        entry: 'U-065',
+        class: 'rewrite',
+        line: 3,
+        message: 'bare underline put in braces',
+        lint: 'deprecated-bare-underline'
+      },
+      {
+        entry: 'U-065',
+        class: 'rewrite',
+        line: 3,
+        message: 'bare underline put in braces',
+        lint: 'deprecated-bare-underline'
+      },
+      {
+        entry: 'U-066',
+        class: 'rewrite',
+        line: 3,
+        message: 'bare strike put in braces',
+        lint: 'deprecated-bare-strike'
+      },
+      {
+        entry: 'U-066',
+        class: 'rewrite',
+        line: 3,
+        message: 'bare strike put in braces',
+        lint: 'deprecated-bare-strike'
+      }
+    ])
+    expect([result.output, result.check, result.changed]).toEqual([
+      'one\n\ntwo {_u_} and {~s~}\n\nSome text\n\n# Heading\n',
+      'pass',
+      true
+    ])
+  })
+
+  it('U-114: keeps the second anonymous div of 0.1 with runs that shrink toward the inside', () => {
+    // The last line opens a second anonymous div in 0.1 and closes the outer block in 0.2.
+    const result = upgrade('ok\n\n:::: note\nbody\n:::\nafter\n::::\n')
+    expect(result.check).toBe('pass')
+    expect(result.output).toBe('ok\n\n::::: note\nbody\n::::\nafter\n:::\n')
+    expect(result.records.map((entry) => entry.entry)).toContain('U-049')
+  })
+
+  it('does not let U-021 explain a difference outside the paragraph elements of the one item', () => {
+    const explained = upgrade('- item\n\n  ***\n')
+    expect([explained.check, explained.records.map((record) => record.entry)]).toEqual([
+      'explained',
+      ['U-021', 'upgrade-difference']
+    ])
+    // The same list, and after it a block of U-219 that 0.1 and 0.2 read differently.
+    const other = upgrade('- item\n\n  ***\n\n:::\n:::e\n::::\nq\n:::\nafter\n')
+    expect([other.check, other.records.map((record) => record.entry)]).toEqual([
+      'mismatch',
+      ['U-021', 'U-219', 'upgrade-mismatch']
+    ])
+  })
+
+  it('prints one summary line for the later paragraphs of tight items', () => {
+    const result = upgrade('- a\n+\nsecond\n- b\n+\nthird\n')
+    expect(result.records.filter((record) => record.entry === 'U-019')).toEqual([
+      {
+        entry: 'U-019',
+        class: 'summary',
+        line: 0,
+        message: '2 later paragraph(s) of list items gain a paragraph element in 0.2'
+      }
+    ])
+    expect(result.check).toBe('explained')
+  })
+})
+
+describe('the command line', () => {
+  const cli = join(import.meta.dirname, '../src/cli.ts')
+  const run = (args: string[]): { status: number | null; stdout: string; stderr: string } => {
+    const done = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
+    return { status: done.status, stdout: done.stdout, stderr: done.stderr }
+  }
+
+  it('prints the rewritten source, writes on request, and says by its status whether a person is needed', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-'))
+    try {
+      const file = join(dir, 'a.crv')
+      const report = join(dir, 'b.crv')
+      writeFileSync(file, 'an _underlined_ word\n')
+      writeFileSync(report, 'a `<b>x</b>`{=html} b\n')
+      const printed = run([file])
+      expect([printed.status, printed.stdout]).toEqual([0, 'an {_underlined_} word\n'])
+      expect(printed.stderr).toContain(
+        `${file}:1: U-065 rewrite: bare underline put in braces [deprecated-bare-underline]`
+      )
+      expect(printed.stderr).toContain('U-079 report')
+      expect(run(['--check', file]).status).toBe(1)
+      expect(readFileSync(file, 'utf8')).toBe('an _underlined_ word\n')
+      expect(run(['--write', file]).status).toBe(0)
+      expect(readFileSync(file, 'utf8')).toBe('an {_underlined_} word\n')
+      expect(run(['--check', file]).status).toBe(0)
+      expect(run([report]).status).toBe(1)
+      const json = JSON.parse(execFileSync(process.execPath, [cli, '--json', file], { encoding: 'utf8' })) as {
+        files: { check: string; records: unknown[] }[]
+      }
+      expect(json.files).toEqual([{ file, changed: false, check: 'pass', records: [] }])
+      expect(run(['--nope', file]).status).toBe(2)
+    } finally {
+      rmSync(dir, { recursive: true })
+    }
+  })
+})

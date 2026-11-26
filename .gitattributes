@@ -13,9 +13,6 @@
 /.gitignore export-ignore
 /.gitmodules export-ignore
 /docs export-ignore
-/examples export-ignore
 /package-lock.json export-ignore
-/published-drift.baseline export-ignore
-/scripts export-ignore
 /spec export-ignore
 /test export-ignore

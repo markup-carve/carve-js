@@ -1,0 +1,82 @@
+import { type Context, type Rule } from '../context.ts'
+import { attributeLinkQuotes } from './attribute-link-quotes.ts'
+import { attributeLines, openers } from './attributes.ts'
+import { blankLines } from './blank-lines.ts'
+import {
+  commentLineBreaks, descriptionColumns, explicitInline, itemColumns, itemParagraphBreaks, lineComments, nestedOrderedBreaks,
+  typedQuotes,
+} from './late.ts'
+import {
+  abbreviationContinuation, definitions, definitionsAtTop, definitionsKept, definitionsKeptAfter, definitionsNested
+} from './definitions.ts'
+import { escapes } from './escapes.ts'
+import { fences } from './fences.ts'
+import { inline, inlineBraced, unclosedRuns } from './inline.ts'
+import { captionContinuation, termDescriptionMarks } from './labels.ts'
+import { lists } from './lists.ts'
+import { orderedTasks, taskBoxSpacing } from './ordered-tasks.ts'
+import { shortcuts } from './shortcuts.ts'
+import { includes, tables, tablesHeadStyles } from './tables.ts'
+import {
+  abbreviationSpaces, attributeAcrossFootnoteDefinition, continuedHeaderRow, crossLineStrong,
+  descriptionAfterQuotedTerm, duplicateItemDefinitions, itemNoteDefinitions,
+  emptyAttributeItemAfterDescription, emptyAttributeQuote, emptyQuoteInFootnote,
+  emptyColonDiv, descriptionMarkerColumns,
+  fenceAfterDescription, flippedStrong, footnoteQuoteAfterDescription, fusedCommentBlockOpener, inlineEditComposition,
+  innerFenceRun, lazyCaretAfterQuote, markerAttributeBeforeHeading, nestedColonRuns, nestedDivInsideAdmonition, paddedTsvRows,
+  legacyPlusDash, listAfterFootnote,
+  literalIncludeMentions, literalLinkBeforeCode, literalNarrowSpaceLinks,
+  literalQuoteAfterAttributes, literalTableHeader, outerAdmonitionAroundDiv, quotedColonOpenerText,
+  nestedFootnoteAfterItem,
+  repeatedIndentedNote, quotedPlusNestedList,
+  siblingHeadingBoundary, siblingListBoundary, tabbedFootnoteContinuation, wrappedCodeTableRow,
+  siblingQuoteParagraphs,
+} from './replay-fallbacks.ts'
+
+/** Starts the repairs of the replay rows (carve#6183) for the rules after it. */
+function repairs(ctx: Context): void {
+  ctx.repairs = true
+}
+
+/** Every rule, in the order of the contract's groups. The order does not decide which edit wins. */
+export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks, taskBoxSpacing, attributeLines, openers, definitions,
+  fences, tables, inline, escapes, shortcuts, unclosedRuns, captionContinuation,
+  abbreviationContinuation]
+
+/** Rules that run only when the first pass leaves a difference, so a source that already upgrades keeps its result. */
+export const LATE_RULES: readonly Rule[] = [lineComments, typedQuotes]
+
+const REPAIRS: readonly Rule[] = [repairs,
+  ...RULES.map((rule) => rule === inline ? inlineBraced : rule === tables ? tablesHeadStyles : rule),
+  ...LATE_RULES, descriptionColumns, flippedStrong, crossLineStrong, literalTableHeader, duplicateItemDefinitions,
+  itemNoteDefinitions, literalLinkBeforeCode,
+  wrappedCodeTableRow, abbreviationSpaces, emptyAttributeQuote, siblingListBoundary, literalQuoteAfterAttributes, innerFenceRun,
+  siblingHeadingBoundary, emptyAttributeItemAfterDescription, emptyColonDiv, continuedHeaderRow,
+  descriptionAfterQuotedTerm, nestedFootnoteAfterItem, legacyPlusDash, tabbedFootnoteContinuation,
+  footnoteQuoteAfterDescription, listAfterFootnote, inlineEditComposition, emptyQuoteInFootnote, lazyCaretAfterQuote,
+  literalNarrowSpaceLinks, fenceAfterDescription, literalIncludeMentions, fusedCommentBlockOpener,
+  markerAttributeBeforeHeading, quotedColonOpenerText, nestedDivInsideAdmonition, descriptionMarkerColumns, paddedTsvRows,
+  attributeAcrossFootnoteDefinition, siblingQuoteParagraphs, attributeLinkQuotes, repeatedIndentedNote,
+  outerAdmonitionAroundDiv, quotedPlusNestedList, nestedColonRuns]
+
+/** Each late variant replaces first-pass rules with the late rules in their place, tried in order. */
+export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
+  [...RULES, ...LATE_RULES],
+  [...RULES.map((rule) => rule === definitions ? definitionsAtTop : rule), ...LATE_RULES],
+  [...RULES.map((rule) => rule === definitions ? definitionsKept : rule), ...LATE_RULES],
+  [...RULES, ...LATE_RULES, commentLineBreaks],
+  [...RULES.map((rule) => rule === inline ? inlineBraced : rule), ...LATE_RULES],
+  [...RULES, ...LATE_RULES, explicitInline],
+  [...RULES.map((rule) => rule === definitions ? definitionsNested : rule), ...LATE_RULES],
+  [...RULES, ...LATE_RULES, descriptionColumns],
+  [...RULES, ...LATE_RULES, itemColumns],
+  [...RULES, ...LATE_RULES, itemParagraphBreaks],
+  [...RULES, ...LATE_RULES, nestedOrderedBreaks],
+  [...RULES.map((rule) => rule === tables ? tablesHeadStyles : rule), ...LATE_RULES],
+  [...RULES.map((rule) => rule === definitions ? definitionsKeptAfter : rule), ...LATE_RULES],
+  REPAIRS,
+  [...RULES, ...LATE_RULES, termDescriptionMarks],
+]
+
+/** The repairs variant, which a fused comment block opener tries first. */
+export const REPAIRS_VARIANT = LATE_VARIANTS.indexOf(REPAIRS)

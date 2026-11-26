@@ -1,0 +1,150 @@
+import { describe, expect, it } from 'vitest'
+import { render } from '../src/index.ts'
+import { importDocument } from '../public/formats.ts'
+
+function fromHtml(html: string): { source: string, codes: string[] } {
+  const result = importDocument(html, { from: 'html' })
+  return { source: result.source, codes: result.diagnostics.map((item) => item.code) }
+}
+
+describe('carve#6788: revision keys on render (C2-H-210)', () => {
+  it('maps the keys in lower case only', () => {
+    expect(render('{+x+}{Author=Ann}\n')).toBe('<p><ins Author="Ann">x</ins></p>')
+    expect(render('{#x#}{DateTime=1}\n')).toBe('<p><span class="critic-comment" DateTime="1">x</span></p>')
+  })
+
+  it('keeps each key in its place among the attributes', () => {
+    expect(render('{-x-}{k=1 author=Ann cite=/r datetime=2}\n')).toBe('<p><del k="1" data-author="Ann" cite="/r" datetime="2">x</del></p>')
+  })
+
+  it('an authored data-datetime wins on the comment span', () => {
+    expect(render('{#x#}{datetime=1 data-datetime=2}\n')).toBe('<p><span class="critic-comment" data-datetime="2">x</span></p>')
+  })
+
+  it('datetime on another node stays an ordinary attribute', () => {
+    expect(render('*x*{author=Ann datetime=1}\n')).toBe('<p><strong author="Ann" datetime="1">x</strong></p>')
+  })
+})
+
+describe('carve#6788: revision keys on import (C2-M-044)', () => {
+  it('a data-author beside an authored author keeps its name', () => {
+    expect(fromHtml('<ins author="A" data-author="B">x</ins>').source).toBe('{+x+}{author=A data-author=B}\n')
+  })
+
+  it('data-datetime on <ins> is not a revision key', () => {
+    expect(fromHtml('<ins data-datetime="1">x</ins>').source).toBe('{+x+}{data-datetime=1}\n')
+  })
+
+  it('render and import agree on an annotated comment', () => {
+    const source = 'a{#c#}{.k author=Ann datetime=2026-11-21} b\n'
+    expect(fromHtml(render(source)).source).toBe(source)
+  })
+})
+
+describe('carve#6788: a ranged comment is read as a point (C2-M-113)', () => {
+  it('finds its end inside another element and reports the range once', () => {
+    const { source, codes } = fromHtml(
+      '<p>a <span class="comment-start" data-comment-id="1">n</span><em>b<span class="comment-end" data-comment-id="1"></span></em> c</p>')
+    expect(source).toBe('a {#n#}/b/ c\n')
+    expect(codes).toEqual(['import-structure-repaired'])
+  })
+
+  it('pairs each start with the first later end of its id', () => {
+    const { source, codes } = fromHtml('<p><span class="comment-start" data-comment-id="1">n</span>'
+      + '<span class="comment-start" data-comment-id="2">m</span>x<span class="comment-end" data-comment-id="2"></span>'
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>')
+    expect(source).toBe('{#n#}{#m#}xy\n')
+    expect(codes).toEqual(['import-structure-repaired', 'import-structure-repaired'])
+  })
+
+  it('an end of another id stays an ordinary span', () => {
+    const { source, codes } = fromHtml(
+      '<p><span class="comment-start" data-comment-id="1">n</span>x<span class="comment-end" data-comment-id="9">e</span></p>')
+    expect(source).toBe('{#n#}x[e]{.comment-end data-comment-id=9}\n')
+    expect(codes).toEqual([])
+  })
+
+  it('an end before the start is not its end', () => {
+    const { source } = fromHtml(
+      '<p><span class="comment-end" data-comment-id="1">e</span><span class="comment-start" data-comment-id="1">n</span></p>')
+    expect(source).toBe('[e]{.comment-end data-comment-id=1}{#n#}\n')
+  })
+
+  it('an empty element between start and end loses nothing', () => {
+    const { codes } = fromHtml('<p><span class="comment-start" data-comment-id="1">n</span><em></em>'
+      + '<span class="comment-end" data-comment-id="1"></span>x</p>')
+    expect(codes).toEqual([])
+  })
+})
+
+describe('carve#6794: an empty list-table cell (C2-M-112)', () => {
+  it('a cell whose only paragraph is empty holds an empty line comment', () => {
+    const result = importDocument('<table><tr><td><p></p></td><td><ul><li>a</li></ul></td></tr></table>', { from: 'html', listTable: true })
+    expect(result.source).toBe('::: list-table\n- - %%\n  - - a\n:::\n')
+  })
+})
+
+describe('carve#6788: a ranged comment loses only what the import keeps (C2-M-113)', () => {
+  it('a dropped element in the range loses nothing', () => {
+    expect(fromHtml('<p><span class="comment-start" data-comment-id="1">n</span><script>x()</script>'
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).not.toContain('import-structure-repaired')
+  })
+
+  it('an empty nested start loses nothing, a nested comment does', () => {
+    const empty = '<span class="comment-start" data-comment-id="2"></span><span class="comment-end" data-comment-id="2"></span>'
+    expect(fromHtml(`<p><span class="comment-start" data-comment-id="1">n</span>${empty}`
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).toEqual(['import-element-dropped'])
+    expect(fromHtml('<p><span class="comment-start" data-comment-id="1">n</span><span class="comment-start" data-comment-id="2">m</span>'
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).toEqual(['import-structure-repaired'])
+  })
+})
+
+describe('carve-js#5661: a non-task input in a ranged comment (C2-M-113)', () => {
+  const html = '<p><span class="comment-start" data-comment-id="1">n</span><input type="text">'
+    + '<span class="comment-end" data-comment-id="1"></span>y</p>'
+
+  it('a dropped input loses nothing with rawHtml off', () => {
+    const { source, codes } = fromHtml(html)
+    expect(source).toBe('{#n#}y\n')
+    expect(codes).toEqual(['import-element-dropped'])
+  })
+
+  it('a kept raw input is a lost range with rawHtml on', () => {
+    const result = importDocument(html, { from: 'html', rawHtml: true })
+    expect(result.diagnostics.map(entry => entry.code)).toContain('import-structure-repaired')
+  })
+
+  it('a dropped input nested in a span loses nothing', () => {
+    expect(fromHtml('<p><span class="comment-start" data-comment-id="1">n</span><em><input type="text" value="v"></em>'
+      + '<span class="comment-end" data-comment-id="1"></span>y</p>').codes).not.toContain('import-structure-repaired')
+  })
+})
+
+describe('carve-js#5661: a snippet use in a ranged comment (C2-M-113, C2-H-186)', () => {
+  const range = (inner: string) => '<p><span class="comment-start" data-comment-id="1">n</span>' + inner
+    + '<span class="comment-end" data-comment-id="1"></span>y</p>'
+
+  it('an input carrier is a kept inline with rawHtml off', () => {
+    const { source, codes } = fromHtml(range('<input data-carve-snippet="1:inline:$foo">'))
+    expect(source).toBe('{#n#}{{ $foo }}y\n')
+    expect(codes).toEqual(['import-structure-repaired'])
+  })
+
+  it('a raw element carrier is a kept inline with rawHtml off', () => {
+    expect(fromHtml(range('<script data-carve-snippet="1:inline:$foo">x()</script>')).codes).toEqual(['import-structure-repaired'])
+  })
+})
+
+describe('carve-js#5661: what the reader takes before inline reading (C2-H-186, C2-M-032)', () => {
+  it('a second carrier of one ordinal is read as its element, so an end inside it is claimed', () => {
+    const { source } = fromHtml('<p><span data-carve-snippet="1:inline:$a"></span><span class="comment-start" data-comment-id="1">n</span>'
+      + '<em data-carve-snippet="1:inline:$b">t<span class="comment-end" data-comment-id="1"></span></em>y</p>')
+    expect(source).not.toContain('comment-end')
+  })
+
+  it('a task box in the range is no kept inline', () => {
+    const { codes } = fromHtml('<ul><li><span class="comment-start" data-comment-id="1">n</span></li>'
+      + '<li><input type="checkbox" data-carve-snippet="1:inline:$a"><span class="comment-end" data-comment-id="1"></span></li></ul>')
+    expect(codes).not.toContain('import-structure-repaired')
+  })
+})

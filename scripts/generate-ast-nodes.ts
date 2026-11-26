@@ -1,0 +1,142 @@
+// Writes src/ast-nodes.ts, one interface per node type of the tree document, from the node table
+// the validator reads (src/ast-validate.ts), so the two cannot name different fields.
+//   node scripts/generate-ast-nodes.ts
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { type Content, NODE_TABLE } from '../src/ast-validate.ts'
+import { MAX_COLUMNS, wrapJson } from './wrap-literal.ts'
+
+const { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, INLINE_SLOTS, ENUMS, STAGES, OPTIONAL_CONTENT } = NODE_TABLE
+
+/** `table_cell` is `TableCellNode`. */
+export function interfaceName(type: string): string {
+  return `${type.split('_').map((part) => part[0]!.toUpperCase() + part.slice(1)).join('')}Node`
+}
+
+function literals(values: readonly string[]): string {
+  return values.map((value) => JSON.stringify(value)).join(' | ')
+}
+
+/** A union type alias, one member per line. */
+function unionLines(name: string, types: readonly string[]): string[] {
+  return [`export type ${name} =`, ...types.map((type) => `  | ${interfaceName(type)}`)]
+}
+
+function childrenType(content: Content): string {
+  if (content === 'blocks') return 'Block[]'
+  if (content === 'inlines') return 'Inline[]'
+  // A list that holds every block type names them as `Block`.
+  const named = content as readonly string[]
+  const blocks = BLOCKS.every((type) => named.includes(type))
+  const rest = blocks ? named.filter((type) => !BLOCKS.includes(type)) : named
+  const members = [...(blocks ? ['Block'] : []), ...rest.map(interfaceName)]
+  return members.length === 1 ? `${members[0]!}[]` : `(${members.join(' | ')})[]`
+}
+
+const SPECIAL = new Map<string, (type: string) => string>([
+  ['marker', () => 'Marker'],
+  ['task', () => 'Task'],
+  ['options', () => 'IncludeOptions'],
+  ['invalid', () => 'string[]'],
+  ['title', (type) => (type === 'link_reference_definition' ? 'string' : 'Inline[]')],
+  ['caption', () => 'CaptionNode'],
+  ['fallback', (type) => (type === 'block_extension' ? 'Block[]' : 'Inline[]')],
+  ['columns', () => 'TableColumnNode[]'],
+  ['pairs', () => 'RubyPairNode[]'],
+  ['locator', () => 'CitationLocator'],
+  ['longDescription', () => 'Block[]'],
+  ['headerIds', () => 'string[]'],
+  ['slots', () => 'Record<string, Node[]>'],
+  ['source', (type) => type === 'smart_punctuation' ? 'string' : 'ExtensionSource'],
+  ['stages', () => `(${literals(STAGES)})[]`],
+  ['resources', () => 'Resource[]'],
+  ['extensions', () => 'ExtensionDeclaration[]'],
+  ['payload', () => '{ format: string, value: unknown }[]'],
+  ['resourceIds', () => 'string[]'],
+  ['props', () => 'Record<string, unknown>'],
+  ['width', () => 'number'],
+])
+
+function fieldType(type: string, name: string): string {
+  const values = ENUMS.get(`${type}.${name}`) ?? ENUMS.get(`*.${name}`)
+  if (values !== undefined) return literals(values)
+  const special = SPECIAL.get(name)
+  if (special !== undefined) return special(type)
+  if (STRINGS.includes(name)) return 'string'
+  if (INTEGERS.includes(name)) return 'number'
+  if (BOOLEANS.includes(name)) return 'boolean'
+  if (INLINE_SLOTS.includes(name)) return 'Inline[]'
+  throw new Error(`no type for ${type}.${name}`)
+}
+
+function fieldLines(name: string, type: string, optional = false): string[] {
+  const prefix = `  ${name}${optional ? '?' : ''}:`
+  if (`${prefix} ${type}`.length <= MAX_COLUMNS) return [`${prefix} ${type}`]
+  return [prefix, ...type.split(' | ').map((part) => `    | ${part}`)]
+}
+
+/** The children field; a union too long for a line puts one member on each line. */
+function childrenLines(type: string, optional = false): string[] {
+  const prefix = `  children${optional ? '?' : ''}:`
+  if (`${prefix} ${type}`.length <= MAX_COLUMNS || !type.startsWith('(')) return [`${prefix} ${type}`]
+  return [`${prefix} (`, ...type.slice(1, -3).split(' | ').map((part) => `    | ${part}`), '  )[]']
+}
+
+/** The text of src/ast-nodes.ts. */
+export function generateAstNodes(): string {
+  const types = [...RULES.keys()]
+  const lines = [
+    '// Generated from the node table of src/ast-validate.ts by scripts/generate-ast-nodes.ts. Do not edit.',
+    'import {',
+    '  type Attrs, type CitationLocator, type ExtensionDeclaration, type IncludeOptions, type Marker, type Metadata,',
+    '  type Position, type Resource, type Task,',
+    "} from './ast.ts'",
+    "import { type ExtensionSource } from './extensions/types.ts'",
+    '',
+    '/** C2-A-027: the fields every node may carry. */',
+    'export interface NodeBase {',
+    '  attrs?: Attrs',
+    '  data?: Record<string, unknown>',
+    '  pos?: Position',
+    '  segments?: Position[]',
+    '  metadata?: Metadata',
+    `  dir?: ${fieldType('*', 'dir')}`,
+    '  lang?: string',
+    '}',
+  ]
+  for (const type of types) {
+    const [content, required, optional] = RULES.get(type)!
+    lines.push('', `export interface ${interfaceName(type)} extends NodeBase {`, `  type: ${JSON.stringify(type)}`)
+    const later = OPTIONAL_CONTENT.get(type)
+    if (content !== 'none') lines.push(...childrenLines(childrenType(content)))
+    else if (later !== undefined) lines.push(...childrenLines(childrenType(later), true))
+    for (const name of required) lines.push(...fieldLines(name, fieldType(type, name)))
+    for (const name of optional) lines.push(...fieldLines(name, fieldType(type, name), true))
+    lines.push('}')
+  }
+  lines.push(
+    '', '/** The node types that stand in a list of blocks. */', ...unionLines('Block', BLOCKS),
+    '', '/** The node types that stand in a list of inlines. */', ...unionLines('Inline', INLINES),
+    '', '/** Every node of the tree document, told apart by `type`. */', ...unionLines('Node', types),
+    '', '/** The node of each type. */', 'export interface NodeOfType {',
+    ...types.map((type) => `  ${type}: ${interfaceName(type)}`), '}',
+    '', '/**',
+    ' * A function per node type, each of which reads a node of its own type and what the caller passes along.',
+    ' * A table is read through a dispatcher of its own, `table[type]?.(node, context)` with `type` and `node`',
+    ' * typed by one parameter `T extends keyof NodeOfType`: one shared dispatcher for every table loses speed.',
+    ' */',
+    'export type NodeHandlers<R, C = void> = { [T in keyof NodeOfType]?: (node: NodeOfType[T], context: C) => R }',
+    '', '/** The values of each field that takes one of a fixed set, by `type.field` (`*` for any type). */',
+    'export const FIELD_VALUES = {',
+    ...[...ENUMS].flatMap(([field, values]) => wrapJson(`  ${JSON.stringify(field)}: `, values, ',')),
+    '} as const',
+    '', '/** Whether `value` is one of the values of `field`. */',
+    'export function isFieldValue<F extends keyof typeof FIELD_VALUES>(',
+    '  field: F, value: string,',
+    '): value is (typeof FIELD_VALUES)[F][number] {',
+    '  return FIELD_VALUES[field].some((allowed) => allowed === value)', '}', '',
+  )
+  return lines.join('\n')
+}
+
+if (import.meta.main) writeFileSync(join(import.meta.dirname, '../src/ast-nodes.ts'), generateAstNodes())

@@ -1,0 +1,327 @@
+// The clauses that the specification commits after "fix what the review of today's clauses found"
+// added or changed, one test per clause id.
+import { describe, expect, it } from 'vitest'
+import { type DocumentNode, format, type Inline, type NodeLayout, parseWithLayout, formatWithDiagnostics, parse, render, renderWithDiagnostics, write, writeWithDiagnostics } from '../src/index.ts'
+import { at, documentOf, paragraph, text } from './support/tree.ts'
+import { referenceForm } from './support/writer-checks.ts'
+
+const CONTROLS = '‪‮⁦⁩'
+const TICK = '`'
+
+function inline(node: Inline): DocumentNode {
+  return documentOf(paragraph(node))
+}
+
+describe('the bidirectional controls', () => {
+  it('C2-H-172: they are not written in a title paragraph or a label paragraph', () => {
+    expect(render(`::: note "T${CONTROLS}t" [L${CONTROLS}l]\nx\n:::`)).toBe(
+      '<aside class="admonition note" aria-labelledby="adm-1">\n  <p class="admonition-title" id="adm-1">Tt</p>\n'
+      + '  <p class="div-label">Ll</p>\n  <p>x</p>\n</aside>')
+  })
+
+  it('C2-H-172: they are not written in the text of a cross-reference', () => {
+    expect(render(`{#h}\n# A${CONTROLS}b\n\nsee </#h>`)).toContain('<a href="#h">Ab</a>')
+  })
+
+  it('C2-H-172: they are not written in static math', () => {
+    expect(render(`$${TICK}a${CONTROLS}b${TICK}`, { mode: 'static' })).toBe('<p><span class="math inline" role="math">\\(ab\\)</span></p>')
+  })
+
+  it('C2-H-172: they are not written in the text of an autolink', () => {
+    expect(render(inline({ type: 'autolink', href: 'https://a.b', text: `a${CONTROLS}b` })))
+      .toBe('<p><a href="https://a.b">ab</a></p>')
+  })
+
+  it('C2-H-172: they are not written in an editorial comment', () => {
+    expect(render(`a {#ed${CONTROLS}it#} b`)).toBe('<p>a <span class="critic-comment">edit</span> b</p>')
+  })
+
+  it('C2-H-172: they are not written in an unresolved reference written as text', () => {
+    expect(render(`[x][k${CONTROLS}k]`)).toBe('<p>[x][kk]</p>')
+  })
+
+  it('C2-H-172: they are not written in a symbol written as its source', () => {
+    expect(render(inline({ type: 'symbol', name: `s${CONTROLS}y` }))).toBe('<p>:sy:</p>')
+  })
+
+  it('C2-H-172: they are not written in an unexpanded include', () => {
+    expect(render(`{{ a${CONTROLS}.crv }}`)).toBe('<p>{{ a.crv }}</p>')
+  })
+
+  it('C2-H-172: they are not written in raw HTML that is escaped', () => {
+    expect(render(`a ${TICK}x${CONTROLS}${TICK}{=html} b`)).toBe('<p>a x b</p>')
+  })
+
+  it('C2-H-172: they are not written in a degraded form', () => {
+    expect(render(`# H${CONTROLS}h`, { profile: 'minimal' })).toBe('<p># Hh</p>')
+    expect(render(documentOf(paragraph(text('a'), { type: 'symbol', name: `s${CONTROLS}y` })), { profile: 'minimal' }))
+      .toBe('<p>a:sy:</p>')
+  })
+
+  it('C2-H-172: the text of a roundtrip carrier keeps them', () => {
+    expect(render(`a ${TICK}x${CONTROLS}${TICK}{=html} b`, { roundtrip: true }))
+      .toBe(`<p>a <span data-carve-raw="html">x${CONTROLS}</span> b</p>`)
+  })
+
+  it('C2-H-172: raw content passed through unescaped keeps them', () => {
+    expect(render(`a ${TICK}x${CONTROLS}${TICK}{=html} b`, { rawHtml: true })).toBe(`<p>a x${CONTROLS} b</p>`)
+  })
+})
+
+describe('the degraded forms', () => {
+  const minimal = { profile: 'minimal' } as const
+
+  it('C2-H-165: a description list gives one paragraph for each term and the degraded blocks of each description', () => {
+    expect(render(':: term one\n: desc *a*\n\n  desc b\n:: term two\n: desc c', minimal))
+      .toBe('<p>term one</p>\n<p>desc a</p>\n<p>desc b</p>\n<p>term two</p>\n<p>desc c</p>')
+  })
+
+  it('C2-H-165: the nodes inside a degraded node are not reported again', () => {
+    const out = renderWithDiagnostics(':: term one\n: desc *a* [x](/u)\n', minimal)
+    expect(out.diagnostics.filter((entry) => entry.code === 'profile-construct-degraded')).toHaveLength(1)
+  })
+
+  it('C2-H-165: an include is written as the source text of its directive, options included', () => {
+    expect(render('{{ a.crv #s @lines:1-2 @cols:"a,b" }}', minimal)).toBe('<p>{{ a.crv #s @lines:1-2 @cols:"a,b" }}</p>')
+  })
+
+  it('C2-H-165: a heading is one # for each level and a space, whatever marker the source used', () => {
+    expect(render('=== Deep', minimal)).toBe('<p>### Deep</p>')
+  })
+
+  it('C2-H-165: a no-break space, a break and a smart punctuation node give U+00A0, one space and the glyph', () => {
+    expect(render('[a\\ b "q" x -- y\\\nz]{.c}', minimal)).toBe('<p>a&nbsp;b “q” x – y z</p>')
+  })
+
+  it('C2-H-165: a footnote reference is written as [^key]', () => {
+    expect(render('a[^n]\n\n[^n]: note', minimal)).toBe('<p>a[^n]</p>')
+  })
+
+  it('C2-H-165: a comment gives no text, and a paragraph that holds only comments writes nothing', () => {
+    expect(render('a {% c %} b', minimal)).toBe('<p>a  b</p>')
+    expect(render('{% only %}', minimal)).toBe('')
+    expect(render('> {% only %}', minimal)).toBe('')
+  })
+})
+
+describe('the cols value of an include', () => {
+  it('C2-A-181, C2-W-058: a cols value that kept its quotes formats to itself with no diagnostic', () => {
+    const out = formatWithDiagnostics('{{ a.crv @cols:"a,b" }}')
+    expect(out.source).toBe('{{ a.crv @cols:"a,b" }}\n')
+    expect(out.diagnostics).toEqual([])
+  })
+
+  it('C2-W-058: the writer writes a stored cols value with no second pair', () => {
+    expect(write(documentOf({ type: 'include', path: 'a.crv', options: { cols: ['a b'] } }))).toBe('{{ a.crv @cols:"a b" }}\n')
+  })
+
+  it('C2-H-171: the renderer writes a cols value that kept its quotes as stored', () => {
+    expect(render('{{ a.crv @cols:"a b" }}')).toBe('<p>{{ a.crv @cols:"a b" }}</p>')
+  })
+})
+
+describe('the bracket label', () => {
+  const fence = TICK.repeat(3)
+
+  it('C2-A-187: the bracket label of a code block is the string groupLabel, with no inline parsing', () => {
+    expect(parse(`${fence}js [Tab *x*]\nx\n${fence}`, { positions: false }).children?.[0]).toEqual(
+      { type: 'code_block', value: 'x\n', syntax: 'js', groupLabel: 'Tab *x*' })
+  })
+
+  it('C2-B-121: the label renders nothing on a code fence', () => {
+    expect(render(`${fence}js [Tab]\nx\n${fence}`)).toBe('<pre><code class="language-js">x\n</code></pre>')
+  })
+
+  it('C2-B-121: the label is the label paragraph on a div, an admonition and a directive', () => {
+    expect(render('::: [Tab *x*]\nx\n:::')).toBe('<div>\n  <p class="div-label">Tab *x*</p>\n  <p>x</p>\n</div>')
+    expect(render('::: tip [L]\nx\n:::')).toContain('<p class="div-label">L</p>')
+    expect(render('::: toc [L]\n:::')).toBe('<div class="toc">\n  <p class="div-label">L</p>\n</div>')
+  })
+
+  it('C2-B-119: a label may stand with no name or language before it', () => {
+    expect(parse('::: [L]\nx\n:::', { positions: false }).children?.[0]).toMatchObject({ type: 'div', groupLabel: 'L' })
+    expect(parse(`${fence} [L]\nx\n${fence}`, { positions: false }).children?.[0]).toEqual({ type: 'code_block', value: 'x\n', groupLabel: 'L' })
+    expect(format('::: [L]\nx\n:::')).toBe('::: [L]\nx\n:::\n')
+  })
+})
+
+describe('a line comment behind a list', () => {
+  const fence = TICK.repeat(3)
+
+  function withComment(src: string): ReturnType<typeof writeWithDiagnostics> {
+    const document = parse(src, { positions: false })
+    document.children!.push({ type: 'comment', form: 'line', value: 'c' })
+    return writeWithDiagnostics(document)
+  }
+
+  for (const src of ['- a', ':: t\n: d', '[^n]: d']) {
+    it(`C2-W-122: a supplied tree with a line comment as the sibling of ${JSON.stringify(src)} is reported`, () => {
+      expect(withComment(src).diagnostics.map((entry) => `${entry.code} ${entry.path ?? ''}`)).toEqual(['structure-unspellable /children/1'])
+    })
+  }
+
+  it('C2-W-122, C2-W-123: behind an open fence the comment is a sibling and nothing is reported', () => {
+    const out = withComment(`- a\n\n  ${fence}\n  x\n  ${fence}`)
+    expect(out.source).toBe(`- a\n\n  ${fence}\n  x\n%% c\n`)
+    expect(out.diagnostics).toEqual([])
+  })
+})
+
+describe('continuation rows with no layout record', () => {
+  const fence = TICK.repeat(3)
+
+  /** The tree of `src` with the `value` of the first inline node of its first cell set to `value`, as a supplied tree. */
+  const suppliedCell = (src: string, value: string): DocumentNode => {
+    const document = parse(src, { positions: false })
+    Object.assign(Object(at(document, 'children.0.children.0.children.0.children.0.children.0.children.0')), { value })
+    return document
+  }
+
+  it('C2-W-067, C2-I-120: a code span in a pipe-table cell whose value holds a line feed is written with a space there', () => {
+    const out = writeWithDiagnostics(suppliedCell(`| ${TICK}a${TICK} | c |`, 'a\nb'), { check: false })
+    expect(out.source).toBe(`| ${TICK}a b${TICK} | c |\n`)
+    expect(out.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
+  })
+
+  it('C2-W-067, C2-I-120: a braced comment that holds a line feed is written the same way', () => {
+    const out = writeWithDiagnostics(suppliedCell('| {% a %} | c |', 'a\nx'), { check: false })
+    expect(out.source).toBe('| {% a x %} | c |\n')
+    expect(out.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
+  })
+
+  it('C2-B-184: a code span opened in a row and closed in its continuation row is text in each fragment', () => {
+    expect(format(`| ${TICK}a | b |\n+ b${TICK} | c |`)).toBe(`| ${TICK}a | b |\n+ b${TICK} | c |\n`)
+    // C2-W-088 (carve-js#5283, option B): the reported backtick kind escapes the second backtick as well.
+    expect(write(parse(`| ${TICK}a | b |\n+ b${TICK} | c |`, { positions: false }))).toBe(`| \\${TICK}a b\\${TICK} | b c |\n`)
+  })
+
+  it('C2-W-067: a delimited table writes a cell that holds a line feed in double quotes', () => {
+    const document = parse(`{table}\n${fence}csv\n"a\nb",c\n${fence}`, { positions: false })
+    expect(write(document)).toBe(`{table}\n${fence}csv\n"a\nb",c\n${fence}\n`)
+  })
+
+  it('C2-B-184: a reference label that a continuation row breaks is text in each fragment', () => {
+    expect(format('| [x][a | b |\n+ b] | c |\n\n[a b]: /u')).toBe('| [x][a | b |\n+ b] | c |\n\n[a b]: /u\n')
+  })
+})
+
+describe('the scheme test', () => {
+  it('C2-H-159: U+0000 of the source is read as U+FFFD, which the scheme test removes', () => {
+    expect(render('[x](java\u0000script:alert(1))')).toBe('<p><a href="">x</a></p>')
+    expect(render('[x](java\ufffdscript:alert(1))')).toBe('<p><a href="">x</a></p>')
+  })
+
+  it('C2-H-159: the two ranges of bidirectional controls are removed before the test', () => {
+    expect(render('[x](java\u202ascript:alert(1))')).toBe('<p><a href="">x</a></p>')
+    expect(render('[x](java\u2069script:alert(1))')).toBe('<p><a href="">x</a></p>')
+  })
+})
+
+describe('the layout record', () => {
+  function entries(src: string): NodeLayout[] {
+    return parseWithLayout(src).layout.nodes
+  }
+
+  function entry(src: string, path: string): NodeLayout | undefined {
+    return entries(src).find((node) => node.path === path)
+  }
+
+  it('C2-L-011: the slots of a node are visited in the order title, children, caption', () => {
+    expect(entries('::: note "see [x][r]"\n[y][r]\n:::\n\n[r]: /u').map((node) => node.path))
+      .toEqual(['/children/0', '/children/0/title/1', '/children/0/children/0', '/children/0/children/0/children/0', '/children/1'])
+    const figure = entries('![a][r]\n^ see [c][r]\n\n[r]: /u').map((node) => node.path)
+    expect(figure.indexOf('/children/0/children/0')).toBeLessThan(figure.indexOf('/children/0/caption'))
+  })
+
+  it('C2-L-020, C2-L-021: an offset of 0 marks the start of a node that need not have a value', () => {
+    const cell = '/children/0/children/0/children/0/children/0'
+    expect(entry('| |\n+ *b* |', cell)?.wraps).toEqual([{ line: 1, path: `${cell}/children/0/children/0`, offset: 0 }])
+    expect(format('| |\n+ *b* |')).toBe('| |\n+ *b* |\n')
+    expect(format('| a | x |\n+ *b* | /y/ |')).toBe('| a | x |\n+ *b* | /y/ |\n')
+  })
+
+  it('C2-L-048: a cell that spans rows has row on its wraps, the number of rows below its own', () => {
+    const wraps = entry('| a | b |\n|^ | c |\n+ x | d |', '/children/0/children/0/children/0/children/0')?.wraps
+    expect(wraps).toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/0', offset: 2, row: 1 }])
+  })
+
+  it('C2-L-045, C2-L-054: a comment inside a quote has the column of the quote mark, and none when its line lacks the mark', () => {
+    expect(entry('> a\n>\n> %% c', '/children/0/children/1')?.markerColumn).toBe(0)
+    expect(entry('  > a\n  >\n  > %% c', '/children/0/children/1')?.markerColumn).toBe(2)
+    expect(entry('> a\n>\n%% c', '/children/0/children/1')).not.toHaveProperty('markerColumn')
+  })
+})
+
+describe('the escapes of a text as one procedure', () => {
+  function written(value: string): string {
+    return write(documentOf(paragraph(text(value))))
+  }
+
+  it('C2-W-088, C2-W-091: x<a:b>=} is written x\\<a:b\\>=}, the form of the procedure', () => {
+    const form = written('x<a:b>=}')
+    expect(form).toBe('x\\<a:b\\>=}\n')
+    expect(referenceForm(form, parse(form))).toEqual({ form })
+  })
+
+  it('C2-W-091: x(/u)(/u)/ is written x(\\/u)(\\/u)/, the third slash first and then the first', () => {
+    const form = written('x(/u)(/u)/')
+    expect(form).toBe('x(\\/u)(\\/u)/\n')
+    expect(referenceForm(form, parse(form))).toEqual({ form })
+  })
+
+  it('C2-W-125, case seven: where the escape of a sigil would turn the quote before it, the bracket takes the backslash', () => {
+    // C2-I-104: behind a hyphen the quote closes, so the sigil takes the backslash as it does behind a letter.
+    const form = format("-':n[\\]")
+    expect(form).toBe("-'\\:n[]\n")
+    expect(referenceForm(form, parse(form))).toEqual({ form })
+    expect(format("x':n[\\]")).toBe("x'\\:n[]\n")
+  })
+
+  it('C2-W-125, case six: a character behind a node that would lengthen it takes the backslash in the reference too', () => {
+    for (const form of [`x${TICK}a${TICK}\\${TICK}\n`, 'x @a\\_\n', 'x(/u)/\\/\n']) {
+      expect(referenceForm(form, parse(form))).toEqual({ form })
+    }
+  })
+
+  it('C2-W-088: a footnote label that runs on over a line break past an emphasis is escaped at its bracket', () => {
+    const form = format('/[^a/\n\\]')
+    expect(form).toBe('/\\[^a/\n]\n')
+    expect(referenceForm(form, parse(form))).toEqual({ form })
+  })
+
+  it('C2-W-088: a backslash the procedure does not place is a defect, and so is a missing one', () => {
+    expect(referenceForm('\\.x\n', parse('.x'))).toEqual({ form: '.x\n' })
+    expect(referenceForm('x<a:b\\>=}\n', parse('x\\<a:b\\>=}'))).toEqual({ form: 'x\\<a:b\\>=}\n' })
+  })
+})
+
+describe('the other clauses of the eight commits', () => {
+  it('C2-H-169: the footnotes directive writes no attribute and is named by its title also with an authored aria-label', () => {
+    const html = render('a[^n]\n\n[^n]: note\n\n::: footnotes "Notes" {aria-label="X" .c #d}\npre\n:::')
+    expect(html).toContain('<p>pre</p>\n<section role="doc-endnotes" aria-labelledby="adm-1">\n  <p class="admonition-title" id="adm-1">Notes</p>')
+    expect(html).not.toContain('aria-label="X"')
+    expect(html).not.toContain('class="c"')
+  })
+
+  it('C2-B-184: an editorial comment, math, a literal and a raw span do not cross a continuation row', () => {
+    const cell = (src: string): unknown => parse(src, { positions: false }).children?.[0]
+    // The unclosed `{#` is text, and the `#a` behind it a tag.
+    expect(JSON.stringify(cell('| {#a | b |\n+ x#} | c |'))).toContain('{"type":"text","value":"{"},{"type":"tag","name":"a"},{"type":"text","value":" x#}"}')
+    expect(JSON.stringify(cell(`| $${TICK}a | b |\n+ b${TICK} | c |`))).toContain(`"value":"$${TICK}a b${TICK}"`)
+    expect(JSON.stringify(cell(`| !${TICK}a | b |\n+ b${TICK} | c |`))).toContain(`"value":"!${TICK}a b${TICK}"`)
+    expect(JSON.stringify(cell(`| ${TICK}a | b |\n+ b${TICK}{=html} | c |`))).toContain(`"value":"${TICK}a b${TICK}{=html}"`)
+  })
+
+  it('C2-B-184: ordinary text joins a continuation row with a space', () => {
+    expect(render('| a | b |\n+ x | c |')).toContain('<td>a x</td><td>b c</td>')
+  })
+
+  it('C2-L-052: continuationStyle stands on an item, a description and a footnote, and on no other block', () => {
+    const styles = (src: string): string[] => parseWithLayout(src).layout.nodes
+      .filter((node) => node.continuationStyle !== undefined).map((node) => `${node.path}=${node.continuationStyle!}`)
+    expect(styles('- a')).toEqual(['/children/0/children/0=marker_line'])
+    expect(styles(':: t\n: d\n  e')).toEqual(['/children/0/children/1=indent'])
+    expect(styles('[^n]: a\n  b')).toEqual(['/children/0=lazy'])
+    expect(styles('> a\n  b')).toEqual([])
+  })
+})
