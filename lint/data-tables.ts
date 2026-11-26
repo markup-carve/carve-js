@@ -363,10 +363,10 @@ const K64 = new RegExp("^(?:able|tble|tale|tabe|tabl|.table|t.able|ta.ble|tab.le
 const K65 = (item: unknown): unknown => !starts(obj(item)?.["raw_body"], "%%")
 const K66 = new Set<unknown>(["block_image","bullet","description","display_math","ordered","text"])
 const K67 = new Set<unknown>(["definition_term","line","paragraph"])
-const K68 = new RegExp("^(?:>[ \\t]+)*(?<label>\\[.+?\\]:).", "")
-const K69 = new RegExp("^(?:>[ \\t]+)*(?<label>\\[.+?\\]:).", "d")
-const K70 = new RegExp("^(?<label>\\[.+?\\]:).", "")
-const K71 = new RegExp("^(?<label>\\[.+?\\]:).", "d")
+const K68 = new RegExp("^(?:>[ \\t]+)*(?<label>\\[.+?\\]:|\\{\\$[A-Za-z0-9_][A-Za-z0-9_-]*(?:[ \\t][^{}\\n]*)?\\}(?:\\{[^{}\\n]*\\})*:).", "")
+const K69 = new RegExp("^(?:>[ \\t]+)*(?<label>\\[.+?\\]:|\\{\\$[A-Za-z0-9_][A-Za-z0-9_-]*(?:[ \\t][^{}\\n]*)?\\}(?:\\{[^{}\\n]*\\})*:).", "d")
+const K70 = new RegExp("^(?<label>\\[.+?\\]:|\\{\\$[A-Za-z0-9_][A-Za-z0-9_-]*(?:[ \\t][^{}\\n]*)?\\}(?:\\{[^{}\\n]*\\})*:).", "")
+const K71 = new RegExp("^(?<label>\\[.+?\\]:|\\{\\$[A-Za-z0-9_][A-Za-z0-9_-]*(?:[ \\t][^{}\\n]*)?\\}(?:\\{[^{}\\n]*\\})*:).", "d")
 const K72 = new RegExp("^[ \\t]", "")
 const K73 = new Set<unknown>(["admonition","block_quote","definition_description","definition_list","directive","div","figure_group","list","list_item"])
 const K74 = new RegExp("^::?[ \\t]+(?<marker>>|[-*]|[0-9]{1,9}[.)])[ \\t]", "")
@@ -493,53 +493,50 @@ const K194 = new RegExp("^[ \\t]*(?<m>(?:(?://|--|/\\*|<!--)[ \\t]*)?#(?:end)?re
 const K195 = new RegExp("^[ \\t]*(?<m>(?:(?://|--|/\\*|<!--)[ \\t]*)?#(?:end)?region(?:[^A-Za-z0-9_]|$))", "id")
 const K196 = new RegExp("(?<use>\\{\\{ +#[A-Za-z0-9_][A-Za-z0-9_-]* +\\}\\})", "gd")
 const K197 = new RegExp("(?:^|[^\\\\])(?:\\\\\\\\)*$", "")
-const K198 = new RegExp("^(?<def>\\{#[A-Za-z0-9_][A-Za-z0-9_-]*(?:[ \\t][^{}\\n]*)?\\}(?:\\{[^{}\\n]*\\})*:) .*[^ \\t]", "")
-const K199 = new RegExp("^(?<def>\\{#[A-Za-z0-9_][A-Za-z0-9_-]*(?:[ \\t][^{}\\n]*)?\\}(?:\\{[^{}\\n]*\\})*:) .*[^ \\t]", "d")
-const K200 = (item: unknown): unknown => (!isAttributeLine(str(obj(item)?.["raw_body"]), 0, str(obj(item)?.["raw_body"]).length) ? obj(item)?.["leaf_id"] : false)
-const K201 = new RegExp("^[ \\t]*(?:>[ \\t]+)*(?<run>={3,}|-{3,})[ \\t]*$", "")
-const K202 = new RegExp("^[ \\t]*(?:>[ \\t]+)*(?<run>={3,}|-{3,})[ \\t]*$", "d")
-const K203 = new RegExp("[@#]", "")
-const K204 = new RegExp("(?<b>[\\p{L}\\p{N}])(?<s>[@#])(?<name>[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*)[A-Za-z0-9_.-]*(?<next>[\\p{L}\\p{N}\\p{M}]?)", "gdu")
-const K205 = new RegExp("[A-Za-z]", "")
-const K206 = new Set<unknown>(["aligns","valigns","widths","header-rows","footer-rows","body-rows","body-header-rows","body-header-cols"])
-const K207 = new RegExp("^[0-9]*$", "")
-const K208 = new Set<unknown>(["aligns","valigns","widths"])
-const K209 = new Set<unknown>(["aligns","valigns"])
-const K210 = new RegExp("(?<n>[0-9]+)", "gd")
-const K211 = new RegExp("^\\s*(?<block>\\{[^}]+\\})(?<marker>[<>~])", "")
-const K212 = new RegExp("^\\s*(?<block>\\{[^}]+\\})(?<marker>[<>~])", "d")
-const K213 = new RegExp("\\|\\s*(?<cell>\\{\\s*[^%}\\s][^|]*\\})\\s*\\|[^|]*$", "")
-const K214 = new RegExp("\\|\\s*(?<cell>\\{\\s*[^%}\\s][^|]*\\})\\s*\\|[^|]*$", "d")
-const K215 = new Set<string>(["table_row"])
-const K216 = new Set<unknown>(["table_body","table_foot","table_head"])
-const K217 = (item: unknown): unknown => (K216.has(obj(obj(item)?.["parent"])?.["type"]) ? obj(obj(item)?.["ancestor_ids"])?.[1] : "")
-const K218 = new RegExp("^[ \\t]*(?<plus>\\+)", "")
-const K219 = new RegExp("^[ \\t]*(?<plus>\\+)", "d")
-const K220 = new RegExp("\\|(?:[ \\t]*\\{[^{}]*\\})?[ \\t\\x00]*$", "")
-const K221 = new Set<unknown>(["<","^"])
-const K222 = new RegExp("\\\\[<^]\\s*$", "")
-const K223 = new RegExp("^(?:-{3,}|_{3,})$", "")
-const K224 = new Set<unknown>(["comment","comment_block"])
-const K225 = (item: unknown): unknown => (!K224.has(obj(item)?.["type"]) ? obj(obj(item)?.["ancestor_ids"])?.[0] : false)
-const K226 = (item: unknown): unknown => ((same(obj(obj(item)?.["parent"])?.["type"], "list_item") && (num(obj(obj(item)?.["layout"])?.["blankLinesAfter"]) > 0) && (num(obj(lookupAt(26, "block", undefined, K225, obj(obj(item)?.["ancestor_ids"])?.[0], num(obj(item)?.["start"]), 1, undefined))?.["start"]) >= 0)) ? obj(obj(item)?.["ancestor_ids"])?.[1] : false)
-const K227 = new RegExp("^(?:\\[[^^]|\\[$|\\*\\[)", "")
-const K228 = new RegExp("^\\s*> ", "")
-const K229 = (_item: unknown): unknown => true
-const K230 = new Set<unknown>(["caption","cell_paragraph","definition_term","heading","line","paragraph"])
-const K231 = new RegExp("(?:^|[^\\\\])(?:\\\\\\\\)*(?<run>(?<blk>\\{[ \\t]*(?:[^{}\\s\"'\\\\]|\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'(?:[^'\\\\]|\\\\[\\s\\S])*'|\\\\[\\s\\S])(?:[^{}\"'\\\\\\n]|\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'(?:[^'\\\\]|\\\\[\\s\\S])*'|\\\\[\\s\\S])*\\})(?:\\{[ \\t]*(?:[^{}\\s\"'\\\\]|\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'(?:[^'\\\\]|\\\\[\\s\\S])*'|\\\\[\\s\\S])(?:[^{}\"'\\\\\\n]|\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'(?:[^'\\\\]|\\\\[\\s\\S])*'|\\\\[\\s\\S])*\\})*)", "gd")
-const K232 = new Set<unknown>(["caption","line","paragraph"])
-const K233 = new Set<unknown>([".","#","_","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"])
-const K234 = new RegExp("(?:^|[^\\\\])(?:\\\\\\\\)*(?<o>\\{%)", "")
-const K235 = new RegExp("(?:^|[^\\\\])(?:\\\\\\\\)*(?<o>\\{%)", "d")
-const K236 = (item: unknown): unknown => contains(obj(item)?.["raw_body"], "%}")
-const K237 = new RegExp("[*/]", "")
-const K238 = new RegExp("(?<b>^|[\\s(\\[]|(?:^|[^\\\\])(?:\\\\\\\\)*\\\\\\{)(?<d>[*/])[A-Za-z0-9_]", "gd")
-const K239 = (item: unknown): unknown => obj(item)?.["leaf_start"]
-const K240 = (item: unknown): unknown => foldKey(str(obj(obj(item)?.["node"])?.["key"]))
-const K241 = (item: unknown): unknown => ((obj(item)?.["heading_text"] !== undefined) ? foldKey(foldLabel(str(obj(item)?.["heading_text"]))) : false)
-const K242 = new Set<string>(["footnote_ref"])
-const K243 = (item: unknown): unknown => obj(obj(item)?.["node"])?.["key"]
-const K244 = new Set<string>(["image","link"])
+const K198 = new RegExp("^[ \\t]*(?:>[ \\t]+)*(?<run>={3,}|-{3,})[ \\t]*$", "")
+const K199 = new RegExp("^[ \\t]*(?:>[ \\t]+)*(?<run>={3,}|-{3,})[ \\t]*$", "d")
+const K200 = new RegExp("[@#]", "")
+const K201 = new RegExp("(?<b>[\\p{L}\\p{N}])(?<s>[@#])(?<name>[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*)[A-Za-z0-9_.-]*(?<next>[\\p{L}\\p{N}\\p{M}]?)", "gdu")
+const K202 = new RegExp("[A-Za-z]", "")
+const K203 = new Set<unknown>(["aligns","valigns","widths","header-rows","footer-rows","body-rows","body-header-rows","body-header-cols"])
+const K204 = new RegExp("^[0-9]*$", "")
+const K205 = new Set<unknown>(["aligns","valigns","widths"])
+const K206 = new Set<unknown>(["aligns","valigns"])
+const K207 = new RegExp("(?<n>[0-9]+)", "gd")
+const K208 = new RegExp("^\\s*(?<block>\\{[^}]+\\})(?<marker>[<>~])", "")
+const K209 = new RegExp("^\\s*(?<block>\\{[^}]+\\})(?<marker>[<>~])", "d")
+const K210 = new RegExp("\\|\\s*(?<cell>\\{\\s*[^%}\\s][^|]*\\})\\s*\\|[^|]*$", "")
+const K211 = new RegExp("\\|\\s*(?<cell>\\{\\s*[^%}\\s][^|]*\\})\\s*\\|[^|]*$", "d")
+const K212 = new Set<string>(["table_row"])
+const K213 = new Set<unknown>(["table_body","table_foot","table_head"])
+const K214 = (item: unknown): unknown => (K213.has(obj(obj(item)?.["parent"])?.["type"]) ? obj(obj(item)?.["ancestor_ids"])?.[1] : "")
+const K215 = new RegExp("^[ \\t]*(?<plus>\\+)", "")
+const K216 = new RegExp("^[ \\t]*(?<plus>\\+)", "d")
+const K217 = new RegExp("\\|(?:[ \\t]*\\{[^{}]*\\})?[ \\t\\x00]*$", "")
+const K218 = new Set<unknown>(["<","^"])
+const K219 = new RegExp("\\\\[<^]\\s*$", "")
+const K220 = new RegExp("^(?:-{3,}|_{3,})$", "")
+const K221 = new Set<unknown>(["comment","comment_block"])
+const K222 = (item: unknown): unknown => (!K221.has(obj(item)?.["type"]) ? obj(obj(item)?.["ancestor_ids"])?.[0] : false)
+const K223 = (item: unknown): unknown => ((same(obj(obj(item)?.["parent"])?.["type"], "list_item") && (num(obj(obj(item)?.["layout"])?.["blankLinesAfter"]) > 0) && (num(obj(lookupAt(25, "block", undefined, K222, obj(obj(item)?.["ancestor_ids"])?.[0], num(obj(item)?.["start"]), 1, undefined))?.["start"]) >= 0)) ? obj(obj(item)?.["ancestor_ids"])?.[1] : false)
+const K224 = new RegExp("^(?:\\[[^^]|\\[$|\\*\\[)", "")
+const K225 = new RegExp("^\\s*> ", "")
+const K226 = (_item: unknown): unknown => true
+const K227 = new Set<unknown>(["caption","cell_paragraph","definition_term","heading","line","paragraph"])
+const K228 = new RegExp("(?:^|[^\\\\])(?:\\\\\\\\)*(?<run>(?<blk>\\{[ \\t]*(?:[^{}\\s\"'\\\\]|\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'(?:[^'\\\\]|\\\\[\\s\\S])*'|\\\\[\\s\\S])(?:[^{}\"'\\\\\\n]|\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'(?:[^'\\\\]|\\\\[\\s\\S])*'|\\\\[\\s\\S])*\\})(?:\\{[ \\t]*(?:[^{}\\s\"'\\\\]|\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'(?:[^'\\\\]|\\\\[\\s\\S])*'|\\\\[\\s\\S])(?:[^{}\"'\\\\\\n]|\"(?:[^\"\\\\]|\\\\[\\s\\S])*\"|'(?:[^'\\\\]|\\\\[\\s\\S])*'|\\\\[\\s\\S])*\\})*)", "gd")
+const K229 = new Set<unknown>(["caption","line","paragraph"])
+const K230 = new Set<unknown>([".","#","_","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"])
+const K231 = new RegExp("(?:^|[^\\\\])(?:\\\\\\\\)*(?<o>\\{%)", "")
+const K232 = new RegExp("(?:^|[^\\\\])(?:\\\\\\\\)*(?<o>\\{%)", "d")
+const K233 = (item: unknown): unknown => contains(obj(item)?.["raw_body"], "%}")
+const K234 = new RegExp("[*/]", "")
+const K235 = new RegExp("(?<b>^|[\\s(\\[]|(?:^|[^\\\\])(?:\\\\\\\\)*\\\\\\{)(?<d>[*/])[A-Za-z0-9_]", "gd")
+const K236 = (item: unknown): unknown => obj(item)?.["leaf_start"]
+const K237 = (item: unknown): unknown => foldKey(str(obj(obj(item)?.["node"])?.["key"]))
+const K238 = (item: unknown): unknown => ((obj(item)?.["heading_text"] !== undefined) ? foldKey(foldLabel(str(obj(item)?.["heading_text"]))) : false)
+const K239 = new Set<string>(["footnote_ref"])
+const K240 = (item: unknown): unknown => obj(obj(item)?.["node"])?.["key"]
+const K241 = new Set<string>(["image","link"])
 
 function rule0(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
@@ -1678,98 +1675,91 @@ function rule92(self: ModelInline, path: string, context: LintContext): void {
   }
 }
 
-function rule93(self: ModelLine, path: string, context: LintContext): void {
-  groups = undefined
-  if (!((hit(K198, K199, self.text) && mark(num(self.start))) && same(self.leaf, "paragraph") && same(self.ancestors?.[0], "document") && !(num(obj(lookupAt(24, "line", undefined, K200, self.leaf_id, self.start, -1, undefined))?.["number"]) >= 1))) return
-  context.report("reserved-syntax", num(group("def", 0)), num(group("def", 1)), path, { "text": String(str(self.text).slice((num(group("def", 0)) - num(self.start)), (num(group("def", 1)) - num(self.start)))) }, 1)
-  return
-}
-
-function rule94(self: ModelAttribute, path: string, context: LintContext): void {
+function rule93(self: ModelAttribute, path: string, context: LintContext): void {
   groups = undefined
   if (!(!same(self.owner?.["type"], "span") && same(self.kind, "key") && Boolean(self.semantic) && Boolean(self.last_key))) return
   context.report("semantic-attribute-outside-span", num(self.start), num(self.key_end), path, { "name": String(self.key), "type": String(self.owner?.["type"]), "value": String(self.value) }, 0)
   return
 }
 
-function rule95(self: ModelAttribute, path: string, context: LintContext): void {
+function rule94(self: ModelAttribute, path: string, context: LintContext): void {
   groups = undefined
   if (!(same(self.kind, "key") && Boolean(self.semantic) && !Boolean(self.semantic_value) && !same(self.value, "") && Boolean(self.last_key))) return
   context.report("semantic-attribute-value-ignored", num(self.start), num(self.end), path, { "name": String(self.key) }, 0)
   return
 }
 
-function rule96(self: ModelLine, path: string, context: LintContext): void {
+function rule95(self: ModelLine, path: string, context: LintContext): void {
   const line = self
   groups = undefined
-  if (!((hit(K201, K202, self.text) && mark(num(self.start))) && (self.prev !== undefined) && same(self.prev?.["leaf"], "paragraph") && !Boolean(self.prev?.["blank"]) && (starts(textFrom(line, num(group("run", 0))), "-") || (same(self.leaf, "paragraph") && same(self.prev?.["leaf_id"], self.leaf_id))))) return
+  if (!((hit(K198, K199, self.text) && mark(num(self.start))) && (self.prev !== undefined) && same(self.prev?.["leaf"], "paragraph") && !Boolean(self.prev?.["blank"]) && (starts(textFrom(line, num(group("run", 0))), "-") || (same(self.leaf, "paragraph") && same(self.prev?.["leaf_id"], self.leaf_id))))) return
   context.report("setext-heading-underline", num(group("run", 0)), num(group("run", 1)), path, {  }, 0)
   return
 }
 
-function rule97(self: ModelInline, path: string, context: LintContext): void {
+function rule96(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
-  if (!test(K203, self.text)) return
+  if (!test(K200, self.text)) return
   const one = (): void => {
-    if ((!test(K106, str(self.text).slice((num(group("b", 0)) - num(self.start)), (num(group("b", 1)) - num(self.start)))) && same(str(self.text).slice((num(group("next", 0)) - num(self.start)), (num(group("next", 1)) - num(self.start))), "") && test(K205, str(self.text).slice((num(group("name", 0)) - num(self.start)), (num(group("name", 1)) - num(self.start)))))) {
+    if ((!test(K106, str(self.text).slice((num(group("b", 0)) - num(self.start)), (num(group("b", 1)) - num(self.start)))) && same(str(self.text).slice((num(group("next", 0)) - num(self.start)), (num(group("next", 1)) - num(self.start))), "") && test(K202, str(self.text).slice((num(group("name", 0)) - num(self.start)), (num(group("name", 1)) - num(self.start)))))) {
       context.report("sigil-after-letter", num(group("s", 0)), num(group("s", 1)), path, {  }, 0)
       return
     }
   }
   const text = self.text
   if (text === '') return
-  for (const found of matchAll(K204, text)) {
+  for (const found of matchAll(K201, text)) {
     groups = spansOf(found)
     base = num(self.start)
     one()
   }
 }
 
+function rule97(self: ModelAttribute, path: string, context: LintContext): void {
+  groups = undefined
+  if (!(same(self.kind, "key") && K203.has(self.key) && Boolean(self.kept) && Boolean(self.last_key) && !(same(self.owner?.["format"], "pipe") && same(self.key, "header-rows") && test(K204, self.value)))) return
+  context.report("table-attribute-invalid", num(self.start), num(self.end), path, { "key": String(self.key) }, 0)
+  return
+}
+
 function rule98(self: ModelAttribute, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.kind, "key") && K206.has(self.key) && Boolean(self.kept) && Boolean(self.last_key) && !(same(self.owner?.["format"], "pipe") && same(self.key, "header-rows") && test(K207, self.value)))) return
-  context.report("table-attribute-invalid", num(self.start), num(self.end), path, { "key": String(self.key) }, 0)
+  if (!(same(self.kind, "key") && K205.has(self.key) && !Boolean(self.kept) && Boolean(self.last_key) && (num(self.entries) < num(self.owner?.["columns"])))) return
+  context.report("table-column-arity", num(self.start), num(self.key_end), path, { "key": String(self.key), "count": String(self.entries), "widest": String(self.owner?.["columns"]) }, 0)
   return
 }
 
 function rule99(self: ModelAttribute, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.kind, "key") && K208.has(self.key) && !Boolean(self.kept) && Boolean(self.last_key) && (num(self.entries) < num(self.owner?.["columns"])))) return
-  context.report("table-column-arity", num(self.start), num(self.key_end), path, { "key": String(self.key), "count": String(self.entries), "widest": String(self.owner?.["columns"]) }, 0)
-  return
-}
-
-function rule100(self: ModelAttribute, path: string, context: LintContext): void {
-  groups = undefined
-  if (!(same(self.kind, "key") && K209.has(self.key) && Boolean(self.last_key))) return
+  if (!(same(self.kind, "key") && K206.has(self.key) && Boolean(self.last_key))) return
   const one = (): void => {
     context.report("table-column-overlap", num(self.start), num(self.key_end), path, { "n": String(str((same(self.key, "aligns") ? self.owner?.["align_overlap"] : (same(self.key, "valigns") ? self.owner?.["valign_overlap"] : ""))).slice(num(group("n", 0)), num(group("n", 1)))) }, 0)
     return
   }
   const text = (same(self.key, "aligns") ? self.owner?.["align_overlap"] : (same(self.key, "valigns") ? self.owner?.["valign_overlap"] : ""))
   if (text === '') return
-  for (const found of matchAll(K210, text)) {
+  for (const found of matchAll(K207, text)) {
     groups = spansOf(found)
     base = 0
     one()
   }
 }
 
-function rule101(self: ModelBlock, path: string, context: LintContext): void {
+function rule100(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(hit(K211, K212, self.text) && mark(num(self.start)))) return
+  if (!(hit(K208, K209, self.text) && mark(num(self.start)))) return
   context.report("table-marker-run-padding", num(group("block", 0)), num(group("marker", 1)), path, { "spelling": String((str(self.text).slice((num(group("block", 0)) - num(self.start)), (num(group("block", 1)) - num(self.start))) + str(self.text).slice((num(group("marker", 0)) - num(self.start)), (num(group("marker", 1)) - num(self.start))))), "marker": String(str(self.text).slice((num(group("marker", 0)) - num(self.start)), (num(group("marker", 1)) - num(self.start)))), "block": String(str(self.text).slice((num(group("block", 0)) - num(self.start)), (num(group("block", 1)) - num(self.start)))), "correctedPrefix": String(("{" + str(self.text).slice((num(group("marker", 0)) - num(self.start)), (num(group("marker", 1)) - num(self.start))) + " " + str(self.text).slice(((num(group("block", 0)) - num(self.start)) + 1), ((num(group("block", 1)) - num(self.start)) - 1)) + "}")) }, 0)
   return
 }
 
-function rule102(self: ModelBlock, path: string, context: LintContext): void {
+function rule101(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.source_format, "pipe") && !(obj(atEnd(obj(self.node)?.["children"], -1))?.["attrs"] !== undefined) && (hit(K213, K214, self.text) && mark(num(self.start))) && (obj(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[0])?.["value"] !== undefined) && !(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[1] !== undefined) && isAttributeLine(str(obj(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[0])?.["value"]), 0, str(obj(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[0])?.["value"]).length) && contains(str(self.text).slice((num(group("cell", 0)) - num(self.start)), (num(group("cell", 1)) - num(self.start))), obj(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[0])?.["value"]))) return
+  if (!(same(self.source_format, "pipe") && !(obj(atEnd(obj(self.node)?.["children"], -1))?.["attrs"] !== undefined) && (hit(K210, K211, self.text) && mark(num(self.start))) && (obj(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[0])?.["value"] !== undefined) && !(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[1] !== undefined) && isAttributeLine(str(obj(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[0])?.["value"]), 0, str(obj(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[0])?.["value"]).length) && contains(str(self.text).slice((num(group("cell", 0)) - num(self.start)), (num(group("cell", 1)) - num(self.start))), obj(obj(obj(obj(obj(atEnd(obj(self.node)?.["children"], -1))?.["children"])?.[0])?.["children"])?.[0])?.["value"]))) return
   context.report("table-row-attribute-as-cell", num(self.start), num(self.end), path, {  }, 0)
   return
 }
 
-function rule103(self: ModelBlock, path: string, context: LintContext): void {
+function rule102(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   let v_head_start: unknown = UNSET
   let g_head_start: Record<string, [number, number]> | undefined
@@ -1777,16 +1767,16 @@ function rule103(self: ModelBlock, path: string, context: LintContext): void {
   let v_head_cells: unknown = UNSET
   let g_head_cells: Record<string, [number, number]> | undefined
   let b_head_cells = 0
-  if (!(K216.has(self.parent?.["type"]) && !same((v_head_start === UNSET ? (g_head_start = groups, b_head_start = base, v_head_start = (obj(lookupAt(25, "block", K215, K217, self.ancestor_ids?.[1], self.start, 0, undefined))?.["start"]), groups = g_head_start, base = b_head_start, v_head_start) : v_head_start), self.start) && !same(lenOf(obj(self.node)?.["children"]), lenOf((v_head_cells === UNSET ? (g_head_cells = groups, b_head_cells = base, v_head_cells = (obj(obj(lookupAt(25, "block", K215, K217, self.ancestor_ids?.[1], self.start, 0, undefined))?.["node"])?.["children"]), groups = g_head_cells, base = b_head_cells, v_head_cells) : v_head_cells))))) return
-  if ((!(obj(self.node)?.["pos"] !== undefined) && (hit(K218, K219, self.last_line?.["body"]) && mark(num(self.last_line?.["body_start"]))))) {
-    context.report("table-row-cell-count", num(group("plus", 0)), num(self.end), path, { "cells": String(lenOf(obj(self.node)?.["children"])), "width": String(lenOf((v_head_cells === UNSET ? (g_head_cells = groups, b_head_cells = base, v_head_cells = (obj(obj(lookupAt(25, "block", K215, K217, self.ancestor_ids?.[1], self.start, 0, undefined))?.["node"])?.["children"]), groups = g_head_cells, base = b_head_cells, v_head_cells) : v_head_cells))) }, 0)
+  if (!(K213.has(self.parent?.["type"]) && !same((v_head_start === UNSET ? (g_head_start = groups, b_head_start = base, v_head_start = (obj(lookupAt(24, "block", K212, K214, self.ancestor_ids?.[1], self.start, 0, undefined))?.["start"]), groups = g_head_start, base = b_head_start, v_head_start) : v_head_start), self.start) && !same(lenOf(obj(self.node)?.["children"]), lenOf((v_head_cells === UNSET ? (g_head_cells = groups, b_head_cells = base, v_head_cells = (obj(obj(lookupAt(24, "block", K212, K214, self.ancestor_ids?.[1], self.start, 0, undefined))?.["node"])?.["children"]), groups = g_head_cells, base = b_head_cells, v_head_cells) : v_head_cells))))) return
+  if ((!(obj(self.node)?.["pos"] !== undefined) && (hit(K215, K216, self.last_line?.["body"]) && mark(num(self.last_line?.["body_start"]))))) {
+    context.report("table-row-cell-count", num(group("plus", 0)), num(self.end), path, { "cells": String(lenOf(obj(self.node)?.["children"])), "width": String(lenOf((v_head_cells === UNSET ? (g_head_cells = groups, b_head_cells = base, v_head_cells = (obj(obj(lookupAt(24, "block", K212, K214, self.ancestor_ids?.[1], self.start, 0, undefined))?.["node"])?.["children"]), groups = g_head_cells, base = b_head_cells, v_head_cells) : v_head_cells))) }, 0)
     return
   }
-  context.report("table-row-cell-count", num(self.start), num(self.end), path, { "cells": String(lenOf(obj(self.node)?.["children"])), "width": String(lenOf((v_head_cells === UNSET ? (g_head_cells = groups, b_head_cells = base, v_head_cells = (obj(obj(lookupAt(25, "block", K215, K217, self.ancestor_ids?.[1], self.start, 0, undefined))?.["node"])?.["children"]), groups = g_head_cells, base = b_head_cells, v_head_cells) : v_head_cells))) }, 0)
+  context.report("table-row-cell-count", num(self.start), num(self.end), path, { "cells": String(lenOf(obj(self.node)?.["children"])), "width": String(lenOf((v_head_cells === UNSET ? (g_head_cells = groups, b_head_cells = base, v_head_cells = (obj(obj(lookupAt(24, "block", K212, K214, self.ancestor_ids?.[1], self.start, 0, undefined))?.["node"])?.["children"]), groups = g_head_cells, base = b_head_cells, v_head_cells) : v_head_cells))) }, 0)
   return
 }
 
-function rule104(self: ModelAttribute, path: string, context: LintContext): void {
+function rule103(self: ModelAttribute, path: string, context: LintContext): void {
   groups = undefined
   let v_below: unknown = UNSET
   let g_below: Record<string, [number, number]> | undefined
@@ -1797,7 +1787,7 @@ function rule104(self: ModelAttribute, path: string, context: LintContext): void
   let v_count: unknown = UNSET
   let g_count: Record<string, [number, number]> | undefined
   let b_count = 0
-  if (!(same(self.kind, "key") && Boolean(self.last_key) && test(K207, self.value) && ((same(self.key, "footer-rows") && (num((v_count === UNSET ? (g_count = groups, b_count = base, v_count = ((same(lenOf(self.value), 0) ? "1" : self.value)), groups = g_count, base = b_count, v_count) : v_count)) > num((v_below === UNSET ? (g_below = groups, b_below = base, v_below = ((num(self.owner?.["body_rows"]) + num(self.owner?.["foot_rows"]))), groups = g_below, base = b_below, v_below) : v_below)))) || (same(self.key, "header-rows") && !same(self.owner?.["format"], "pipe") && (num((v_count === UNSET ? (g_count = groups, b_count = base, v_count = ((same(lenOf(self.value), 0) ? "1" : self.value)), groups = g_count, base = b_count, v_count) : v_count)) > num((v_all_rows === UNSET ? (g_all_rows = groups, b_all_rows = base, v_all_rows = ((num(self.owner?.["head_rows"]) + num(self.owner?.["body_rows"]) + num(self.owner?.["foot_rows"]))), groups = g_all_rows, base = b_all_rows, v_all_rows) : v_all_rows))))))) return
+  if (!(same(self.kind, "key") && Boolean(self.last_key) && test(K204, self.value) && ((same(self.key, "footer-rows") && (num((v_count === UNSET ? (g_count = groups, b_count = base, v_count = ((same(lenOf(self.value), 0) ? "1" : self.value)), groups = g_count, base = b_count, v_count) : v_count)) > num((v_below === UNSET ? (g_below = groups, b_below = base, v_below = ((num(self.owner?.["body_rows"]) + num(self.owner?.["foot_rows"]))), groups = g_below, base = b_below, v_below) : v_below)))) || (same(self.key, "header-rows") && !same(self.owner?.["format"], "pipe") && (num((v_count === UNSET ? (g_count = groups, b_count = base, v_count = ((same(lenOf(self.value), 0) ? "1" : self.value)), groups = g_count, base = b_count, v_count) : v_count)) > num((v_all_rows === UNSET ? (g_all_rows = groups, b_all_rows = base, v_all_rows = ((num(self.owner?.["head_rows"]) + num(self.owner?.["body_rows"]) + num(self.owner?.["foot_rows"]))), groups = g_all_rows, base = b_all_rows, v_all_rows) : v_all_rows))))))) return
   if (same(self.key, "footer-rows")) {
     context.report("table-row-count-clamped", num(self.start), num(self.end), path, { "key": String(self.key), "count": String((v_count === UNSET ? (g_count = groups, b_count = base, v_count = ((same(lenOf(self.value), 0) ? "1" : self.value)), groups = g_count, base = b_count, v_count) : v_count)), "effective": String((v_below === UNSET ? (g_below = groups, b_below = base, v_below = ((num(self.owner?.["body_rows"]) + num(self.owner?.["foot_rows"]))), groups = g_below, base = b_below, v_below) : v_below)) }, 0)
     return
@@ -1806,14 +1796,14 @@ function rule104(self: ModelAttribute, path: string, context: LintContext): void
   return
 }
 
-function rule105(self: ModelLine, path: string, context: LintContext): void {
+function rule104(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(K8.has(self.leaf) && starts(self.body, "|") && !same(self.body, "|") && !test(K220, self.body))) return
+  if (!(K8.has(self.leaf) && starts(self.body, "|") && !same(self.body, "|") && !test(K217, self.body))) return
   context.report("table-shaped-paragraph", num(self.body_start), num(self.body_end), path, { "owner": String((same(self.leaf, "definition_term") ? "term" : (same(self.leaf, "line") ? "line-block line" : self.leaf))) }, 0)
   return
 }
 
-function rule106(self: ModelBlock, path: string, context: LintContext): void {
+function rule105(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   if (!(same(self.source_format, "pipe") && (obj(self.node)?.["span"] !== undefined))) return
   if ((starts(self.text, "{") || starts(self.text, "={"))) {
@@ -1826,9 +1816,9 @@ function rule106(self: ModelBlock, path: string, context: LintContext): void {
   }
 }
 
-function rule107(self: ModelBlock, path: string, context: LintContext): void {
+function rule106(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(self.source_format, "pipe") && !(obj(self.node)?.["span"] !== undefined) && same(obj(obj(obj(self.node)?.["children"])?.[0])?.["type"], "cell_paragraph") && same(countFrom(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"], 0, () => true), 1) && same(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["type"], "text") && K221.has(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["value"]) && !test(K222, self.text))) return
+  if (!(same(self.source_format, "pipe") && !(obj(self.node)?.["span"] !== undefined) && same(obj(obj(obj(self.node)?.["children"])?.[0])?.["type"], "cell_paragraph") && same(countFrom(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"], 0, () => true), 1) && same(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["type"], "text") && K218.has(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["value"]) && !test(K219, self.text))) return
   if ((same(obj(obj(obj(obj(obj(self.node)?.["children"])?.[0])?.["children"])?.[0])?.["value"], "<") && same(self.index, 0))) {
     context.report("table-span-marker-blocked", num(self.start), num(self.end), path, {  }, 0)
     return
@@ -1845,28 +1835,28 @@ function rule107(self: ModelBlock, path: string, context: LintContext): void {
   return
 }
 
-function rule108(self: ModelAttribute, path: string, context: LintContext): void {
+function rule107(self: ModelAttribute, path: string, context: LintContext): void {
   groups = undefined
   if (!(same(self.kind, "key") && same(self.key, "widths") && Boolean(self.last_key) && !Boolean(self.kept) && (num(self.entry_total) > 100))) return
   context.report("table-width-total", num(self.start), num(self.key_end), path, {  }, 0)
   return
 }
 
-function rule109(self: ModelLine, path: string, context: LintContext): void {
+function rule108(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(test(K223, self.body) && !(starts(self.body, "-") && same(self.prev?.["leaf"], "paragraph") && !Boolean(self.prev?.["blank"])) && !(same(self.number, 1) && same(self.body_start, self.start) && same(self.body, "---")))) return
+  if (!(test(K220, self.body) && !(starts(self.body, "-") && same(self.prev?.["leaf"], "paragraph") && !Boolean(self.prev?.["blank"])) && !(same(self.number, 1) && same(self.body_start, self.start) && same(self.body, "---")))) return
   context.report("thematic-break-spelling", num(self.body_start), num(self.body_end), path, { "raw": String(self.body) }, 0)
   return
 }
 
-function rule110(self: ModelBlock, path: string, context: LintContext): void {
+function rule109(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  if (!(same(obj(self.node)?.["spacing"], "tight") && (num(obj(lookupAt(27, "block", undefined, K226, self.identity, self.start, 0, (item: unknown): boolean => (someFrom(obj(obj(lookupAt(12, "block", K107, K98, obj(obj(item)?.["ancestor_ids"])?.[0], self.start, 0, undefined))?.["node"])?.["children"], 0, (item) => same(obj(item)?.["type"], "paragraph")))))?.["start"]) >= 0))) return
+  if (!(same(obj(self.node)?.["spacing"], "tight") && (num(obj(lookupAt(26, "block", undefined, K223, self.identity, self.start, 0, (item: unknown): boolean => (someFrom(obj(obj(lookupAt(12, "block", K107, K98, obj(obj(item)?.["ancestor_ids"])?.[0], self.start, 0, undefined))?.["node"])?.["children"], 0, (item) => same(obj(item)?.["type"], "paragraph")))))?.["start"]) >= 0))) return
   context.report("tight-list-item-with-blank-line", num(self.start), num(self.end), path, {  }, 0)
   return
 }
 
-function rule111(self: ModelLine, path: string, context: LintContext): void {
+function rule110(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
   if (!(same(self.leaf, "paragraph") && Boolean(self.leaf_first) && same(self.shape, "attribute_line") && !Boolean(self.attached_here) && (!(self.leaf_next !== undefined) || Boolean(self.leaf_next?.["blank"]) || Boolean(self.leaf_next?.["closes_container"]) || !same(self.leaf_next?.["leaf_id"], self.leaf_id)))) return
   if ((Boolean(self.leaf_next?.["blank"]) && (num(self.leaf_next?.["quote_marks"]) >= num(self.quote_depth)))) {
@@ -1877,46 +1867,46 @@ function rule111(self: ModelLine, path: string, context: LintContext): void {
   return
 }
 
-function rule112(self: ModelLine, path: string, context: LintContext): void {
+function rule111(self: ModelLine, path: string, context: LintContext): void {
   groups = undefined
-  if (!(K8.has(self.leaf) && starts(self.body, "^ ") && !contains(self.ancestors, "caption") && !((self.prev !== undefined) && !K8.has(self.prev?.["leaf"]) && test(K227, self.prev?.["raw_body"]) && test(K115, str(self.prev?.["text"]).slice(0, (num(self.prev?.["body_start"]) - num(self.prev?.["start"])))) && !test(K228, self.text)))) return
+  if (!(K8.has(self.leaf) && starts(self.body, "^ ") && !contains(self.ancestors, "caption") && !((self.prev !== undefined) && !K8.has(self.prev?.["leaf"]) && test(K224, self.prev?.["raw_body"]) && test(K115, str(self.prev?.["text"]).slice(0, (num(self.prev?.["body_start"]) - num(self.prev?.["start"])))) && !test(K225, self.text)))) return
   context.report("unattached-caption", num(self.body_start), num(self.body_end), path, {  }, 0)
   return
 }
 
-function rule113(self: ModelInline, path: string, context: LintContext): void {
+function rule112(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
   let v_last_cell: unknown = UNSET
   let g_last_cell: Record<string, [number, number]> | undefined
   let b_last_cell = 0
-  if (!(K230.has(self.leaf) && contains(self.text, "{"))) return
+  if (!(K227.has(self.leaf) && contains(self.text, "{"))) return
   const one = (): void => {
-    if ((isAttributeLine(str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))), 0, str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))).length) && !(same(group("run", 0), obj(lookupAt(28, "line", undefined, K229, true, (num(group("run", 0)) + 1), -1, undefined))?.["body_start"]) && (same(group("run", 1), obj(lookupAt(28, "line", undefined, K229, true, (num(group("run", 0)) + 1), -1, undefined))?.["body_end"]) || (K232.has(self.leaf) && K233.has(str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))).slice(1, 2))))) && !(same(self.leaf, "cell_paragraph") && same(group("run", 0), self.start) && same(group("run", 1), self.end) && Boolean((v_last_cell === UNSET ? (g_last_cell = groups, b_last_cell = base, v_last_cell = (((indexOf(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))), "|") >= 0) && same(trimEnd(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))).slice(0, indexOf(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))), "|"))), "") && same(trimEnd(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))).slice((indexOf(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))), "|") + 1))), ""))), groups = g_last_cell, base = b_last_cell, v_last_cell) : v_last_cell))))) {
+    if ((isAttributeLine(str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))), 0, str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))).length) && !(same(group("run", 0), obj(lookupAt(27, "line", undefined, K226, true, (num(group("run", 0)) + 1), -1, undefined))?.["body_start"]) && (same(group("run", 1), obj(lookupAt(27, "line", undefined, K226, true, (num(group("run", 0)) + 1), -1, undefined))?.["body_end"]) || (K229.has(self.leaf) && K230.has(str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))).slice(1, 2))))) && !(same(self.leaf, "cell_paragraph") && same(group("run", 0), self.start) && same(group("run", 1), self.end) && Boolean((v_last_cell === UNSET ? (g_last_cell = groups, b_last_cell = base, v_last_cell = (((indexOf(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))), "|") >= 0) && same(trimEnd(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))).slice(0, indexOf(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))), "|"))), "") && same(trimEnd(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))).slice((indexOf(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))), "|") + 1))), ""))), groups = g_last_cell, base = b_last_cell, v_last_cell) : v_last_cell))))) {
       context.report("unattached-inline-attribute", num(group("run", 0)), num(group("run", 1)), path, {  }, 0)
       return
     }
-    if ((!isAttributeLine(str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))), 0, str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))).length) && (isAttributeLine(str(self.text).slice((num(group("blk", 0)) - num(self.start)), (num(group("blk", 1)) - num(self.start))), 0, str(self.text).slice((num(group("blk", 0)) - num(self.start)), (num(group("blk", 1)) - num(self.start))).length) && !(same(group("run", 0), obj(lookupAt(28, "line", undefined, K229, true, (num(group("run", 0)) + 1), -1, undefined))?.["body_start"]) && (same(group("blk", 1), obj(lookupAt(28, "line", undefined, K229, true, (num(group("run", 0)) + 1), -1, undefined))?.["body_end"]) || (K232.has(self.leaf) && K233.has(str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))).slice(1, 2))))) && !(same(self.leaf, "cell_paragraph") && same(group("run", 0), self.start) && same(group("blk", 1), self.end) && Boolean((v_last_cell === UNSET ? (g_last_cell = groups, b_last_cell = base, v_last_cell = (((indexOf(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))), "|") >= 0) && same(trimEnd(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))).slice(0, indexOf(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))), "|"))), "") && same(trimEnd(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))).slice((indexOf(str(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]))), "|") + 1))), ""))), groups = g_last_cell, base = b_last_cell, v_last_cell) : v_last_cell)))))) {
+    if ((!isAttributeLine(str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))), 0, str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))).length) && (isAttributeLine(str(self.text).slice((num(group("blk", 0)) - num(self.start)), (num(group("blk", 1)) - num(self.start))), 0, str(self.text).slice((num(group("blk", 0)) - num(self.start)), (num(group("blk", 1)) - num(self.start))).length) && !(same(group("run", 0), obj(lookupAt(27, "line", undefined, K226, true, (num(group("run", 0)) + 1), -1, undefined))?.["body_start"]) && (same(group("blk", 1), obj(lookupAt(27, "line", undefined, K226, true, (num(group("run", 0)) + 1), -1, undefined))?.["body_end"]) || (K229.has(self.leaf) && K230.has(str(self.text).slice((num(group("run", 0)) - num(self.start)), (num(group("run", 1)) - num(self.start))).slice(1, 2))))) && !(same(self.leaf, "cell_paragraph") && same(group("run", 0), self.start) && same(group("blk", 1), self.end) && Boolean((v_last_cell === UNSET ? (g_last_cell = groups, b_last_cell = base, v_last_cell = (((indexOf(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))), "|") >= 0) && same(trimEnd(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))).slice(0, indexOf(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))), "|"))), "") && same(trimEnd(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))).slice((indexOf(str(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]).slice((num(self.end) - num(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]))), "|") + 1))), ""))), groups = g_last_cell, base = b_last_cell, v_last_cell) : v_last_cell)))))) {
       context.report("unattached-inline-attribute", num(group("blk", 0)), num(group("blk", 1)), path, {  }, 0)
       return
     }
   }
   const text = self.text
   if (text === '') return
-  for (const found of matchAll(K231, text)) {
+  for (const found of matchAll(K228, text)) {
     groups = spansOf(found)
     base = num(self.start)
     one()
   }
 }
 
-function rule114(self: ModelInline, path: string, context: LintContext): void {
+function rule113(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
-  if (!((hit(K234, K235, self.text) && mark(num(self.start))) && !contains(str(self.text).slice((num(group("o", 1)) - num(self.start))), "%}") && same(obj(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["leaf_next"])?.["blank"], false) && !same(obj(obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["leaf_next"])?.["shape"], "region_marker") && (num(obj(lookupAt(29, "line", undefined, K236, true, num(self.end), 1, undefined))?.["start"]) >= 0))) return
+  if (!((hit(K231, K232, self.text) && mark(num(self.start))) && !contains(str(self.text).slice((num(group("o", 1)) - num(self.start))), "%}") && same(obj(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["leaf_next"])?.["blank"], false) && !same(obj(obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["leaf_next"])?.["shape"], "region_marker") && (num(obj(lookupAt(28, "line", undefined, K233, true, num(self.end), 1, undefined))?.["start"]) >= 0))) return
   context.report("unclosed-braced-comment", num(group("o", 0)), num(self.end), path, {  }, 0)
   return
 }
 
-function rule115(self: ModelInline, path: string, context: LintContext): void {
+function rule114(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
   let v_last_text: unknown = UNSET
   let g_last_text: Record<string, [number, number]> | undefined
@@ -1930,23 +1920,23 @@ function rule115(self: ModelInline, path: string, context: LintContext): void {
   let v_first_body: unknown = UNSET
   let g_first_body: Record<string, [number, number]> | undefined
   let b_first_body = 0
-  if (!(same(self.leaf, "paragraph") && test(K237, self.text))) return
+  if (!(same(self.leaf, "paragraph") && test(K234, self.text))) return
   const one = (): void => {
-    if (((!same(str(self.text).slice((num(group("b", 0)) - num(self.start)), (num(group("b", 1)) - num(self.start))), "") || same((v_first_body === UNSET ? (g_first_body = groups, b_first_body = base, v_first_body = (obj(lookupAt(28, "line", undefined, K229, true, (num(self.start) + 1), -1, undefined))?.["body_start"]), groups = g_first_body, base = b_first_body, v_first_body) : v_first_body), self.start)) && !contains(str(self.text).slice((num(group("d", 1)) - num(self.start))), str(self.text).slice((num(group("d", 0)) - num(self.start)), (num(group("d", 1)) - num(self.start)))) && !contains(str((v_last_text === UNSET ? (g_last_text = groups, b_last_text = base, v_last_text = (obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["text"]), groups = g_last_text, base = b_last_text, v_last_text) : v_last_text)).slice((num(self.end) - num((v_last_start === UNSET ? (g_last_start = groups, b_last_start = base, v_last_start = (obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["start"]), groups = g_last_start, base = b_last_start, v_last_start) : v_last_start)))), str(self.text).slice((num(group("d", 0)) - num(self.start)), (num(group("d", 1)) - num(self.start)))) && !(num(obj(lookupAt(30, "line", undefined, K239, (v_leaf_start === UNSET ? (g_leaf_start = groups, b_leaf_start = base, v_leaf_start = (obj(lookupAt(28, "line", undefined, K229, true, num(self.end), -1, undefined))?.["leaf_start"]), groups = g_leaf_start, base = b_leaf_start, v_leaf_start) : v_leaf_start), num(self.end), 1, (item: unknown): boolean => (contains(obj(item)?.["text"], str(self.text).slice((num(group("d", 0)) - num(self.start)), (num(group("d", 1)) - num(self.start)))))))?.["start"]) >= 0))) {
+    if (((!same(str(self.text).slice((num(group("b", 0)) - num(self.start)), (num(group("b", 1)) - num(self.start))), "") || same((v_first_body === UNSET ? (g_first_body = groups, b_first_body = base, v_first_body = (obj(lookupAt(27, "line", undefined, K226, true, (num(self.start) + 1), -1, undefined))?.["body_start"]), groups = g_first_body, base = b_first_body, v_first_body) : v_first_body), self.start)) && !contains(str(self.text).slice((num(group("d", 1)) - num(self.start))), str(self.text).slice((num(group("d", 0)) - num(self.start)), (num(group("d", 1)) - num(self.start)))) && !contains(str((v_last_text === UNSET ? (g_last_text = groups, b_last_text = base, v_last_text = (obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["text"]), groups = g_last_text, base = b_last_text, v_last_text) : v_last_text)).slice((num(self.end) - num((v_last_start === UNSET ? (g_last_start = groups, b_last_start = base, v_last_start = (obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["start"]), groups = g_last_start, base = b_last_start, v_last_start) : v_last_start)))), str(self.text).slice((num(group("d", 0)) - num(self.start)), (num(group("d", 1)) - num(self.start)))) && !(num(obj(lookupAt(29, "line", undefined, K236, (v_leaf_start === UNSET ? (g_leaf_start = groups, b_leaf_start = base, v_leaf_start = (obj(lookupAt(27, "line", undefined, K226, true, num(self.end), -1, undefined))?.["leaf_start"]), groups = g_leaf_start, base = b_leaf_start, v_leaf_start) : v_leaf_start), num(self.end), 1, (item: unknown): boolean => (contains(obj(item)?.["text"], str(self.text).slice((num(group("d", 0)) - num(self.start)), (num(group("d", 1)) - num(self.start)))))))?.["start"]) >= 0))) {
       context.report("unclosed-inline-emphasis", num(group("d", 0)), num(group("d", 1)), path, { "span": String((same(str(self.text).slice((num(group("d", 0)) - num(self.start)), (num(group("d", 1)) - num(self.start))), "*") ? "strong" : "emphasis")) }, 0)
       return
     }
   }
   const text = self.text
   if (text === '') return
-  for (const found of matchAll(K238, text)) {
+  for (const found of matchAll(K235, text)) {
     groups = spansOf(found)
     base = num(self.start)
     one()
   }
 }
 
-function rule116(self: ModelBlock, path: string, context: LintContext): void {
+function rule115(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
   let v_previous: unknown = UNSET
   let g_previous: Record<string, [number, number]> | undefined
@@ -1966,19 +1956,19 @@ function rule116(self: ModelBlock, path: string, context: LintContext): void {
   let v_first_content: unknown = UNSET
   let g_first_content: Record<string, [number, number]> | undefined
   let b_first_content = 0
-  if (!((num(self.index) >= 1) && (num(self.layout?.["markerColumn"]) < num((v_previous === UNSET ? (g_previous = groups, b_previous = base, v_previous = (obj(obj(lookupAt(19, "block", K107, K178, self.ancestor_ids?.[0], self.start, -1, undefined))?.["layout"])?.["markerColumn"]), groups = g_previous, base = b_previous, v_previous) : v_previous))) && (num((v_previous === UNSET ? (g_previous = groups, b_previous = base, v_previous = (obj(obj(lookupAt(19, "block", K107, K178, self.ancestor_ids?.[0], self.start, -1, undefined))?.["layout"])?.["markerColumn"]), groups = g_previous, base = b_previous, v_previous) : v_previous)) > num((v_footnote === UNSET ? (g_footnote = groups, b_footnote = base, v_footnote = ((contains(self.ancestors, "footnote") ? obj(obj(lookupAt(31, "block", K135, undefined, undefined, self.start, -1, undefined))?.["layout"])?.["contentColumn"] : 0)), groups = g_footnote, base = b_footnote, v_footnote) : v_footnote))) && (!(num((v_outer === UNSET ? (g_outer = groups, b_outer = base, v_outer = (obj(obj(lookupAt(12, "block", K107, K98, self.ancestor_ids?.[1], self.start, 0, undefined))?.["layout"])?.["markerColumn"]), groups = g_outer, base = b_outer, v_outer) : v_outer)) >= 0) || (num(self.layout?.["markerColumn"]) <= num((v_outer === UNSET ? (g_outer = groups, b_outer = base, v_outer = (obj(obj(lookupAt(12, "block", K107, K98, self.ancestor_ids?.[1], self.start, 0, undefined))?.["layout"])?.["markerColumn"]), groups = g_outer, base = b_outer, v_outer) : v_outer)))) && !((num(self.index) >= 1) && same((v_kind === UNSET ? (g_kind = groups, b_kind = base, v_kind = (obj(obj(obj(lookupAt(20, "block", K179, K98, self.ancestor_ids?.[0], self.start, 0, undefined))?.["node"])?.["marker"])?.["kind"]), groups = g_kind, base = b_kind, v_kind) : v_kind), "ordered") && (num((v_first_marker === UNSET ? (g_first_marker = groups, b_first_marker = base, v_first_marker = (obj(obj(lookupAt(19, "block", K107, K178, self.ancestor_ids?.[0], self.start, 0, undefined))?.["layout"])?.["markerColumn"]), groups = g_first_marker, base = b_first_marker, v_first_marker) : v_first_marker)) > num(self.layout?.["markerColumn"])) && same((v_first_content === UNSET ? (g_first_content = groups, b_first_content = base, v_first_content = (obj(obj(lookupAt(19, "block", K107, K178, self.ancestor_ids?.[0], self.start, 0, undefined))?.["layout"])?.["contentColumn"]), groups = g_first_content, base = b_first_content, v_first_content) : v_first_content), self.layout?.["contentColumn"])))) return
+  if (!((num(self.index) >= 1) && (num(self.layout?.["markerColumn"]) < num((v_previous === UNSET ? (g_previous = groups, b_previous = base, v_previous = (obj(obj(lookupAt(19, "block", K107, K178, self.ancestor_ids?.[0], self.start, -1, undefined))?.["layout"])?.["markerColumn"]), groups = g_previous, base = b_previous, v_previous) : v_previous))) && (num((v_previous === UNSET ? (g_previous = groups, b_previous = base, v_previous = (obj(obj(lookupAt(19, "block", K107, K178, self.ancestor_ids?.[0], self.start, -1, undefined))?.["layout"])?.["markerColumn"]), groups = g_previous, base = b_previous, v_previous) : v_previous)) > num((v_footnote === UNSET ? (g_footnote = groups, b_footnote = base, v_footnote = ((contains(self.ancestors, "footnote") ? obj(obj(lookupAt(30, "block", K135, undefined, undefined, self.start, -1, undefined))?.["layout"])?.["contentColumn"] : 0)), groups = g_footnote, base = b_footnote, v_footnote) : v_footnote))) && (!(num((v_outer === UNSET ? (g_outer = groups, b_outer = base, v_outer = (obj(obj(lookupAt(12, "block", K107, K98, self.ancestor_ids?.[1], self.start, 0, undefined))?.["layout"])?.["markerColumn"]), groups = g_outer, base = b_outer, v_outer) : v_outer)) >= 0) || (num(self.layout?.["markerColumn"]) <= num((v_outer === UNSET ? (g_outer = groups, b_outer = base, v_outer = (obj(obj(lookupAt(12, "block", K107, K98, self.ancestor_ids?.[1], self.start, 0, undefined))?.["layout"])?.["markerColumn"]), groups = g_outer, base = b_outer, v_outer) : v_outer)))) && !((num(self.index) >= 1) && same((v_kind === UNSET ? (g_kind = groups, b_kind = base, v_kind = (obj(obj(obj(lookupAt(20, "block", K179, K98, self.ancestor_ids?.[0], self.start, 0, undefined))?.["node"])?.["marker"])?.["kind"]), groups = g_kind, base = b_kind, v_kind) : v_kind), "ordered") && (num((v_first_marker === UNSET ? (g_first_marker = groups, b_first_marker = base, v_first_marker = (obj(obj(lookupAt(19, "block", K107, K178, self.ancestor_ids?.[0], self.start, 0, undefined))?.["layout"])?.["markerColumn"]), groups = g_first_marker, base = b_first_marker, v_first_marker) : v_first_marker)) > num(self.layout?.["markerColumn"])) && same((v_first_content === UNSET ? (g_first_content = groups, b_first_content = base, v_first_content = (obj(obj(lookupAt(19, "block", K107, K178, self.ancestor_ids?.[0], self.start, 0, undefined))?.["layout"])?.["contentColumn"]), groups = g_first_content, base = b_first_content, v_first_content) : v_first_content), self.layout?.["contentColumn"])))) return
   context.report("uneven-list-indent", num(self.start), num(self.end), path, {  }, 0)
   return
 }
 
-function rule117(self: ModelInline, path: string, context: LintContext): void {
+function rule116(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
   if (!!(obj(self.node)?.["number"] !== undefined)) return
   context.report("unresolved-footnote", num(self.start), num(self.end), path, { "id": String(obj(self.node)?.["key"]) }, 0)
   return
 }
 
-function rule118(self: ModelInline, path: string, context: LintContext): void {
+function rule117(self: ModelInline, path: string, context: LintContext): void {
   groups = undefined
   let v_labels: unknown = UNSET
   let g_labels: Record<string, [number, number]> | undefined
@@ -1999,35 +1989,35 @@ function rule118(self: ModelInline, path: string, context: LintContext): void {
   let g_case_candidates: Record<string, [number, number]> | undefined
   let b_case_candidates = 0
   if (!((obj(self.node)?.["key"] !== undefined) && ((same(self.type, "link") && !(obj(self.node)?.["href"] !== undefined)) || (same(self.type, "image") && !(obj(self.node)?.["src"] !== undefined))))) return
-  if ((same(self.type, "link") && (lenOf((v_case_only === UNSET ? (g_case_only = groups, b_case_only = base, v_case_only = (((lenOf((v_label === UNSET ? (g_label = groups, b_label = base, v_label = (findIn((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels), (item) => !same(item, obj(self.node)?.["key"]))), groups = g_label, base = b_label, v_label) : v_label)) >= 1) ? (v_label === UNSET ? (g_label = groups, b_label = base, v_label = (findIn((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels), (item) => !same(item, obj(self.node)?.["key"]))), groups = g_label, base = b_label, v_label) : v_label) : ((same(self.type, "link") && (lenOf((v_id === UNSET ? (g_id = groups, b_id = base, v_id = (findIn((v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids), (item) => !same(item, self.key_text))), groups = g_id, base = b_id, v_id) : v_id)) >= 1)) ? (v_id === UNSET ? (g_id = groups, b_id = base, v_id = (findIn((v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids), (item) => !same(item, self.key_text))), groups = g_id, base = b_id, v_id) : v_id) : ""))), groups = g_case_only, base = b_case_only, v_case_only) : v_case_only)) >= 1))) {
-    context.report("unresolved-reference-link", num(self.start), num(self.end), path, { "rawRef": String(self.raw_ref), "caseOnlyPhrase": String((str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? "the label " : "the labels ")) + listOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates), '') + str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? " differs only in case" : " differ only in case")))) }, 0)
+  if ((same(self.type, "link") && (lenOf((v_case_only === UNSET ? (g_case_only = groups, b_case_only = base, v_case_only = (((lenOf((v_label === UNSET ? (g_label = groups, b_label = base, v_label = (findIn((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels), (item) => !same(item, obj(self.node)?.["key"]))), groups = g_label, base = b_label, v_label) : v_label)) >= 1) ? (v_label === UNSET ? (g_label = groups, b_label = base, v_label = (findIn((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels), (item) => !same(item, obj(self.node)?.["key"]))), groups = g_label, base = b_label, v_label) : v_label) : ((same(self.type, "link") && (lenOf((v_id === UNSET ? (g_id = groups, b_id = base, v_id = (findIn((v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids), (item) => !same(item, self.key_text))), groups = g_id, base = b_id, v_id) : v_id)) >= 1)) ? (v_id === UNSET ? (g_id = groups, b_id = base, v_id = (findIn((v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids), (item) => !same(item, self.key_text))), groups = g_id, base = b_id, v_id) : v_id) : ""))), groups = g_case_only, base = b_case_only, v_case_only) : v_case_only)) >= 1))) {
+    context.report("unresolved-reference-link", num(self.start), num(self.end), path, { "rawRef": String(self.raw_ref), "caseOnlyPhrase": String((str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? "the label " : "the labels ")) + listOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates), '') + str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? " differs only in case" : " differ only in case")))) }, 0)
     return
   }
   if (same(self.type, "link")) {
-    context.report("unresolved-reference-link", num(self.start), num(self.end), path, { "rawRef": String(self.raw_ref), "caseOnlyPhrase": String((str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? "the label " : "the labels ")) + listOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates), '') + str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? " differs only in case" : " differ only in case")))) }, 1)
+    context.report("unresolved-reference-link", num(self.start), num(self.end), path, { "rawRef": String(self.raw_ref), "caseOnlyPhrase": String((str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? "the label " : "the labels ")) + listOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates), '') + str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? " differs only in case" : " differ only in case")))) }, 1)
     return
   }
-  if ((lenOf((v_case_only === UNSET ? (g_case_only = groups, b_case_only = base, v_case_only = (((lenOf((v_label === UNSET ? (g_label = groups, b_label = base, v_label = (findIn((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels), (item) => !same(item, obj(self.node)?.["key"]))), groups = g_label, base = b_label, v_label) : v_label)) >= 1) ? (v_label === UNSET ? (g_label = groups, b_label = base, v_label = (findIn((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels), (item) => !same(item, obj(self.node)?.["key"]))), groups = g_label, base = b_label, v_label) : v_label) : ((same(self.type, "link") && (lenOf((v_id === UNSET ? (g_id = groups, b_id = base, v_id = (findIn((v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids), (item) => !same(item, self.key_text))), groups = g_id, base = b_id, v_id) : v_id)) >= 1)) ? (v_id === UNSET ? (g_id = groups, b_id = base, v_id = (findIn((v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids), (item) => !same(item, self.key_text))), groups = g_id, base = b_id, v_id) : v_id) : ""))), groups = g_case_only, base = b_case_only, v_case_only) : v_case_only)) >= 1)) {
-    context.report("unresolved-reference-link", num(self.start), num(self.end), path, { "rawRef": String(self.raw_ref), "caseOnlyPhrase": String((str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? "the label " : "the labels ")) + listOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates), '') + str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? " differs only in case" : " differ only in case")))) }, 2)
+  if ((lenOf((v_case_only === UNSET ? (g_case_only = groups, b_case_only = base, v_case_only = (((lenOf((v_label === UNSET ? (g_label = groups, b_label = base, v_label = (findIn((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels), (item) => !same(item, obj(self.node)?.["key"]))), groups = g_label, base = b_label, v_label) : v_label)) >= 1) ? (v_label === UNSET ? (g_label = groups, b_label = base, v_label = (findIn((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels), (item) => !same(item, obj(self.node)?.["key"]))), groups = g_label, base = b_label, v_label) : v_label) : ((same(self.type, "link") && (lenOf((v_id === UNSET ? (g_id = groups, b_id = base, v_id = (findIn((v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids), (item) => !same(item, self.key_text))), groups = g_id, base = b_id, v_id) : v_id)) >= 1)) ? (v_id === UNSET ? (g_id = groups, b_id = base, v_id = (findIn((v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids), (item) => !same(item, self.key_text))), groups = g_id, base = b_id, v_id) : v_id) : ""))), groups = g_case_only, base = b_case_only, v_case_only) : v_case_only)) >= 1)) {
+    context.report("unresolved-reference-link", num(self.start), num(self.end), path, { "rawRef": String(self.raw_ref), "caseOnlyPhrase": String((str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? "the label " : "the labels ")) + listOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates), '') + str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? " differs only in case" : " differ only in case")))) }, 2)
     return
   }
-  context.report("unresolved-reference-link", num(self.start), num(self.end), path, { "rawRef": String(self.raw_ref), "caseOnlyPhrase": String((str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? "the label " : "the labels ")) + listOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates), '') + str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(32, "block", K112, K240, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(33, "id", K30, K241, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? " differs only in case" : " differ only in case")))) }, 3)
+  context.report("unresolved-reference-link", num(self.start), num(self.end), path, { "rawRef": String(self.raw_ref), "caseOnlyPhrase": String((str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? "the label " : "the labels ")) + listOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates), '') + str((same(lenOf((v_case_candidates === UNSET ? (g_case_candidates = groups, b_case_candidates = base, v_case_candidates = (((lenOf((v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels)) >= 1) ? (v_labels === UNSET ? (g_labels = groups, b_labels = base, v_labels = (lookupAll(31, "block", K112, K237, foldKey(str(obj(self.node)?.["key"])), undefined).map((record) => obj(obj(record)?.["node"])?.["key"])), groups = g_labels, base = b_labels, v_labels) : v_labels) : (v_ids === UNSET ? (g_ids = groups, b_ids = base, v_ids = (lookupAll(32, "id", K30, K238, foldKey(foldLabel(str(self.key_text))), undefined).map((record) => obj(record)?.["heading_text"])), groups = g_ids, base = b_ids, v_ids) : v_ids))), groups = g_case_candidates, base = b_case_candidates, v_case_candidates) : v_case_candidates)), 1) ? " differs only in case" : " differ only in case")))) }, 3)
+  return
+}
+
+function rule118(self: ModelBlock, path: string, context: LintContext): void {
+  groups = undefined
+  let v_at: unknown = UNSET
+  let g_at: Record<string, [number, number]> | undefined
+  let b_at = 0
+  if (!(!(num(obj(lookupAt(33, "inline", K239, K240, obj(self.node)?.["key"], self.start, 0, undefined))?.["start"]) >= 0) && (num((v_at === UNSET ? (g_at = groups, b_at = base, v_at = (indexOf(self.text, ("[^" + str(obj(self.node)?.["key"]) + "]"))), groups = g_at, base = b_at, v_at) : v_at)) >= 0))) return
+  context.report("unused-footnote-definition", (num(self.start) + num((v_at === UNSET ? (g_at = groups, b_at = base, v_at = (indexOf(self.text, ("[^" + str(obj(self.node)?.["key"]) + "]"))), groups = g_at, base = b_at, v_at) : v_at))), (num(self.start) + num((v_at === UNSET ? (g_at = groups, b_at = base, v_at = (indexOf(self.text, ("[^" + str(obj(self.node)?.["key"]) + "]"))), groups = g_at, base = b_at, v_at) : v_at)) + lenOf(("[^" + str(obj(self.node)?.["key"]) + "]"))), path, { "label": String(obj(self.node)?.["key"]) }, 0)
   return
 }
 
 function rule119(self: ModelBlock, path: string, context: LintContext): void {
   groups = undefined
-  let v_at: unknown = UNSET
-  let g_at: Record<string, [number, number]> | undefined
-  let b_at = 0
-  if (!(!(num(obj(lookupAt(34, "inline", K242, K243, obj(self.node)?.["key"], self.start, 0, undefined))?.["start"]) >= 0) && (num((v_at === UNSET ? (g_at = groups, b_at = base, v_at = (indexOf(self.text, ("[^" + str(obj(self.node)?.["key"]) + "]"))), groups = g_at, base = b_at, v_at) : v_at)) >= 0))) return
-  context.report("unused-footnote-definition", (num(self.start) + num((v_at === UNSET ? (g_at = groups, b_at = base, v_at = (indexOf(self.text, ("[^" + str(obj(self.node)?.["key"]) + "]"))), groups = g_at, base = b_at, v_at) : v_at))), (num(self.start) + num((v_at === UNSET ? (g_at = groups, b_at = base, v_at = (indexOf(self.text, ("[^" + str(obj(self.node)?.["key"]) + "]"))), groups = g_at, base = b_at, v_at) : v_at)) + lenOf(("[^" + str(obj(self.node)?.["key"]) + "]"))), path, { "label": String(obj(self.node)?.["key"]) }, 0)
-  return
-}
-
-function rule120(self: ModelBlock, path: string, context: LintContext): void {
-  groups = undefined
-  if (!!(num(obj(lookupAt(35, "inline", K244, K243, obj(self.node)?.["key"], self.start, 0, undefined))?.["start"]) >= 0)) return
+  if (!!(num(obj(lookupAt(34, "inline", K241, K240, obj(self.node)?.["key"], self.start, 0, undefined))?.["start"]) >= 0)) return
   context.report("unused-link-reference-definition", num(self.start), num(self.end), path, {  }, 0)
   return
 }
@@ -2140,32 +2130,31 @@ export const DATA_RULES: readonly DataRule[] = [
   { id: "region-marker-renders-as-text", over: "inline", types: ["comment"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule90 },
   { id: "region-marker-renders-as-text", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["caption","definition_term","heading","line","paragraph"]), needs: {"block":[],"inline":[]}, run: rule91 },
   { id: "reserved-syntax", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule92 },
-  { id: "reserved-syntax", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["paragraph"]), needs: {"block":[],"inline":[]}, run: rule93 },
-  { id: "semantic-attribute-outside-span", over: "attribute", types: undefined, verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule94 },
-  { id: "semantic-attribute-value-ignored", over: "attribute", types: ["span"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule95 },
-  { id: "setext-heading-underline", over: "line", types: undefined, verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule96 },
-  { id: "sigil-after-letter", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule97 },
-  { id: "table-attribute-invalid", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule98 },
-  { id: "table-column-arity", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule99 },
-  { id: "table-column-overlap", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule100 },
-  { id: "table-marker-run-padding", over: "block", types: ["table_cell"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule101 },
-  { id: "table-row-attribute-as-cell", over: "block", types: ["table_row"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule102 },
-  { id: "table-row-cell-count", over: "block", types: ["table_row"], verbatim: new Set([]), only: new Set(["table_body","table_foot","table_head"]), needs: {"block":["table_row"],"inline":[]}, run: rule103 },
-  { id: "table-row-count-clamped", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule104 },
-  { id: "table-shaped-paragraph", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["caption","definition_term","heading","line","paragraph"]), needs: {"block":[],"inline":[]}, run: rule105 },
-  { id: "table-span-marker-attribute", over: "block", types: ["table_cell"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule106 },
-  { id: "table-span-marker-blocked", over: "block", types: ["table_cell"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule107 },
-  { id: "table-width-total", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule108 },
-  { id: "thematic-break-spelling", over: "line", types: undefined, verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule109 },
-  { id: "tight-list-item-with-blank-line", over: "block", types: ["list"], verbatim: new Set([]), only: undefined, needs: {"block":["*","list_item"],"inline":[]}, run: rule110 },
-  { id: "unattached-block-attribute", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["paragraph"]), needs: {"block":[],"inline":[]}, run: rule111 },
-  { id: "unattached-caption", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["caption","definition_term","heading","line","paragraph"]), needs: {"block":[],"inline":[]}, run: rule112 },
-  { id: "unattached-inline-attribute", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule113 },
-  { id: "unclosed-braced-comment", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule114 },
-  { id: "unclosed-inline-emphasis", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule115 },
-  { id: "uneven-list-indent", over: "block", types: ["list_item"], verbatim: new Set([]), only: undefined, needs: {"block":["footnote","list","list_item"],"inline":[]}, run: rule116 },
-  { id: "unresolved-footnote", over: "inline", types: ["footnote_ref"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule117 },
-  { id: "unresolved-reference-link", over: "inline", types: ["image","link"], verbatim: new Set([]), only: undefined, needs: {"block":["link_reference_definition"],"inline":[]}, run: rule118 },
-  { id: "unused-footnote-definition", over: "block", types: ["footnote"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":["footnote_ref"]}, run: rule119 },
-  { id: "unused-link-reference-definition", over: "block", types: ["link_reference_definition"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":["image","link"]}, run: rule120 },
+  { id: "semantic-attribute-outside-span", over: "attribute", types: undefined, verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule93 },
+  { id: "semantic-attribute-value-ignored", over: "attribute", types: ["span"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule94 },
+  { id: "setext-heading-underline", over: "line", types: undefined, verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule95 },
+  { id: "sigil-after-letter", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule96 },
+  { id: "table-attribute-invalid", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule97 },
+  { id: "table-column-arity", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule98 },
+  { id: "table-column-overlap", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule99 },
+  { id: "table-marker-run-padding", over: "block", types: ["table_cell"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule100 },
+  { id: "table-row-attribute-as-cell", over: "block", types: ["table_row"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule101 },
+  { id: "table-row-cell-count", over: "block", types: ["table_row"], verbatim: new Set([]), only: new Set(["table_body","table_foot","table_head"]), needs: {"block":["table_row"],"inline":[]}, run: rule102 },
+  { id: "table-row-count-clamped", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule103 },
+  { id: "table-shaped-paragraph", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["caption","definition_term","heading","line","paragraph"]), needs: {"block":[],"inline":[]}, run: rule104 },
+  { id: "table-span-marker-attribute", over: "block", types: ["table_cell"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule105 },
+  { id: "table-span-marker-blocked", over: "block", types: ["table_cell"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule106 },
+  { id: "table-width-total", over: "attribute", types: ["table"], verbatim: new Set([]), only: new Set(["key"]), needs: {"block":[],"inline":[]}, run: rule107 },
+  { id: "thematic-break-spelling", over: "line", types: undefined, verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule108 },
+  { id: "tight-list-item-with-blank-line", over: "block", types: ["list"], verbatim: new Set([]), only: undefined, needs: {"block":["*","list_item"],"inline":[]}, run: rule109 },
+  { id: "unattached-block-attribute", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["paragraph"]), needs: {"block":[],"inline":[]}, run: rule110 },
+  { id: "unattached-caption", over: "line", types: undefined, verbatim: new Set([]), only: new Set(["caption","definition_term","heading","line","paragraph"]), needs: {"block":[],"inline":[]}, run: rule111 },
+  { id: "unattached-inline-attribute", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule112 },
+  { id: "unclosed-braced-comment", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule113 },
+  { id: "unclosed-inline-emphasis", over: "inline", types: ["text_run"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule114 },
+  { id: "uneven-list-indent", over: "block", types: ["list_item"], verbatim: new Set([]), only: undefined, needs: {"block":["footnote","list","list_item"],"inline":[]}, run: rule115 },
+  { id: "unresolved-footnote", over: "inline", types: ["footnote_ref"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":[]}, run: rule116 },
+  { id: "unresolved-reference-link", over: "inline", types: ["image","link"], verbatim: new Set([]), only: undefined, needs: {"block":["link_reference_definition"],"inline":[]}, run: rule117 },
+  { id: "unused-footnote-definition", over: "block", types: ["footnote"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":["footnote_ref"]}, run: rule118 },
+  { id: "unused-link-reference-definition", over: "block", types: ["link_reference_definition"], verbatim: new Set([]), only: undefined, needs: {"block":[],"inline":["image","link"]}, run: rule119 },
 ]
