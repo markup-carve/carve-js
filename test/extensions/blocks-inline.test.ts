@@ -205,6 +205,13 @@ describe('smartQuotes', () => {
     expect(isSmartQuoteLocaleSupported('de-AT')).toBe(true)
     expect(isSmartQuoteLocaleSupported('xx')).toBe(false)
   })
+
+  it('reads only own locale keys, so a prototype name falls back to English (carve-rs#4838)', () => {
+    for (const locale of ['constructor', 'toString', '__proto__', 'hasOwnProperty-x']) {
+      expect([locale, render('"a"', { ...use(smartQuotes({ locale })), smartTypography: true })]).toEqual([locale, '<p>“a”</p>'])
+      expect([locale, isSmartQuoteLocaleSupported(locale)]).toEqual([locale, false])
+    }
+  })
 })
 
 describe('listTable and colorSwatch', () => {

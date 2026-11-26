@@ -34,8 +34,9 @@ export interface SmartQuotesOptions {
   closeSingleQuote?: string
 }
 
+/** The locale and its language, matched ignoring ASCII case with `_` read as `-` (C2-X-075). */
 function localeKeys(locale: string): [string, string] {
-  const normalized = locale.replaceAll('_', '-').toLowerCase()
+  const normalized = locale.replaceAll('_', '-').replace(/[A-Z]+/g, (letters) => letters.toLowerCase())
   const exact = Object.keys(SMART_QUOTE_LOCALES).find((key) => key.toLowerCase() === normalized) ?? normalized
   return [exact, normalized.split('-')[0] ?? normalized]
 }
@@ -45,13 +46,14 @@ export function smartQuoteLocales(): string[] {
 }
 
 export function isSmartQuoteLocaleSupported(locale: string): boolean {
-  return localeKeys(locale).some((key) => key in SMART_QUOTE_LOCALES)
+  return localeKeys(locale).some((key) => Object.hasOwn(SMART_QUOTE_LOCALES, key))
 }
 
 /** Locale quote glyphs for smart typography; the `smartTypography` option still turns it on. */
 export function smartQuotes(options: SmartQuotesOptions = {}): ExtensionBundle {
   const [exact, language] = localeKeys(options.locale ?? 'en')
-  const quotes = SMART_QUOTE_LOCALES[exact] ?? SMART_QUOTE_LOCALES[language] ?? SMART_QUOTE_LOCALES['en']!
+  const own = (key: string) => Object.hasOwn(SMART_QUOTE_LOCALES, key) ? SMART_QUOTE_LOCALES[key] : undefined
+  const quotes = own(exact) ?? own(language) ?? SMART_QUOTE_LOCALES['en']!
   return { extensions: [{ name: 'carve.smartQuotes', version: '1', props: {}, slots: {}, quotes: [
     options.openDoubleQuote ?? quotes[0], options.closeDoubleQuote ?? quotes[1],
     options.openSingleQuote ?? quotes[2], options.closeSingleQuote ?? quotes[3],
