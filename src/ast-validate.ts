@@ -1284,6 +1284,12 @@ function checkSnippet(value: Fields, type: string, path: string, allowed: readon
   const mode = allowed.includes('text') ? 'inline' : 'block'
   const slot = mode === 'inline' ? 'inline nodes' : 'blocks'
   if (value['mode'] !== mode) fail(`${path}/mode`, `a snippet use in a list of ${slot} has the mode ${String(value['mode'])}`)
+  if (mode === 'inline') checkInlineUseFields(value, path)
+}
+
+/** C2-I-128: no attribute line reaches an inline use, so the carve#6896 allowance holds for block uses only. */
+function checkInlineUseFields(value: Fields, path: string): void {
+  for (const name of ['attrs', 'lang']) if (value[name] !== undefined) fail(`${path}/${name}`, 'not a field of snippet_use')
 }
 
 type TypeCheck = (value: Fields, type: string, path: string, allowed: readonly string[], walk: Walk) => void

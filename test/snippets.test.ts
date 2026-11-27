@@ -19,7 +19,7 @@ describe('named snippets', () => {
       { type: 'snippet_definition', name: 's', children: [{ type: 'text', value: 'hi' }] },
       { type: 'paragraph', children: [{ type: 'snippet_use', mode: 'inline', name: 's', ...fields }] },
     ] })
-    for (const [field, value] of [['dir', 'ltr'], ['metadata', {}]] as const) {
+    for (const [field, value] of [['dir', 'ltr'], ['metadata', {}], ['lang', 'en'], ['attrs', { id: 'x' }]] as const) {
       expect(() => decodeTree(tree({ [field]: value }))).toThrow(`/children/1/children/0/${field}: not a field of snippet_use`)
     }
     const pos = { startLine: 1, endLine: 1, startColumn: 1, endColumn: 2, startOffset: 0, endOffset: 1 }
