@@ -12,4 +12,12 @@ describe('C2-W-088: a round reports the constructs behind the place its comparis
     expect(treesEqual(parse(written), parse(source))).toBe(true)
     expect(format(written)).toBe(written)
   })
+
+  it('finds the openers behind a character outside the basic plane', () => {
+    const source = '\u{1F600} [a *[a][x]*[x]: /u\n'.repeat(122)
+    const written = format(source)
+    expect(written.split('\n')[99]).toBe('\u{1F600} [a \\*\\[a][x]\\*\\[x\\]: /u')
+    expect(treesEqual(parse(written), parse(source))).toBe(true)
+    expect(format(written)).toBe(written)
+  })
 })
