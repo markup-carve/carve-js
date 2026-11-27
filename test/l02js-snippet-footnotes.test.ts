@@ -39,3 +39,10 @@ it('keeps a child note ahead of a parent note with the same key', () => {
   expect(findings.filter((entry) => entry.code === 'unused-footnote-definition').map((entry) => entry.file))
     .toEqual([undefined])
 })
+
+it('counts a note reference through nested snippet copies', () => {
+  const source = '[^n]: Note\n\n{{ child.crv }}'
+  const child = '{$a}: [^n]\n\n{$b}: {{ $a }}\n\n{{ $b }}'
+  const findings = lint(source, { includes: () => ({ text: child, id: 'child.crv' }) })
+  expect(findings.map((entry) => entry.code)).toEqual([])
+})

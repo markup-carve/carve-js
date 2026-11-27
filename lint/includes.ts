@@ -191,8 +191,8 @@ function referenceFindings(document: DocumentNode, source: string): ReferenceFin
   if (holdsSnippetUse(document)) {
     const view = cloneTree(document)
     expandSnippets(view, { entries: [], nodes: [] }, { roundtrip: false, source }, document)
-    resolveTree(view)
-    copiedNotes(view, root, root, includeScopes(view, root), found)
+    const resolved = resolveTree(view)
+    copiedNotes(resolved.document, root, root, includeScopes(resolved.document, root), found)
   }
   return found
 }
