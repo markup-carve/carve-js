@@ -136,39 +136,77 @@ function catalogMessage(id: 'fence-title-syntax' | 'fence-opener-fallback', inde
   return template.replace(/\$\{([^}]+)\}/g, (placeholder, key: string) => values[key] ?? placeholder)
 }
 
-function titleVariant(src: string, note: ParseNote, info: ReturnType<typeof readOpenerInfo>,
-  run: string, type: string, text: string, lineEnd: number): number {
-  if (isCurlyTitle(text)) return 2
-  if (note.block.kind === DIV && type === '') return 0
-  if (/^"[^"\n]*"[ \t]+\S/.test(src.slice(info.wordEnd, lineEnd).trimStart())) return 1
-  if (text.startsWith('{') || note.block.kind === DIV || (note.block.kind !== CODE && type !== '')) return 4
-  if (type === '' && note.block.kind === CODE && misspaced(src, note.block.start + run.length)) return 5
-  if (src.slice(info.wordEnd, lineEnd).startsWith('\t')) return 6
-  return 3
+const trimSpaces = (text: string): string => text.replace(/^[ \t\r]+|[ \t\r]+$/g, '')
+
+interface TitleParts {
+  run: string
+  runEnd: number
+  lineEnd: number
+  from: number
+  before: string
+  /** Whether a tab stands between the opener parts before the further words, not inside a title or label. */
+  partTab: boolean
+  type: string
+  wordEnd: number
+  rest: string
+  label: string
+  code: boolean
 }
 
-/** C2-B-122: the opener with its further words read as the quoted title the author meant. */
-function titleMessage(src: string, note: ParseNote): string {
-  const block = note.block
-  const run = openerRun(src, block.start)
-  const lineEnd = lineFeedAt(src, block.start)
-  const line = src.slice(block.start + run.length, lineEnd).trim()
-  const space = line.search(/[ \t]/)
+function titleParts(src: string, note: ParseNote): TitleParts {
+  const run = openerRun(src, note.block.start)
+  const lineEnd = lineFeedAt(src, note.block.start)
+  const runEnd = note.block.start + run.length
+  const from = Math.max(note.from, runEnd)
+  const before = src.slice(runEnd, from)
   // C2-B-117, C2-B-119: the word ends where its characters end, so the further words may be glued to it.
-  const info = readOpenerInfo(src, block.start + run.length)
-  const word = info.wordStart < 0 ? '' : src.slice(info.wordStart, info.wordEnd)
-  const type = note.from >= 0 ? word : space < 0 ? line : line.slice(0, space)
-  const rest = note.from < 0 ? (space < 0 ? '' : line.slice(space).trim()) : src.slice(note.from, lineEnd).trim()
-  const [text, label] = note.from < 0 ? [rest, ''] : splitLabel(rest)
-  const opener = type === '' ? run : `${run} ${type}`
-  const values = { type, fence: run, title: text.replace(/^"|"$/g, ''), label,
-    correctedOpener: opener, respaced: line === '' ? run : `${run} ${line.replace(/\s+/g, ' ')}` }
-  const variant = titleVariant(src, note, info, run, type, text, lineEnd)
-  if (variant === 2) {
-    const title = text.slice(1, CURLY_QUOTES.includes(text.charAt(text.length - 1)) ? -1 : undefined)
-    return catalogMessage('fence-title-syntax', 2, { ...values, title })
+  const info = readOpenerInfo(src, runEnd)
+  const type = info.wordStart >= 0 && info.wordEnd <= from ? src.slice(info.wordStart, info.wordEnd) : ''
+  const wordEnd = runEnd + before.length - before.replace(/^[ \t]+/, '').length + type.length
+  const [rest, label] = splitLabel(trimSpaces(src.slice(from, lineEnd)))
+  let parts = before
+  for (const [start, end] of [[info.labelStart, info.labelEnd], [info.titleStart, info.titleEnd]] as const) {
+    if (start >= runEnd && end <= from) parts = parts.slice(0, start - runEnd) + parts.slice(end - runEnd)
   }
-  return catalogMessage('fence-title-syntax', variant, values)
+  return { run, runEnd, lineEnd, from, before, partTab: parts.includes('\t'), type, wordEnd, rest, label,
+    code: note.node.type === 'code_block' }
+}
+
+/** C2-B-117: the whitespace messages of a code fence; -1 for any other opener. */
+function spacingVariant(src: string, p: TitleParts): number {
+  // A spaced brace block is further words (4); a tab behind the run is the whitespace message (5).
+  if (p.type === '' && /^ +\{/.test(src.slice(p.runEnd, p.lineEnd))) return 4
+  if (p.type === '' && misspaced(src, p.runEnd)) return 5
+  if (p.type !== '' && (p.partTab || src.charCodeAt(p.wordEnd) === TAB)) return 6
+  return -1
+}
+
+/**
+ * C2-B-122: the catalog message for the further words of an opener. Only a code fence takes the code-fence messages
+ * (1, 2, 3, 5, 6): a raw fence and a div report message 4, or message 0 for an anonymous div.
+ */
+function titleVariant(src: string, p: TitleParts): number {
+  if (!p.code) return trimSpaces(p.before) === '' ? 0 : 4
+  const spacing = spacingVariant(src, p)
+  if (spacing >= 0) return spacing
+  if (p.type !== '' && isCurlyTitle(p.rest)) return 2
+  const titled = p.before.includes('"') && !p.before.includes(']')
+  if (titled || /^"[^"\n]*"[ \t]+\S/.test(src.slice(p.wordEnd, p.lineEnd).replace(/^[ \t]+/, ''))) return 1
+  // A brace block or a title behind the label is no unquoted title (C2-B-117).
+  return p.type !== '' && !p.rest.startsWith('{') && !p.before.includes(']') ? 3 : 4
+}
+
+function titleMessage(src: string, note: ParseNote): string {
+  const p = titleParts(src, note)
+  const line = src.slice(p.runEnd, p.lineEnd).trim()
+  const parts = trimSpaces(p.before)
+  const variant = titleVariant(src, p)
+  const title = variant === 2
+    ? p.rest.slice(1, CURLY_QUOTES.includes(p.rest.charAt(p.rest.length - 1)) ? -1 : undefined)
+    : p.rest.replace(/^"|"$/g, '')
+  return catalogMessage('fence-title-syntax', variant, { type: p.type, fence: p.run, label: p.label, title,
+    respaced: line === '' ? p.run : `${p.run} ${line.replace(/\s+/g, ' ')}`,
+    correctedOpener: p.run.startsWith('`') && parts !== '' ? `${p.run} ${parts}` : src.slice(note.block.start, p.from).trimEnd() })
 }
 
 /** C2-B-105: an attribute block after a fence language or an admonition name, which the block does not take. */
