@@ -46,6 +46,8 @@ function gapForNode(node: Record<string, unknown>): string | null {
     return 'refForm dependency'
   }
   if (node['type'] === 'inline_extension' && node['name'] === '_') return 'underscore extension'
+  // carve#6896: the reader keeps the attribute line a block snippet use takes; the schema has no field for it.
+  if (node['type'] === 'snippet_use' && (node['attrs'] !== undefined || node['lang'] !== undefined)) return 'snippet use attributes'
   if (node['type'] !== 'include' || !object(node['options'])) return null
   for (const field of ['lines', 'rows', 'cols']) {
     const value = node['options'][field]

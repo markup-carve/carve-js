@@ -19,12 +19,21 @@ describe('named snippets', () => {
       { type: 'snippet_definition', name: 's', children: [{ type: 'text', value: 'hi' }] },
       { type: 'paragraph', children: [{ type: 'snippet_use', mode: 'inline', name: 's', ...fields }] },
     ] })
-    for (const [field, value] of [['lang', '2.0'], ['lang', 'en'], ['dir', 'ltr'], ['metadata', {}], ['attrs', { id: 'x' }]] as const) {
+    for (const [field, value] of [['dir', 'ltr'], ['metadata', {}]] as const) {
       expect(() => decodeTree(tree({ [field]: value }))).toThrow(`/children/1/children/0/${field}: not a field of snippet_use`)
     }
     const pos = { startLine: 1, endLine: 1, startColumn: 1, endColumn: 2, startOffset: 0, endOffset: 1 }
     expect(() => decodeTree(tree({}))).not.toThrow()
     expect(() => decodeTree(tree({ pos, segments: [pos] }))).not.toThrow()
+  })
+
+  it('carve#6896: a parsed block use that took an attribute line reads back until that line is decided', () => {
+    for (const source of ['{$v}: X\n{k}\n{{ $v }}', '{$v}: X\n\n{.k :en}\n{{ $v }}', '{$v}: X\n\n> {#a}\n> {{ $v }}']) {
+      const tree = parseTree(source)
+      expect(() => decodeTree(JSON.stringify(tree.document), source)).not.toThrow()
+      const children = (text: string): unknown => parseTree(text, { positions: false }).document.children
+      expect(children(format(source))).toEqual(children(source))
+    }
   })
 
   it('C2-B-236: a glued block after a quoted value holding } still reads', () => {
