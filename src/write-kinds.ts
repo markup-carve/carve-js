@@ -239,22 +239,48 @@ function edge(block: KindBlock, index: number, step: number): number {
  */
 export function escapeKinds(check: Check, group: readonly Node[], noKind: ReadonlySet<[TextNode, number]> = new Set(),
   starts?: TextStarts): void {
+  addKinds(check, reportedKinds(check, group, noKind, starts))
+}
+
+/**
+ * `escapeKinds` with the escapes `noKind` giving no kind unless `all`, and whether they change the kinds the round
+ * adds: where they do not, the two forms of the pass are the same.
+ */
+export function escapeKindsBeside(check: Check, group: readonly Node[], noKind: ReadonlySet<[TextNode, number]>,
+  all: boolean, starts?: TextStarts): boolean {
+  const kept = reportedKinds(check, group, noKind, starts)
+  const every = check.escapes.some((escape) => noKind.has(escape)) ? reportedKinds(check, group, new Set(), starts) : kept
+  addKinds(check, all ? every : kept)
+  return every.length !== kept.length || every.some(([block, key], at) => kept[at]![0] !== block || kept[at]![1] !== key)
+}
+
+/** The kinds the escapes of `check` report, each once per block, in the order of the first escape that reports it. */
+function reportedKinds(check: Check, group: readonly Node[], noKind: ReadonlySet<[TextNode, number]>,
+  starts?: TextStarts): [KindBlock, string][] {
   const trials = new Set(check.trials)
   const candidates = check.escapes.filter((escape) => check.ownEscapes.get(escape[0])?.has(escape[1]) !== true &&
     !trials.has(escape) && !noKind.has(escape) && !check.lengthening.has(escape))
   const braces = candidates.some(([node, at]) => node.value[at] === '{') ? braceContext(check, group, starts) : null
   const reported = candidates.filter(([node, at]) => reportedBrace(braces, node, at))
-  if (reported.length === 0) return
+  const kinds: [KindBlock, string][] = []
+  if (reported.length === 0) return kinds
   const owners = groupKindBlocks(check, group)
   const done = new Map<KindBlock, Set<string>>()
   for (const [node, at] of reported) {
     const block = owners.get(node)
     if (block === undefined) continue
     const key = reportedKey(check, block, node, at, braces)
-    if (key.startsWith('{')) check.w.reportedBraceKinds.add(key)
     const keys = done.get(block) ?? new Set<string>()
     if (keys.has(key)) continue
     done.set(block, keys.add(key))
+    kinds.push([block, key])
+  }
+  return kinds
+}
+
+function addKinds(check: Check, kinds: readonly [KindBlock, string][]): void {
+  for (const [block, key] of kinds) {
+    if (key.startsWith('{')) check.w.reportedBraceKinds.add(key)
     block.leaves.forEach((leaf, index) => {
       if (leaf.text === null) return
       for (const offset of kindOffsets(key, block, index)) escapeAt(check, leaf.text, offset)

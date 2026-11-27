@@ -65,7 +65,7 @@ function noteBraced(trace: PassTrace, before: Set<Node>, after: Set<Node>): void
 }
 
 interface PassRecord {
-  /** Which step of the repair this records: a pass of the rounds or the check after one. */
+  /** Which step of the repair this records. */
   step: string
   modes: [boolean, boolean, boolean]
   closerKinds: boolean
@@ -100,15 +100,24 @@ export interface PassRun<T> {
 /** The passes one group repair ran, with what each started from and ended with. */
 export type PassMemo = PassRecord[]
 
+// A snapshot is only read, and `restore` copies out of it, so its empty containers can be shared.
+const EMPTY_ARRAY: readonly unknown[] = []
+const EMPTY_MAP: ReadonlyMap<unknown, unknown> = new Map()
+const EMPTY_SET: ReadonlySet<unknown> = new Set()
+
 /** A copy of `value` that a later write does not change: the containers of the writer copied, nodes kept. */
 function copy(value: unknown): unknown {
-  if (Array.isArray(value)) return (value as unknown[]).map((item) => Array.isArray(item) ? [...(item as unknown[])] : item)
+  if (Array.isArray(value)) {
+    if (value.length === 0) return EMPTY_ARRAY
+    return (value as unknown[]).map((item) => Array.isArray(item) ? [...(item as unknown[])] : item)
+  }
   if (value instanceof Map) {
+    if (value.size === 0) return EMPTY_MAP
     const out = new Map<unknown, unknown>()
     for (const [key, item] of value as Map<unknown, unknown>) out.set(key, copyItem(item))
     return out
   }
-  if (value instanceof Set) return new Set(value as Set<unknown>)
+  if (value instanceof Set) return value.size === 0 ? EMPTY_SET : new Set(value as Set<unknown>)
   if (isLosses(value)) return { ...value, entries: [...value.entries], nodes: [...value.nodes] }
   return value
 }
@@ -164,19 +173,24 @@ function sameSnapshot(a: Snapshot, b: Snapshot): boolean {
 export function restore(w: Writer, taken: Snapshot): void {
   const target = w as unknown as Record<string, unknown>
   for (const key of STATE) {
-    const value = copy(taken.get(key))
-    if (!refill(target[key], value)) target[key] = value
+    const value = taken.get(key)
+    if (!refill(target[key], value)) target[key] = copyOut(value)
   }
 }
 
-/** Fills the container `held` with the items of `value` where both are containers of one kind. */
+/** A copy of a snapshot's value the writer can change. */
+function copyOut(value: unknown): unknown {
+  if (value === EMPTY_ARRAY) return []
+  if (value === EMPTY_MAP) return new Map()
+  if (value === EMPTY_SET) return new Set()
+  return copy(value)
+}
+
+/** Fills the container `held` with copies of the items of `value` where both are containers of one kind. */
 function refill(held: unknown, value: unknown): boolean {
-  if (Array.isArray(held) && Array.isArray(value)) {
-    held.splice(0, held.length, ...(value as unknown[]))
-  } else if (held instanceof Map && value instanceof Map) {
-    held.clear()
-    for (const [item, entry] of value as Map<unknown, unknown>) held.set(item, entry)
-  } else if (held instanceof Set && value instanceof Set) {
+  if (Array.isArray(held) && Array.isArray(value)) refillArray(held as unknown[], value as unknown[])
+  else if (held instanceof Map && value instanceof Map) refillMap(held as Map<unknown, unknown>, value as Map<unknown, unknown>)
+  else if (held instanceof Set && value instanceof Set) {
     held.clear()
     for (const item of value as Set<unknown>) held.add(item)
   } else if (isLosses(held) && isLosses(value)) {
@@ -184,6 +198,16 @@ function refill(held: unknown, value: unknown): boolean {
     held.nodes.splice(0, held.nodes.length, ...value.nodes)
   } else return false
   return true
+}
+
+function refillArray(held: unknown[], value: readonly unknown[]): void {
+  held.length = 0
+  for (const item of value) held.push(Array.isArray(item) ? [...(item as unknown[])] : item)
+}
+
+function refillMap(held: Map<unknown, unknown>, value: ReadonlyMap<unknown, unknown>): void {
+  held.clear()
+  for (const [item, entry] of value) held.set(item, copyItem(entry))
 }
 
 /**
@@ -258,6 +282,7 @@ function copyPlaced(placed: Map<TextNode, Set<number>>): Map<TextNode, Set<numbe
  */
 function runWholeTests(w: Writer, tests: WholeTest[] | null): Charge[] | null {
   if (tests === null) return null
+  if (tests.length === 0) return []
   const current = snapshot(w)
   const linkPlaced = copyPlaced(w.linkPlaced)
   const { parseCache, parses, pass } = w
