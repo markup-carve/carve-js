@@ -144,6 +144,8 @@ interface TitleParts {
   lineEnd: number
   from: number
   before: string
+  /** Whether a tab stands between the opener parts before the further words, not inside a title or label. */
+  partTab: boolean
   type: string
   wordEnd: number
   rest: string
@@ -162,14 +164,19 @@ function titleParts(src: string, note: ParseNote): TitleParts {
   const type = info.wordStart >= 0 && info.wordEnd <= from ? src.slice(info.wordStart, info.wordEnd) : ''
   const wordEnd = runEnd + before.length - before.replace(/^[ \t]+/, '').length + type.length
   const [rest, label] = splitLabel(trimSpaces(src.slice(from, lineEnd)))
-  return { run, runEnd, lineEnd, from, before, type, wordEnd, rest, label, code: note.node.type === 'code_block' }
+  let parts = before
+  for (const [start, end] of [[info.labelStart, info.labelEnd], [info.titleStart, info.titleEnd]] as const) {
+    if (start >= runEnd && end <= from) parts = parts.slice(0, start - runEnd) + parts.slice(end - runEnd)
+  }
+  return { run, runEnd, lineEnd, from, before, partTab: parts.includes('\t'), type, wordEnd, rest, label,
+    code: note.node.type === 'code_block' }
 }
 
 /** C2-B-117: a brace block behind a second space, or the whitespace messages of a code fence; -1 for any other opener. */
 function spacingVariant(src: string, p: TitleParts): number {
   if (p.type === '' && /^[ \t]{2,}\{[.#][^{}]*\}/.test(src.slice(p.runEnd, p.lineEnd))) return 4
   if (p.type === '' && misspaced(src, p.runEnd)) return 5
-  if (p.type !== '' && (p.before.includes('\t') || src.charCodeAt(p.wordEnd) === TAB)) return 6
+  if (p.type !== '' && (p.partTab || src.charCodeAt(p.wordEnd) === TAB)) return 6
   return -1
 }
 

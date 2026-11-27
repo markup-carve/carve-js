@@ -43,4 +43,9 @@ describe('fence-title-syntax messages', () => {
     expect(titleMessages('``` js "t""u"\nx\n```\n')).toEqual([AFTER_TITLE])
     expect(titleMessages('```"t" x\nx\n```\n')).toEqual([AFTER_TITLE])
   })
+
+  it('C2-B-117: a tab inside a valid title or label separates no opener parts', () => {
+    expect(titleMessages('```js "foo\tbar" junk\nx\n```\n')).toEqual([AFTER_TITLE])
+    expect(titleMessages('```js [foo\tbar] junk\nx\n```\n')).toEqual([FURTHER('``` js [foo\tbar]')])
+  })
 })
