@@ -189,6 +189,8 @@ function titleVariant(src: string, p: TitleParts): number {
   if (!p.code) return trimSpaces(p.before) === '' ? 0 : 4
   const spacing = spacingVariant(src, p)
   if (spacing >= 0) return spacing
+  // C2-B-225: a character glued to the language starts further words, not an unquoted title.
+  if (p.type !== '' && p.from === p.wordEnd) return 4
   if (p.type !== '' && isCurlyTitle(p.rest)) return 2
   const titled = p.before.includes('"') && !p.before.includes(']')
   if (titled || /^"[^"\n]*"[ \t]+\S/.test(src.slice(p.wordEnd, p.lineEnd).replace(/^[ \t]+/, ''))) return 1
