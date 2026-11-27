@@ -102,21 +102,26 @@ function definition(scope: ReferenceScope, key: string, kind: 'links' | 'notes')
   return undefined
 }
 
+function isResolved(node: Node, inSnippet: boolean, target: { node: Node, file: string } | undefined): boolean {
+  if (node.type === 'footnote_ref') return node.number !== undefined || (inSnippet && target !== undefined)
+  if (node.type === 'link') return node.href !== undefined
+  return node.type === 'image' && node.src !== undefined
+}
+
 function recordReference(node: Node, file: string, inclusion: string, scope: ReferenceScope,
-  found: ReferenceFindings): void {
+  found: ReferenceFindings, inSnippet: boolean): void {
   if (node.type !== 'link' && node.type !== 'image' && node.type !== 'footnote_ref') return
   const note = node.type === 'footnote_ref'
   const location = referenceKey(file, node, note ? 'unresolved-footnote' : 'unresolved-reference-link')
   if (location === null) return
   const occurrence = `${location}\u0000${inclusion}`
   found.observed.add(occurrence)
-  const resolved = note ? node.number !== undefined : node.type === 'link' ? node.href !== undefined : node.src !== undefined
-  if (!resolved) {
+  const target = node.key === undefined ? undefined : definition(scope, node.key, note ? 'notes' : 'links')
+  if (!isResolved(node, inSnippet, target)) {
     found.unresolved.add(occurrence)
     return
   }
   if (node.key === undefined) return
-  const target = definition(scope, node.key, note ? 'notes' : 'links')
   if (target === undefined) return
   const used = referenceKey(target.file, target.node,
     note ? 'unused-footnote-definition' : 'unused-link-reference-definition')
@@ -124,21 +129,22 @@ function recordReference(node: Node, file: string, inclusion: string, scope: Ref
 }
 
 function walkReferences(node: Node, path: string, file: string, inclusion: string, scope: ReferenceScope,
-  found: ReferenceFindings): void {
-  recordReference(node, file, inclusion, scope, found)
+  found: ReferenceFindings, inSnippet = false): void {
+  recordReference(node, file, inclusion, scope, found, inSnippet)
+  const belowSnippet = inSnippet || node.type === 'snippet_definition'
   if (node.type === 'include' && node.children !== undefined) {
     const innerFile = node.file ?? file
     const inner = scopeOf(node.children, innerFile, scope)
     forEachSlot(node, (nodes, step, single) => {
       nodes.forEach((child, index) => walkReferences(child, `${path}/${step}${single ? '' : `/${index}`}`,
         step === 'children' ? innerFile : file, step === 'children' ? path : inclusion,
-        step === 'children' ? inner : scope, found))
+        step === 'children' ? inner : scope, found, belowSnippet))
     })
     return
   }
   forEachSlot(node, (nodes, step, single) => {
     nodes.forEach((child, index) => walkReferences(child, `${path}/${step}${single ? '' : `/${index}`}`,
-      file, inclusion, scope, found))
+      file, inclusion, scope, found, belowSnippet))
   })
 }
 
