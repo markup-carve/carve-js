@@ -331,8 +331,10 @@ export function lintIncludes(source: string, value: unknown, own: Diagnostic[], 
   // The file lint pass selects source lines and sections. Keep only expansion findings that it cannot produce.
   const expansion = expanded.diagnostics.filter((entry) => entry.code.startsWith('include-') ||
     visit.codePaths.some((path) => entry.path?.startsWith(path) === true))
-  // C2-N-090: a duplicate across files is seen only in the expanded tree; one a file pass found is not repeated.
+  // C2-T-031, C2-N-058, C2-N-090: a parse entry across files, such as a duplicate, is seen only in the expanded tree;
+  // one a file pass found is not repeated.
   const found = new Set([...own, ...visit.out].map(findingKey))
-  const crossFile = duplicates.filter((entry) => !found.has(findingKey(entry)) && !expansion.includes(entry))
+  const crossFile = expanded.diagnostics.filter((entry) => entry.channel === 'parse' &&
+    !found.has(findingKey(entry)) && !expansion.includes(entry))
   return [...own.filter((entry) => reconciled(entry, references)), ...expansion, ...crossFile, ...visit.out]
 }
