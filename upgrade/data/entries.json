@@ -563,7 +563,9 @@
       "id": "U-101",
       "name": "`=` at the start of a paragraph, item or quote",
       "class": "escape",
-      "lint": []
+      "lint": [
+        "heading-marker-mixed"
+      ]
     },
     {
       "id": "U-102",
@@ -760,7 +762,9 @@
       "id": "U-129",
       "name": "percent comment fence ownership",
       "class": "rewrite",
-      "lint": []
+      "lint": [
+        "unclosed-comment-fence"
+      ]
     },
     {
       "id": "U-130",
@@ -825,7 +829,9 @@
       "id": "U-138",
       "name": "caret line after an eligible block",
       "class": "rewrite",
-      "lint": []
+      "lint": [
+        "unattached-caption"
+      ]
     },
     {
       "id": "U-139",
