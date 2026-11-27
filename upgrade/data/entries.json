@@ -2192,6 +2192,12 @@
       "lint": [
         "continuation-reading-changed"
       ]
+    },
+    {
+      "id": "U-444",
+      "name": "first item paragraph that keeps its <p> around images",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

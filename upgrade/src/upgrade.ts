@@ -1,4 +1,4 @@
-import { compareHtml, compareHtmlExact, dropOnlyItemParagraphs } from './compare.ts'
+import { compareHtml, compareHtmlExact, dropOnlyItemParagraphs, keepImageParagraphs } from './compare.ts'
 import { type Context, type Finding, makeContext, type Rule } from './context.ts'
 import { applyEdits, type Edit, offsetAfter, offsetBefore, selectEdits } from './edits.ts'
 import { ENGINE_01_VERSION, html01, html02, withUpgradeSession, type Node01 } from './engines.ts'
@@ -300,7 +300,8 @@ function addDifferenceReports(input: string, done: Rewritten, old: string, next:
     const message = `${normalized.gainedParagraphs} later paragraph(s) of list items gain a paragraph element in 0.2`
     records.push({ entry: 'U-019', class: 'summary', line: 0, message })
   }
-  if (!normalized.equal && compareHtml(old, next, true).equal && !hasEntry(records, 'U-021')) {
+  const kept = reportKeptImageParagraphs(input, done, old, next)
+  if (!compareHtml(kept, next).equal && compareHtml(kept, next, true).equal && !hasEntry(records, 'U-021')) {
     records.push(recordOf('U-021', 0, 'the one-item list loses its loose paragraph wrapper under C2-B-062 and C2-H-036'))
   }
   const colonLine = innerColonClose(input)
@@ -315,9 +316,35 @@ function addDifferenceReports(input: string, done: Rewritten, old: string, next:
   }
 }
 
-function applyCitedStep(old: string, next: string, records: ReportRecord[]): ReturnType<typeof applyHtmlTransformations> {
+/** U-444: reports each first paragraph at the 0.2 lines `lines` that 0.2 keeps as `<p>` under C2-H-018. */
+function reportKeptLines(input: string, done: Rewritten, lines: readonly number[]): void {
+  const source = readLines(input)
+  for (const line of lines) {
+    const at = placeOf(input, done, line)
+    if (done.records.some((record) => record.entry === 'U-444' && record.line === at)) continue
+    const range = at === 0 ? { startOffset: 0, endOffset: input.length }
+      : { startOffset: lineStart(source, at), endOffset: lineEnd(source, at) }
+    done.records.push({ ...recordOf('U-444', at,
+      'the first paragraph of the item keeps its <p> in 0.2 under C2-H-018: 0.1 wrote it bare'), range })
+  }
+}
+
+/** U-444 found before any other transformation; returns the 0.1 HTML with the kept `<p>`. */
+function reportKeptImageParagraphs(input: string, done: Rewritten, old: string, next: string): string {
+  const kept = keepImageParagraphs(old, next)
+  reportKeptLines(input, done, kept.lines)
+  return kept.html
+}
+
+function applyCitedStep(old: string, next: string, records: ReportRecord[], keptLines: number[]):
+  ReturnType<typeof applyHtmlTransformations> {
   const entries = records.map((record) => record.entry)
   const transformed: ReturnType<typeof applyHtmlTransformations> = { html: old, applied: [] }
+  // U-444 also runs after the other transformations, which can clear a difference in front of the paragraph.
+  const kept = keepImageParagraphs(transformed.html, next)
+  transformed.html = kept.html
+  transformed.applied.push(...kept.applied)
+  keptLines.push(...kept.lines)
   if (hasEntry(records, 'U-019')) {
     const wrapped = wrapLaterItemParagraphs(transformed.html, next)
     transformed.html = wrapped.html
@@ -365,7 +392,8 @@ function applyCitedStep(old: string, next: string, records: ReportRecord[]): Ret
   return transformed
 }
 
-function applyCitedHtml(old: string, next: string, records: ReportRecord[]): ReturnType<typeof applyHtmlTransformations> {
+function applyCitedHtml(old: string, next: string, records: ReportRecord[], keptLines: number[] = []):
+  ReturnType<typeof applyHtmlTransformations> {
   const transformed = applyHtmlTransformations(old, next, hasEntry(records, 'U-154') ? ['U-154'] : [])
   if (hasEntry(records, 'U-021')) {
     const without = dropOnlyItemParagraphs(transformed.html)
@@ -374,7 +402,7 @@ function applyCitedHtml(old: string, next: string, records: ReportRecord[]): Ret
   const seen = new Set<string>()
   while (!seen.has(transformed.html)) {
     seen.add(transformed.html)
-    const step = applyCitedStep(transformed.html, next, records)
+    const step = applyCitedStep(transformed.html, next, records, keptLines)
     if (step.html === transformed.html) break
     transformed.html = step.html
     transformed.applied.push(...step.applied)
@@ -401,7 +429,9 @@ function transformWithRemainderReports(input: string, done: Rewritten, old: stri
 
 function applyExtraHtml(input: string, done: Rewritten, old: string, next: string):
   ReturnType<typeof applyHtmlTransformations> {
-  const cited = applyCitedHtml(old, next, done.records)
+  const keptLines: number[] = []
+  const cited = applyCitedHtml(old, next, done.records, keptLines)
+  reportKeptLines(input, done, keptLines)
   const empty = done.records.filter((record) => (record.entry === 'U-258' || record.entry === 'U-396' || record.entry === 'U-439')
     && record.class === 'report' && record.range !== undefined)
     .map((record) => input.slice(record.range!.startOffset, record.range!.endOffset))

@@ -394,3 +394,88 @@ export function compareHtmlExact(old: string, next: string): Comparison {
   const line = at < b.length ? b[at]?.line ?? 0 : b[b.length - 1]?.line ?? 0
   return { equal: false, difference: { line, expected: excerpt(a, at), actual: excerpt(b, at) }, gainedParagraphs: 0 }
 }
+
+export interface KeptParagraphs {
+  html: string
+  applied: string[]
+  /** The 0.2 source line of each `<p>` added, 0 when the 0.2 HTML names none. */
+  lines: number[]
+}
+
+const isBareImage = (token: Token | undefined): boolean => token?.kind === OPEN && token.name === 'img'
+
+/** The index of the `</p>` that closes the paragraph opened at `open`, or -1. */
+function paragraphClose(tokens: Token[], open: number): number {
+  let depth = 0
+  for (let at = open + 1; at < tokens.length; at++) {
+    const token = tokens[at]!
+    if (token.kind === OPEN && !VOID.has(token.name)) depth++
+    else if (token.kind === CLOSE && depth > 0) depth--
+    else if (token.kind === CLOSE) return token.name === 'p' ? at : -1
+  }
+  return -1
+}
+
+interface Open { name: string; content: boolean }
+
+/** Copies an equal token and tracks which open element holds content. */
+function follow(token: Token, stack: Open[]): void {
+  const top = stack[stack.length - 1]
+  if (token.kind === CLOSE) stack.pop()
+  else if (top !== undefined && (token.kind === OPEN || !isWhitespace(token.text))) top.content = true
+  if (token.kind === OPEN && !VOID.has(token.name)) stack.push({ name: token.name, content: false })
+}
+
+/**
+ * The index of the `</p>` of a paragraph that opens at `to` in `target` and that C2-H-018 keeps where `source`
+ * at `at` has it bare, or -1.
+ */
+function keptParagraph(source: Token[], at: number, target: Token[], to: number, parent: Open | undefined): number {
+  if (target[to]!.text !== '<p>' || parent === undefined || parent.content) return -1
+  if (parent.name !== 'li' && parent.name !== 'dd') return -1
+  const close = paragraphClose(target, to)
+  if (close < 0) return -1
+  const content = target.slice(to + 1, close)
+  const images = content.length > 0
+    && content.every((token) => isBareImage(token) || token.kind === TEXT && isWhitespace(token.text))
+  // The following image must stand right after the paragraph in the 0.1 item as well.
+  const before = parent.name === 'li' && isBareImage(target[close + 1])
+    && source[at + content.length]?.text === target[close + 1]!.text
+  if (!images && !before) return -1
+  return content.every((token, index) => source[at + index]?.text === token.text) ? close : -1
+}
+
+/**
+ * U-444 (C2-H-018): 0.2 keeps the `<p>` of the first paragraph of a tight item or of a one-block
+ * description when its bare content would be only images and whitespace (Exception C2-M-013), or
+ * when a bare block image of the same item follows it (C2-M-012); 0.1 wrote both bare.
+ */
+export function keepImageParagraphs(old: string, next: string): KeptParagraphs {
+  const source = settle(tokenize(old, false))
+  const target = settle(tokenize(next, false))
+  const out: string[] = []
+  const lines: number[] = []
+  const stack: Open[] = []
+  let at = 0
+  let to = 0
+  while (at < source.length && to < target.length) {
+    if (source[at]!.text === target[to]!.text) {
+      follow(source[at]!, stack)
+      out.push(source[at]!.text)
+      at++
+      to++
+      continue
+    }
+    const parent = stack[stack.length - 1]
+    const close = keptParagraph(source, at, target, to, parent)
+    if (close < 0) break
+    const content = target.slice(to + 1, close).map((token) => token.text)
+    out.push('<p>', ...content, '</p>')
+    lines.push(target[to]!.line)
+    parent!.content = true
+    at += content.length
+    to = close + 1
+  }
+  for (; at < source.length; at++) out.push(source[at]!.text)
+  return { html: lines.length > 0 ? out.join('') : old, applied: lines.length > 0 ? ['U-444'] : [], lines }
+}
