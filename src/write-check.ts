@@ -2950,11 +2950,34 @@ function valueOffset(content: string, t: WrittenText, at: number): number {
  * Each line of the written `content` behind the prefix its line of the source holds, from the byte `start` on: its
  * content offset, the source byte where it starts there, and the line. Null where a line is not there.
  */
-function contentLines(c: Check, start: number, content: string): [number, number, string][] | null {
+function contentLines(c: Check, start: number, content: string): [number, number, string, boolean][] | null {
+  const source = c.source!
+  return /^[\x00-\x7f]*$/.test(source) ? asciiContentLines(source, start, content) : unicodeContentLines(c, start, content)
+}
+
+/** ASCII offsets are UTF-8 byte offsets, so no per-line encoding or byte-by-byte comparison is needed. */
+function asciiContentLines(source: string, start: number, content: string): [number, number, string, boolean][] | null {
+  let lineStart = start === 0 ? 0 : source.lastIndexOf('\n', start - 1) + 1
+  let contentAt = 0
+  const lines: [number, number, string, boolean][] = []
+  for (const part of content.split('\n')) {
+    const found = source.indexOf('\n', lineStart)
+    const lineEnd = found < 0 ? source.length : found
+    const partStart = lineEnd - part.length
+    if (partStart < lineStart || source.slice(partStart, lineEnd) !== part) return null
+    lines.push([contentAt, partStart, part, true])
+    contentAt += part.length + 1
+    lineStart = lineEnd + 1
+  }
+  return lines
+}
+
+/** The UTF-8 mapping of a paragraph that contains multibyte characters. */
+function unicodeContentLines(c: Check, start: number, content: string): [number, number, string, boolean][] | null {
   const bytes = c.bytes ??= ENCODER.encode(c.source!)
   let lineStart = start === 0 ? 0 : bytes.lastIndexOf(0x0a, start - 1) + 1
   let contentAt = 0
-  const lines: [number, number, string][] = []
+  const lines: [number, number, string, boolean][] = []
   for (const part of content.split('\n')) {
     const found = bytes.indexOf(0x0a, lineStart)
     const lineEnd = found < 0 ? bytes.length : found
@@ -2962,7 +2985,7 @@ function contentLines(c: Check, start: number, content: string): [number, number
     const partStart = lineEnd - want.length
     if (partStart < lineStart) return null
     for (let k = 0; k < want.length; k++) if (bytes[partStart + k] !== want[k]) return null
-    lines.push([contentAt, partStart, part])
+    lines.push([contentAt, partStart, part, false])
     contentAt += part.length + 1
     lineStart = lineEnd + 1
   }
@@ -2970,7 +2993,7 @@ function contentLines(c: Check, start: number, content: string): [number, number
 }
 
 /** The content offset of the source byte `at`, where a line of `contentLines` holds it; -1 otherwise. */
-function toContent(lines: readonly [number, number, string][], at: number): number {
+function toContent(lines: readonly [number, number, string, boolean][], at: number): number {
   let low = 0
   let high = lines.length
   while (low < high) {
@@ -2980,7 +3003,8 @@ function toContent(lines: readonly [number, number, string][], at: number): numb
   }
   const line = lines[low - 1]
   if (line === undefined) return -1
-  const [contentAt, byte, part] = line
+  const [contentAt, byte, part, ascii] = line
+  if (ascii) return at - byte < part.length || part.length === 0 && at === byte ? contentAt + at - byte : -1
   let units = 0
   for (let bytes = byte; bytes < at; units++) {
     if (units >= part.length) return -1
@@ -3034,7 +3058,7 @@ function opensFrom(nodes: readonly Node[], from: number): boolean {
 }
 
 /** The tree text and value offset of the opener of the parse node `node`, where the tree holds no node of its type there. */
-function unheldOpener(map: WrittenMap, lines: readonly [number, number, string][], content: string, node: Node,
+function unheldOpener(map: WrittenMap, lines: readonly [number, number, string, boolean][], content: string, node: Node,
   behind: number): [WrittenText, number] | null {
   if (node.type === 'text' || node.type === 'soft_break' || node.pos === undefined) return null
   const at = toContent(lines, node.pos.startOffset)
