@@ -83,7 +83,11 @@ const bundle = withExtensions(
   tabNormalize(4),
   inlineFootnotesToParentheses(),
 )
-const { html } = renderWithDocumentTransforms(source, bundle.transforms ?? [], bundle)
+const source = 'A note ^[remember this].\n'
+const { html } = renderWithDocumentTransforms(source, bundle.transforms ?? [], {
+  extensions: bundle.extensions,
+  renderers: bundle.renderers,
+})
 ```
 
 - `defaultAttributes(map)` adds attributes per node type under the authored ones: `class` adds classes, `id` sets a

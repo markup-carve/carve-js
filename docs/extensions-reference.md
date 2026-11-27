@@ -8,6 +8,7 @@ import { renderWithDocumentTransforms } from '@markup-carve/carve'
 import { citations, withExtensions, glossary, index } from '@markup-carve/carve/extensions'
 
 const registered = withExtensions(glossary(), index(), citations())
+const source = 'Use :term[HTTP] for pages.\n\n::: glossary\n:: HTTP\n: HyperText Transfer Protocol.\n:::\n'
 const { html } = renderWithDocumentTransforms(source, registered.transforms, {
   extensions: registered.extensions,
   renderers: registered.renderers,
