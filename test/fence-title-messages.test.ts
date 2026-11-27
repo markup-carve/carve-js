@@ -44,6 +44,11 @@ describe('fence-title-syntax messages', () => {
     expect(titleMessages('```"t" x\nx\n```\n')).toEqual([AFTER_TITLE])
   })
 
+  it('C2-B-122: the typographic-quote message needs a code fence type; with none the title is further words', () => {
+    expect(titleMessages('``` \u201ct\u201d\nx\n```\n')).toEqual([FURTHER('```')])
+    expect(titleMessages('``` js \u201ct\u201d\nx\n```\n')[0]).toContain('The title after "js" uses typographic quotes.')
+  })
+
   it('C2-B-117: a tab inside a valid title or label separates no opener parts', () => {
     expect(titleMessages('```js "foo\tbar" junk\nx\n```\n')).toEqual([AFTER_TITLE])
     expect(titleMessages('```js [foo\tbar] junk\nx\n```\n')).toEqual([FURTHER('``` js [foo\tbar]')])

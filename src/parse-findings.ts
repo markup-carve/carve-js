@@ -188,7 +188,7 @@ function titleVariant(src: string, p: TitleParts): number {
   if (!p.code) return trimSpaces(p.before) === '' ? 0 : 4
   const spacing = spacingVariant(src, p)
   if (spacing >= 0) return spacing
-  if (isCurlyTitle(p.rest)) return 2
+  if (p.type !== '' && isCurlyTitle(p.rest)) return 2
   const titled = p.before.includes('"') && !p.before.includes(']')
   if (titled || /^"[^"\n]*"[ \t]+\S/.test(src.slice(p.wordEnd, p.lineEnd).replace(/^[ \t]+/, ''))) return 1
   // A brace block or a title behind the label is no unquoted title (C2-B-117).
