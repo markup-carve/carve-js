@@ -64,6 +64,7 @@
     "dist",
     "!dist/carve.iife.min.js.map",
     "README.md",
+    "docs",
     "LICENSE",
     "action.yml",
     ".pre-commit-hooks.yaml"
