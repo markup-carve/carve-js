@@ -188,7 +188,8 @@ function addTitleFinding(src: string, note: ParseNote, offsets: Uint32Array, fin
   const bareTab = note.block.kind === CODE && src[start] === '\t'
     && start === note.block.start + openerRun(src, note.block.start).length
   if (!bareTab) while (start < src.length && (src[start] === ' ' || src[start] === '\t')) start++
-  const end = lineFeedAt(src, note.block.start)
+  const feed = lineFeedAt(src, note.block.start)
+  const end = feed < src.length && feed > note.block.start && src.charCodeAt(feed - 1) === CR ? feed - 1 : feed
   const range = { startOffset: offsets[start]!, endOffset: offsets[end]! }
   addFinding(findings, note.node, { code: 'fence-title-syntax', severity: 'warning', channel: 'parse', message, range })
 }
