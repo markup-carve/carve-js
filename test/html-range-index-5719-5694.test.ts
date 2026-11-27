@@ -31,4 +31,11 @@ describe('HTML ranged comment prewalk follows the reader', () => {
     const html = '<div><span>' + start + '<div data-carve-snippet="1:inline:$good"></div>' + end + 'y</span></div>'
     expect(read(html).codes).toContain('import-structure-repaired')
   })
+
+  it('C2-H-186: a table cell with blocks claims its block carrier first', () => {
+    const html = '<table><tr><td><p data-carve-snippet="1:block:$bad"></p></td></tr></table>'
+      + `<p>${start}<script data-carve-snippet="1:inline:$good">x</script>${end}y</p>`
+    const messages = importDocument(html, { from: 'html' }).diagnostics.map(item => item.message)
+    expect(messages).not.toContain('Ranged comment read as a point: its range is lost')
+  })
 })

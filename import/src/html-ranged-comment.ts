@@ -28,16 +28,32 @@ const INDEXES = new WeakMap<HtmlContext, DocumentIndex>()
  * The walk's state: the ids of open starts, the carrier ordinals claimed so far, the carriers read as snippet uses, and
  * a context to read empty elements in without reporting or defining anything.
  */
-interface Walk { pending: Set<string>, ordinals: Set<string>, uses: Set<Html.Element>, scratch: HtmlContext }
+interface Walk {
+  pending: Set<string>, ordinals: Set<string>, uses: Set<Html.Element>, scratch: HtmlContext,
+  cellBlocks: WeakMap<Html.Element, boolean>
+}
 
 type Slot = 'block' | 'inline'
 
 const INLINE_CONTENT_BLOCKS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dt', 'caption', 'figcaption', 'summary', 'legend'])
+const TABLE_STRUCTURE = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr'])
 
 /** A block-tag child of inline content is still offered to the inline reader. */
-function childSlot(parent: Html.Node, parentSlot: Slot, child: Html.Node): Slot {
-  if (parentSlot === 'inline' || (isElement(parent as Html.ChildNode)
-    && INLINE_CONTENT_BLOCKS.has((parent as Html.Element).tagName))) return 'inline'
+function childSlot(parent: Html.Node, parentSlot: Slot, child: Html.Node, walk: Walk): Slot {
+  if (parentSlot === 'inline') return 'inline'
+  if (isElement(parent as Html.ChildNode)) {
+    const element = parent as Html.Element
+    if (INLINE_CONTENT_BLOCKS.has(element.tagName)) return 'inline'
+    if (TABLE_STRUCTURE.has(element.tagName)) return 'block'
+    if (element.tagName === 'td' || element.tagName === 'th') {
+      let blocks = walk.cellBlocks.get(element)
+      if (blocks === undefined) {
+        blocks = element.childNodes.some(node => isElement(node) && isBlockElement(node))
+        walk.cellBlocks.set(element, blocks)
+      }
+      if (!blocks) return 'inline'
+    }
+  }
   return isElement(child as Html.ChildNode) && isBlockElement(child as Html.Element) ? 'block' : 'inline'
 }
 
@@ -152,7 +168,7 @@ function documentIndex(node: Html.Element, context: HtmlContext): DocumentIndex 
   const scratch: HtmlContext = {
     ...context, diagnostics: [], definitions: new Map(), anchorKeys: new Set(), snippetOrdinals: ordinals, dropped: new WeakSet(),
   }
-  const walk: Walk = { pending: new Set(), ordinals, uses: new Set(), scratch }
+  const walk: Walk = { pending: new Set(), ordinals, uses: new Set(), scratch, cellBlocks: new WeakMap() }
   let count = 0
   const stack: [Html.Node, boolean, Slot][] = [[documentRoot(node), false, 'block']]
   while (stack.length > 0) {
@@ -166,7 +182,7 @@ function documentIndex(node: Html.Element, context: HtmlContext): DocumentIndex 
     visit(index, walk, at, count++, context, slot)
     stack.push([at, true, slot])
     const children = 'childNodes' in at && !isOpaque(at, walk) && !readsValueWhole(at) ? at.childNodes : []
-    for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, false, childSlot(at, slot, children[i]!)])
+    for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, false, childSlot(at, slot, children[i]!, walk)])
   }
   INDEXES.set(context, index)
   return index
