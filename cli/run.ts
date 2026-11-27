@@ -146,8 +146,8 @@ function decodedWidth(bytes: Uint8Array, at: number): number {
   return width
 }
 
-function lineBom(bytes: Uint8Array, at: number, lineStart: number, width: number): boolean {
-  return at === lineStart && width === 3 && bytes[at] === 0xef &&
+function leadingBom(bytes: Uint8Array, at: number, width: number): boolean {
+  return at === 0 && width === 3 && bytes[at] === 0xef &&
     bytes[at + 1] === 0xbb && bytes[at + 2] === 0xbf
 }
 
@@ -168,13 +168,11 @@ export function locationIndex(input: string | Uint8Array, requested: ReadonlySet
   const columns = new Map<number, number>()
   if (ascii || requested.size === 0) return { bytes, starts, columns, ascii }
   let column = 1
-  let lineStart = 0
   for (let at = 0; at < bytes.length;) {
     if (requested.has(at)) columns.set(at, column)
     const first = bytes[at]!
     if (first === 0x0a) {
       column = 1
-      lineStart = at + 1
       at++
       continue
     }
@@ -182,7 +180,7 @@ export function locationIndex(input: string | Uint8Array, requested: ReadonlySet
     // that prefix includes the replacement, just as decoding a sliced prefix does.
     const width = decodedWidth(bytes, at)
     for (let step = 1; step < width; step++) if (requested.has(at + step)) columns.set(at + step, column + 1)
-    if (!lineBom(bytes, at, lineStart, width)) column++
+    if (!leadingBom(bytes, at, width)) column++
     at += width
   }
   // location() clamps a reported offset beyond EOF, so keep EOF available even when no

@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { location, locationIndex } from '../run.ts'
 
@@ -21,7 +23,10 @@ it('C2-T-019: indexed positions equal decoded byte prefixes, including malformed
     for (let offset = 0; offset <= bytes.length; offset++) {
       const lineStart = offset === 0 ? 0 : bytes.lastIndexOf(0x0a, offset - 1) + 1
       const line = bytes.subarray(0, lineStart).filter((byte) => byte === 0x0a).length + 1
-      const column = Array.from(new TextDecoder().decode(bytes.subarray(lineStart, offset))).length + 1
+      // C2-B-165 excludes only the source-leading BOM; a later one is line content.
+      const leadingBom = lineStart === 0 && offset >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
+      const column = Array.from(new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.subarray(lineStart, offset))).length + 1
+        - Number(leadingBom)
       const entry = { code: 'x', severity: 'warning' as const, channel: 'lint' as const, message: '',
         range: { startOffset: offset, endOffset: offset } }
       expect(location(index, entry), `${bytes.length}:${offset}`).toEqual({ line, column })
@@ -52,4 +57,17 @@ it('C2-T-019: line starts and supplementary code points keep their columns', () 
   expect(at(bytes, 7)).toEqual({ line: 2, column: 2 })
   expect(at(bytes, bytes.length)).toEqual({ line: 3, column: 1 })
   expect(at(bytes, bytes.length + 20)).toEqual({ line: 3, column: 1 })
+})
+
+it('C2-B-165, C2-T-019: CLI locations skip only the source-leading BOM', () => {
+  const source = Buffer.from('\uFEFF# é\n\uFEFFx')
+  expect(at(source, 3)).toEqual({ line: 1, column: 1 })
+  expect(at(source, 5)).toEqual({ line: 1, column: 3 })
+  expect(at(source, 11)).toEqual({ line: 2, column: 2 })
+})
+
+it('C2-B-165, C2-T-019: lint reports a later BOM as a source column', () => {
+  const main = join(import.meta.dirname, '../main.ts')
+  const report = spawnSync(process.execPath, [main, 'lint', '-'], { input: 'x\n\uFEFF[x]()', encoding: 'utf8' })
+  expect(report.stdout).toContain('<stdin>:2:2: warning empty-link-destination')
 })

@@ -244,11 +244,12 @@ export function positionOf(source: string | Uint8Array, offset: number): { line:
   let line = 1
   let column = 1
   let at = 0
+  const leadingBom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
   while (at < offset) {
     if (bytes[at] === LF) {
       line++
       column = 1
-    } else column++
+    } else if (at !== 0 || !leadingBom) column++
     at += unitLength(bytes, at)
   }
   if (at !== offset) throw new CarveOptionError('offset', `${offset} is inside the bytes of one code point`)
