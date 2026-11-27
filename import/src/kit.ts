@@ -3,7 +3,7 @@ import {
   type Attrs, type Block, type Diagnostic, type DocumentNode,
   type Inline, type ListNode, type TableCellNode, type TableRowNode,
 } from '../../src/index.ts'
-import { writeWithLossBudget } from '../../src/write.ts'
+import { writeWithLossBudget, writerHasLoss } from '../../src/write.ts'
 
 import type { ImportConstruct } from './hub-constructs.ts'
 
@@ -40,13 +40,24 @@ function applyLossSettings(result: ImportResult, settings: LossSettings): Import
   let losses = 0
   // The line-feed losses the writer only counted, as `complete` kept fewer than all (`writeWithLossBudget`).
   let suppressed = DROPPED.get(result) ?? 0
+  const writerRefused = (suppressed > 0 && !allowed.has('field-unspellable')) ||
+    writerHasLoss(result.diagnostics.filter((entry) => !allowed.has(entry.code)))
   for (const entry of result.diagnostics) {
     if (entry.channel !== 'render-loss') kept.push(entry)
     else if (allowed.has(entry.code)) continue
     else if (losses++ >= max) suppressed++
     else kept.push(settings.strictLosses === true ? { ...entry, severity: 'error' } : entry)
   }
-  return { ...result, diagnostics: kept, suppressedDiagnostics: suppressed }
+  const capped = { ...result, diagnostics: kept, suppressedDiagnostics: suppressed }
+  WRITER_REFUSALS.set(capped, writerRefused)
+  return capped
+}
+
+const WRITER_REFUSALS = new WeakMap<ImportResult, boolean>()
+
+/** C2-W-134: the loss cap can hide a writer refusal, but the source-only CLI still needs to know it occurred. */
+export function hasUnallowedWriterLoss(result: ImportResult): boolean {
+  return WRITER_REFUSALS.get(result) ?? false
 }
 
 /**

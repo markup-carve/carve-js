@@ -9,6 +9,7 @@ import { forEachSlot, type Node } from '../src/ast.ts'
 import { canWriteUpgrade, ENGINE_01_VERSION, formatRecord, needsAttention, type ReportRecord, upgrade } from '../upgrade/src/index.ts'
 import { decodeUpgradeBytes } from '../upgrade/src/bytes.ts'
 import { importDocument, ImportInputError, type Adapter, type Format } from '../import/src/index.ts'
+import { hasUnallowedWriterLoss } from '../import/src/kit.ts'
 import { migrateTree, type MigrationResult } from '../migrate/index.ts'
 import cli from '../data/cli.json' with { type: 'json' }
 import lintRules from '../data/lint-rules.json' with { type: 'json' }
@@ -560,20 +561,23 @@ function diagnosticsFile(path: string, display: string, bytes: Uint8Array, args:
 function importFile(display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
   const html = lenientText(bytes)
   const strict = args.values['strict-losses'] === true
+  const allowed = allowedLosses(args)
   let result: ReturnType<typeof importDocument>
   try {
     result = importDocument(html, { from: args.values['from'] as Format, rawHtml: args.values['raw-html'] === true, strictLosses: strict,
       listTable: args.values['list-table'] === true,
+      allowLosses: [...allowed], maxLosses: (args.values['max-render-losses'] as number | undefined) ?? 100,
       ...(args.values['adapter'] !== undefined ? { adapter: args.values['adapter'] as Adapter } : {}) })
   } catch (error) {
     if (error instanceof CarveTreeError) throw new FileFailure('import-tree-invalid', `${display}: ${error.message}`, { status: 1 })
     throw error
   }
   const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
-  const file: FileResult = { status: 0, losses: { file: display, diagnostics: located(html, retained), suppressed } }
+  const totalSuppressed = suppressed + (result.suppressedDiagnostics ?? 0)
+  const file: FileResult = { status: 0, losses: { file: display, diagnostics: located(html, retained), suppressed: totalSuppressed } }
   const others = result.diagnostics.filter((entry) => entry.channel !== 'render-loss')
   // An allowed code is no loss (C2-T-025), so only the writer entries left after --allow-loss refuse the file.
-  const failure = strict && losses.length > 0 ? 'render-loss' : writerHasLoss(losses) ? 'writer-refused' : null
+  const failure = strict && losses.length + totalSuppressed > 0 ? 'render-loss' : hasUnallowedWriterLoss(result) ? 'writer-refused' : null
   if (failure !== null) process.stderr.write(`carve[${failure}]: ${display}: the import lost content\n`)
   process.stderr.write(lines(display, html, [...others, ...retained]))
   if (failure !== null) return { ...file, status: 1 }
