@@ -568,10 +568,11 @@ export function exportText(x: Exporter, ansi: boolean): string {
   if (!keys.abbreviations) return run(x, ansi, keys, new Set()).text
   const entries = x.losses.entries.length
   const budget = x.derivedLeft
+  const reported = x.derivedReported
   const probe = run(x, ansi, keys, new Set())
   x.losses.entries.length = entries
   x.losses.nodes.length = entries
   x.derivedLeft = budget
-  x.derivedReported = false
+  x.derivedReported = reported
   return run(x, ansi, keys, probe.expanded).text
 }

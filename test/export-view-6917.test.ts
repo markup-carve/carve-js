@@ -33,4 +33,13 @@ describe('exports read the resolved render view (carve#6917)', () => {
       expect(result.diagnostics.map((item) => item.code)).toEqual(['derived-text-budget'])
     }
   })
+
+  it('reports one budget loss when a refused snippet precedes a refused abbreviation', () => {
+    const tree = parse('{$x}: ABCDEFGHIJ\n\n{{ $x }} A\n\n*[A]: long\n')
+    for (const run of exports) {
+      const result = withSnippetLimits({ derivedTextBytes: 2 }, () => run(tree))
+      expect(result.output).toContain('{{ $x }} A')
+      expect(result.diagnostics.map((item) => item.code)).toEqual(['derived-text-budget'])
+    }
+  })
 })
