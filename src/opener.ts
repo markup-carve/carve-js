@@ -132,7 +132,10 @@ export function readOpenerInfo(src: string, pos: number): OpenerInfo {
   }
   // C2-B-117, `code_fence_opener`: at most one space stands before the first part of a fence; one or more before a div's.
   const fence = src.charCodeAt(pos - 1) === BACKTICK
-  let p = fence ? (src.charCodeAt(pos) === SPACE ? pos + 1 : pos) : divPartStart(src, pos, end)
+  // C2-B-122: whitespace after the optional first space is no further words.
+  // A tab directly behind the run still starts a reportable tail (CC-1171).
+  const blankFenceTail = fence && src.charCodeAt(pos) === SPACE && skipSpaces(src, pos, end) === end
+  let p = blankFenceTail ? end : fence ? (src.charCodeAt(pos) === SPACE ? pos + 1 : pos) : divPartStart(src, pos, end)
   p = partEnd(src, p, readWord(src, p, end, info, fence), end)
   if (p >= 0) p = partEnd(src, p, readTitle(src, p, end, info), end)
   if (p >= 0) p = partEnd(src, p, readLabel(src, p, end, info), end)
