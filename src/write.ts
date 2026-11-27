@@ -499,7 +499,7 @@ function retestTrials(w: Writer, group: readonly Node[], first: boolean, check: 
   const leadSkip = w.leadSkip
   const starts = new Map(w.starts)
   let found = -1
-  const subsets = [...Array(1 << log.length).keys()].sort((a, b) => bitCount(a) - bitCount(b) || a - b)
+  const subsets = subsetOrder(log.length)
   for (const subset of subsets) {
     const escapes = new Map(base)
     log.forEach(([node, at], bit) => {
@@ -523,6 +523,13 @@ function retestTrials(w: Writer, group: readonly Node[], first: boolean, check: 
     if ((found & (1 << bit)) !== 0 && !isPlaced) check.escapes.push(escape)
     else if ((found & (1 << bit)) === 0 && isPlaced) check.retracted.push(escape)
   })
+}
+
+// The subsets of each log length, fewest first: the same for every retest.
+const SUBSET_ORDERS: number[][] = []
+
+function subsetOrder(length: number): readonly number[] {
+  return SUBSET_ORDERS[length] ??= [...Array(1 << length).keys()].sort((a, b) => bitCount(a) - bitCount(b) || a - b)
 }
 
 function bitCount(value: number): number {
@@ -1144,8 +1151,17 @@ function withoutStandardData(node: Node): Node {
   return copy
 }
 
+// `writerEqual` asks this of the same blocks once per readback. Kept for one write, as the trim before it changes the tree.
+let rewritesKnown = new WeakMap<Node, boolean>()
+
 /** Whether `withoutStandardData` or `withCoreInlines` can change `tree`: a data record or an inline extension in it. */
 function holdsRewrites(tree: Node): boolean {
+  let known = rewritesKnown.get(tree)
+  if (known === undefined) rewritesKnown.set(tree, known = scanRewrites(tree))
+  return known
+}
+
+function scanRewrites(tree: Node): boolean {
   const pending: object[] = [tree]
   for (let value = pending.pop(); value !== undefined; value = pending.pop()) {
     if (!Array.isArray(value)) {
@@ -3164,6 +3180,7 @@ function writeWithSpanMarks(w: Writer, run: WriterRun, document: DocumentNode, o
 
 /** C2-W-151: the document written without the spaces and tabs that would end a line of text, then restored. */
 function writeTrimmed(w: Writer, run: WriterRun, document: DocumentNode, original: string | null): string {
+  rewritesKnown = new WeakMap()
   const restore = trimLineEnds(document, (table) => tableFormat(w, table) !== 'pipe')
   try {
     return writeWithSpanMarks(w, run, document, original)
