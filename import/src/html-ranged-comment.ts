@@ -56,13 +56,20 @@ function isTaskBox(node: Html.Element): boolean {
 function claimsUse(node: Html.Element, walk: Walk): boolean {
   const carrier = carrierOrdinal(node)
   if (carrier === undefined || walk.ordinals.has(carrier.n)) return false
-  if (carrier.mode === 'block') {
-    if (node.tagName === 'p') walk.ordinals.add(carrier.n)
+  // Block elements are offered to blockSnippet, which accepts only a paragraph with a block carrier.
+  if (isBlockElement(node)) {
+    if (node.tagName === 'p' && carrier.mode === 'block') walk.ordinals.add(carrier.n)
     return false
   }
+  if (carrier.mode !== 'inline') return false
   walk.ordinals.add(carrier.n)
   walk.uses.add(node)
   return true
+}
+
+/** C2-M-045, C2-M-049: the reader takes the value of these elements whole, never their child nodes as inlines. */
+function readsValueWhole(node: Html.Node): boolean {
+  return isElement(node as Html.ChildNode) && ['code', 'math'].includes((node as Html.Element).tagName)
 }
 
 /** An element whose content gives no inline of its own: a snippet use, dropped, kept whole as raw, or a comment's text. */
@@ -147,7 +154,7 @@ function documentIndex(node: Html.Element, context: HtmlContext): DocumentIndex 
     }
     visit(index, walk, at, count++, context)
     stack.push([at, true])
-    const children = 'childNodes' in at && !isOpaque(at, walk) ? at.childNodes : []
+    const children = 'childNodes' in at && !isOpaque(at, walk) && !readsValueWhole(at) ? at.childNodes : []
     for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, false])
   }
   INDEXES.set(context, index)
