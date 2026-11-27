@@ -165,7 +165,8 @@
       "class": "rewrite",
       "lint": [
         "list-marker-below-content-column",
-        "ordered-marker-right-aligned"
+        "ordered-marker-right-aligned",
+        "list-marker-without-blank-line"
       ]
     },
     {
@@ -196,9 +197,7 @@
       "id": "U-029",
       "name": "comment line, empty box, `- -`",
       "class": "none",
-      "lint": [
-        "uneven-list-indent"
-      ]
+      "lint": []
     },
     {
       "id": "U-030",
@@ -255,7 +254,8 @@
       "name": "attribute block after fence language or name",
       "class": "rewrite",
       "lint": [
-        "fence-opener-fallback"
+        "fence-opener-fallback",
+        "fence-title-syntax"
       ]
     },
     {
@@ -302,9 +302,7 @@
       "id": "U-043",
       "name": "`#` headings and heading text",
       "class": "none",
-      "lint": [
-        "heading-marker-mixed"
-      ]
+      "lint": []
     },
     {
       "id": "U-044",
@@ -333,9 +331,7 @@
       "id": "U-047",
       "name": "frontmatter format names, unclosed",
       "class": "none",
-      "lint": [
-        "unclosed-frontmatter"
-      ]
+      "lint": []
     },
     {
       "id": "U-048",
@@ -535,9 +531,7 @@
       "id": "U-075",
       "name": "references that read the same",
       "class": "none",
-      "lint": [
-        "unresolved-reference-link"
-      ]
+      "lint": []
     },
     {
       "id": "U-076",
@@ -608,7 +602,7 @@
       "name": "text line under a term",
       "class": "escape",
       "lint": [
-        "description-term-multi-line"
+        "continuation-reading-changed"
       ]
     },
     {
@@ -760,7 +754,8 @@
       "name": "description mark at its owning column",
       "class": "rewrite",
       "lint": [
-        "description-term-multi-line"
+        "description-term-multi-line",
+        "description-separator-below-content-column"
       ]
     },
     {
@@ -782,7 +777,8 @@
       "name": "definition-shaped text in a list item",
       "class": "report",
       "lint": [
-        "definition-in-container"
+        "definition-in-container",
+        "empty-reference-definition"
       ]
     },
     {
@@ -790,7 +786,8 @@
       "name": "empty or container-local link definition",
       "class": "report",
       "lint": [
-        "definition-in-container"
+        "definition-in-container",
+        "empty-reference-definition"
       ]
     },
     {
@@ -804,7 +801,8 @@
       "name": "definition-shaped text in a quote",
       "class": "report",
       "lint": [
-        "definition-in-container"
+        "definition-in-container",
+        "empty-reference-definition"
       ]
     },
     {
