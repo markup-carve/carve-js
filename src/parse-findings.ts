@@ -172,9 +172,10 @@ function titleParts(src: string, note: ParseNote): TitleParts {
     code: note.node.type === 'code_block' }
 }
 
-/** C2-B-117: a brace block behind a second space, or the whitespace messages of a code fence; -1 for any other opener. */
+/** C2-B-117: the whitespace messages of a code fence; -1 for any other opener. */
 function spacingVariant(src: string, p: TitleParts): number {
-  if (p.type === '' && /^[ \t]{2,}\{[.#][^{}]*\}/.test(src.slice(p.runEnd, p.lineEnd))) return 4
+  // A spaced brace block is further words (4); a tab behind the run is the whitespace message (5).
+  if (p.type === '' && /^ +\{/.test(src.slice(p.runEnd, p.lineEnd))) return 4
   if (p.type === '' && misspaced(src, p.runEnd)) return 5
   if (p.type !== '' && (p.partTab || src.charCodeAt(p.wordEnd) === TAB)) return 6
   return -1

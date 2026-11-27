@@ -49,6 +49,13 @@ describe('fence-title-syntax messages', () => {
     expect(titleMessages('``` js \u201ct\u201d\nx\n```\n')[0]).toContain('The title after "js" uses typographic quotes.')
   })
 
+  it('C2-B-117: a brace block behind spaces is further words, behind a tab the whitespace message', () => {
+    expect(titleMessages('```  {a=1}\nx\n```\n')).toEqual([FURTHER('```')])
+    expect(titleMessages('```  {.a}\nx\n```\n')).toEqual([FURTHER('```')])
+    expect(titleMessages('``` \t{a=1}\nx\n```\n')[0]).toContain('The whitespace in this fence opener is invalid')
+    expect(titleMessages('```\t{.a}\nx\n```\n')[0]).toContain('The whitespace in this fence opener is invalid')
+  })
+
   it('C2-B-117: a tab inside a valid title or label separates no opener parts', () => {
     expect(titleMessages('```js "foo\tbar" junk\nx\n```\n')).toEqual([AFTER_TITLE])
     expect(titleMessages('```js [foo\tbar] junk\nx\n```\n')).toEqual([FURTHER('``` js [foo\tbar]')])
