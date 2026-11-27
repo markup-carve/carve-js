@@ -146,10 +146,10 @@ export function byteOffsetTable(input: string): Uint32Array {
   return table
 }
 
-/** C2-M-083: the codes of the HTML importer. The Markdown and Djot importers keep the two codes of the 0.1 importer. */
+/** C2-M-083: the catalog codes of the HTML importer and the import hub's other source formats. */
 export type HtmlImportCode = 'import-attribute-dropped' | 'import-carrier-ignored' | 'import-destination-denied' | 'snippet-scope-loss'
   | 'import-element-dropped' | 'import-element-mapped' | 'import-structure-repaired' | 'import-whitespace-normalized'
-export type ImportCode = HtmlImportCode | 'import-unsupported' | 'import-degraded'
+export type ImportCode = HtmlImportCode
 
 export function finding(context: Context, code: ImportCode, foreignType: string,
   message: string, start?: number, end?: number): void {
@@ -227,8 +227,7 @@ export function classNames(value: string): string[] {
 
 export function safeUrl(context: Context, foreignType: string, url: string, start?: number, end?: number): string | undefined {
   if (isUrlAllowed(url)) return url
-  const code = context.format === 'html' ? 'import-destination-denied' : 'import-degraded'
-  finding(context, code, foreignType, `Denied URL scheme in ${foreignType}`, start, end)
+  finding(context, 'import-destination-denied', foreignType, `Denied URL scheme in ${foreignType}`, start, end)
   return undefined
 }
 

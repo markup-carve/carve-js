@@ -118,6 +118,6 @@ BBCode is read by the engine, not by a library, with the tag set of the 0.1 `bbc
 | `[color]`, `[size]`, `[font]` | their text |
 | `[noparse]` | its content as text |
 
-An unknown tag keeps its content and is reported with `import-unsupported`; an unclosed tag and a stray closing
+An unknown tag keeps its content and is reported with `import-element-mapped`; an unclosed tag and a stray closing
 tag stay text. An input over `BBCODE_MAX_INPUT_LENGTH` (262144 UTF-8 bytes) throws `BbcodeInputTooLargeError`,
 an `ImportInputError`.
