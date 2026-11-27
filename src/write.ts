@@ -2354,14 +2354,114 @@ function addLines(out: string[], lines: readonly string[], blanks: number): void
   for (const line of lines) out.push(line)
 }
 
+interface RepeatedGroup {
+  lines: string[]
+  chars: number
+  spent: number
+  rewritten: number
+  parses: number
+}
+
+/** A source-identical paragraph has the same tree and layout facts only when all three agree here. */
+function repeatableParagraph(w: Writer, nodes: readonly Node[], from: number, end: number): Node | null {
+  const node = nodes[from]
+  if (end !== from + 1 || node?.type !== 'paragraph' || nodes[from - 1]?.type !== 'paragraph' ||
+    nodes[end]?.type !== 'paragraph') return null
+  if (w.extensions.length > 0 || w.linkKeys.size > 0 || w.abbreviations.size > 0 || w.blankFirst ||
+    w.authored === null || w.authored.length !== w.work.source) return null
+  return node
+}
+
+function repeatedGroupKey(w: Writer, nodes: readonly Node[], from: number, end: number): string | null {
+  const node = repeatableParagraph(w, nodes, from, end)
+  const authored = w.authored
+  if (node === null || authored === null) return null
+  const start = node.pos?.startOffset
+  const stop = node.pos?.endOffset
+  if (start === undefined || stop === undefined || stop <= start || stop - start > 4096) return null
+  const bytes = authored.subarray(start, stop)
+  let source = ''
+  for (const byte of bytes) {
+    if (byte > 127) return null
+    source += String.fromCharCode(byte)
+  }
+  const below = groupNodes([node])
+  if (below.some((part) => {
+    const facts = w.facts?.get(part)
+    return facts?.wraps !== undefined || facts?.continuationLines !== undefined || w.lost.has(part)
+  })) return null
+  const facts = below.map((part) => w.facts?.get(part) ?? null)
+  const tree = JSON.stringify(node, (key: string, value: unknown) => key === 'pos' ? undefined : value)
+  const layout = JSON.stringify(facts, (key: string, value: unknown) =>
+    key === 'path' || key === 'startByte' || key === 'endByte' ? undefined : value)
+  return `${source}\0${tree}\0${layout}`
+}
+
+function reuseRepeated(w: Writer, run: WriterRun, known: RepeatedGroup): boolean {
+  const bytes = known.lines.reduce((total, line) => total + line.length + 1, 0)
+  const budget = Math.max(WORK_FLOOR, Math.max(w.work.source, w.work.written + bytes) * WORK_FACTOR)
+  if (w.work.spent + known.spent >= budget || w.work.rewritten + known.rewritten >= budget) return false
+  clearGroupChoices(w)
+  w.lines = known.lines
+  w.work.chars += known.chars
+  w.work.spent += known.spent
+  w.work.rewritten += known.rewritten
+  w.parses += known.parses
+  run.stats.planned++
+  return true
+}
+
+function writeRepeatedGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number,
+  repeated: Map<string, RepeatedGroup>): number {
+  const end = groupEnd(w, document.children, from)
+  const key = repeated.size > 0 ? repeatedGroupKey(w, document.children, from, end) : null
+  const known = key === null ? undefined : repeated.get(key)
+  if (known !== undefined && reuseRepeated(w, run, known)) return end
+  const chars = w.work.chars
+  const spent = w.work.spent
+  const rewritten = w.work.rewritten
+  const parses = w.parses
+  const losses = w.losses.entries.length
+  const parseVersion = w.parseCache.version
+  const readVersion = w.readTreeVersion
+  const result = writeGroup(w, run, document, from, false)
+  // A new kept source can change the charge of a later repair even when the group source is the same.
+  if (w.parseCache.version !== parseVersion || w.readTreeVersion !== readVersion) repeated.clear()
+  if (result === end && losses === w.losses.entries.length && !w.blankFirst &&
+    w.parseCache.version === parseVersion && w.readTreeVersion === readVersion) {
+    const storedKey = key ?? repeatedGroupKey(w, document.children, from, end)
+    if (storedKey === null) return result
+    if (repeated.size >= 256) repeated.delete(repeated.keys().next().value!)
+    repeated.set(storedKey, { lines: [...w.lines], chars: w.work.chars - chars, spent: w.work.spent - spent,
+      rewritten: w.work.rewritten - rewritten, parses: w.parses - parses })
+  }
+  return result
+}
+
+function writeDocumentGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean,
+  lastSourceStart: number, repeated: Map<string, RepeatedGroup>): number {
+  const nodes = document.children
+  const start = nodes[from]?.pos?.startOffset
+  if (run.path !== 'plan' || nodes.length < 3 || from === 0 || nodes[from]?.type !== 'paragraph' ||
+    start === undefined || start <= lastSourceStart) {
+    repeated.clear()
+    return writeGroup(w, run, document, from, first)
+  }
+  return writeRepeatedGroup(w, run, document, from, repeated)
+}
+
 function writeDocument(w: Writer, run: WriterRun, document: DocumentNode): string {
   const nodes = document.children
   const out: string[] = []
+  const repeated = new Map<string, RepeatedGroup>()
+  let lastSourceStart = -1
   let before: Node | null = null
   let list: Node | null = null
   for (let at = 0; at < nodes.length;) {
     const from = at
-    at = writeGroup(w, run, document, from, out.length === 0)
+    const sourceStart = nodes[from]?.pos?.startOffset
+    at = writeDocumentGroup(w, run, document, from, out.length === 0, lastSourceStart, repeated)
+    if (sourceStart !== undefined) lastSourceStart = sourceStart
     if (w.lines.length === 0) continue
     if (out.length === 0 && w.blankFirst) out.push('')
     const blanks = before === null ? 0 : blankLinesBetween(w, before, list, nodes[from]!, false)

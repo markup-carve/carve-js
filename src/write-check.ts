@@ -68,6 +68,7 @@ export function readbackParse(w: Writer, src: string): DocumentNode {
   const tree = parseChunk(w, src, w.linkKeys, false)
   if (w.readTrees.size >= MAX_READ_TREES) w.readTrees.clear()
   w.readTrees.set(src, tree)
+  w.readTreeVersion++
   return tree
 }
 
@@ -113,6 +114,7 @@ function plainParse(w: Writer, linkKeys: ReadonlySet<string> | null): boolean {
 }
 
 function rememberRecent(cache: ParseCache, src: string, parsed: DocumentNode): void {
+  cache.version++
   cache.recent.unshift([src, parsed])
   let chars = 0
   let keep = 0
@@ -162,6 +164,7 @@ const MAX_TREE_CHARS = 16_384
  * no longer than its counted first parse: the repair limit (C2-W-133) still bounds the work.
  */
 function remember(cache: ParseCache, src: string, parsed: DocumentNode, repeated: boolean): void {
+  cache.version++
   if (!repeated && cache.trees.size >= 128) {
     cache.trees.clear()
     cache.treeChars = 0

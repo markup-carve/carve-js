@@ -46,6 +46,21 @@ function examplePlans(): { checks: readonly PlanCheck[], held: ReadonlySet<strin
 }
 
 describe('the planned writer', () => {
+  it('C2-W-091: an independent paragraph repeated later takes its earlier repair result', () => {
+    const paragraph = '\\[^[\\`[`[[^]\\[]][]\\['
+    const source = `${Array(32).fill(paragraph).join('\n\n')}\n`
+    const planned = formatBy(source, 'plan')
+    const repaired = formatBy(source, 'repair')
+    expect(planned.output).toEqual(repaired.output)
+    expect(planned.stats.planned).toBeGreaterThan(20)
+    expect(planned.stats.repaired).toBeLessThan(repaired.stats.repaired)
+    expect(planned.stats.parses).toBe(repaired.stats.parses)
+    for (const changed of [source.replace(paragraph, `lorem${paragraph}`),
+      `${source}\n[ref]: /u\n`, `> ${paragraph}\n\n${source}`]) {
+      expect(formatBy(changed, 'plan').output, changed).toEqual(formatBy(changed, 'repair').output)
+    }
+  })
+
   it('C2-W-088: src/write-tables.ts is what scripts/generate-writer-tables.ts writes', () => {
     const generated = generateWriterTables((file) => readFileSync(join(root, 'data', file), 'utf8'))
     expect(readFileSync(join(root, 'src/write-tables.ts'), 'utf8')).toBe(generated)

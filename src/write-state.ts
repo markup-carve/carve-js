@@ -13,6 +13,8 @@ import { type Snapshot } from './write-passes.ts'
  */
 export interface ParseCache {
   trees: Map<string, DocumentNode | null>
+  /** Changes when a charged read replaces or adds a reusable source. */
+  version: number
   /** The characters of the sources whose trees are kept. */
   treeChars: number
   /** The last sources too long for `trees`, with their trees, newest first. */
@@ -207,6 +209,7 @@ export interface Writer {
   readBacks: Map<string, ReadBack[]>
   /** C2-W-002: the trees those sources read back as, where the parse reads nothing but its source; shared by all groups. */
   readTrees: Map<string, DocumentNode>
+  readTreeVersion: number
   /** C2-W-088: the result of each probe of the repair by the state it reads (write-check.ts), and an id of each node it read. */
   probes: Map<string, ProbeResult>
   nodeIds: Map<Node, number>
@@ -261,9 +264,11 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     trialLog: null, trialsRetested: false,
     topBlocks: new Map(),
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
-    parses: 0, parseCache: { trees: new Map(), treeChars: 0, recent: [], kept: { parsed: new Map(), bare: new Map(), chars: 0 } },
+    parses: 0,
+    parseCache: { trees: new Map(), version: 0, treeChars: 0, recent: [],
+      kept: { parsed: new Map(), bare: new Map(), chars: 0 } },
     extensionSources: new Map(), verifiedSourceBytes: undefined, authored: null, authoredLeaves: new Map(), collapsedLabels: new Map(),
-    labelReads: new Map(), readBacks: new Map(), readTrees: new Map(),
+    labelReads: new Map(), readBacks: new Map(), readTrees: new Map(), readTreeVersion: 0,
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
     leadingFrontmatter: null, pass: null,
