@@ -549,6 +549,7 @@ function checkCount(name: string, value: Value, path: string): boolean {
 
 /** What the walk counts over the whole tree for the bounds of C2-A-132 and the manifest of C2-A-131. */
 interface TreeFacts {
+  snippetUses?: boolean
   resourceReferences: number
   metadataFields: number
   annotationIds: Map<string, string>
@@ -1270,7 +1271,7 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
 /** C2-B-236: an ASCII letter, digit or `_`, then ASCII letters, digits, `_` and `-`. */
 const SNIPPET_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/u
 
-function checkSnippet(value: Fields, type: string, path: string, allowed: readonly string[]): void {
+function checkSnippet(value: Fields, type: string, path: string, allowed: readonly string[], walk: Walk): void {
   // C2-A-220, C2-A-221: the name is a snippet name, as the schema's pattern states.
   if (typeof value['name'] === 'string' && !SNIPPET_NAME.test(value['name'])) fail(`${path}/name`, 'not a snippet name')
   if (type === 'snippet_definition') {
@@ -1280,6 +1281,7 @@ function checkSnippet(value: Fields, type: string, path: string, allowed: readon
     if (Array.isArray(value['children']) && value['children'].length === 0) fail(`${path}/children`, 'a snippet definition with no value')
     return
   }
+  walk.tree.snippetUses = true
   const mode = allowed.includes('text') ? 'inline' : 'block'
   const slot = mode === 'inline' ? 'inline nodes' : 'blocks'
   if (value['mode'] !== mode) fail(`${path}/mode`, `a snippet use in a list of ${slot} has the mode ${String(value['mode'])}`)
@@ -1441,6 +1443,7 @@ export function validateTree(
   document: unknown, envelope?: Readonly<Record<string, unknown>>, source?: string,
   extensions: readonly ExtensionDefinition[] = [],
   annotations?: AnnotationRangeSidecar,
+  summary?: { snippetUses: boolean },
 ): asserts document is DocumentNode {
   // C2-A-168.
   if (!isRecord(document)) fail('', 'not a tree')
@@ -1448,7 +1451,7 @@ export function validateTree(
   if (document['children'] === undefined) fail('/children', 'the root has no children')
   checkVersion(document['astVersion'], '/astVersion')
   const declarations = combinedDeclarations(document, envelope)
-  const tree: TreeFacts = { resourceReferences: 0, metadataFields: 0, annotationIds: new Map(), references: [],
+  const tree: TreeFacts = { resourceReferences: 0, metadataFields: 0, annotationIds: new Map(), references: [], snippetUses: false,
     declarations: new Map(declarations),
     registry: new Map(extensions.map((entry) => [entry.name, entry])),
     headerIds: new Set(), headerReferences: [], sourcePositions: source === undefined ? undefined : sourcePositions(source) }
@@ -1460,6 +1463,7 @@ export function validateTree(
   checkNodeBounds(document, '', { depth: 0, fallbacks: 0, tree })
   checkReferences(document, tree)
   if (annotations !== undefined) checkAnnotations(annotations, tree)
+  if (summary !== undefined) summary.snippetUses = tree.snippetUses === true
 }
 
 /**
