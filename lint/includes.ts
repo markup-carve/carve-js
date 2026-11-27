@@ -8,7 +8,7 @@ import { fileLines, type LineRange, lineRange, regionRange } from '../src/includ
 import { CarveOptionError } from '../src/options.ts'
 import { unitBytes, utf8Length } from '../src/positions.ts'
 import { usedNames } from './snippets.ts'
-import { COPY_SCOPE, expandSnippets, holdsSnippetUse, snippetRegistry } from '../src/snippet-expand.ts'
+import { holdsSnippetUse, snippetRegistry } from '../src/snippet-expand.ts'
 
 /** The text the resolver returned for each id, as the expansion read it. */
 function recording(config: IncludeSettings, texts: Map<string, string>): IncludeConfig {
@@ -149,50 +149,33 @@ function walkReferences(node: Node, path: string, file: string, inclusion: strin
   })
 }
 
-/** The scope of each included file, indexed before copies are walked so a use may precede its definition. */
-function includeScopes(document: DocumentNode, root: ReferenceScope): Map<IncludeNode, ReferenceScope> {
-  const scopes = new Map<IncludeNode, ReferenceScope>()
-  const visit = (node: Node, scope: ReferenceScope): void => {
-    const inner = node.type === 'include' && node.children !== undefined
-      ? scopeOf(node.children, node.file ?? '', scope) : scope
-    if (node.type === 'include' && node.children !== undefined) scopes.set(node, inner)
-    forEachSlot(node, (nodes, step) => {
-      for (const child of nodes) visit(child, step === 'children' ? inner : scope)
-    })
-  }
-  visit(document, root)
-  return scopes
-}
-
-/** Count only the footnote references of copies the render admitted, in their definition file's scope. */
-function copiedNotes(node: Node, scope: ReferenceScope, root: ReferenceScope,
-  scopes: ReadonlyMap<IncludeNode, ReferenceScope>, found: ReferenceFindings): void {
-  if (COPY_SCOPE.has(node)) {
-    const origin = COPY_SCOPE.get(node)
-    scope = origin === null ? root : scopes.get(origin!) ?? scope
-  }
-  if (node.type === 'footnote_ref' && node.pos === undefined && node.number !== undefined) {
-    const target = definition(scope, node.key, 'notes')
-    const used = target === undefined ? null : referenceKey(target.file, target.node, 'unused-footnote-definition')
-    if (used !== null) found.used.add(used)
-  }
-  const inner = node.type === 'include' ? scopes.get(node) ?? scope : scope
+/** The source file of each note definition in a resolved render view. */
+function noteFiles(node: Node, file: string, files: Map<Node, string>): void {
+  if (node.type === 'footnote') files.set(node, file)
   forEachSlot(node, (nodes, step) => {
-    for (const child of nodes) copiedNotes(child, step === 'children' ? inner : scope, root, scopes, found)
+    const childFile = node.type === 'include' && step === 'children' ? node.file ?? file : file
+    for (const child of nodes) noteFiles(child, childFile, files)
   })
 }
 
 /** The resolved expansion decides which file's definition a reference actually uses (C2-N-054, C2-N-055). */
-function referenceFindings(document: DocumentNode, source: string): ReferenceFindings {
+function referenceFindings(document: DocumentNode): ReferenceFindings {
   const found: ReferenceFindings = { observed: new Set(), unresolved: new Set(), used: new Set(), snippets: usedNames(document),
     losing: new Set() }
   const root = scopeOf(document.children, '', null)
   walkReferences(document, '', '', '', root, found)
   if (holdsSnippetUse(document)) {
     const view = cloneTree(document)
-    expandSnippets(view, { entries: [], nodes: [] }, { roundtrip: false, source }, document)
     const resolved = resolveTree(view)
-    copiedNotes(resolved.document, root, root, includeScopes(resolved.document, root), found)
+    const files = new Map<Node, string>()
+    noteFiles(resolved.document, '', files)
+    for (const note of resolved.resolution.notes) {
+      if (note.definition === null) continue
+      const file = files.get(note.definition)
+      if (file === undefined) continue
+      const key = referenceKey(file, note.definition, 'unused-footnote-definition')
+      if (key !== null) found.used.add(key)
+    }
   }
   return found
 }
@@ -388,7 +371,7 @@ export function lintIncludes(source: string, value: unknown, own: Diagnostic[], 
   if (!expands && !own.some((entry) => RECONCILED.has(entry.code))) return own
   const texts = new Map<string, string>()
   const expanded = parseWithDiagnostics(source, { includes: recording(config, texts) })
-  const references = referenceFindings(expanded.document, source)
+  const references = referenceFindings(expanded.document)
   const duplicates = expanded.diagnostics.filter((entry) => entry.code === 'duplicate-snippet')
   for (const entry of duplicates) references.losing.add(`${entry.file ?? ''}\u0000${entry.range?.startOffset ?? -1}`)
   // A file included twice repeats its definitions at one offset: the winning one keeps its hint.

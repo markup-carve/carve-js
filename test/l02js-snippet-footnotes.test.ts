@@ -46,3 +46,11 @@ it('counts a note reference through nested snippet copies', () => {
   const findings = lint(source, { includes: () => ({ text: child, id: 'child.crv' }) })
   expect(findings.map((entry) => entry.code)).toEqual([])
 })
+
+it('attributes a nested copy to the child note when parent and child share a key', () => {
+  const source = '[^n]: Root\n\n{{ $b }}\n\n{{ child.crv }}'
+  const child = '{$a}: [^n]\n\n{$b}: {{ $a }}\n\n[^n]: Child'
+  const findings = lint(source, { includes: () => ({ text: child, id: 'child.crv' }) })
+  expect(findings.filter((entry) => entry.code === 'unused-footnote-definition').map((entry) => entry.file))
+    .toEqual([undefined])
+})
