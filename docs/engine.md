@@ -31,7 +31,7 @@ const resolver = ({ path }: { path: string }) =>
 
 render('{{ chapter.crv }}', { includes: resolver })
 const tree = parse('{{ chapter.crv }}', { includes: { resolver, file: 'main.crv', depth: 8 } })
-includeDependencies(tree) // [{ path: 'chapter.crv', file: 'chapter.crv', read: true }]
+includeDependencies(tree) // [{ path: 'chapter.crv', read: true, file: 'chapter.crv' }]
 ```
 
 A resolver receives the decoded `path`, the `section`, the valid `options` and `from`, the id of the including file. It returns the whole text (a string or UTF-8 bytes) with an id, or one error: `not_found`, `outside_root`, `unreadable` or `non_text`. The object form also takes `file`, the id of the top-level document for the cycle check, and lowered `depth` (at most 16) and `bytes` (at most 8388608) limits. An expanded include keeps its node, with `file` and `children`; `fmt` and `write` write the directive, never the children. `lint(source, { includes })` lints the included files too.

@@ -42,6 +42,8 @@ The diagnostics name what an import lost. With `constructs: true`, a Markdown, G
 it read, so a host can show a receipt for each construct:
 
 ```js
+import { importDocument } from '@markup-carve/carve/import'
+
 const { constructs } = importDocument('**Hello**', { from: 'markdown', constructs: true })
 // [{ construct: 'strong', node: 'strong', status: 'preserved', range: { startOffset: 0, endOffset: 9 } }]
 ```
