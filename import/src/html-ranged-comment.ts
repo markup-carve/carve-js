@@ -38,6 +38,15 @@ type Slot = 'block' | 'inline'
 const INLINE_CONTENT_BLOCKS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dt', 'caption', 'figcaption', 'summary', 'legend'])
 const TABLE_STRUCTURE = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr'])
 
+function cellHasBlocks(element: Html.Element, walk: Walk): boolean {
+  let blocks = walk.cellBlocks.get(element)
+  if (blocks === undefined) {
+    blocks = element.childNodes.some(node => isElement(node) && isBlockElement(node))
+    walk.cellBlocks.set(element, blocks)
+  }
+  return blocks
+}
+
 /** A block-tag child of inline content is still offered to the inline reader. */
 function childSlot(parent: Html.Node, parentSlot: Slot, child: Html.Node, walk: Walk): Slot {
   if (parentSlot === 'inline') return 'inline'
@@ -45,14 +54,7 @@ function childSlot(parent: Html.Node, parentSlot: Slot, child: Html.Node, walk: 
     const element = parent as Html.Element
     if (INLINE_CONTENT_BLOCKS.has(element.tagName)) return 'inline'
     if (TABLE_STRUCTURE.has(element.tagName)) return 'block'
-    if (element.tagName === 'td' || element.tagName === 'th') {
-      let blocks = walk.cellBlocks.get(element)
-      if (blocks === undefined) {
-        blocks = element.childNodes.some(node => isElement(node) && isBlockElement(node))
-        walk.cellBlocks.set(element, blocks)
-      }
-      if (!blocks) return 'inline'
-    }
+    if ((element.tagName === 'td' || element.tagName === 'th') && !cellHasBlocks(element, walk)) return 'inline'
   }
   return isElement(child as Html.ChildNode) && isBlockElement(child as Html.Element) ? 'block' : 'inline'
 }
