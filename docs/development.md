@@ -37,7 +37,9 @@ carve-js/
 
 `npm run build` compiles the 0.1 reader into `build/engine-0.1/` (not published), then bundles
 `dist/index.js`, `dist/node.js`, `dist/cli.js` and the declarations in `dist/types/`.
-`npm run build:browser` writes `dist/carve.iife.min.js`.
+`npm run build:browser` writes `dist/carve.iife.min.js`. `npm pack` and `npm publish` run it
+through `prepack`, so every tarball carries the bundle. A git-dependency install runs only `prepare`
+and skips it.
 
 ---
 

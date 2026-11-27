@@ -38,12 +38,14 @@ const pkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'))
  *
  * @param {object} [options]
  * @param {string} [options.outfile] Where to write, relative to the repo root.
- * @param {boolean} [options.sourcemap] Emit the sourcemap next to it.
+ * @param {boolean} [options.sourcemap] Emit the sourcemap next to it. Off by
+ *   default: the package does not ship the map, so the published bundle must
+ *   not name one.
  * @param {string[]} [options.extraArgs] Appended verbatim; the selfcheck uses
  *   this to emit a deliberately wrong artifact.
  * @returns {string} The absolute path written.
  */
-export function buildBrowserBundle({ outfile = BUNDLE, sourcemap = true, extraArgs = [] } = {}) {
+export function buildBrowserBundle({ outfile = BUNDLE, sourcemap = false, extraArgs = [] } = {}) {
   const args = [
     '--yes',
     `esbuild@${ESBUILD_VERSION}`,

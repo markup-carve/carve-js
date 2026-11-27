@@ -231,7 +231,8 @@ describe('carve process', () => {
   })
 
   it('C2-W-101: version and command help exit 0', () => {
-    expect(cli(['--version']).stdout).toMatch(/^0\.2\.0-dev\n$/)
+    const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string }
+    expect(cli(['--version']).stdout).toBe(`${version}\n`)
     for (const command of ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import']) {
       expect(cli([command, '--help']).status).toBe(0)
     }
