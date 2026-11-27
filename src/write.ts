@@ -659,10 +659,8 @@ function compareWithLinkFallback(w: Writer, document: DocumentNode, group: reado
   if (attempts === null) return check
   if (asksNothing(check) && readsBack(w, group, first)) return check
   if (reportsConstruct(check, group)) {
-    // C2-W-088: the round reports every construct of its parse, also where it asks for a change inside a link
-    // (carve#6802), so the rounds go on from the bare text with those kinds.
-    if (linkRepairRequested(group, check)) return check
-    // C2-W-125: the case backslash is placed in this round, beside the kind escapes (carve#6656 ruling A, carve#6681).
+    // C2-W-088: keep every kind from the bare parse. C2-W-125 places link-bracket case backslashes in the next round;
+    // they cannot replace the kind report of this one (carve#6802, carve#6656).
     w.linkFallback = true
     return check
   }
@@ -702,22 +700,6 @@ function dropLinkFallback(w: Writer): void {
     if (current !== undefined && current.some((at) => placed.has(at))) w.escapes.set(node, current.filter((at) => !placed.has(at)))
   }
   w.linkPlaced.clear()
-}
-
-/** Whether the round asks for an escape, a form or a loss in a link or below one. */
-function linkRepairRequested(group: readonly Node[], check: Check): boolean {
-  const asked = new Set<Node>()
-  for (const [node] of check.escapes) asked.add(node)
-  for (const [node] of check.losses) asked.add(node)
-  for (const node of check.forms) asked.add(node)
-  if (asked.size === 0) return false
-  const pending: [Node, boolean][] = group.map((node) => [node, false])
-  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
-    const inside = item[1] || item[0].type === 'link'
-    if (inside && asked.has(item[0])) return true
-    for (const child of childNodes(item[0])) pending.push([child, inside])
-  }
-  return false
 }
 
 /** A reported construct's opener can settle the tree before repairs beside its marks are needed. */
