@@ -1271,6 +1271,7 @@ function sameEscapes(escapes: ReadonlyMap<TextNode, readonly number[]>, final: R
 
 function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boolean, pairs: GroupPairs): boolean {
   const reported = w.losses.entries.length
+  w.linkFallback = true
   const plan = settledPlan(w, run, group, first, reported)
   if (plan === null) return false
   const replaced = addPlanned(w, plan)
@@ -2145,23 +2146,20 @@ function repairRounds(w: Writer, document: DocumentNode, from: number, first: bo
   w.sawLink = false
   const ran = (result: number): PassRun<number> => ({ result, limited: history.limited || exhausted(w), budget: history.budget })
   const chain = createChain()
-  try {
-    for (let round = 0; ; round++) {
-      const end = groupEnd(w, nodes, from)
-      const group = nodes.slice(from, end)
-      const before = watchRound(w, chain)
-      resetLines(w)
-      writeBlocks(w, group, '', 0, false)
-      if (w.lines.length === 0) return ran(end)
-      takeGroupFacts(history, group, end)
-      if (history.deep) {
-        refuseDeepGroup(w, group)
-        return ran(end)
-      }
-      if (!nextRound(w, document, group, first, round === 0, reported, history, chain, before)) return ran(end)
+  // The rounds leave `linkFallback` as they settled, so a later write of the group gives their lines (C2-W-010).
+  for (let round = 0; ; round++) {
+    const end = groupEnd(w, nodes, from)
+    const group = nodes.slice(from, end)
+    const before = watchRound(w, chain)
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+    if (w.lines.length === 0) return ran(end)
+    takeGroupFacts(history, group, end)
+    if (history.deep) {
+      refuseDeepGroup(w, group)
+      return ran(end)
     }
-  } finally {
-    w.linkFallback = true
+    if (!nextRound(w, document, group, first, round === 0, reported, history, chain, before)) return ran(end)
   }
 }
 
