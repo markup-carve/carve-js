@@ -2953,7 +2953,6 @@ function toContent(lines: readonly [number, number, string][], at: number): numb
   let units = 0
   for (let bytes = byte; bytes < at; units++) {
     if (units >= part.length) return -1
-    if (isSecondHalf(part, units)) continue
     bytes += unitBytes(part, units)
   }
   return units < part.length || part.length === 0 && units === 0 ? contentAt + units : -1
