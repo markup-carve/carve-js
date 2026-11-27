@@ -14,6 +14,19 @@ describe('named snippets', () => {
     expect(() => decodeTree(tree('_a-1'))).not.toThrow()
   })
 
+  it('C2-A-027, C2-A-221: a reader refuses the common fields the schema withholds from a snippet use', () => {
+    const tree = (fields: Record<string, unknown>): string => JSON.stringify({ astVersion: '2.0', type: 'document', children: [
+      { type: 'snippet_definition', name: 's', children: [{ type: 'text', value: 'hi' }] },
+      { type: 'paragraph', children: [{ type: 'snippet_use', mode: 'inline', name: 's', ...fields }] },
+    ] })
+    for (const [field, value] of [['lang', '2.0'], ['lang', 'en'], ['dir', 'ltr'], ['metadata', {}], ['attrs', { id: 'x' }]] as const) {
+      expect(() => decodeTree(tree({ [field]: value }))).toThrow(`/children/1/children/0/${field}: not a field of snippet_use`)
+    }
+    const pos = { startLine: 1, endLine: 1, startColumn: 1, endColumn: 2, startOffset: 0, endOffset: 1 }
+    expect(() => decodeTree(tree({}))).not.toThrow()
+    expect(() => decodeTree(tree({ pos, segments: [pos] }))).not.toThrow()
+  })
+
   it('C2-B-236: a glued block after a quoted value holding } still reads', () => {
     const definition = parseTree('{$x title="a}b"}{.foo}: Hi', { positions: false }).document.children[0]
     expect(definition?.attrs).toEqual({ classes: ['foo'], keyValues: [['title', 'a}b']] })

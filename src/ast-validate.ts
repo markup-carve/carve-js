@@ -51,6 +51,8 @@ const DOCUMENT_CHILDREN = [
   ...BLOCKS, 'footnote', 'link_reference_definition', 'abbreviation_def', 'snippet_definition', 'citation_definition', 'frontmatter',
 ]
 const COMMON = ['type', 'attrs', 'data', 'pos', 'segments', 'metadata', 'dir', 'lang']
+// C2-A-027, C2-A-221: a common field holds only as far as the schema definition allows; a snippet use has no attrs, metadata, dir or lang.
+const COMMON_OF = new Map<string, readonly string[]>([['snippet_use', ['type', 'data', 'pos', 'segments']]])
 
 /** What the `children` of a node type hold: `blocks`, `inlines`, `none`, or the member types by name. */
 export type Content = 'blocks' | 'inlines' | 'none' | readonly string[]
@@ -219,10 +221,10 @@ function allows(allowed: readonly string[], type: string): boolean {
 
 const RULE_FIELDS = new WeakMap<Rule, ReadonlySet<string>>()
 
-function ruleFields(rule: Rule): ReadonlySet<string> {
+function ruleFields(rule: Rule, type: string): ReadonlySet<string> {
   let fields = RULE_FIELDS.get(rule)
   if (fields === undefined) {
-    fields = new Set([...COMMON, ...rule[1], ...rule[2]])
+    fields = new Set([...(COMMON_OF.get(type) ?? COMMON), ...rule[1], ...rule[2]])
     RULE_FIELDS.set(rule, fields)
   }
   return fields
@@ -1208,7 +1210,7 @@ function checkSpanCounts(table: Fields, path: string): void {
 function checkField(node: Fields, type: string, rule: Rule, name: string, path: string, walk: Walk): void {
   const value = node[name]
   const at = `${path}/${name}`
-  if (!ruleFields(rule).has(name)) fail(at, `not a field of ${type}`)
+  if (!ruleFields(rule, type).has(name)) fail(at, `not a field of ${type}`)
   if (value === null || value === undefined) fail(at, 'a field without a value')
   if (name === 'attrs') checkAttrs(value, at, type === 'span')
   else if (!checkScalar(type, name, value, at)) FIELD_CHECKS.get(name)?.(value, at, walk, node)
