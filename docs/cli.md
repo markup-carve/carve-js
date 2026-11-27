@@ -43,11 +43,11 @@ A file fails with status 1 and the run goes on with the next file when:
 | `heading-closing-hashes` | `# Title ##` | `# Title` |
 | `thematic-break-spelling` | `---` | `***` |
 
-Under `--fix` each rule keeps the state it has under `lint` (C2-T-049, C2-T-031). `markdown-strong-double-star`, `markdown-strikethrough-double-tilde` and `heading-closing-hashes` are on. The others are migration notices (C2-W-156): they rewrite only a document that declares a Carve version below 0.2, under `--upgrade`, or when `--rules` turns them on, and `--rules` turning one off keeps it off over both. So `carve fix` leaves `a =x= b` in a 0.2 document as written, and `carve fix --upgrade` writes `a {=x=} b`. A rule whose message offers two replacements, such as `deprecated-bare-underline` (braced underline or the slash pair), has no fix.
+Under `--fix` each rule keeps the state it has under `lint` (C2-T-049, C2-T-031). `markdown-strong-double-star`, `markdown-strikethrough-double-tilde` and `heading-closing-hashes` are on. The `deprecated-` rules and `thematic-break-spelling` are migration notices (C2-W-156): they rewrite only a document that declares a Carve version below 0.2, under `--upgrade`, or when `--rules` turns them on, and `--rules` turning one off keeps it off over both. The `djot-` rules are off unless `--rules` turns them on; `--upgrade` does not. So `carve fix` leaves `a =x= b` in a 0.2 document as written, and `carve fix --upgrade` writes `a {=x=} b`. A rule whose message offers two replacements, such as `deprecated-bare-underline` (braced underline or the slash pair), has no fix.
 
 A fix is applied only when it holds:
 
-- Where two rules report one range with different replacements, the range is left as written. `~t~` is Djot subscript and also the 0.1 strike, so `carve fix --upgrade --rules '{"djot-subscript-tilde":"off"}'` picks the strike and `'{"deprecated-bare-strike":"off"}'` the subscript.
+- Where two rules report one range with different replacements, the range is left as written. `~t~` is Djot subscript and also the 0.1 strike, so `carve fix --upgrade --rules '{"djot-subscript-tilde":"on"}'` leaves it, `carve fix --upgrade` writes the strike, and `--upgrade --rules '{"djot-subscript-tilde":"on","deprecated-bare-strike":"off"}'` the subscript.
 - The fixed source is parsed once, and a fix whose node does not stand where the finding started is dropped. A `+ item` line directly below paragraph text becomes no list item with `-` either, so it stays.
 - Fixes repeat until a pass changes nothing, so a habit nested in another is fixed too.
 
