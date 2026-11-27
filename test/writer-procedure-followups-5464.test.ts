@@ -15,7 +15,8 @@ describe('C2-W-125: case-one trials replace earlier repairs', () => {
 
   it('takes out the content-start escape when the brace trial forms the node', () => {
     const source = '1. / /\\/{//{,b,}{*}{//}/{/{/}[ [//}{**} }/}/{*{*{//}*}/*/*z'
-    const expected = '1. / {//\\{//}{,b,}{*}{//}{/{/{/}[ [//}{**} }/}/}{*{*{//}*}/*/*z\n'
+    // C2-W-088 (carve#6802) also escapes the unheld constructs behind the comparison stop.
+    const expected = '1. / {/\\/\\{\\//}{,b,}{*}{//}{/{/{/}[ [\\//}{**} }/}/}{*{*{//}*}/*/*z\n'
     expect(format(source)).toBe(expected)
     const repair = writeTreeWithStats(parse(source), undefined, 'repair').output
     expect(repair.diagnostics).toEqual([])

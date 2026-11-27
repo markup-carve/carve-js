@@ -1,28 +1,28 @@
-// carve-js#5201: the authored-block fallback of C2-W-088 across a line break inside a node, as in a wrapped label.
+// C2-W-088, carve#6802: reporting all constructs can settle a wrapped node before the authored-block fallback.
 import { describe, expect, it } from 'vitest'
 import { formatWithDiagnostics } from '../src/index.ts'
 
 const wrapped = '``^[/`"`[^\\\\/ \n`]^[[^*]\\`/=[^`[]]'
 
-describe('C2-W-088: the authored slice of a node that wraps', () => {
-  it('C2-W-022: writes no space at the end of the wrapped line', () => {
+describe('C2-W-088: the round of a node with a source wrap', () => {
+  it('C2-W-022: writes no trailing space when a code span becomes one line', () => {
     for (const normalize of [false, true]) {
       const result = formatWithDiagnostics(wrapped, { normalize })
-      expect(result.source).toBe('``^[/`"`[^\\\\/\n`]^[[^*]\\`/=[^`[]]\n')
+      expect(result.source).toBe("\\`\\`^\\[/`\"`[^\\\\/ `]^\\[\\[^*]\\`/=\\[^\\`\\[\\]]\n")
       expect(result.diagnostics).toEqual([])
     }
   })
 
-  it('C2-W-024: indents the wrapped line once inside a list item', () => {
+  it('C2-W-024: keeps the item marker when a code span becomes one line', () => {
     const once = formatWithDiagnostics(`- ${wrapped}`).source
-    expect(once).toBe('- ``^[/`"`[^\\\\/\n  `]^[[^*]\\`/=[^`[]]\n')
+    expect(once).toBe("- \\`\\`^\\[/`\"`[^\\\\/ `]^\\[\\[^*]\\`/=\\[^\\`\\[\\]]\n")
     expect(formatWithDiagnostics(once).source).toBe(once)
   })
 
-  it('C2-W-024: drops the quote markers a later line repeats, and keeps a lazy line', () => {
+  it('C2-W-024: keeps container marks and writes the remaining lazy lines', () => {
     for (const [input, expected] of [
-      [`> > ${wrapped.replace('\n', '\n> > ')}`, '> > ``^[/`"`[^\\\\/\n> > `]^[[^*]\\`/=[^`[]]\n'],
-      ['- > ``^[/`"`[^\\\\/\n  > `]^[[^*]\\`/=[^`[]]\n', '- > ``^[/`"`[^\\\\/\n  > `]^[[^*]\\`/=[^`[]]\n'],
+      [`> > ${wrapped.replace('\n', '\n> > ')}`, "> > \\`\\`^\\[/`\"`[^\\\\/ `]^\\[\\[^*]\\`/=\\[^\\`\\[\\]]\n"],
+      ['- > ``^[/`"`[^\\\\/\n  > `]^[[^*]\\`/=[^`[]]\n', "- > \\`\\`^\\[/`\"`[^\\\\/ `]^\\[\\[^*]\\`/=\\[^\\`\\[\\]]\n"],
       [' > ^[/\\[^}[^}]*\\][^[\n> ]/', '> ^[/\\[^}[^}]*\\][^[\n> ]/\n'],
       ['> :n[\n{[]``\n> ``@\\`~]`', '> :n[\n> {[]``\n> ``@\\`~]`\n'],
       // A code span line whose content starts with a quote marker keeps it on both runs.
