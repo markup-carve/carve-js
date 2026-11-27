@@ -73,3 +73,35 @@ Without `--write`, the fixed source goes to standard output, and `FILE: fixed RU
 - `--strict` on `render` and `lint`: a file that wrote any entry ends with status 1, a hint included. `render --strict` still writes the HTML; `--strict-losses` is the flag that withholds it.
 - `--upgrade` on `lint`: turns on the migration notices, the rules that report 0.2 text which 0.1 read differently. A document whose line-1 frontmatter declares `carve: 0.1` gets them without the flag (C2-W-156).
 - `--ignore FILE-ID` on `lint`, repeatable: the entries of that file are dropped. An included file is named by its id, its path from the include root; the entry file by its name as given.
+
+## Migrating from the 0.1 command line
+
+The `carve` program of 0.1.x took the commands and flags below, which 0.2 removes or renames. The specification's map of the 0.1 flags is in the command line section of `spec/0.2/UPGRADING.md`; this table lists every flag of this package's 0.1 program that 0.2 drops.
+
+| 0.1 | 0.2 |
+| --- | --- |
+| `render --html` | `carve render`, or `render --to html`; HTML is the default |
+| `render --markdown`, `--md` | `carve render --to markdown` |
+| `render --plain`, `--plain-text` | `carve render --to plain` |
+| `render --ansi`, and `carve --ansi FILE` | `carve render --to ansi` |
+| `render --carve` | `carve fmt`; `carve fmt --from-ast` writes a 2.0 tree as source |
+| `render --json`, `render --ast` | `carve ast` |
+| `render --from-json` | `--from-ast` on `render` and `fmt`; migrate an older tree first with `carve migrate-ast` |
+| `render --no-raw-html`, `render --safe` | the default; `--raw-html` turns raw HTML on |
+| `render --profile-base-host HOST` | no flag; a library host registers `linkPolicy({ baseHost })` from `@markup-carve/carve/extensions` ([navigation](extensions-navigation.md)) |
+| `render --stamp-info`, `render --stamp-check` | none; 0.2 source carries no stamp. The `carve` key of line-1 frontmatter declares the version, and `carve upgrade --check FILE` exits with 1 when the upgrade would change the file |
+| `fmt --stamp`, `fmt --stamp-block` | none; no stamp is written |
+| `fmt --stdout`, `fix --stdout` | the default: without `--write`, `fmt` and `fix` write the result to standard output |
+| `fmt --migrate` | `carve upgrade --migrate`, described above |
+| `fix --check` | no flag; `carve lint` reports the findings that `fix` rewrites, and `carve fix FILE \| cmp -s - FILE` tells whether a fix would change the file |
+| `lint --rule ID`, `lint --platform NAME` | `carve lint --rules '{"ID":"on"}'`, `--platforms '["NAME"]'` |
+| `lint --from-djot` | turn the `djot-` rules on by id in `--rules`, or pass `--upgrade` |
+| `lint --caption-hints` | none needed: `caption-looking-paragraph` is on by default |
+| `lint --extension citations` | `--extensions '["carve.cite"]'` registers the citations extension |
+| `lint --portable` | none; it did nothing in 0.1.x either |
+| `migrate --from html\|markdown\|djot\|bbcode` | `carve import --from html\|gfm\|djot\|bbcode`; `--from markdown` reads strict CommonMark |
+| `migrate --adapter`, `--list-table`, `--output`, `--directory` | the same flags on `carve import` |
+| `migrate --check-loss`, `migrate --report FILE` | `carve import --strict-losses`, `--report-losses FILE` |
+| `migrate --mode roundtrip` | `carve import --raw-html` keeps comments and raw elements |
+| `merge`, `portability`, `trace` | none; three-way merge, Djot portability checks and the decision trace are not part of 0.2 |
+| `-h`, `-V` | `--help`, `--version` |

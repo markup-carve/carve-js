@@ -6,13 +6,17 @@ the same package; [Migrating from 0.1](#migrating-from-01) maps each 0.1 call to
 
 | Entry | Runs in | Holds |
 |---|---|---|
-| `@markup-carve/carve` | browsers, Node, Deno, bundlers (Vite, webpack, Astro, Obsidian) | every call below |
-| `@markup-carve/carve/node` | Node | `fileSystemResolver`, the include resolver that reads files |
+| `@markup-carve/carve` | browsers, Node, Deno, bundlers (Vite, webpack, Astro, Obsidian) | every call below, the node types and the tabs extension |
+| `@markup-carve/carve/node` | Node | `fileSystemResolver` and its `FileResolverOptions`, the include resolver that reads files |
+| `@markup-carve/carve/extensions` | browsers, Node, bundlers | the provisional standard extensions and their option types ([Extensions](#extensions-provisional)) |
+| `@markup-carve/carve/import` | browsers, Node, bundlers | `importDocument` for Markdown, GFM, Djot, BBCode and HTML, `BbcodeInputTooLargeError`, `BBCODE_MAX_INPUT_LENGTH` ([import.md](import.md)) |
+| `@markup-carve/carve/export` | browsers, Node, bundlers | `toMarkdown`, `toPlainText`, `toAnsi` and the export writers ([export.md](export.md)) |
 | `@markup-carve/carve/upgrade` | browsers, Node, bundlers | `upgrade`, the 0.1 to 0.2 source upgrade; it carries the 0.1 reader |
 | `@markup-carve/carve/prettier` | Prettier 3 | the Prettier plugin for `.crv` files |
 
-Both entries are ES modules with TypeScript declarations. The only runtime dependency is `parse5`, which the
-HTML importer uses.
+Every entry is an ES module with TypeScript declarations. The root entry loads one runtime dependency, `parse5`,
+which the HTML importer uses; `./import` adds micromark and djot.js, so a host that imports no Markdown or Djot
+never loads them.
 
 ## Calls
 
@@ -378,10 +382,83 @@ if (!html.includes('Install')) throw new Error(html)
 // render(source, { extensions: tabsExtensions, renderers: { 'carve.tabs': standardTabsRenderer({ mode: 'aria' }) } })
 ```
 
+## Types from 0.1
+
+### Option types of the extensions
+
+The option and helper types of the extensions moved with their factories, under the same names:
+`AutolinkOptions`, `CitationsOptions`, `CodeGroupOptions`, `ColorSwatchOptions`, `CslEntry`, `CslName`,
+`DefaultAttributesMap`, `ExternalLinksOptions`, `FencedRenderContentMode`, `FencedRenderOptions`,
+`HeadingNumbersOptions`, `HeadingPermalinksOptions`, `HeadingReferenceOptions`, `IndexOptions`, `MathBlockOptions`,
+`QuoteCharacters`, `SanitizeResult`, `SanitizeSvgOptions`, `SmartQuotesOptions`, `SwatchPosition`, `SwatchShape`,
+`TableOfContentsOptions` and `WikilinksOptions`.
+
+`DefaultAttributesOptions`, `ImgFenceOptions`, `TabsOptions` and `TabsMode` are gone. `defaultAttributes` takes a
+`DefaultAttributesMap`, `imgFence()` takes no options, and `standardTabsRenderer({ mode: 'aria' })` selects the tab
+mode. `HeadingLevelShiftOptions` became the `headingShift` render option.
+
+### Removed types
+
+The 0.1 root exported 176 types that 0.2 removes. The tree types follow one rule: the 0.1 node type `Foo` is
+`FooNode` in 0.2, so `Heading` is `HeadingNode` and `Paragraph` is `ParagraphNode`. `NodeOfType['heading']` gives the
+same type from the `type` string. The rule covers `Abbreviation`, `AbbreviationDef`, `Admonition`, `BlockQuote`,
+`CaptionNumber`, `Citation`, `CitationDefinition`, `CitationGroup`, `CodeBlock`, `Comment`, `CriticComment`,
+`DefinitionList`, `Directive`, `Div`, `Document`, `FigureGroup`, `FootnoteRef`, `HardBreak`, `Heading`, `Image`,
+`InlineFootnote`, `LineBlock`, `Link`, `LinkReferenceDefinition`, `List`, `ListItem`, `LiteralInline`, `Math`,
+`Mention`, `NonBreakingSpace`, `Paragraph`, `RawBlock`, `RawInline`, `Ruby`, `RubyPair`, `Section`, `SmallCaps`,
+`SmartPunctuation`, `Span`, `Table`, `TableCell`, `TableColumn`, `TableRow`, `Tag`, `Text` and `ThematicBreak`. The
+other tree types:
+
+| 0.1 type | 0.2 type | Note |
+|---|---|---|
+| `AnyNode`, `BaseNode`, `BlockNode`, `InlineNode` | `Node`, `NodeBase`, `Block`, `Inline` |  |
+| `AutoLink`, `InlineCode`, `SymbolInline` | `AutolinkNode`, `CodeNode`, `SymbolNode` |  |
+| `CriticDelete`, `CriticInsert` | `DeleteNode`, `InsertNode` |  |
+| `CrossRef` | `XrefNode` | a `</#id>` reference has `namespace: 'heading'` and `key` |
+| `Emphasis` | `EmphasisNode`, `StrongNode`, `UnderlineNode`, `StrikeNode`, `SuperscriptNode`, `SubscriptNode`, `HighlightNode` | one node type per mark |
+| `Footnote` | `FootnoteRefNode`, `InlineFootnoteNode` |  |
+| `FootnoteDefNode` | `FootnoteNode` | the definition of a note |
+| `DefinitionItem` | `DefinitionTermNode`, `DefinitionDescriptionNode` | the children of `DefinitionListNode` |
+| `TableBodyGroup`, `TableRowGroups` | `TableHeadNode`, `TableBodyNode`, `TableFootNode` | row groups are nodes |
+| `HeadingLevel` | `HeadingNode['level']` |  |
+| `TaskState` | `Task` | the task box is `{ mark }` |
+| `CriticSubstitute`, `EscapedText`, `Figure` | none | no such node in the 0.2 tree; a caption is a `CaptionNode` on its block |
+
+The types of the calls:
+
+| 0.1 types | 0.2 types | Note |
+|---|---|---|
+| `AstJsonDocument`, `AstJsonBlock` | `DocumentNode`, `Block` | the encoded tree has the shape of the tree |
+| `AstEnvelope`, `AstEnvelopeExtension`, `FromAstEnvelopeOptions`, `ToAstEnvelopeOptions` | `Envelope`, `ExtensionDeclaration`, `DecodeOptions` | `encodeEnvelope` takes no options |
+| `AnnotationAnchor`, `AnnotationRange` | `AnnotationRangeSidecar` | the `annotations` option of `validateTree` and `decodeTree` |
+| `NodeIdentity`, `NodeProvenance`, `ProvenanceSidecar`, `ProvenanceSource` | none | no identity or provenance sidecar in 0.2 |
+| `SourceLayoutNode`, `CellWrap`, `VerbatimCellWrap` | `SourceLayout`, `NodeLayout`, `Wrap` | the layout sidecar of `parseWithLayout` |
+| `AstPatchOperation` | `PatchOperation` |  |
+| `ReversibleAstPatch`, `Change`, `ChangeKind`, `MergeConflict`, `MergeOptions`, `MergeResolution`, `MergeResult`, `SourceEdit`, `SourcePatch`, `SourceSuggestion` | none | the calls are gone; `FixEdit` and `UpgradeEdit` are the source edits of 0.2 |
+| `CarveRenderOptions`, `CarveConversionResult`, `ConversionDiagnostic`, `ConversionDiagnostics` | `WriteOptions`, `WriteOutput`, `Diagnostic` |  |
+| `RenderResult`, `CheckedRenderOptions`, `RenderLoss`, `RenderLossCode` | `RenderOutput`, `RenderOptions`, `Diagnostic` | a loss is a diagnostic of the `render-loss` channel; `strictLosses` is a render option |
+| `RenderDocumentOptions`, `RenderTarget`, `DocumentRenderTarget` | `WriterOptions`, the writer target string | `writeDocument` and `createWriterRegistry` |
+| `MarkdownRenderOptions`, `PlainTextRenderOptions`, `AnsiRenderOptions` | `MarkdownExportOptions`, `PlainTextExportOptions`, `AnsiExportOptions` | from `@markup-carve/carve/export` |
+| `ProfileOptions`, `ProfileFilterResult`, `ProfileViolation`, `DisallowedAction` | `Profile`, `Diagnostic` | the `profile` option; a profile loss is a diagnostic |
+| `SmartTypographyMode`, `SmartTypographyFamilies`, `SmartTypographyOption` | none | `smartTypography` is a boolean; `smartQuotes` from `./extensions` sets the quote glyphs |
+| `SocialLinkAttrs`, `SocialLinkKind`, `SocialLinkResolver`, `SocialLinkResolverInput` | `Social`, `SocialRequest` | the `social` option |
+| `IncludeContext`, `IncludeDirective`, `IncludeSite`, `IncludeResolved`, `IncludeUnresolved`, `IncludedContent`, `IncludeDenial`, `IncludeResult`, `IncludeWarning` | `IncludeRequest`, `IncludeAnswer`, `IncludeError`, `IncludeConfig`, `IncludeResolver`, `IncludeNode`, `Diagnostic` | see [Includes](#includes) |
+| `IncludeRegionMode`, `IncludeRegionResult` | `IncludeRegionOptions`, `RegionResult` | `includeRegion` |
+| `DirectiveSite` | `IncludeDependency` | `includeDependencies(tree, { ranges: true })` |
+| `FileSystemResolverOptions` (`./node`) | `FileResolverOptions` (`./node`) | the same `maxFileBytes` and `allowAbsolute` |
+| `LintWarning`, `AccessibilityDiagnostic`, `LintPlatform` | `Diagnostic`, `LintOptions` | the platforms are a `platforms` list of names |
+| `MigrationCategory`, `MigrationConfidence`, `MigrationDiagnostic`, `MigrationFidelity`, `MigrationWarning`, `MigrationFixResult` | `Diagnostic`, `FixResult` | migration notices are lint diagnostics |
+| `HtmlImportOptions`, `HtmlImportResult`, `HtmlImportDiagnostic`, `HtmlImportDiagnosticCode`, `HtmlImportAdapter` | `ImportOptions`, `ImportResult`, `ImportDiagnostic` | the adapter is the `adapter` option |
+| `SourceFormat`, `MarkdownDialect` | `ImportFormat` (`./import`) | `'markdown'`, `'gfm'`, `'djot'`, `'bbcode'` or `'html'` |
+| `HtmlImportMode`, `DjotEngine` | none | `rawHtml` keeps comments and raw elements; djot.js is the one Djot reader |
+| `CarveExtension`, `Extension`, `BlockMatcher`, `BlockMatch`, `InlineMatcher`, `InlineMatch`, `MatcherContext`, `BeforeRenderContext`, `ExtensionRenderContext`, `BlockExtensionRenderContext`, `BlockExtensionRenderer` | `ExtensionDefinition`, `ExtensionClaim`, `ExtensionRenderer`, `ExtensionRenderHost`, `DocumentTransform` | a 0.2 extension claims a div, fence or inline extension and adds no syntax (C2-X-013) |
+| `PortabilityReport`, `Divergence`, `NormalizedHtml`, `PreservationDiagnostic`, `PreservationOptions`, `PreservationTarget`, `TablePreservationReport`, `ColonFenceMismatch`, `ColonFenceSite`, `TraceRecord`, `Stamp`, `StampForm` | none | the calls are gone (see the table above) |
+
 ## Migrating from 0.1
 
 Each value the 0.1 package root exports, and what replaces it in 0.2. A row marked gone has no 0.2 call; the note
-says what to use instead. Of the 172 values, 118 map to a 0.2 call and 54 are gone.
+says what to use instead. Of the 172 values, 118 map to a 0.2 call and 54 are gone. [Types from 0.1](#types-from-01)
+maps the types.
 
 For a document whose 0.1 host registered the default `wikilinks` or `samp` semantic span extension, pass
 `registeredExtensions: ['wikilinks', 'samp']` to `upgrade`. It writes U-423 to U-425 source forms and verifies the
@@ -417,7 +494,7 @@ old and new host HTML. The command line spelling is `carve upgrade --registered-
 | `lintIncludes` | `lint(source, { includes })` |  |
 | `expandIncludes` | `parse(source, { includes })` | a resolver; `fileSystemResolver` from `./node` reads files |
 | `applyProfile`, `Profile` | the `profile` option |  |
-| `LinkPolicy` | the `urlPolicy` option | `isUrlAllowed` tests one URL |
+| `LinkPolicy` | the `urlPolicy` option | `isUrlAllowed` tests one URL; `linkPolicy({ baseHost })` from `@markup-carve/carve/extensions` takes the domain and host rules |
 | `smartQuotes` | the `smartTypography` option with `smartQuotes` from `@markup-carve/carve/extensions` | `smartQuotes(options)` sets the quote glyphs of a locale |
 | `details`, `spoiler`, `semanticSpan`, `listTable`, `colorSwatch`, `wikilinks`, `smartQuoteLocales`, `isSmartQuoteLocaleSupported`, `SMART_QUOTE_LOCALES`, `defaultAttributes`, `tabNormalize` | same names from `@markup-carve/carve/extensions` | provisional; see [blocks and inline extensions](extensions-blocks-inline.md) |
 | `tabs` | `tabsExtensions`, `tabsRenderer` | provisional |
@@ -450,7 +527,7 @@ old and new host HTML. The command line spelling is `carve upgrade --registered-
 | `inspectColonFences`, `decisionTrace`, `decisionTraceJsonLines` | gone | 0.1 debugging helpers; 0.2 has one parser path and no trace to show |
 | `selectIncludeRegion` | `includeRegion` | returns the text and the lines |
 | `findDirectiveSites` | `includeDependencies(tree, { ranges: true })` | the byte range of each directive |
-| `headingReference` | `headingId` | the id without document dedup |
+| `headingReference` | same name from `@markup-carve/carve/extensions` | provisional; it now only adds the class, see [navigation](extensions-navigation.md); `headingId` gives the id of a heading text |
 | `expandsForTarget`, `isDirectiveShape`, `parseDirective` | gone | include internals; a directive is an `include` node of the tree |
 | `CANONICAL_BLOCK_TYPES`, `CANONICAL_INLINE_TYPES` | `NODE_TYPES` | `block` and `inline`, from the pinned schema |
 | `LIB_VERSION` | `VERSION` | |

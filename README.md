@@ -75,7 +75,7 @@ the trees of two files.
 - [Standard extensions: navigation](docs/extensions-navigation.md)
 - [Engine notes: conformance, byte input, includes, command line](docs/engine.md)
 - [Importing Markdown, Djot, BBCode and HTML](docs/import.md)
-- [Engine commands and flags: flatten, fix, upgrade --migrate, --output, --strict, --ignore](docs/cli.md)
+- [Engine commands and flags: flatten, fix, upgrade --migrate, --output, --strict, --ignore, and the 0.1 command line](docs/cli.md)
 - [Development](docs/development.md)
 - [Carve documentation](https://markup-carve.github.io/carve/)
 - [Playground](https://markup-carve.github.io/carve/playground)

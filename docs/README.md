@@ -10,5 +10,5 @@ Start with the [Carve documentation](https://markup-carve.github.io/carve/) for 
 - [Standard extensions: navigation](extensions-navigation.md)
 - [Engine notes: conformance, byte input, includes, command line](engine.md)
 - [Importing Markdown, Djot, BBCode and HTML](import.md)
-- [Engine commands and flags: flatten, fix, upgrade --migrate, --output, --strict, --ignore](cli.md)
+- [Engine commands and flags: flatten, fix, upgrade --migrate, --output, --strict, --ignore, and the 0.1 command line](cli.md)
 - [Development](development.md)
