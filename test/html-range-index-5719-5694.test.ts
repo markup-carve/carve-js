@@ -26,4 +26,9 @@ describe('HTML ranged comment prewalk follows the reader', () => {
       + `<script data-carve-snippet="1:inline:$good">z</script>${end}y</p>`
     expect(read(html)).toEqual({ source: '{#n#}`x`{{ $good }}y\n', codes: ['import-structure-repaired'] })
   })
+
+  it('C2-H-186: a block-tag carrier nested in inline content uses an inline slot', () => {
+    const html = '<div><span>' + start + '<div data-carve-snippet="1:inline:$good"></div>' + end + 'y</span></div>'
+    expect(read(html).codes).toContain('import-structure-repaired')
+  })
 })

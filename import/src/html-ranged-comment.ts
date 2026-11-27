@@ -30,6 +30,17 @@ const INDEXES = new WeakMap<HtmlContext, DocumentIndex>()
  */
 interface Walk { pending: Set<string>, ordinals: Set<string>, uses: Set<Html.Element>, scratch: HtmlContext }
 
+type Slot = 'block' | 'inline'
+
+const INLINE_CONTENT_BLOCKS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dt', 'caption', 'figcaption', 'summary', 'legend'])
+
+/** A block-tag child of inline content is still offered to the inline reader. */
+function childSlot(parent: Html.Node, parentSlot: Slot, child: Html.Node): Slot {
+  if (parentSlot === 'inline' || (isElement(parent as Html.ChildNode)
+    && INLINE_CONTENT_BLOCKS.has((parent as Html.Element).tagName))) return 'inline'
+  return isElement(child as Html.ChildNode) && isBlockElement(child as Html.Element) ? 'block' : 'inline'
+}
+
 function isRangeEndSpan(node: Html.Node): node is Html.Element {
   return isElement(node as Html.ChildNode) && (node as Html.Element).tagName === 'span' &&
     classList(node as Html.Element)[0] === 'comment-end'
@@ -53,11 +64,11 @@ function isTaskBox(node: Html.Element): boolean {
 }
 
 /** C2-H-186: whether the reader takes the element as a snippet use: the first well-formed inline carrier of its ordinal. */
-function claimsUse(node: Html.Element, walk: Walk): boolean {
+function claimsUse(node: Html.Element, walk: Walk, slot: Slot): boolean {
   const carrier = carrierOrdinal(node)
   if (carrier === undefined || walk.ordinals.has(carrier.n)) return false
-  // Block elements are offered to blockSnippet, which accepts only a paragraph with a block carrier.
-  if (isBlockElement(node)) {
+  // A block slot is offered to blockSnippet, which accepts only a paragraph with a block carrier.
+  if (slot === 'block') {
     if (node.tagName === 'p' && carrier.mode === 'block') walk.ordinals.add(carrier.n)
     return false
   }
@@ -80,13 +91,13 @@ function isOpaque(node: Html.Node, walk: Walk): boolean {
 }
 
 /** Whether a node gives an inline by itself: text, a snippet use, a comment or raw element kept, or a comment. */
-function holds(node: Html.Node, context: HtmlContext, walk: Walk): boolean {
+function holds(node: Html.Node, context: HtmlContext, walk: Walk, slot: Slot): boolean {
   const child = node as Html.ChildNode
   if (isText(child)) return child.value !== ''
   if (isComment(child)) return context.rawHtml === true
   if (!isElement(child)) return false
   if (isTaskBox(child)) return false
-  if (claimsUse(child, walk)) return true
+  if (claimsUse(child, walk, slot)) return true
   if (treatment(child) === 'drop') return false
   if (isRaw(child)) return context.rawHtml === true
   return isRangeStart(child) && plain(child) !== ''
@@ -113,12 +124,12 @@ function documentRoot(node: Html.Node): Html.Node {
 }
 
 /** Places `at` at `count` in document order. A start's end is the first later end of its id, which is dropped with it. */
-function visit(index: DocumentIndex, walk: Walk, at: Html.Node, count: number, context: HtmlContext): void {
+function visit(index: DocumentIndex, walk: Walk, at: Html.Node, count: number, context: HtmlContext, slot: Slot): void {
   index.order.set(at, [count, count])
   const end = isRangeEndSpan(at)
   const claimed = end && walk.pending.delete(attr(at, 'data-comment-id') ?? '\0')
   if (claimed) index.claimed.add(at)
-  const held = !claimed && holds(at, context, walk)
+  const held = !claimed && holds(at, context, walk, slot)
   index.holding.push(index.holding[count]! + (held ? 1 : 0))
   // An opaque element or a claimed end that gives no inline here gives none to an element read around it.
   if (!held && (claimed || isOpaque(at, walk))) walk.scratch.dropped!.add(at as Html.Element)
@@ -143,19 +154,19 @@ function documentIndex(node: Html.Element, context: HtmlContext): DocumentIndex 
   }
   const walk: Walk = { pending: new Set(), ordinals, uses: new Set(), scratch }
   let count = 0
-  const stack: [Html.Node, boolean][] = [[documentRoot(node), false]]
+  const stack: [Html.Node, boolean, Slot][] = [[documentRoot(node), false, 'block']]
   while (stack.length > 0) {
-    const [at, closing] = stack.pop()!
+    const [at, closing, slot] = stack.pop()!
     if (closing) {
       const place = index.order.get(at)!
       place[1] = count - 1
       if (index.holding[count] === index.holding[place[0]] && keepsEmpty(at, index, walk)) index.holding[count]!++
       continue
     }
-    visit(index, walk, at, count++, context)
-    stack.push([at, true])
+    visit(index, walk, at, count++, context, slot)
+    stack.push([at, true, slot])
     const children = 'childNodes' in at && !isOpaque(at, walk) && !readsValueWhole(at) ? at.childNodes : []
-    for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, false])
+    for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, false, childSlot(at, slot, children[i]!)])
   }
   INDEXES.set(context, index)
   return index
