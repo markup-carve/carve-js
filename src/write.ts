@@ -27,7 +27,7 @@ import {
   chargeReadback, type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains,
   openerOffsets,
   simpleSpanForest, earlyLoneNoteBrackets, earlyTextNoteClosers, holdsCaretPair,
-  parseChunk, parseWritten,
+  parseChunk, parseWritten, readbackParse,
 } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
@@ -1189,7 +1189,7 @@ function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
     chargeReadback(w, source)
     return kept.result
   }
-  const result = groupEqual(w, group, parseChunk(w, source, w.linkKeys, false).children)
+  const result = groupEqual(w, group, readbackParse(w, source).children)
   if (w.readBacks.size >= MAX_READ_BACKS) w.readBacks.clear()
   const entries = w.readBacks.get(source) ?? []
   // Groups of the same source each add one, so the list keeps the last few and its scan stays short.

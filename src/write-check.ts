@@ -52,6 +52,27 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   return parsed
 }
 
+// The readback trees kept across groups, and the longest source kept.
+const MAX_READ_TREES = 64
+const MAX_READ_TREE_CHARS = 8192
+
+/**
+ * `parseChunk` without positions. Where that parse reads nothing but its source, a tree of the same source, from any
+ * group, stands in; the parse is charged as made either way.
+ */
+export function readbackParse(w: Writer, src: string): DocumentNode {
+  if (!plainParse(w, w.linkKeys) || src.length > MAX_READ_TREE_CHARS) return parseChunk(w, src, w.linkKeys, false)
+  const kept = w.readTrees.get(src)
+  if (kept !== undefined) {
+    chargeReadback(w, src)
+    return kept
+  }
+  const tree = parseChunk(w, src, w.linkKeys, false)
+  if (w.readTrees.size >= MAX_READ_TREES) w.readTrees.clear()
+  w.readTrees.set(src, tree)
+  return tree
+}
+
 /** What `parseChunk` charges for a parse without positions, where a kept result of the same source stands in. */
 export function chargeReadback(w: Writer, src: string): void {
   noteCharge(w, src, false)

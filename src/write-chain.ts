@@ -5,7 +5,7 @@
 // would have reached that state: it must ask, as its only change, for the next bracket. Where it does not, the batch
 // is halved down to the round-by-round procedure. The skipped rounds are charged to the budget as they would be.
 import { type Node, type TextNode, forEachSlot, SOURCE_ORDER } from './ast.ts'
-import { logTrials, restore, sameBesideRound, type Snapshot, snapshot } from './write-passes.ts'
+import { logTrials, restore, sameBesideRound, type Snapshot, snapshot, snapshotEscapes } from './write-passes.ts'
 import { type Writer } from './write-state.ts'
 
 type Escape = [TextNode, number]
@@ -96,7 +96,7 @@ function chainStep(w: Writer, step: RoundStep, before: Snapshot | null): boolean
   if (before === null) return true
   const after = snapshot(w)
   if (!sameBesideRound(w, before, after)) return false
-  return addedOnly(before.get('escapes') as Map<TextNode, number[]>, w.escapes, escape)
+  return addedOnly(snapshotEscapes(before), w.escapes, escape)
 }
 
 /** Whether `after` is `before` with the one escape added. */
