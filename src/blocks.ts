@@ -1156,6 +1156,8 @@ function openSnippetDefinition(state: BlockState, lineStart: number, end: number
 function openInclude(state: BlockState, end: number): boolean {
   // C2-B-237: a block snippet use is tested before the include directive.
   if (isBlockSnippetUse(state.src, state.cursor.pos, end)) {
+    // C2-B-096: a block use takes no attribute line, which stays a paragraph (C2-B-092).
+    state.above.takeAttributes = false
     writeLeafLine(state, enterTag(state, SNIPPET_USE, 0), SNIPPET_USE, end)
     return true
   }
