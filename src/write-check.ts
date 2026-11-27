@@ -14,7 +14,7 @@ import { sourceCoreEquivalent } from './write-extension-source.ts'
 import { treesEqual } from './ast-json.ts'
 import { isSecondHalf, stringOffsetOfByte, unitBytes, utf8Length } from './positions.ts'
 import {
-  escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode, keyIsContent, leadingCaret,
+  AT_PAIRED_END, escapeOffsets, firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_NOTE, IN_STRONG, joinsNextCode, keyIsContent, leadingCaret,
   spelledEnd,
   writeInline, writeInlines,
 } from './write-inline.ts'
@@ -1001,12 +1001,12 @@ function earlyNoteOpeners(check: Check, node: Node): [TextNode, number][] {
 
 /** The flags the content of `e` is written with. */
 function contentFlags(c: Check, e: Node): number {
-  return c.flags | contentFlag(e.type)
+  return (c.flags & ~AT_PAIRED_END) | contentFlag(e.type)
 }
 
 // The content of a note is written with IN_NOTE (write-inline.ts); a spelling without it escapes a leading caret of a link.
 function contentFlag(type: string): number {
-  return type === 'emphasis' ? IN_EMPHASIS : type === 'strong' ? IN_STRONG : type === 'link' ? IN_BRACKET :
+  return type === 'emphasis' ? IN_EMPHASIS | AT_PAIRED_END : type === 'strong' ? IN_STRONG | AT_PAIRED_END : type === 'link' ? IN_BRACKET :
     type === 'inline_footnote' ? IN_NOTE : 0
 }
 
@@ -1392,7 +1392,7 @@ function closerOf(w: Writer, node: Node, flags: number): string | null {
   const type = node.type
   if ((!PAIRED_MARKS.includes(type) && !BRACKETED.has(type)) || !('children' in node)) return null
   const spelled = writeInlines(w, [node], flags)
-  const content = writeInlines(w, node.children as Node[], flags | contentFlag(type))
+  const content = writeInlines(w, node.children as Node[], (flags & ~AT_PAIRED_END) | contentFlag(type))
   if (type === 'link') return spelled.slice(1 + content.length)
   if (PAIRED_MARKS.includes(type)) return spelled.slice(spelled.length - (spelled.length - content.length) / 2)
   const start = type === 'inline_footnote' ? 2 : spelled.indexOf('[') + 1
@@ -2774,7 +2774,7 @@ function compareInline(c: Check, e: Node, a: Node): void {
   compareFields(c, e, a)
   if (!('children' in e)) return
   const outer = c.flags
-  c.flags |= contentFlag(e.type)
+  c.flags = (c.flags & ~AT_PAIRED_END) | contentFlag(e.type)
   compareInlines(c, e.children, childNodes(a), e)
   c.flags = outer
 }
