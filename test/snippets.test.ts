@@ -27,15 +27,6 @@ describe('named snippets', () => {
     expect(() => decodeTree(tree({ pos, segments: [pos] }))).not.toThrow()
   })
 
-  it('carve#6896: a parsed block use that took an attribute line reads back until that line is decided', () => {
-    for (const source of ['{$v}: X\n{k}\n{{ $v }}', '{$v}: X\n\n{.k :en}\n{{ $v }}', '{$v}: X\n\n> {#a}\n> {{ $v }}']) {
-      const tree = parseTree(source)
-      expect(() => decodeTree(JSON.stringify(tree.document), source)).not.toThrow()
-      const children = (text: string): unknown => parseTree(text, { positions: false }).document.children
-      expect(children(format(source))).toEqual(children(source))
-    }
-  })
-
   it('C2-B-236: a glued block after a quoted value holding } still reads', () => {
     const definition = parseTree('{$x title="a}b"}{.foo}: Hi', { positions: false }).document.children[0]
     expect(definition?.attrs).toEqual({ classes: ['foo'], keyValues: [['title', 'a}b']] })
@@ -45,6 +36,36 @@ describe('named snippets', () => {
     const definition = parseTree('{.a}\n{.b k=1}\n{$x .c}{.d k=2}: Hi', { positions: false }).document.children[0]
     expect(definition?.type).toBe('snippet_definition')
     expect(definition?.attrs).toEqual({ classes: ['a', 'b', 'c', 'd'], keyValues: [['k', '2']] })
+  })
+
+  it('C2-B-096: a block use takes no attribute line, so the line stays a paragraph in every container', () => {
+    const use = { type: 'snippet_use', name: 'v', mode: 'block' }
+    for (const [src, path] of [
+      ['{$v}: X\n\n{.k :en}\n{{ $v }}\n', []],
+      ['{$v}: X\n\n{#i}\n{.a}\n{{ $v }}\n', []],
+      ['{$v}: X\n\n> {.k}\n> {{ $v }}\n', [0]],
+      ['{$v}: X\n\n::: d\n{.k}\n{{ $v }}\n:::\n', [0]],
+    ] as const) {
+      const tree = parseTree(src, { positions: false })
+      let children = tree.document.children.slice(1)
+      for (const index of path) children = (children[index] as { children: typeof children }).children
+      expect(children.map((child) => child.type), src).toEqual(['paragraph', 'snippet_use'])
+      expect(children[1], src).toEqual(use)
+      expect(() => decodeTree(JSON.stringify(tree.document)), src).not.toThrow()
+      expect(render(format(src)), src).toBe(render(src))
+    }
+  })
+
+  it('C2-B-095, C2-B-096: the definition takes its attribute line and the block use below it does not', () => {
+    const children = parseTree('{.k}\n{$v}: X\n\n{.m}\n{{ $v }}\n', { positions: false }).document.children
+    expect(children[0]?.attrs).toEqual({ classes: ['k'] })
+    expect(children.slice(1).map((child) => child.type)).toEqual(['paragraph', 'snippet_use'])
+    expect(render('{.k}\n{$v}: X\n\n{.m}\n{{ $v }}\n')).toBe('<p>{.m}</p>\n<p class="k">X</p>')
+  })
+
+  it('C2-B-091: an attribute line above a line that opens a container or holds an inline use goes to that block', () => {
+    expect(parseTree('{$v}: X\n\n{.k}\n- {{ $v }}\n', { positions: false }).document.children[1]).toMatchObject({ type: 'list', attrs: { classes: ['k'] } })
+    expect(parseTree('{$v}: X\n\n{.k}\n{{ $v }} t\n', { positions: false }).document.children[1]).toMatchObject({ type: 'paragraph', attrs: { classes: ['k'] } })
   })
 
   it('C2-B-236: an id key in an attribute line above the marker makes the line text, with the marker reported', () => {

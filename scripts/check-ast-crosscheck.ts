@@ -41,17 +41,11 @@ function schemaGap(tree: unknown): string | null {
   return null
 }
 
-// carve#6896: the reader keeps the attribute line a block snippet use takes; the schema has no field for it.
-function blockUseAttributes(node: Record<string, unknown>): boolean {
-  return node['type'] === 'snippet_use' && node['mode'] === 'block' && (node['attrs'] !== undefined || node['lang'] !== undefined)
-}
-
 function gapForNode(node: Record<string, unknown>): string | null {
   if ((node['type'] === 'link' || node['type'] === 'image') && node['key'] !== undefined && node['refForm'] !== undefined) {
     return 'refForm dependency'
   }
   if (node['type'] === 'inline_extension' && node['name'] === '_') return 'underscore extension'
-  if (blockUseAttributes(node)) return 'snippet use attributes'
   if (node['type'] !== 'include' || !object(node['options'])) return null
   for (const field of ['lines', 'rows', 'cols']) {
     const value = node['options'][field]
