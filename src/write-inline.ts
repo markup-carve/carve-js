@@ -26,6 +26,8 @@ export const IN_BRACKET = 16
 export const IN_FIGURE_GROUP = 32
 /** C2-I-089: inside an inline footnote, where a caret pair opens nothing. */
 export const IN_NOTE = 64
+/** C2-W-125 case one: the list ends at the closing mark of the emphasis or strong around it, not at a nested closer. */
+export const AT_PAIRED_END = 128
 
 const BACKSLASH = 92
 const EXCLAMATION = 33
@@ -313,7 +315,7 @@ function contentOf(w: Writer, node: InlineParent, flags: number): string | null 
 /** C2-W-069, C2-W-070: emphasis and strong, bare where that reads back and braced otherwise. */
 function paired(mark: string, bit: number, inside: number): InlineWriter {
   return (w, node, flags) => {
-    const content = contentOf(w, node, flags | inside)
+    const content = contentOf(w, node, flags | inside | AT_PAIRED_END)
     if (content === null) return ''
     const braced = bracedPair(w, node, flags, bit, inside)
     return braced ? `{${mark}${content}${mark}}` : `${mark}${content}${mark}`
@@ -1073,7 +1075,7 @@ function writeOwn<T extends keyof NodeOfType>(w: Writer, type: T, node: NodeOfTy
 }
 
 export function writeInline(w: Writer, node: Node, flags: number): string {
-  const out = writeOwn(w, node.type, node, flags)
+  const out = writeOwn(w, node.type, node, flags & ~AT_PAIRED_END)
   if (out === null) return childrenOnly(w, node, flags)
   // C2-W-076: the attribute block is glued to its host. C2-I-040: a span takes the block with no part.
   const block = braceBlock(node, (flags & IN_CELL) !== 0 ? { pipes: true } : undefined)
@@ -1190,7 +1192,7 @@ function braceBesidePair(w: Writer, node: TextNode, next: Node | undefined, afte
   // C2-W-069: the text behind the pair can brace it (`markForm`), and a brace before a braced pair opens nothing more.
   const pairedNext = next?.type === 'strong' ? !bracedPair(w, next, flags, 2, IN_STRONG) && !bracedBy(after, '*')
     : next?.type === 'emphasis' && !bracedPair(w, next, flags, 1, IN_EMPHASIS) && !bracedBy(after, '/')
-  const pairedEnd = atEnd && (flags & (IN_STRONG | IN_EMPHASIS)) !== 0
+  const pairedEnd = atEnd && (flags & AT_PAIRED_END) !== 0
   if (!pairedNext && !pairedEnd) return
   const at = node.value.length - 1
   const escapes = w.escapes.get(node) ?? []
