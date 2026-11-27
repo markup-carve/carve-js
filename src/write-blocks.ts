@@ -506,8 +506,6 @@ function snippetDefinition(w: Writer, node: SnippetDefinitionNode, prefix: strin
 
 /** C2-W-159: a block use alone on its line. */
 function snippetUse(w: Writer, node: SnippetUseNode, prefix: string): void {
-  // carve#6896: the attribute line a block use took is written back until that line is decided.
-  attributeLine(w, node, prefix)
   emit(w, prefix, snippetUseSpelling(node.name))
 }
 
