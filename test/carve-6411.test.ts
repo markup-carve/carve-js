@@ -22,9 +22,9 @@ describe('the nested escape probe of carve#6411', () => {
 
   it('C2-W-125, C2-W-088: a closer that ends a probed node early gives no kind, so bare carets stay bare (CC-1568)', () => {
     const source = '^{^{^{^{^^}\\{^^{^^}^{^^}{^^^^{^^}\\{^{^^^}^}^}^}^}^}\n'
-    // Kind `^` from the escape of the closer `^}` escaped every caret run start: `^{^{^{^\{\^\^}\{\^^\{\^\^}\^...`.
+    // The C2-W-088 report keeps the text carets bare; the closer probe gives no caret kind.
     const written = format(source)
-    expect(written).toBe('^{^{^{^\\{^\\^}\\{^^\\{^\\^}^\\{^\\^}{^\\^^^\\{^\\^}\\{^{^^^}^}^}^}^}^}\n')
+    expect(written).toBe('^{^{^{^\\{^\\^}\\{^^\\{^\\^}^\\{^\\^}{^^^^\\{^\\^}\\{^{^^^}^}^}^}^}^}\n')
     expect(treesEqual(parse(written), parse(source))).toBe(true)
   })
 })
