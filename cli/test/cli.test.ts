@@ -52,6 +52,16 @@ describe('carve process', () => {
     }
   })
 
+  it('C2-T-007: command help lists each accepted flag once', () => {
+    for (const command of ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import', 'lint', 'flatten', 'fix', 'diff']) {
+      const result = cli([command, '--help'])
+      expect(result.status, command).toBe(0)
+      expect(result.stderr, command).toBe('')
+      const names = [...result.stdout.matchAll(/^  --([\w-]+)/gm)].map((match) => match[1])
+      expect(names.length, command).toBe(new Set(names).size)
+    }
+  })
+
   it('C2-W-101: unknown options, bad values, missing files and invalid AST JSON exit 2 with categories', () => {
     expect(cli(['--bad']).stderr).toMatch(/^carve\[usage\]:/)
     expect(cli(['--mode=broken']).stderr).toMatch(/^carve\[usage\]:/)

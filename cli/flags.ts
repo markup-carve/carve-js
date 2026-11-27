@@ -232,7 +232,12 @@ function usageOf(flag: Flag): string {
 
 export function help(command: Command): string {
   const lines = [`Usage: carve ${command} [FLAG...] [FILE...]`, '', 'Use - or omit FILE to read standard input.', '', 'Flags:']
-  for (const flag of FLAGS.filter((entry) => entry.commands.includes(command))) lines.push(`  --${flag.name}${usageOf(flag)}`)
+  const shown = new Set<string>()
+  for (const flag of FLAGS.filter((entry) => entry.commands.includes(command))) {
+    if (shown.has(flag.name)) continue
+    shown.add(flag.name)
+    lines.push(`  --${flag.name}${usageOf(flag)}`)
+  }
   lines.push('  --help', '  --version', '', `Commands: ${[...COMMANDS, ...ENGINE_COMMANDS].join(', ')}`)
   return `${lines.join('\n')}\n`
 }
