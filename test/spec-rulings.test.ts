@@ -26,9 +26,10 @@ describe('where a name ends', () => {
     expect(findings('::: x{.c}\nq\n:::\n')).toEqual(['fence-opener-fallback'])
   })
 
-  it('C2-B-122: the report of what is glued to a raw format names that text', () => {
+  it('C2-B-122: what is glued to a raw format is further words, and the report names the opener without them', () => {
     const message = parseWithDiagnostics('```=html~\na\n```\n').diagnostics[0]?.message ?? ''
-    expect(message).toContain('"~"')
+    expect(message).toContain('These further words are not read as a title, label or attributes.')
+    expect(message).toContain('Use "``` =html" for the same block')
     expect(message).not.toContain('typographic')
   })
 
