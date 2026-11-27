@@ -54,6 +54,12 @@ describe('comment-in-reference-label covers reference labels only (C2-I-076, C2-
     expect(codes('[a %% b]\n\n[a]: /u\n').filter(([code]) => code === 'comment-in-reference-label')).toEqual([])
   })
 
+  it('a bracket pair after a space or a tab is no label (C2-I-072: the label is glued)', () => {
+    expect(codes('[x] [a %% b]')).toEqual([])
+    expect(codes('[x] [a %% b]\n\n[x]: /u\n')).toEqual([])
+    expect(codes('[x]\t[a %% b]\n\n[x]: /u\n')).toEqual([])
+  })
+
   it('the label of a full reference and of a footnote reference still reports', () => {
     expect(codes('[x][a %% b]\n\n[x]: /u\n')).toEqual([['comment-in-reference-label', { startOffset: 5, endOffset: 11 }]])
     expect(codes('[^a %% b]\n').map(([code]) => code)).toContain('comment-in-reference-label')
