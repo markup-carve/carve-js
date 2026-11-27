@@ -18,7 +18,7 @@ import {
   spelledEnd,
   writeInline, writeInlines,
 } from './write-inline.ts'
-import { type Attempt, isBracedAnyway, type ParseCache, PLACE_COLUMNS, recordedRaw, type Writer } from './write-state.ts'
+import { type Attempt, isBracedAnyway, type KeptTrees, type ParseCache, PLACE_COLUMNS, recordedRaw, type Writer } from './write-state.ts'
 import { braceBlock, isKey, spelledValue } from './write-attributes.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation, isBoundarySpace, isWordCharacter } from './unicode.ts'
 import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET } from './chars.ts'
@@ -43,9 +43,7 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   // A longer source that one of the last rounds wrote again is counted as a parse, but its tree is reused.
   const recent = plain && !cacheable ? cache.recent.find((entry) => entry[0] === src)?.[1] : undefined
   if (recent !== undefined) return recent
-  const extensions = w.extensions
-  const source = buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys)
-  const parsed = applyExtensions(source, extensions, linkKeys).document
+  const parsed = parsedTree(w, src, linkKeys, positions, cacheable)
   if (cacheable) remember(cache, src, parsed, cached === null)
   else if (plain) rememberRecent(cache, src, parsed)
   keepCharged(charge, cacheable, parsed)
@@ -125,6 +123,36 @@ function rememberRecent(cache: ParseCache, src: string, parsed: DocumentNode): v
   }
   cache.recent.length = keep
 }
+
+// A source whose tree `trees` or `readTrees` gave up is counted as `parseChunk` counts it, but its tree is reused.
+function parsedTree(w: Writer, src: string, linkKeys: ReadonlySet<string> | null, positions: boolean,
+  cacheable: boolean): DocumentNode {
+  const store = w.parseCache.kept
+  const short = src.length <= MAX_PARSED_SOURCE
+  const trees = !short ? null : cacheable ? store.parsed : !positions && plainParse(w, linkKeys) ? store.bare : null
+  const known = trees?.get(src)
+  if (known !== undefined) return known
+  const extensions = w.extensions
+  const source = buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys)
+  const parsed = applyExtensions(source, extensions, linkKeys).document
+  if (trees !== null) keepTree(store, trees, src, parsed)
+  return parsed
+}
+
+function keepTree(store: KeptTrees, trees: Map<string, DocumentNode>, src: string, parsed: DocumentNode): void {
+  if (trees.size >= MAX_PARSED_TREES || store.chars + src.length > MAX_PARSED_CHARS) {
+    store.parsed.clear()
+    store.bare.clear()
+    store.chars = 0
+  }
+  trees.set(src, parsed)
+  store.chars += src.length
+}
+
+// The kept trees only spare a parse: what a parse is charged stays that of `trees` and `readTrees`.
+const MAX_PARSED_TREES = 8192
+const MAX_PARSED_SOURCE = 4096
+const MAX_PARSED_CHARS = 262_144
 
 // The characters of the sources whose trees the parse cache keeps on first sight; the blocks it reuses are short.
 const MAX_TREE_CHARS = 16_384
