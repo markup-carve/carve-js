@@ -19,3 +19,23 @@ it('does not treat a note in an included child as visible to a parent snippet', 
   const findings = lint(source, { includes: () => ({ text: '[^n]: Note', id: 'child.crv' }) })
   expect(findings.map((entry) => entry.code)).toContain('unresolved-footnote')
 })
+
+it('leaves an unused parent note unused when the included snippet has no copy', () => {
+  const source = '[^n]: Note\n\n{{ child.crv }}'
+  const findings = lint(source, { includes: () => ({ text: '{$s}: [^n]', id: 'child.crv' }) })
+  expect(findings.map((entry) => entry.code)).toContain('unused-footnote-definition')
+})
+
+it('uses the definition file scope when the use precedes an included snippet definition', () => {
+  const source = '[^n]: Note\n\n{{ $s }}\n\n{{ child.crv }}'
+  const findings = lint(source, { includes: () => ({ text: '{$s}: [^n]', id: 'child.crv' }) })
+  expect(findings.map((entry) => entry.code)).toEqual([])
+})
+
+it('keeps a child note ahead of a parent note with the same key', () => {
+  const source = '[^n]: Root\n\n{{ $s }}\n\n{{ child.crv }}'
+  const child = '{$s}: [^n]\n\n[^n]: Child'
+  const findings = lint(source, { includes: () => ({ text: child, id: 'child.crv' }) })
+  expect(findings.filter((entry) => entry.code === 'unused-footnote-definition').map((entry) => entry.file))
+    .toEqual([undefined])
+})
