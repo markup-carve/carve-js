@@ -548,7 +548,8 @@ function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): v
     check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, located, opened))
   }
   const closers = new Set([...check.closers, ...check.readOn])
-  if (closers.size > 0) noteRead(w, READ_CLOSER_KINDS)
+  // The switch changes the pass only where it keeps an asked escape from giving its kind.
+  if (check.escapes.some((escape) => closers.has(escape))) noteRead(w, READ_CLOSER_KINDS)
   escapeKinds(check, group, w.closerKinds ? undefined : closers, located)
   escapePartnerClosers(check, group)
 }
