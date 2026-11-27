@@ -11,6 +11,17 @@ function titleMessages(src: string): string[] {
 }
 
 describe('fence-title-syntax messages', () => {
+  it.each(['}', '~', '>', '"title"', '\u201ctitle\u201d'])(
+    'C2-B-225: %j glued to a language is further words', (suffix) => {
+      const src = `\`\`\`js${suffix}\nx\n\`\`\`\n`
+      expect(titleMessages(src)).toEqual([FURTHER('``` js')])
+    },
+  )
+
+  it('C2-B-122: a separated unquoted title keeps its own message', () => {
+    expect(titleMessages('```js title\nx\n```\n')[0]).toContain('Text after "js" must be a quoted title')
+  })
+
   it.each([
     ['```=html~\n<b>x</b>\n```\n'],
     ['```=html\tfoo bar\nx\n```\n'],
