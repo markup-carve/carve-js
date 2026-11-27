@@ -5,7 +5,7 @@ import {
   type SmartPunctuationNode,
 } from '../ast.ts'
 import { validateTree } from '../ast-validate.ts'
-import { DERIVED_TEXT_BYTES } from '../derived-text.ts'
+import { derivedTextBudget } from '../derived-text.ts'
 import { type Diagnostic, type Findings, locateFindings } from '../diagnostics.ts'
 import { isUrlAllowed } from '../html-attributes.ts'
 import { CarveOptionError, checkType, type UrlPolicy } from '../options.ts'
@@ -14,6 +14,7 @@ import { resolve, type Resolution } from '../resolve.ts'
 import { smartGlyph } from '../ast-text.ts'
 import { includeMessage } from '../expand.ts'
 import { includeSource } from '../include.ts'
+import { expandSnippets, SNIPPET_BUDGETS } from '../snippet-expand.ts'
 
 /** The options every export reads. */
 export interface ExportOptions {
@@ -62,6 +63,7 @@ export interface Exporter {
   smartTypography: boolean
   urlPolicy: UrlPolicy
   losses: Findings
+  derivedBudget: number
   /** Bytes of derived text (abbreviation expansions, cross-reference labels) still allowed in this run. */
   derivedLeft: number
   derivedReported: boolean
@@ -117,15 +119,20 @@ export function checkExportOptions(options: unknown, own: readonly string[] = []
   }
 }
 
-/** Validates `document` and resolves a copy of it, so the caller's tree is not changed. */
+/** Validates `document`, then expands and resolves a copy, so the caller's tree is not changed. */
 export function startExport(target: ExportTarget, document: DocumentNode, options: ExportOptions | undefined): Exporter {
-  validateTree(document)
+  const summary = { snippetUses: false }
+  validateTree(document, undefined, undefined, [], undefined, summary)
   const copy = structuredClone(document)
-  const resolution = resolve(copy, 'keep-case', null)
   const losses: Findings = { entries: [], nodes: [] }
+  if (summary.snippetUses) expandSnippets(copy, losses, { roundtrip: false, source: undefined }, document)
+  const snippetBudget = SNIPPET_BUDGETS.get(copy)
+  const resolution = resolve(copy, 'keep-case', null)
+  const derivedBudget = snippetBudget?.budget ?? derivedTextBudget(document, undefined)
   return {
     target, document: copy, resolution, smartTypography: options?.smartTypography !== false, urlPolicy: options?.urlPolicy ?? {},
-    losses, derivedLeft: DERIVED_TEXT_BYTES, derivedReported: false, depth: 0, linkDepth: 0,
+    losses, derivedBudget, derivedLeft: snippetBudget?.left ?? derivedBudget,
+    derivedReported: snippetBudget?.reported ?? false, depth: 0, linkDepth: 0,
   }
 }
 
@@ -171,11 +178,10 @@ export function drawDerived(x: Exporter, node: Node, text: string): boolean {
     x.derivedLeft -= cost
     return true
   }
-  x.derivedLeft = 0
   if (!x.derivedReported) {
     x.derivedReported = true
     loss(x, node, 'derived-text-budget', 'Wrote an abbreviation or a cross-reference in its plain form: ' +
-      `the derived text of this render reached its budget of ${DERIVED_TEXT_BYTES} bytes`)
+      `the derived text of this render reached its budget of ${x.derivedBudget} bytes`)
   }
   return false
 }
