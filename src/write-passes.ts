@@ -31,7 +31,7 @@ const FIELDS: Record<keyof Writer, 'state' | 'added' | 'mode' | 'cache' | 'fixed
   trialLog: 'mode', trialsRetested: 'mode', topBlocks: 'fixed', openerRuns: 'cache', planKinds: 'mode',
   planWhy: 'state', plan: 'state', parses: 'work', parseCache: 'cache', extensionSources: 'cache',
   verifiedSourceBytes: 'fixed', authored: 'fixed', authoredLeaves: 'state', collapsedLabels: 'cache',
-  labelReads: 'cache', readBacks: 'cache', readTrees: 'cache',
+  labelReads: 'cache', readBacks: 'cache', readTrees: 'cache', readTreeVersion: 'cache',
   probes: 'cache', nodeIds: 'cache', standIns: 'cache', lineOpens: 'cache', work: 'work',
   leadingFrontmatter: 'fixed', pass: 'work',
 }
@@ -305,7 +305,7 @@ function runWholeTests(w: Writer, tests: WholeTest[] | null): Charge[] | null {
       refillPlaced(w, test.linkPlaced)
       Object.assign(w.work, test.work)
       w.parses = test.parses
-      w.parseCache = { trees: new Map(), treeChars: 0, recent: [], kept: parseCache.kept }
+      w.parseCache = { trees: new Map(), version: parseCache.version, treeChars: 0, recent: [], kept: parseCache.kept }
       w.pass = emptyTrace()
       const idle = !test.gives() && !exhausted(w) && sameBeside(test.state, snapshot(w), TRIAL_FIELDS) &&
         samePlaced(test.linkPlaced, w.linkPlaced)
