@@ -139,7 +139,7 @@
     "path": "resources/examples/edge-cases/0879-a-line-comment-hides-a-substitution-arrow.md",
     "line": 72,
     "input": "x:foo[\"q\"]\n",
-    "check": "mismatch",
+    "check": "explained",
     "entries": [
       "U-073"
     ]

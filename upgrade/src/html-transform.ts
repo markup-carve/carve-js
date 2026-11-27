@@ -255,6 +255,57 @@ export function moveTrailingSigilHyphen(old: string, next: string): Result {
   return { html: old, applied: [] }
 }
 
+function closingSpan(tokens: readonly string[], open: number): number {
+  let depth = 0
+  for (let at = open; at < tokens.length; at++) {
+    const token = tokens[at]!
+    if (token.startsWith('<span')) depth++
+    else if (token === '</span>' && --depth === 0) return at
+  }
+  return -1
+}
+
+/** The source of a sigil form at the start of `rest`, as 0.2 writes it: led by the sigil, keeping the text 0.1 wrote, then `tail`. */
+function sigilForm(rest: string, text: string, tail: string): string | null {
+  if (!/^[^\p{L}\p{N}\s]/u.test(rest)) return null
+  const found = rest.indexOf(text)
+  if (found < 0) return null
+  if (tail === '') return rest
+  for (let end = found + text.length; end <= rest.length - tail.length; end++) {
+    if (rest.startsWith(tail, end)) return rest.slice(0, end)
+  }
+  return null
+}
+
+/** The merged text token for a span at `at` that 0.2 writes as the source of a sigil form, or null. */
+function sigilText(source: readonly string[], target: readonly string[], at: number): { token: string; end: number } | null {
+  const before = source[at - 1]!
+  if (!source[at]!.startsWith('<span ') || before.startsWith('<') || !/[\p{L}\p{N}]$/u.test(before)) return null
+  const close = closingSpan(source, at)
+  if (close < 0) return null
+  const text = source.slice(at + 1, close).filter((token) => !token.startsWith('<')).join('')
+  const following = source[close + 1]
+  const tail = following !== undefined && !following.startsWith('<') ? following : ''
+  const written = target[at - 1]
+  if (text === '' || written === undefined || !written.startsWith(before)) return null
+  const form = sigilForm(written.slice(before.length), text, tail)
+  return form === null ? null : { token: before + form + tail, end: tail === '' ? close : close + 1 }
+}
+
+/** C2-I-090: a sigil form directly after a letter or number is text, so 0.2 writes its source where 0.1 wrote a span. */
+export function explainSigilAfterLetter(old: string, next: string): Result {
+  const source = htmlTokens(old)
+  const target = htmlTokens(next)
+  let changed = false
+  for (let at = 1; at < source.length && at <= target.length; at++) {
+    const merged = sigilText(source, target, at)
+    if (merged === null) continue
+    source.splice(at - 1, merged.end - at + 2, merged.token)
+    changed = true
+  }
+  return { html: changed ? source.join('') : old, applied: changed ? ['U-073'] : [] }
+}
+
 function emptyRunMarkup(literal: string): string[] | null {
   if (/^\$\$`+$/u.test(literal)) return ['<span class="math display" role="math">', '\\[\\]', '</span>']
   if (/^\$`+$/u.test(literal)) return ['<span class="math inline" role="math">', '\\(\\)', '</span>']
