@@ -14,7 +14,7 @@ import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
 import { addShortTableColumns, addTaskPresentation, followTaskLabels, applyHtmlTransformations, dropEmptyClasses, explainEmptyRuns,
   hasTaskPresentationDifference, trimCellTabPadding,
-  moveTrailingSigilHyphen,
+  explainSigilAfterLetter, moveTrailingSigilHyphen,
   wrapLaterItemParagraphs } from './html-transform.ts'
 import { explainDescriptionPlusFenceEof } from './html-plus-eof.ts'
 import { removeListMarkerTab } from './html-list-tab.ts'
@@ -28,6 +28,7 @@ import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
 import { rescueEscape } from './escape-rescue.ts'
 import { rescueDashRun } from './dash-run-rescue.ts'
 import { rescueIgnoredLine } from './ignored-line-rescue.ts'
+import { nameFiringLints } from './record-lint.ts'
 import { LATE_VARIANTS, REPAIRS_VARIANT, RULES } from './rules/index.ts'
 import { itemColumns, itemParagraphBreaks, nestedOrderedBreaks } from './rules/late.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
@@ -383,6 +384,11 @@ function applyCitedStep(old: string, next: string, records: ReportRecord[], kept
     const classes = dropEmptyClasses(transformed.html, next)
     transformed.html = classes.html
     transformed.applied.push(...classes.applied)
+  }
+  if (hasEntry(records, 'U-073')) {
+    const sigil = explainSigilAfterLetter(transformed.html, next)
+    transformed.html = sigil.html
+    transformed.applied.push(...sigil.applied)
   }
   if (records.some((record) => record.entry === 'U-170' && record.range !== undefined)) {
     const sigil = moveTrailingSigilHyphen(transformed.html, next)
@@ -790,7 +796,9 @@ function upgradeBase(input: string): UpgradeResult {
 
 /** Rewrite only source forms of the 0.1 host extensions the caller explicitly registered. */
 export function upgrade(input: string, registered: readonly RegisteredExtension[] = []): UpgradeResult {
-  return withUpgradeSession(() => upgradeWith(input, registered))
+  const result = withUpgradeSession(() => upgradeWith(input, registered))
+  nameFiringLints(input, result.records)
+  return result
 }
 
 function upgradeWith(input: string, registered: readonly RegisteredExtension[]): UpgradeResult {
