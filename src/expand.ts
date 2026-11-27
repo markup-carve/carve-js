@@ -118,7 +118,8 @@ function invalidReason(node: IncludeNode, entry: string): string {
 
 /** C2-N-062: the causes tested before the resolver is called, in the order of `data/includes.json`. */
 function beforeResolver(exp: Expansion, node: IncludeNode, frame: Frame): Failure | null {
-  const invalid = node.invalid?.[0]
+  // A bad key is more useful to report than a bad value on an earlier option.
+  const invalid = node.invalid?.find((entry) => invalidReason(node, entry) === INCLUDE_KEY_UNKNOWN) ?? node.invalid?.[0]
   if (invalid !== undefined) return { cause: 'option_invalid', values: { option: invalid, reason: invalidReason(node, invalid) } }
   const reason = conflictReason(node)
   if (reason !== null) return { cause: 'conflict', values: { reason } }
