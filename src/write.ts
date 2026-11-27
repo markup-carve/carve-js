@@ -21,7 +21,7 @@ import { addSpanMarks } from './write-spans.ts'
 import { contentOrder, tableFormat } from './write-table.ts'
 import { trimLineEnds } from './write-trim.ts'
 import { type Asked, EARLY_FINAL, EARLY_PAIRS, LATE_PAIRS, NO_PAIRS, pairEscapes, pairReach } from './write-pairs.ts'
-import { escapeKinds, escapePartnerClosers, leavesKindBare, locateTexts, type TextStarts } from './write-kinds.ts'
+import { escapeKindsBeside, escapePartnerClosers, leavesKindBare, locateTexts, type TextStarts } from './write-kinds.ts'
 import { BRACED_MARKS, BRACED_NODES } from './inline-tables.ts'
 import {
   chargeReadback, type Check, compareBlocks, createCheck, escapeAt, escapeCappedRun, escapeOpeners, exhausted, extendChains,
@@ -548,9 +548,8 @@ function escapeReportedKinds(w: Writer, check: Check, group: readonly Node[]): v
     check.trials = check.trials.filter(([node, at]) => !trialOpensBracedConstruct(check, node, at, located, opened))
   }
   const closers = new Set([...check.closers, ...check.readOn])
-  // The switch changes the pass only where it keeps an asked escape from giving its kind.
-  if (check.escapes.some((escape) => closers.has(escape))) noteRead(w, READ_CLOSER_KINDS)
-  escapeKinds(check, group, w.closerKinds ? undefined : closers, located)
+  // The switch changes the pass only where the asked escapes it keeps from giving a kind would add one.
+  if (escapeKindsBeside(check, group, closers, w.closerKinds, located)) noteRead(w, READ_CLOSER_KINDS)
   escapePartnerClosers(check, group)
 }
 
@@ -2073,14 +2072,14 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   addEscapes(w, earlyLoneNoteBrackets(w, group).filter(([node, at]) => !(w.escapes.get(node) ?? []).includes(at)))
   const saved = w.kindRounds ? saveGroup(w, groupEnd(w, document.children, from)) : null
   const end = repairOnce(w, document, from, first, reported, memo)
-  if (saved === null || settledPass(w, memo, group, first, reported)) return end
+  if (saved === null || passSettled(w, group, first, reported)) return end
   restoreGroup(w, saved)
   const before = saveGroup(w, saved.end)
   // C2-W-005: where that loses a node, the closer repairs give their kind too, the smallest departure that keeps it.
   w.closerKinds = true
   try {
     const kinds = repairOnce(w, document, from, first, reported, memo)
-    if (settledPass(w, memo, group, first, reported)) return kinds
+    if (passSettled(w, group, first, reported)) return kinds
   } finally {
     w.closerKinds = false
   }
@@ -2091,7 +2090,7 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   w.kindRounds = false
   try {
     const openers = repairOnce(w, document, from, first, reported, memo)
-    if (settledPass(w, memo, group, first, reported)) return openers
+    if (passSettled(w, group, first, reported)) return openers
   } finally {
     w.kindRounds = true
   }
@@ -2108,7 +2107,7 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
       w.kindRounds = kinds
       try {
         const trials = repairOnce(w, document, from, first, reported, memo)
-        if (settledPass(w, memo, group, first, reported)) return trials
+        if (passSettled(w, group, first, reported)) return trials
       } finally {
         w.wholeTrials = false
         w.kindRounds = true
@@ -2124,11 +2123,6 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
   } finally {
     w.kindRounds = true
   }
-}
-
-/** `passSettled` after a pass of `repairGroup`; a pass that took an earlier pass's result takes its check too. */
-function settledPass(w: Writer, memo: PassMemo, group: readonly Node[], first: boolean, reported: number): boolean {
-  return memoPass(w, memo, 'settled', () => ({ result: passSettled(w, group, first, reported), limited: false, budget: Infinity }))
 }
 
 function repairOnce(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number,
