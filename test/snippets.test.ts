@@ -27,6 +27,15 @@ describe('named snippets', () => {
     expect(() => decodeTree(tree({ pos, segments: [pos] }))).not.toThrow()
   })
 
+  it('carve#6896: a parsed block use that took an attribute line reads back until that line is decided', () => {
+    for (const source of ['{$v}: X\n{k}\n{{ $v }}', '{$v}: X\n\n{.k :en}\n{{ $v }}', '{$v}: X\n\n> {#a}\n> {{ $v }}']) {
+      const tree = parseTree(source)
+      expect(() => decodeTree(JSON.stringify(tree.document), source)).not.toThrow()
+      const children = (text: string): unknown => parseTree(text, { positions: false }).document.children
+      expect(children(format(source))).toEqual(children(source))
+    }
+  })
+
   it('C2-B-236: a glued block after a quoted value holding } still reads', () => {
     const definition = parseTree('{$x title="a}b"}{.foo}: Hi', { positions: false }).document.children[0]
     expect(definition?.attrs).toEqual({ classes: ['foo'], keyValues: [['title', 'a}b']] })

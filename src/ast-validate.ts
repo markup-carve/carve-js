@@ -51,8 +51,9 @@ const DOCUMENT_CHILDREN = [
   ...BLOCKS, 'footnote', 'link_reference_definition', 'abbreviation_def', 'snippet_definition', 'citation_definition', 'frontmatter',
 ]
 const COMMON = ['type', 'attrs', 'data', 'pos', 'segments', 'metadata', 'dir', 'lang']
-// C2-A-027, C2-A-221: a common field holds only as far as the schema definition allows; a snippet use has no attrs, metadata, dir or lang.
-const COMMON_OF = new Map<string, readonly string[]>([['snippet_use', ['type', 'data', 'pos', 'segments']]])
+// C2-A-027, C2-A-221: a common field holds only as far as the schema definition allows; a snippet use has no metadata or dir.
+// It keeps attrs and lang, which an attribute line above a block use gives it, until carve#6896 decides that line.
+const COMMON_OF = new Map<string, readonly string[]>([['snippet_use', ['type', 'attrs', 'data', 'pos', 'segments', 'lang']]])
 
 /** What the `children` of a node type hold: `blocks`, `inlines`, `none`, or the member types by name. */
 export type Content = 'blocks' | 'inlines' | 'none' | readonly string[]
@@ -1283,6 +1284,12 @@ function checkSnippet(value: Fields, type: string, path: string, allowed: readon
   const mode = allowed.includes('text') ? 'inline' : 'block'
   const slot = mode === 'inline' ? 'inline nodes' : 'blocks'
   if (value['mode'] !== mode) fail(`${path}/mode`, `a snippet use in a list of ${slot} has the mode ${String(value['mode'])}`)
+  if (mode === 'inline') checkInlineUseFields(value, path)
+}
+
+/** C2-I-128: no attribute line reaches an inline use, so the carve#6896 allowance holds for block uses only. */
+function checkInlineUseFields(value: Fields, path: string): void {
+  for (const name of ['attrs', 'lang']) if (value[name] !== undefined) fail(`${path}/${name}`, 'not a field of snippet_use')
 }
 
 type TypeCheck = (value: Fields, type: string, path: string, allowed: readonly string[], walk: Walk) => void
