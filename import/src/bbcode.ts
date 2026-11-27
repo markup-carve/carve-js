@@ -76,7 +76,7 @@ class BbcodeReader {
     this.text(this.input.slice(this.at, match.index))
     this.at = match.index + whole.length
     if (!KNOWN.has(name)) {
-      if (!slash) this.diagnostics.push({ code: 'import-unsupported', severity: 'warning', channel: 'render-loss',
+      if (!slash) this.diagnostics.push({ code: 'import-element-mapped', severity: 'warning', channel: 'render-loss',
         foreignType: `bbcode:${name}`, message: `BBCode tag [${name}] has no counterpart; its content is kept` })
       return
     }

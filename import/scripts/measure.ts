@@ -13,8 +13,8 @@ const outputPath = join(import.meta.dirname, '../docs/conformance.md')
 function cause(result: ImportResult | undefined, error: unknown, expected: string, actual: string): string {
   if (error !== undefined) return `exception: ${String(error)}`
   const codes = result?.diagnostics.map(item => item.code) ?? []
-  if (codes.includes('import-unsupported')) return 'unsupported foreign node'
-  if (codes.includes('import-degraded')) return 'degraded foreign node'
+  if (codes.includes('import-element-mapped')) return 'mapped foreign node'
+  if (codes.includes('import-destination-denied')) return 'denied foreign destination'
   if (codes.some(code => code.endsWith('unspellable'))) return 'writer cannot spell tree field'
   if (visibleText(expected) !== visibleText(actual)) return 'visible text differs'
   if (canonicalHtml(expected, true) !== canonicalHtml(actual, true)) return 'block structure differs'

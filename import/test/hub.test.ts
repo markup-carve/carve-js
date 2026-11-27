@@ -121,7 +121,7 @@ describe('BBCode', () => {
 
   it('reports an unknown tag once and keeps its content', () => {
     const result = importDocument('[foo]x[/foo]', { from: 'bbcode' })
-    expect([result.source, result.diagnostics.map(entry => entry.code)]).toEqual(['x\n', ['import-unsupported']])
+    expect([result.source, result.diagnostics.map(entry => entry.code)]).toEqual(['x\n', ['import-element-mapped']])
   })
 
   it('refuses an input past the limit in UTF-8 bytes', () => {

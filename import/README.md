@@ -21,7 +21,7 @@ the elements of the treatment `raw` (scripts, styles, media, embedded objects, f
 `template`) and `data-carve-raw` spans as `raw_block` and `raw_inline` nodes; with it off they are dropped and
 reported. Its diagnostics use the seven codes of C2-M-083 on the `render-loss` channel, each with `foreignType` and a
 UTF-8 byte range of the HTML input. Through the hub, Markdown and Djot
-report the same codes without a byte range, and BBCode adds `import-unsupported` for an unknown tag.
+report the same codes without a byte range, and BBCode reports `import-element-mapped` for an unknown tag.
 
 ```ts
 importDocument('<p>a<!-- c -->b</p>', { from: 'html', rawHtml: true })
