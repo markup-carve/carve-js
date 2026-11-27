@@ -178,7 +178,6 @@ export function drawDerived(x: Exporter, node: Node, text: string): boolean {
     x.derivedLeft -= cost
     return true
   }
-  x.derivedLeft = 0
   if (!x.derivedReported) {
     x.derivedReported = true
     loss(x, node, 'derived-text-budget', 'Wrote an abbreviation or a cross-reference in its plain form: ' +
