@@ -305,7 +305,9 @@ function runWholeTests(w: Writer, tests: WholeTest[] | null): Charge[] | null {
       refillPlaced(w, test.linkPlaced)
       Object.assign(w.work, test.work)
       w.parses = test.parses
-      w.parseCache = { trees: new Map(), treeChars: 0, recent: [] }
+      w.parseCache = {
+        trees: new Map(), treeChars: 0, recent: [], parsed: parseCache.parsed, bare: parseCache.bare, parsedChars: parseCache.parsedChars,
+      }
       w.pass = emptyTrace()
       const idle = !test.gives() && !exhausted(w) && sameBeside(test.state, snapshot(w), TRIAL_FIELDS) &&
         samePlaced(test.linkPlaced, w.linkPlaced)

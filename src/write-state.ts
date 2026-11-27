@@ -17,6 +17,11 @@ export interface ParseCache {
   treeChars: number
   /** The last sources too long for `trees`, with their trees, newest first. */
   recent: [string, DocumentNode][]
+  /** The trees of sources up to the length `trees` takes, for a parse of one `trees` no longer holds. */
+  parsed: Map<string, DocumentNode>
+  /** The same for the parses without positions (`readbackParse`). */
+  bare: Map<string, DocumentNode>
+  parsedChars: number
 }
 
 /** The facts of the sidecar that the writer reads (C2-L-046), by node. */
@@ -252,7 +257,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     trialLog: null, trialsRetested: false,
     topBlocks: new Map(),
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
-    parses: 0, parseCache: { trees: new Map(), treeChars: 0, recent: [] },
+    parses: 0, parseCache: { trees: new Map(), treeChars: 0, recent: [], parsed: new Map(), bare: new Map(), parsedChars: 0 },
     extensionSources: new Map(), verifiedSourceBytes: undefined, authored: null, authoredLeaves: new Map(), collapsedLabels: new Map(),
     labelReads: new Map(), readBacks: new Map(), readTrees: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),

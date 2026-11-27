@@ -43,9 +43,7 @@ export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string>
   // A longer source that one of the last rounds wrote again is counted as a parse, but its tree is reused.
   const recent = plain && !cacheable ? cache.recent.find((entry) => entry[0] === src)?.[1] : undefined
   if (recent !== undefined) return recent
-  const extensions = w.extensions
-  const source = buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys)
-  const parsed = applyExtensions(source, extensions, linkKeys).document
+  const parsed = parsedTree(w, src, linkKeys, positions, cacheable)
   if (cacheable) remember(cache, src, parsed, cached === null)
   else if (plain) rememberRecent(cache, src, parsed)
   keepCharged(charge, cacheable, parsed)
@@ -125,6 +123,36 @@ function rememberRecent(cache: ParseCache, src: string, parsed: DocumentNode): v
   }
   cache.recent.length = keep
 }
+
+// A source whose tree `trees` or `readTrees` gave up is counted as `parseChunk` counts it, but its tree is reused.
+function parsedTree(w: Writer, src: string, linkKeys: ReadonlySet<string> | null, positions: boolean,
+  cacheable: boolean): DocumentNode {
+  const cache = w.parseCache
+  const short = src.length <= MAX_PARSED_SOURCE
+  const kept = !short ? null : cacheable ? cache.parsed : !positions && plainParse(w, linkKeys) ? cache.bare : null
+  const known = kept?.get(src)
+  if (known !== undefined) return known
+  const extensions = w.extensions
+  const source = buildSource(src, positions, w.abbreviations, null, extensions.length > 0, linkKeys)
+  const parsed = applyExtensions(source, extensions, linkKeys).document
+  if (kept !== null) rememberParsed(cache, kept, src, parsed)
+  return parsed
+}
+
+function rememberParsed(cache: ParseCache, kept: Map<string, DocumentNode>, src: string, parsed: DocumentNode): void {
+  if (kept.size >= MAX_PARSED_TREES || cache.parsedChars + src.length > MAX_PARSED_CHARS) {
+    cache.parsed.clear()
+    cache.bare.clear()
+    cache.parsedChars = 0
+  }
+  kept.set(src, parsed)
+  cache.parsedChars += src.length
+}
+
+// The trees `parsed` and `bare` keep only spare a parse: what a parse is charged stays that of `trees` and `readTrees`.
+const MAX_PARSED_TREES = 8192
+const MAX_PARSED_SOURCE = 4096
+const MAX_PARSED_CHARS = 262_144
 
 // The characters of the sources whose trees the parse cache keeps on first sight; the blocks it reuses are short.
 const MAX_TREE_CHARS = 16_384
