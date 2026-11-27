@@ -2360,6 +2360,7 @@ interface RepeatedGroup {
   spent: number
   rewritten: number
   parses: number
+  work: [number, number][]
 }
 
 /** A source-identical paragraph has the same tree and layout facts only when all three agree here. */
@@ -2407,6 +2408,7 @@ function reuseRepeated(w: Writer, run: WriterRun, known: RepeatedGroup): boolean
   w.work.spent += known.spent
   w.work.rewritten += known.rewritten
   w.parses += known.parses
+  run.stats.work.push(...known.work)
   run.stats.planned++
   return true
 }
@@ -2421,6 +2423,7 @@ function writeRepeatedGroup(w: Writer, run: WriterRun, document: DocumentNode, f
   const spent = w.work.spent
   const rewritten = w.work.rewritten
   const parses = w.parses
+  const workEntries = run.stats.work.length
   const losses = w.losses.entries.length
   const parseVersion = w.parseCache.version
   const readVersion = w.readTreeVersion
@@ -2433,7 +2436,8 @@ function writeRepeatedGroup(w: Writer, run: WriterRun, document: DocumentNode, f
     if (storedKey === null) return result
     if (repeated.size >= 256) repeated.delete(repeated.keys().next().value!)
     repeated.set(storedKey, { lines: [...w.lines], chars: w.work.chars - chars, spent: w.work.spent - spent,
-      rewritten: w.work.rewritten - rewritten, parses: w.parses - parses })
+      rewritten: w.work.rewritten - rewritten, parses: w.parses - parses,
+      work: run.stats.work.slice(workEntries) })
   }
   return result
 }

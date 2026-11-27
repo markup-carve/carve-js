@@ -55,6 +55,7 @@ describe('the planned writer', () => {
     expect(planned.stats.planned).toBeGreaterThan(20)
     expect(planned.stats.repaired).toBeLessThan(repaired.stats.repaired)
     expect(planned.stats.parses).toBe(repaired.stats.parses)
+    expect(planned.stats.work).toEqual(repaired.stats.work)
     for (const changed of [source.replace(paragraph, `lorem${paragraph}`),
       `${source}\n[ref]: /u\n`, `> ${paragraph}\n\n${source}`]) {
       expect(formatBy(changed, 'plan').output, changed).toEqual(formatBy(changed, 'repair').output)
