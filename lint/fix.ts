@@ -444,6 +444,18 @@ function excludeCause(sites: readonly Site[], excluded: Set<string>, chosen: rea
 
 interface ClosedPassResult extends FixResult { settled: boolean, findings: readonly Diagnostic[] }
 
+function excludeIncomplete(result: RunResult, excluded: Set<string>): boolean {
+  const remaining = new Set(result.findings.map((finding) => finding.code))
+  const incomplete = new Set([...result.applied.keys()].filter((rule) => remaining.has(rule)))
+  let grew = false
+  for (const candidate of result.chosen) {
+    if (!incomplete.has(candidate.rule) || excluded.has(candidate.key)) continue
+    excluded.add(candidate.key)
+    grew = true
+  }
+  return grew
+}
+
 function fixClosedPass(source: string, options: LintOptions, previous?: readonly Diagnostic[]): ClosedPassResult {
   const settings: LintOptions = { ...fixOptions(options) }
   delete settings.includes
@@ -455,6 +467,9 @@ function fixClosedPass(source: string, options: LintOptions, previous?: readonly
   for (let attempt = 0; attempt <= sourceBytes.length; attempt++) {
     const result = runPasses(source, settings, excluded, original)
     if (result.applied.size === 0) return { output: source, applied: new Map(), settled: true, findings: original }
+    // Do not report a rule as fixed when an unfixable occurrence of that rule remains.
+    // Withhold all of its edits together; independent rules can still be applied.
+    if (excludeIncomplete(result, excluded)) continue
     const bad = addedSites(result.findings, result.output, baseline, originalSites)
     if (bad === null) return { output: result.output, applied: result.applied,
       settled: candidates(encoder.encode(result.output), result.findings).length === 0, findings: result.findings }
