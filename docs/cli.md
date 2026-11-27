@@ -95,7 +95,7 @@ The `carve` program of 0.1.x took the commands and flags below, which 0.2 remove
 | `fmt --migrate` | `carve upgrade --migrate`, described above |
 | `fix --check` | no flag; `carve lint` reports the findings that `fix` rewrites, and `carve fix FILE \| cmp -s - FILE` tells whether a fix would change the file |
 | `lint --rule ID`, `lint --platform NAME` | `carve lint --rules '{"ID":"on"}'`, `--platforms '["NAME"]'` |
-| `lint --from-djot` | turn the `djot-` rules on by id in `--rules`, or pass `--upgrade` |
+| `lint --from-djot` | turn the `djot-` rules on by id in `--rules`; `--upgrade` does not turn them on |
 | `lint --caption-hints` | none needed: `caption-looking-paragraph` is on by default |
 | `lint --extension citations` | `--extensions '["carve.cite"]'` registers the citations extension |
 | `lint --portable` | none; it did nothing in 0.1.x either |
