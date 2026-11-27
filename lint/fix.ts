@@ -223,6 +223,28 @@ function offsetMap(chosen: readonly Candidate[]): (offset: number) => number {
 }
 
 interface Span { type: string, start: number, end: number }
+interface SpanGroup { spans: Span[], maxEnds: number[] }
+
+function containsSpan(group: SpanGroup | undefined, at: number): boolean {
+  if (group === undefined) return false
+  let low = 0
+  let high = group.spans.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (group.spans[middle]!.start <= at) low = middle + 1
+    else high = middle
+  }
+  return (group.maxEnds[low - 1] ?? -1) > at
+}
+
+function heldBySpan(candidate: Candidate, at: number, group: SpanGroup | undefined,
+  index: number, text: SpanGroup | undefined): boolean {
+  if (candidate.plan.starts && group?.spans[index]?.start === at) return true
+  if (!candidate.plan.starts && (group?.maxEnds[index] ?? -1) >= at) return true
+  // A two-star pair next to a word is literal both before and after the fix. Its single-star
+  // replacement need not form a strong node (C2-I-049), but must remain text at that place.
+  return candidate.rule === 'markdown-strong-double-star' && containsSpan(text, at)
+}
 
 function spans(bytes: Uint8Array): Span[] {
   const result: Span[] = []
@@ -263,15 +285,15 @@ function verified(bytes: Uint8Array, chosen: readonly Candidate[]): Candidate[] 
     const holding = kept.filter((candidate) => {
       const at = map(candidate.plan.at)
       const group = byType.get(candidate.plan.node)
-      if (group === undefined) return false
+      if (group === undefined && candidate.rule !== 'markdown-strong-double-star') return false
       let low = 0
-      let high = group.spans.length
+      let high = group?.spans.length ?? 0
       while (low < high) {
         const middle = (low + high) >>> 1
-        if (group.spans[middle]!.start <= at) low = middle + 1
+        if (group!.spans[middle]!.start <= at) low = middle + 1
         else high = middle
       }
-      return candidate.plan.starts ? group.spans[low - 1]?.start === at : (group.maxEnds[low - 1] ?? -1) >= at
+      return heldBySpan(candidate, at, group, low - 1, byType.get('text'))
     })
     if (holding.length === kept.length) return kept
     kept = holding
@@ -422,6 +444,18 @@ function excludeCause(sites: readonly Site[], excluded: Set<string>, chosen: rea
 
 interface ClosedPassResult extends FixResult { settled: boolean, findings: readonly Diagnostic[] }
 
+function excludeIncomplete(result: RunResult, excluded: Set<string>): boolean {
+  const remaining = new Set(result.findings.map((finding) => finding.code))
+  const incomplete = new Set([...result.applied.keys()].filter((rule) => remaining.has(rule)))
+  let grew = false
+  for (const candidate of result.chosen) {
+    if (!incomplete.has(candidate.rule) || excluded.has(candidate.key)) continue
+    excluded.add(candidate.key)
+    grew = true
+  }
+  return grew
+}
+
 function fixClosedPass(source: string, options: LintOptions, previous?: readonly Diagnostic[]): ClosedPassResult {
   const settings: LintOptions = { ...fixOptions(options) }
   delete settings.includes
@@ -433,6 +467,9 @@ function fixClosedPass(source: string, options: LintOptions, previous?: readonly
   for (let attempt = 0; attempt <= sourceBytes.length; attempt++) {
     const result = runPasses(source, settings, excluded, original)
     if (result.applied.size === 0) return { output: source, applied: new Map(), settled: true, findings: original }
+    // Do not report a rule as fixed when an unfixable occurrence of that rule remains.
+    // Withhold all of its edits together; independent rules can still be applied.
+    if (excludeIncomplete(result, excluded)) continue
     const bad = addedSites(result.findings, result.output, baseline, originalSites)
     if (bad === null) return { output: result.output, applied: result.applied,
       settled: candidates(encoder.encode(result.output), result.findings).length === 0, findings: result.findings }

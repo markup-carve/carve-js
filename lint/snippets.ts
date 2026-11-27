@@ -1,5 +1,6 @@
 // C2-N-096 and C2-B-236: the snippet rules, which read the authored tree and its registry.
 import { type DocumentNode, forEachSlot, type Node } from '../src/ast.ts'
+import { type Diagnostic } from '../src/diagnostics.ts'
 import { snippetRegistry } from '../src/snippet-expand.ts'
 import { attributeLinesHoldId, readSnippetMarker } from '../src/snippets.ts'
 import { type RuleId } from './catalog.ts'
@@ -14,6 +15,25 @@ export function usedNames(document: DocumentNode): Set<string> {
     forEachSlot(node, (nodes) => { for (const child of nodes) pending.push(child) }, undefined, document.extensions)
   }
   return names
+}
+
+/** A snippet definition's reference has no number until copied, but is resolved by a definition in this file. */
+export function reconcileSnippetFootnotes(source: string, document: DocumentNode, entries: Diagnostic[]): Diagnostic[] {
+  if (!source.includes('[^')) return entries
+  const notes = new Set(document.children.filter((node) => node.type === 'footnote').map((node) => node.key))
+  if (notes.size === 0) return entries
+  const resolved = new Set<number>()
+  for (const { definition } of snippetRegistry(document).values()) {
+    const pending: Node[] = [...definition.children]
+    for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+      if (node.type === 'footnote_ref' && notes.has(node.key) && node.pos !== undefined) resolved.add(node.pos.startOffset)
+      forEachSlot(node, (nodes) => { for (const child of nodes) pending.push(child) }, undefined, document.extensions)
+    }
+  }
+  if (resolved.size === 0) return entries
+  return entries.filter((entry) => {
+    return entry.code !== 'unresolved-footnote' || entry.range === undefined || !resolved.has(entry.range.startOffset)
+  })
 }
 
 /** C2-N-096: a winning definition no use names, at the `$` and the name of its marker. */

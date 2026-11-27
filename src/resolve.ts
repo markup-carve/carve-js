@@ -801,7 +801,7 @@ export function resolve(
   // C2-N-090: a later snippet definition of a name stays, renders nothing and reports at its `$` and name.
   if (walk.snippets) snippetRegistry(document, (node) => {
     const entry: Diagnostic = { code: 'duplicate-snippet', severity: 'warning', channel: 'parse',
-      message: `A snippet named ${node.name} is defined earlier; this definition is not used` }
+      message: `Duplicate snippet "$${node.name}": the first definition of the name wins. Rename or remove this one.` }
     const start = node.pos?.startOffset
     if (start !== undefined) entry.range = { startOffset: start + 1, endOffset: start + 2 + node.name.length }
     addFinding(resolution.findings, node, entry)

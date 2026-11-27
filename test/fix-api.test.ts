@@ -32,6 +32,18 @@ describe('fix', () => {
     expect([...result.applied]).toEqual([['markdown-strong-double-star', 1], ['markdown-strikethrough-double-tilde', 1]])
   })
 
+  it('fixes two-star pairs next to letters even when the replacement stays text', () => {
+    for (const source of ['x**b**y', 'x**b** y', 'x **b**y']) {
+      expect(lint(source).some((entry) => entry.code === 'markdown-strong-double-star')).toBe(true)
+      expect(fix(source).output).toBe(source.replaceAll('**', '*'))
+    }
+  })
+
+  it('withholds a partial double-star fix when another pair on the line cannot hold', () => {
+    const source = '**_**a_b**_**\n'
+    expect(fix(source).output).toBe(source)
+  })
+
   it('matches the CLI fix pass on each habit', () => {
     for (const source of ['**a**\n', '~~a~~\n', 'a _b_ c\n', 'snake_case_name\n', 'H~2~O\n', 'x^2^\n', 'a =b= c\n', '+ a\n+ b\n',
       '# Title ##  \n', 'a\n\n---\n', 'Text\n+ x\n']) {

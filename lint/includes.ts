@@ -1,14 +1,14 @@
 // Lint through includes (C2-N-085 to C2-N-087): every Carve include the expansion accepted is linted over the source it
 // parsed, and each finding names its file, a range in that file and a tree path through the includes that reached it.
-import { forEachSlot, type DocumentNode, type IncludeNode, type Node } from '../src/ast.ts'
-import { parse, parseWithDiagnostics } from '../src/api.ts'
+import { cloneTree, forEachSlot, type DocumentNode, type IncludeNode, type Node } from '../src/ast.ts'
+import { parse, parseWithDiagnostics, resolveTree } from '../src/api.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { type IncludeConfig, includeSettings, type IncludeResolver, type IncludeSettings } from '../src/include-settings.ts'
 import { fileLines, type LineRange, lineRange, regionRange } from '../src/include-source.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { unitBytes, utf8Length } from '../src/positions.ts'
 import { usedNames } from './snippets.ts'
-import { snippetRegistry } from '../src/snippet-expand.ts'
+import { holdsSnippetUse, snippetRegistry } from '../src/snippet-expand.ts'
 
 /** The text the resolver returned for each id, as the expansion read it. */
 function recording(config: IncludeSettings, texts: Map<string, string>): IncludeConfig {
@@ -102,43 +102,59 @@ function definition(scope: ReferenceScope, key: string, kind: 'links' | 'notes')
   return undefined
 }
 
+function isResolved(node: Node, inSnippet: boolean, target: { node: Node, file: string } | undefined): boolean {
+  if (node.type === 'footnote_ref') return node.number !== undefined || (inSnippet && target !== undefined)
+  if (node.type === 'link') return node.href !== undefined
+  return node.type === 'image' && node.src !== undefined
+}
+
 function recordReference(node: Node, file: string, inclusion: string, scope: ReferenceScope,
-  found: ReferenceFindings): void {
+  found: ReferenceFindings, inSnippet: boolean): void {
   if (node.type !== 'link' && node.type !== 'image' && node.type !== 'footnote_ref') return
   const note = node.type === 'footnote_ref'
   const location = referenceKey(file, node, note ? 'unresolved-footnote' : 'unresolved-reference-link')
   if (location === null) return
   const occurrence = `${location}\u0000${inclusion}`
   found.observed.add(occurrence)
-  const resolved = note ? node.number !== undefined : node.type === 'link' ? node.href !== undefined : node.src !== undefined
-  if (!resolved) {
+  const target = node.key === undefined ? undefined : definition(scope, node.key, note ? 'notes' : 'links')
+  if (!isResolved(node, inSnippet, target)) {
     found.unresolved.add(occurrence)
     return
   }
   if (node.key === undefined) return
-  const target = definition(scope, node.key, note ? 'notes' : 'links')
   if (target === undefined) return
+  if (note && inSnippet) return
   const used = referenceKey(target.file, target.node,
     note ? 'unused-footnote-definition' : 'unused-link-reference-definition')
   if (used !== null) found.used.add(used)
 }
 
 function walkReferences(node: Node, path: string, file: string, inclusion: string, scope: ReferenceScope,
-  found: ReferenceFindings): void {
-  recordReference(node, file, inclusion, scope, found)
+  found: ReferenceFindings, inSnippet = false): void {
+  recordReference(node, file, inclusion, scope, found, inSnippet)
+  const belowSnippet = inSnippet || node.type === 'snippet_definition'
   if (node.type === 'include' && node.children !== undefined) {
     const innerFile = node.file ?? file
     const inner = scopeOf(node.children, innerFile, scope)
     forEachSlot(node, (nodes, step, single) => {
       nodes.forEach((child, index) => walkReferences(child, `${path}/${step}${single ? '' : `/${index}`}`,
         step === 'children' ? innerFile : file, step === 'children' ? path : inclusion,
-        step === 'children' ? inner : scope, found))
+        step === 'children' ? inner : scope, found, belowSnippet))
     })
     return
   }
   forEachSlot(node, (nodes, step, single) => {
     nodes.forEach((child, index) => walkReferences(child, `${path}/${step}${single ? '' : `/${index}`}`,
-      file, inclusion, scope, found))
+      file, inclusion, scope, found, belowSnippet))
+  })
+}
+
+/** The source file of each note definition in a resolved render view. */
+function noteFiles(node: Node, file: string, files: Map<Node, string>): void {
+  if (node.type === 'footnote') files.set(node, file)
+  forEachSlot(node, (nodes, step) => {
+    const childFile = node.type === 'include' && step === 'children' ? node.file ?? file : file
+    for (const child of nodes) noteFiles(child, childFile, files)
   })
 }
 
@@ -146,7 +162,21 @@ function walkReferences(node: Node, path: string, file: string, inclusion: strin
 function referenceFindings(document: DocumentNode): ReferenceFindings {
   const found: ReferenceFindings = { observed: new Set(), unresolved: new Set(), used: new Set(), snippets: usedNames(document),
     losing: new Set() }
-  walkReferences(document, '', '', '', scopeOf(document.children, '', null), found)
+  const root = scopeOf(document.children, '', null)
+  walkReferences(document, '', '', '', root, found)
+  if (holdsSnippetUse(document)) {
+    const view = cloneTree(document)
+    const resolved = resolveTree(view)
+    const files = new Map<Node, string>()
+    noteFiles(resolved.document, '', files)
+    for (const note of resolved.resolution.notes) {
+      if (note.definition === null) continue
+      const file = files.get(note.definition)
+      if (file === undefined) continue
+      const key = referenceKey(file, note.definition, 'unused-footnote-definition')
+      if (key !== null) found.used.add(key)
+    }
+  }
   return found
 }
 

@@ -1,4 +1,4 @@
-import { lintSnippets, SNIPPET_RULES } from './snippets.ts'
+import { lintSnippets, reconcileSnippetFootnotes, SNIPPET_RULES } from './snippets.ts'
 import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
 import { parseWithLayoutForLint } from '../src/api.ts'
 import { isCompactEmptyCell } from '../src/ast-table.ts'
@@ -590,7 +590,8 @@ function lintSource(source: string, options: LintOptions, facts?: SourceFacts): 
   }
   if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, (id) => active(id, options), defaults)
   const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
-  return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
+  return reconcileSnippetFootnotes(source, parsed.document,
+    positionOrder(context, [...parseFindings, ...filterControls(context, controls)]))
 }
 
 export const IMPLEMENTED_RULES: readonly Rule[] = [
