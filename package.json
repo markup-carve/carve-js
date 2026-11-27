@@ -62,6 +62,7 @@
   },
   "files": [
     "dist",
+    "!dist/carve.iife.min.js.map",
     "README.md",
     "LICENSE",
     "action.yml",
@@ -74,6 +75,7 @@
     "build": "tsx scripts/generate-package-info.ts && tsc -p upgrade/engine-0.1/tsconfig.json && npm ci --prefix import --ignore-scripts --silent && node cli/build.mjs && node public/build.mjs",
     "build:browser": "node scripts/build-browser.mjs",
     "prepare": "npm run build",
+    "prepack": "tsx scripts/generate-package-info.ts && npm run build:browser",
     "prepublishOnly": "node scripts/refuse-prerelease-publish.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

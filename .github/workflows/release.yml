@@ -201,12 +201,11 @@ jobs:
       - run: npm run build
       - run: npm test
 
-      # The browser bundle is built here rather than in `prepare`, so that a
-      # git-dependency install (the spec repo pins this package by commit)
-      # neither builds it nor downloads a bundler for it. `npm publish` re-runs
-      # `prepare`, and tsc leaves files it did not emit alone, so the artifact
-      # written here survives into the tarball that unpkg and jsdelivr serve.
-      # This step also verifies it against the ESM build before publishing.
+      # The browser bundle is built in `prepack` rather than in `prepare`, so
+      # that a git-dependency install (the spec repo pins this package by
+      # commit) neither builds it nor downloads a bundler for it. `npm publish`
+      # rebuilds it through `prepack` with the same pinned esbuild. This step
+      # verifies it against the ESM build before publishing.
       - name: Build and verify the browser bundle
         run: npm run test:browser
 

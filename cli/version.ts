@@ -1,1 +1,1 @@
-export const CARVE_VERSION = '0.2.0-dev'
+export { VERSION as CARVE_VERSION } from '../src/package-info.ts'
