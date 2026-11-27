@@ -31,13 +31,23 @@ const FIELDS: Record<keyof Writer, 'state' | 'added' | 'mode' | 'cache' | 'fixed
   trialLog: 'mode', trialsRetested: 'mode', topBlocks: 'fixed', openerRuns: 'cache', planKinds: 'mode',
   planWhy: 'state', plan: 'state', parses: 'work', parseCache: 'cache', extensionSources: 'cache',
   verifiedSourceBytes: 'fixed', authored: 'fixed', authoredLeaves: 'state', collapsedLabels: 'cache',
-  labelReads: 'cache', readBacks: 'cache', probes: 'cache', nodeIds: 'cache', standIns: 'cache', lineOpens: 'cache', work: 'work',
+  labelReads: 'cache', readBacks: 'cache', readTrees: 'cache',
+  probes: 'cache', nodeIds: 'cache', standIns: 'cache', lineOpens: 'cache', work: 'work',
   leadingFrontmatter: 'fixed', pass: 'work',
 }
 
 const STATE = (Object.keys(FIELDS) as (keyof Writer)[]).filter((key) => FIELDS[key] === 'state')
 
-export type Snapshot = Map<keyof Writer, unknown>
+/** The values of the `state` fields, in the order of `STATE`. */
+export type Snapshot = unknown[]
+
+const BRACED = STATE.indexOf('bracedAnyway')
+const ESCAPES = STATE.indexOf('escapes')
+
+/** The escapes a snapshot holds. */
+export function snapshotEscapes(taken: Snapshot): Map<TextNode, number[]> {
+  return taken[ESCAPES] as Map<TextNode, number[]>
+}
 
 // The fields each round writes anew, and the escapes, which a chain step compares itself (write-chain.ts).
 const ROUND_FIELDS: ReadonlySet<keyof Writer> = new Set<keyof Writer>([
@@ -49,11 +59,11 @@ const ROUND_FIELDS: ReadonlySet<keyof Writer> = new Set<keyof Writer>([
  * `bracedAnyway` tells them apart, the pass notes the members that do (`bracedFits`).
  */
 export function sameBesideRound(w: Writer, a: Snapshot, b: Snapshot): boolean {
-  for (const key of STATE) {
-    if (key !== 'bracedAnyway' && !ROUND_FIELDS.has(key) && !same(a.get(key), b.get(key))) return false
+  for (let at = 0; at < STATE.length; at++) {
+    if (at !== BRACED && !ROUND_FIELDS.has(STATE[at]!) && !same(a[at], b[at])) return false
   }
-  const before = a.get('bracedAnyway') as Set<Node>
-  const after = b.get('bracedAnyway') as Set<Node>
+  const before = a[BRACED] as Set<Node>
+  const after = b[BRACED] as Set<Node>
   if (same(before, after)) return true
   if (w.pass !== null) noteBraced(w.pass, before, after)
   return false
@@ -159,21 +169,22 @@ function sameMaps(a: Map<unknown, unknown>, b: Map<unknown, unknown>): boolean {
 }
 
 export function snapshot(w: Writer): Snapshot {
-  const taken: Snapshot = new Map()
-  for (const key of STATE) taken.set(key, copy(w[key]))
+  const taken: Snapshot = new Array(STATE.length)
+  for (let at = 0; at < STATE.length; at++) taken[at] = copy(w[STATE[at]!])
   return taken
 }
 
 function sameSnapshot(a: Snapshot, b: Snapshot): boolean {
-  for (const key of STATE) if (!same(a.get(key), b.get(key))) return false
+  for (let at = 0; at < STATE.length; at++) if (!same(a[at], b[at])) return false
   return true
 }
 
 /** Puts a snapshot back, into the containers the writer holds where it has them, as the rounds change them in place. */
 export function restore(w: Writer, taken: Snapshot): void {
   const target = w as unknown as Record<string, unknown>
-  for (const key of STATE) {
-    const value = taken.get(key)
+  for (let at = 0; at < STATE.length; at++) {
+    const key = STATE[at]!
+    const value = taken[at]
     if (!refill(target[key], value)) target[key] = copyOut(value)
   }
 }
@@ -331,7 +342,7 @@ function replay(w: Writer, known: PassRecord, start: Snapshot): void {
   const whole = wholeStandsIn(w, known)
   restore(w, known.end)
   // The members the start holds beyond the record's are members the pass never found absent (`bracedFits`).
-  for (const node of start.get('bracedAnyway') as Set<Node>) w.bracedAnyway.add(node)
+  for (const node of start[BRACED] as Set<Node>) w.bracedAnyway.add(node)
   if (w.pass !== null) for (const node of known.trace.braced) w.pass.braced.add(node)
   for (const [node, offsets] of known.placed) {
     const held = w.linkPlaced.get(node) ?? new Set<number>()
@@ -382,15 +393,15 @@ function sameStart(record: PassRecord, start: Snapshot): boolean {
  * pass never found absent and that never alone told a chain step's states apart: no read or comparison then differs.
  */
 function bracedFits(record: PassRecord, start: Snapshot): boolean {
-  const recorded = record.start.get('bracedAnyway') as Set<Node>
-  const held = start.get('bracedAnyway') as Set<Node>
+  const recorded = record.start[BRACED] as Set<Node>
+  const held = start[BRACED] as Set<Node>
   for (const node of recorded) if (!held.has(node)) return false
   for (const node of held) if (!recorded.has(node) && record.trace.braced.has(node)) return false
   return true
 }
 
 function sameBesideBraced(a: Snapshot, b: Snapshot): boolean {
-  for (const key of STATE) if (key !== 'bracedAnyway' && !same(a.get(key), b.get(key))) return false
+  for (let at = 0; at < STATE.length; at++) if (at !== BRACED && !same(a[at], b[at])) return false
   return true
 }
 
@@ -438,7 +449,7 @@ function fits(w: Writer, record: PassRecord): boolean {
 
 /** Whether two snapshots hold the same state beside the fields `beside`. */
 export function sameBeside(a: Snapshot, b: Snapshot, beside: ReadonlySet<keyof Writer>): boolean {
-  for (const key of STATE) if (!beside.has(key) && !same(a.get(key), b.get(key))) return false
+  for (let at = 0; at < STATE.length; at++) if (!beside.has(STATE[at]!) && !same(a[at], b[at])) return false
   return true
 }
 

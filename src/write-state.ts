@@ -5,6 +5,7 @@ import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { type Plan } from './write-plan.ts'
 import { type OpenerRuns } from './write-blocks.ts'
+import { type Snapshot } from './write-passes.ts'
 
 /**
  * The sources `parseChunk` has seen since the last clear, with the tree of each short or repeated one. A tree is not held
@@ -55,7 +56,7 @@ export interface PassTrace {
 
 /** A trial a pass without `wholeTrials` read the switch for, which a pass with it would test (write-passes.ts). */
 export interface WholeTest {
-  state: Map<keyof Writer, unknown>
+  state: Snapshot
   linkPlaced: Map<TextNode, Set<number>>
   work: Writer['work']
   parses: number
@@ -195,6 +196,8 @@ export interface Writer {
   labelReads: Map<string, Inline[]>
   /** C2-W-002: the read-back results of the last sources a group wrote (write.ts `readsBack`), by source. */
   readBacks: Map<string, ReadBack[]>
+  /** C2-W-002: the trees those sources read back as, where the parse reads nothing but its source; shared by all groups. */
+  readTrees: Map<string, DocumentNode>
   /** C2-W-088: the result of each probe of the repair by the state it reads (write-check.ts), and an id of each node it read. */
   probes: Map<string, ProbeResult>
   nodeIds: Map<Node, number>
@@ -251,7 +254,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     openerRuns: null, planKinds: false, planWhy: null, plan: null,
     parses: 0, parseCache: { trees: new Map(), treeChars: 0, recent: [] },
     extensionSources: new Map(), verifiedSourceBytes: undefined, authored: null, authoredLeaves: new Map(), collapsedLabels: new Map(),
-    labelReads: new Map(), readBacks: new Map(),
+    labelReads: new Map(), readBacks: new Map(), readTrees: new Map(),
     probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(),
     work: { chars: 0, limit: Infinity, spent: 0, source: 0, written: 0, rewritten: 0 },
     leadingFrontmatter: null, pass: null,
