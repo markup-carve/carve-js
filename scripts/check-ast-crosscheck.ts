@@ -78,7 +78,7 @@ const BEYOND_SCHEMA = [
   // C2-A-098: the glyph and the source of a smart punctuation node follow its kind; the schema lists each field apart.
   'not the glyph of its kind', 'not the source of its kind',
   // C2-A-124: an unqualified extension has no version, so no field that a declaration gives; the schema cannot tie them.
-  'not a field of an unqualified extension',
+  'not a field of an unqualified extension', 'an unqualified extension has no version',
 ]
 
 function explained(finding: Failure & { classification?: string }): string | null {
