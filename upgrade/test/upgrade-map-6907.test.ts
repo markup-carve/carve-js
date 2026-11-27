@@ -49,7 +49,13 @@ describe('C2-W-156: a record names the rule of its entry that fires on its line'
     expect(record?.lint).toBe('list-marker-below-content-column')
   })
 
-  it('takes the finding nearest the record line', () => {
+  it('does not take a rule that fires only at another record of the entry', () => {
+    const records = upgrade('1. outer\n  1. inner\n\n- item text\n 3. child\n').records.filter((item) => item.entry === 'U-023')
+    expect(records.map((record) => [record.line, record.lint])).toEqual([
+      [2, 'list-marker-below-content-column'], [5, 'list-marker-without-blank-line']])
+  })
+
+  it('names the rule of each record in a document with several entries', () => {
     const records = upgrade('```js{1,3}\na\n```\n\n- item text\n 3. child\n').records
     expect(records.find((record) => record.entry === 'U-037')?.lint).toBe('fence-title-syntax')
     expect(records.find((record) => record.entry === 'U-023')?.lint).toBe('list-marker-without-blank-line')

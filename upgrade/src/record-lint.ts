@@ -18,11 +18,12 @@ function linesOfBytes(input: string): (offset: number) => number {
 }
 
 /**
- * An entry with several lint rules names, on each record, the one that fires nearest the record's line
- * (C2-W-156 migration notices); the first rule stays when none of them fires.
+ * An entry with several lint rules names, on each record, the one that fires on the record's line, or on the next
+ * line when no other record of the entry stands there (C2-W-156 migration notices); else the first rule stays.
  */
 export function nameFiringLints(input: string, records: readonly ReportRecord[]): void {
-  const several = records.filter((record) => record.lint !== undefined && entryLints(record.entry).length > 1)
+  const several = records.filter((record) => record.lint !== undefined && record.line > 0
+    && entryLints(record.entry).length > 1)
   if (several.length === 0) return
   let found: { code: string; line: number }[]
   try {
@@ -31,20 +32,15 @@ export function nameFiringLints(input: string, records: readonly ReportRecord[])
       .map((entry) => ({ code: entry.code, line: lineOf(entry.range?.startOffset ?? 0) }))
   } catch { return }
   for (const record of several) {
-    const rule = nearestRule(entryLints(record.entry), record.line, found)
+    const rules = entryLints(record.entry)
+    const next = records.some((other) => other.entry === record.entry && other.line === record.line + 1)
+    const rule = firstFiring(rules, record.line, found) ?? (next ? undefined : firstFiring(rules, record.line + 1, found))
     if (rule !== undefined) record.lint = rule
   }
 }
 
-function nearestRule(rules: readonly string[], line: number, found: readonly { code: string; line: number }[]): string | undefined {
-  let best: { rank: number; distance: number } | null = null
-  for (const finding of found) {
-    const rank = rules.indexOf(finding.code)
-    if (rank < 0) continue
-    const distance = line > 0 ? Math.abs(finding.line - line) : 0
-    if (best === null || distance < best.distance || (distance === best.distance && rank < best.rank)) best = { rank, distance }
-  }
-  return best === null ? undefined : rules[best.rank]
+function firstFiring(rules: readonly string[], line: number, found: readonly { code: string; line: number }[]): string | undefined {
+  return rules.find((rule) => found.some((finding) => finding.line === line && finding.code === rule))
 }
 
 function entryLints(id: string): readonly string[] {
