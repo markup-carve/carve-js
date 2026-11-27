@@ -133,8 +133,44 @@ function runLines(model: LineModel<BlockRun>, walked: readonly Walked[], rules: 
   }
 }
 
-function runBlocks(model: LineModel<BlockRun>, context: LintContext): void {
-  for (const [index, block] of model.blocks.entries()) for (const run of model.runs[index]!) run(block, block.path, context)
+// The pinned data rule requires nonspace text after an old alignment run. C2-B-171 also covers an empty
+// cell after the separating space; this branch joins the data rule when the spec pin advances.
+const EMPTY_CELL_ALIGNMENT = /^=?\s*(?<prefix>(?<mark>[<>~][\^v~]?|\?[\^v~])(?:\{\s*(?<block>[^{}]*?)\s*\})?)[ \t]\s*$/d
+const LONE_LESS_THAN = /^=?\s*<[ \t]\s*$/
+
+function matchEmptyCellAlignment(block: ModelBlock): RegExpExecArray | null {
+  if (block.type !== 'table_cell' || block.source_format !== 'pipe'
+    || (block.text.startsWith('=') && !('header' in block.node && block.node.header))) return null
+  const match = EMPTY_CELL_ALIGNMENT.exec(block.text)
+  return match !== null && !LONE_LESS_THAN.test(block.text) ? match : null
+}
+
+function hasAlignmentFinding(context: LintContext, from: number): boolean {
+  for (let index = from; index < context.diagnostics.length; index++) {
+    if (context.diagnostics[index]?.code === 'deprecated-cell-alignment') return true
+  }
+  return false
+}
+
+function reportEmptyCellAlignment(block: ModelBlock, context: LintContext): void {
+  const match = matchEmptyCellAlignment(block)
+  if (match === null) return
+  const prefixSpan = match.indices?.groups?.['prefix']
+  if (prefixSpan === undefined) return
+  const mark = match.groups?.['mark'] ?? ''
+  const bodySpan = match.indices?.groups?.['block']
+  const braced = bodySpan !== undefined && bodySpan[0] !== bodySpan[1]
+    ? `{${mark} ${match.groups?.['block'] ?? ''}}` : `{${mark}}`
+  context.report('deprecated-cell-alignment', block.start + prefixSpan[0], block.start + prefixSpan[1], block.path,
+    { prefix: match.groups?.['prefix'] ?? '', braced })
+}
+
+function runBlocks(model: LineModel<BlockRun>, context: LintContext, emptyCellAlignment: boolean): void {
+  for (const [index, block] of model.blocks.entries()) {
+    const firstFinding = context.diagnostics.length
+    for (const run of model.runs[index]!) run(block, block.path, context)
+    if (emptyCellAlignment && !hasAlignmentFinding(context, firstFinding)) reportEmptyCellAlignment(block, context)
+  }
 }
 
 function runInline(walk: DataWalk, rules: Active, context: LintContext): void {
@@ -162,7 +198,7 @@ export function runDataRules(walk: DataWalk, context: LintContext, active: (id: 
   const model = buildModel(walk.walked, context, (type, parent) => blockRuns(rules, type, parent), rules.needBlocks)
   useRecords(model.blocks, walk.inline, () => walk.ids(), () => model.lines.all())
   // The hand-written node rules report during the visit, before the line rules: findings at one offset keep that order.
-  runBlocks(model, context)
+  runBlocks(model, context, active('deprecated-cell-alignment'))
   runInline(walk, rules, context)
   runLines(model, walk.walked, rules, context)
   // The lookup index holds every record of the document; kept past the call it would hold the whole document alive.
