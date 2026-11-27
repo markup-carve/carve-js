@@ -727,6 +727,8 @@ export interface ParsedTree {
   readonly facts: ParseFacts | null
   /** C2-H-201: the source the tree was parsed from, or its byte length, which a parse without positions does not record. */
   readonly source?: string | number
+  /** The text of each included file by its id, where the tree was expanded with positions. */
+  readonly files?: ReadonlyMap<string, string>
 }
 
 /** The number of lines from `start` to `end`. */

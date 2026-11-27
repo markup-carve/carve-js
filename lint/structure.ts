@@ -100,6 +100,8 @@ function commentInLabel(node: Node, path: string, context: LintContext): void {
   const before = context.source.slice(line.start, range[0])
   const open = before.lastIndexOf('[')
   if (open < 0 || before.indexOf(']', open) >= 0) return
+  // C2-I-072, C2-I-087: a label is glued to the `]` of its text, or follows `[^`; link text and `^[` take none.
+  if (before[open - 1] !== ']' && before[open + 1] !== '^') return
   // C2-I-077: only a comment that takes the label's closer leaves the label unclosed; `[ %%` had none to take.
   if (!context.source.slice(range[0], line.end).includes(']')) return
   context.report('comment-in-reference-label', range[0], range[1], path)

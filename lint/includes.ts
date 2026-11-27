@@ -51,6 +51,8 @@ interface Visit {
   seen: Set<string>
   out: Diagnostic[]
   codePaths: string[]
+  /** The part of each expanded Carve include that was linted, by the path of the include. */
+  parts: { path: string, text: string, part: Linted }[]
 }
 
 interface ReferenceScope {
@@ -268,6 +270,23 @@ function keepLocated(visit: Visit, entry: Diagnostic | null, inclusion: string):
   visit.out.push(entry)
 }
 
+/** C2-N-086: whether an entry of the expanded parse stands in the part of its file that was linted. */
+function inLintedPart(visit: Visit, entry: Diagnostic): boolean {
+  if (entry.file === undefined || entry.range === undefined) return true
+  let deepest: Visit['parts'][number] | undefined
+  for (const at of visit.parts) {
+    if (entry.path?.startsWith(at.path) === true && (deepest === undefined || at.path.length > deepest.path.length)) deepest = at
+  }
+  if (deepest === undefined) return true
+  const { text, part } = deepest
+  const start = entry.range.startOffset
+  if (part.kept !== null) {
+    const line = lineOfByte(text, start)
+    return line > part.kept.from && line <= part.kept.to
+  }
+  return part.source === text || (start >= part.shift && start < part.shift + utf8Length(part.source))
+}
+
 /** C2-N-086, C2-N-087: lints the source of one expanded Carve include and keeps each distinct finding once. */
 function lintInclude(visit: Visit, node: IncludeNode, path: string, includedBy: NonNullable<Diagnostic['includedBy']>): void {
   const text = node.file === undefined ? undefined : visit.texts.get(node.file)
@@ -277,6 +296,7 @@ function lintInclude(visit: Visit, node: IncludeNode, path: string, includedBy: 
     return
   }
   const part = lintedPart(node, text)
+  visit.parts.push({ path: `${path}/children/`, text, part })
   for (const entry of visit.lintFile(part.source)) {
     keepLocated(visit, located(visit, node, text, part, entry, path, includedBy), path)
   }
@@ -326,13 +346,16 @@ export function lintIncludes(source: string, value: unknown, own: Diagnostic[], 
   for (const entry of duplicates) references.losing.add(`${entry.file ?? ''}\u0000${entry.range?.startOffset ?? -1}`)
   // A file included twice repeats its definitions at one offset: the winning one keeps its hint.
   for (const key of winningKeys(expanded.document)) references.losing.delete(key)
-  const visit: Visit = { texts, lintFile, lintPayload, references, seen: new Set(), out: [], codePaths: [] }
+  const visit: Visit = { texts, lintFile, lintPayload, references, seen: new Set(), out: [], codePaths: [],
+    parts: [] }
   walk(visit, expanded.document, '', undefined, [])
   // The file lint pass selects source lines and sections. Keep only expansion findings that it cannot produce.
   const expansion = expanded.diagnostics.filter((entry) => entry.code.startsWith('include-') ||
     visit.codePaths.some((path) => entry.path?.startsWith(path) === true))
-  // C2-N-090: a duplicate across files is seen only in the expanded tree; one a file pass found is not repeated.
+  // C2-T-031, C2-N-058, C2-N-090: a parse entry across files, such as a duplicate, is seen only in the expanded tree;
+  // one a file pass found is not repeated.
   const found = new Set([...own, ...visit.out].map(findingKey))
-  const crossFile = duplicates.filter((entry) => !found.has(findingKey(entry)) && !expansion.includes(entry))
+  const crossFile = expanded.diagnostics.filter((entry) => entry.channel === 'parse' &&
+    !found.has(findingKey(entry)) && !expansion.includes(entry) && inLintedPart(visit, entry))
   return [...own.filter((entry) => reconciled(entry, references)), ...expansion, ...crossFile, ...visit.out]
 }

@@ -160,7 +160,8 @@ function parseSource(src: string, settings: Settings, positions: boolean, trace:
   }
   const expanded = expandTree(parsed, includes, parse, settings.headingIds, positions)
   if (settings.extensions.length > 0) declareExtensions(parsed.document, settings.extensions)
-  return { document: parsed.document, facts: combinedFacts(facts, expanded.facts, expanded.findings) }
+  return { document: parsed.document, facts: combinedFacts(facts, expanded.facts, expanded.findings),
+    files: expanded.sources }
 }
 
 /** C2-B-218: the parse of a string or of bytes; the positions of bytes count the source bytes. */
@@ -387,10 +388,11 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
     : { entries: [...noted.entries, ...found.entries], nodes: [...noted.nodes, ...found.nodes] }
   const diagnostics = locateFindings(resolved.document, findings)
   if (typeof parsed.source !== 'string') return diagnostics
-  const encoder = new TextEncoder()
-  const source = encoder.encode(parsed.source)
+  const top = new TextEncoder().encode(parsed.source)
+  const files = new Map<string, Uint8Array>()
   diagnostics.forEach((entry, index) => {
-    if (entry.file !== undefined) return
+    const source = entry.file === undefined ? top : fileBytes(parsed, entry.file, files)
+    if (source === undefined) return
     const node = findings.nodes[index]
     const pos = node?.pos
     if (node === undefined || node === null || pos === undefined) return
@@ -401,6 +403,17 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
     if (entry.code === 'duplicate-id') locateAuthoredId(entry, node, parsed, source)
   })
   return diagnostics
+}
+
+/** The bytes of an included file, which its findings are placed in. */
+function fileBytes(parsed: ParsedTree, file: string, cache: Map<string, Uint8Array>): Uint8Array | undefined {
+  const cached = cache.get(file)
+  if (cached !== undefined) return cached
+  const text = parsed.files?.get(file)
+  if (text === undefined) return undefined
+  const bytes = new TextEncoder().encode(text)
+  cache.set(file, bytes)
+  return bytes
 }
 
 const CAUSE_CODES: ReadonlySet<string> = new Set([...INCLUDE_CAUSES.values()].map((cause) => cause.code))

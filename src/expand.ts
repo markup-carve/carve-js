@@ -30,6 +30,8 @@ interface Expansion {
   facts: ParseFacts[]
   /** The expanded includes in tree order, for the shifts (C2-N-050). */
   expanded: IncludeNode[]
+  /** The text of each file the expansion took, by its id, which places the findings in that file. */
+  sources: Map<string, string>
 }
 
 /** The file whose includes are expanded: its id, its depth (C2-N-064), the files around it (C2-N-066) and its scope. */
@@ -296,6 +298,7 @@ function expandOne(exp: Expansion, node: IncludeNode, frame: Frame): void {
   const selected = select(exp, node, answer.text, frame)
   if ('cause' in selected) return fail(exp, node, selected)
   if (exp.positions) stampFile(selected.children, answer.id)
+  exp.sources.set(answer.id, answer.text)
   node.children = selected.children
   if (selected.facts !== null) exp.facts.push(selected.facts)
   exp.expanded.push(node)
@@ -307,6 +310,7 @@ function expandOne(exp: Expansion, node: IncludeNode, frame: Frame): void {
 export interface Expanded {
   facts: readonly ParseFacts[]
   findings: Findings
+  sources: ReadonlyMap<string, string>
 }
 
 /**
@@ -317,12 +321,13 @@ export function expandTree(
   parsed: ParsedTree, settings: IncludeSettings, parse: FileParse, headingIds: HeadingIds, positions: boolean,
 ): Expanded {
   const findings: Findings = { entries: [], nodes: [] }
-  const exp: Expansion = { settings, parse, headingIds, positions, spent: 0, findings, facts: [], expanded: [] }
+  const exp: Expansion = { settings, parse, headingIds, positions, spent: 0, findings, facts: [], expanded: [],
+    sources: new Map() }
   const facts = parsed.facts
   const document: DocumentNode = parsed.document
   document.stages = ['includeExpansion']
   const frame: Frame = { file: settings.file, depth: 0, around: [], scope: facts?.scope ?? EMPTY_SCOPE }
   for (const node of facts?.includes ?? []) expandOne(exp, node, frame)
   if (exp.expanded.some((node) => node.options?.shift !== undefined)) applyShifts(document, findings)
-  return { facts: exp.facts, findings }
+  return { facts: exp.facts, findings, sources: exp.sources }
 }
