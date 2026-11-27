@@ -162,7 +162,7 @@ describe('C2-B-206, C2-A-181: a malformed include is still an include', () => {
     const includes = { resolver: () => ({ text: 'x', id: 'a.crv' }) }
     expect(renderWithDiagnostics('{{ a.crv @shift:x @size:2 }}', { includes }).diagnostics.map((item) => [item.code, item.message]))
       .toEqual([
-        ['include-option-invalid', 'The include option @shift:x has a value outside the shape of its key, so the include is not expanded. Correct it or remove it.'],
+        ['include-option-invalid', 'The include option @size:2 has a key that is not an include option, so the include is not expanded. Correct it or remove it.'],
         ['include-unresolved', 'Include "a.crv" could not be resolved.'],
       ])
   })
