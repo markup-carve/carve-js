@@ -33,6 +33,7 @@ never loads them.
 | `write` | a tree, `{ layout, alignTables, extensions, check }` | canonical source | `CarveOptionError`, `CarveTreeError`, `CarveWriteError` |
 | `writeWithDiagnostics` | as `write` | `{ source, diagnostics }` | `CarveOptionError`, `CarveTreeError` |
 | `lint` | source, `{ rules, platforms, upgrade, includes, extensions, headingIds }` | diagnostics | `CarveOptionError` |
+| `prepareLint` | source, lint options | a handle with the resolved `document` | `CarveOptionError` |
 | `fix` | source, `{ rules, platforms, extensions }` | `{ output, applied }`, as `carve lint --fix` writes it ([Lint fixes](#lint-fixes)) | `CarveOptionError` |
 | `fixEdits` | source, a diagnostic of `lint` | the edits that fix that finding, or null | `CarveOptionError` |
 | `importDocument` | HTML, `{ from: 'html', rawHtml, labels, adapter, listTable, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
@@ -55,6 +56,18 @@ never loads them.
 The `annotations` sidecar is `{ ranges }`; each range has `id`, `start` and `end`, and may carry a `data` object
 whose keys are qualified names declared on the tree's root or envelope (C2-A-214, C2-A-029). The reader checks it and
 leaves it unchanged.
+
+`prepareLint(source, options?)` parses with the layout and resolution facts lint needs. Read its `document` for
+other analysis, then call `lint(prepared)` to reuse that parse. Pass lint options to `prepareLint`; the handle keeps
+them for `lint`. Create a new handle after changing the source. Do not mutate its document before linting.
+
+```ts
+import { lint, prepareLint } from '@markup-carve/carve'
+
+const prepared = prepareLint('= Title\n\nSee [missing][].')
+const headings = prepared.document.children.filter((node) => node.type === 'heading')
+const diagnostics = lint(prepared)
+```
 
 Helpers: `fixableRules` lists the lint rules that `fix` rewrites. `isUrlAllowed` and `urlScheme` test a URL against a
 URL policy (for an extension renderer that writes a link), `DEFAULT_DENIED_SCHEMES` is the default deny list, `utf8Length` and `stringOffsetOfByte` turn the byte

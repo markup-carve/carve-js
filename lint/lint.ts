@@ -1,5 +1,6 @@
 import { lintSnippets, reconcileSnippetFootnotes, SNIPPET_RULES } from './snippets.ts'
-import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
+import { childNodes, forEachSlot, type DocumentNode, type Node, SOURCE_ORDER } from '../src/ast.ts'
+import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { parseWithLayoutForLint } from '../src/api.ts'
 import { isCompactEmptyCell } from '../src/ast-table.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
@@ -146,7 +147,26 @@ function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
 }
 
 // `quotes` counts the block quotes whose children hold the node.
+const CORE_SHAPES = [...NODE_SLOTS].map(([type, slots]) => [type, slots.filter((slot) => !slot.startsWith('metadata.'))] as const)
+const CHILDREN_ONLY_TYPES = new Set(CORE_SHAPES.filter(([, slots]) => slots.length === 1 && slots[0] === 'children')
+  .map(([type]) => type))
+const LEAF_TYPES = new Set(CORE_SHAPES.filter(([, slots]) => slots.length === 0).map(([type]) => type))
+
 function visitChildren(node: Node, path: string, context: LintContext, controls: Control[][], quotes: number): void {
+  if (node.metadata === undefined) {
+    if (LEAF_TYPES.has(node.type)) return
+    if (CHILDREN_ONLY_TYPES.has(node.type)) {
+      const children = childNodes(node)
+      for (let index = 0; index < children.length; index++) {
+        const child = children[index]!
+        if (inertTableNode(node, child, index, children.length, context)) continue
+        const childPath = `${path}/children/${index}`
+        context.dataWalk?.child(child, childPath, node, path, index)
+        visit(child, childPath, context, controls, quotes)
+      }
+      return
+    }
+  }
   forEachSlot(node, (nodes, step, single) => {
     const inner = node.type === 'block_quote' && step === 'children' ? quotes + 1 : quotes
     if (single) {
@@ -185,10 +205,12 @@ function plainEmptyCell(node: Node, context: LintContext): boolean {
   return start !== undefined && end !== undefined && context.source.slice(start, end).trim() === ''
 }
 
+const CONTAINER_CLOSER_TYPES: ReadonlySet<Node['type']> = new Set(['div', 'admonition', 'figure_group', 'line_block', 'block_quote'])
+
 function markDescriptionAndCloser(node: Node, context: LintContext): void {
   const pos = node.pos
   if (pos === undefined) return
-  if (['div', 'admonition', 'figure_group', 'line_block', 'block_quote'].includes(node.type) && pos.endLine > pos.startLine
+  if (CONTAINER_CLOSER_TYPES.has(node.type) && pos.endLine > pos.startLine
     && /^\s*:{3,}\s*$/.test(context.lines[pos.endLine - 1]?.text ?? '')) context.state.containerClosers.add(pos.endLine)
 }
 
@@ -230,11 +252,11 @@ function markContent(node: Node, context: LintContext): void {
   if (line !== undefined && at !== undefined && (line.content === undefined || at < line.content)) line.content = at
 }
 
-const OPAQUE_LEAF_TYPES: readonly Node['type'][] = ['autolink', 'code', 'raw_inline', 'literal_inline', 'math', 'comment',
-  'code_block', 'raw_block', 'frontmatter', 'include', 'link_reference_definition', 'abbreviation_def']
+const OPAQUE_LEAF_TYPES: ReadonlySet<Node['type']> = new Set(['autolink', 'code', 'raw_inline', 'literal_inline', 'math', 'comment',
+  'code_block', 'raw_block', 'frontmatter', 'include', 'link_reference_definition', 'abbreviation_def'])
 
 function maskLeaf(node: Node, path: string, context: LintContext, quotes: number): void {
-  if (!OPAQUE_LEAF_TYPES.includes(node.type)) return
+  if (!OPAQUE_LEAF_TYPES.has(node.type)) return
   const layout = context.layouts.get(path)
   const startByte = node.pos?.startOffset ?? layout?.startByte
   const endByte = node.pos?.endOffset ?? layout?.endByte
@@ -510,10 +532,43 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
  * C2-W-103, C2-W-109: lint a 0.2 source with catalog messages and byte ranges. C2-N-085: with `includes` the files it
  * includes are linted too, each finding of one with its `file` and a range in that file.
  */
-export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
+export function lint(source: string | PreparedLint, options?: LintOptions): Diagnostic[] {
+  if (typeof source !== 'string') {
+    if (options !== undefined) throw new CarveOptionError('lint', 'options belong to prepareLint')
+    return lintPrepared(source)
+  }
+  options ??= {}
   validateOptions(options)
   const facts: SourceFacts = { includes: true }
   const own = lintSource(source, options, facts)
+  return lintWithIncludes(source, options, facts, own)
+}
+
+/** A parse and its lint facts, retained for a caller that needs both the tree and lint findings. */
+export interface PreparedLint { readonly document: DocumentNode }
+
+type LintParse = ReturnType<typeof parseWithLayoutForLint>
+const preparedLint = new WeakMap<PreparedLint, { source: string, options: LintOptions, parsed: LintParse }>()
+
+/** Parse once, then pass the returned handle to `lint` after using its resolved document. */
+export function prepareLint(source: string, options: LintOptions = {}): PreparedLint {
+  validateOptions(options)
+  const parsed = parseWithLayoutForLint(source, parseOptions(options))
+  const handle: PreparedLint = { document: parsed.document }
+  preparedLint.set(handle, { source, options: { ...options }, parsed })
+  return handle
+}
+
+function lintPrepared(input: PreparedLint): Diagnostic[] {
+  const prepared = preparedLint.get(input)
+  if (prepared === undefined) throw new CarveOptionError('lint', 'not a prepared lint handle')
+  const { source, options, parsed } = prepared
+  const facts: SourceFacts = { includes: true }
+  const own = lintSource(source, options, facts, parsed)
+  return lintWithIncludes(source, options, facts, own)
+}
+
+function lintWithIncludes(source: string, options: LintOptions, facts: SourceFacts, own: Diagnostic[]): Diagnostic[] {
   if (options.includes === undefined) return own
   const rest: LintOptions = { ...options }
   // With extensions the expansion, which parses without them, may read another tree.
@@ -567,9 +622,13 @@ export function lintPayload(text: string, node: Node, path: string, options: Lin
 
 interface SourceFacts { includes: boolean }
 
-function lintSource(source: string, options: LintOptions, facts?: SourceFacts): Diagnostic[] {
-  const parsed = parseWithLayoutForLint(source, { ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
-    ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) })
+function parseOptions(options: LintOptions): Parameters<typeof parseWithLayoutForLint>[1] {
+  return { ...(options.extensions === undefined ? {} : { extensions: options.extensions }),
+    ...(options.headingIds === undefined ? {} : { headingIds: options.headingIds }) }
+}
+
+function lintSource(source: string, options: LintOptions, facts?: SourceFacts, prepared?: LintParse): Diagnostic[] {
+  const parsed = prepared ?? parseWithLayoutForLint(source, parseOptions(options))
   if (facts !== undefined) facts.includes = parsed.includes
   if (options.upgrade !== true && declaresBelow02(parsed.document)) options = { ...options, upgrade: true }
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))

@@ -523,6 +523,7 @@ let idRecords: () => readonly Located[] = () => []
 let idsRead = false
 // Per kind of record, the positions of the records of each type, in document order.
 let typePositions = new Map<Over, Map<string, number[]>>()
+let selectedRecords = new Map<Over, WeakMap<ReadonlySet<string>, readonly Located[]>>()
 
 /** The records of one document that the lookups read, in document order; the line records are made when a lookup reads them. */
 export function useRecords(block: readonly Located[], inline: readonly Located[], id: () => readonly Located[] = () => [],
@@ -533,9 +534,14 @@ export function useRecords(block: readonly Located[], inline: readonly Located[]
   idsRead = false
   lookupSites = new Map()
   typePositions = new Map()
+  selectedRecords = new Map()
 }
 
 function recordsOf(over: Over, types: ReadonlySet<string>): readonly Located[] {
+  let selected = selectedRecords.get(over)
+  if (selected === undefined) selectedRecords.set(over, selected = new WeakMap())
+  const cached = selected.get(types)
+  if (cached !== undefined) return cached
   const records = lookupRecords[over]
   let byType = typePositions.get(over)
   if (byType === undefined) {
@@ -550,7 +556,9 @@ function recordsOf(over: Over, types: ReadonlySet<string>): readonly Located[] {
   }
   const lists = [...types].map((type) => byType.get(type) ?? [])
   const positions = lists.length === 1 ? lists[0]! : lists.flat().sort((a, b) => a - b)
-  return positions.map((at) => records[at]!)
+  const result = positions.map((at) => records[at]!)
+  selected.set(types, result)
+  return result
 }
 
 // C2-W-141: the first record of the types whose key equals the value, the last one that starts before the record
@@ -589,16 +597,20 @@ function lookupAt(site: number, over: Over, types: ReadonlySet<string> | undefin
   value: unknown, start: number, side: -1 | 0 | 1, filter?: (item: unknown) => boolean): Located | undefined {
   const found = lookupIndex(site, over, types, key).get(value)
   if (found === undefined) return undefined
-  const list = filter === undefined ? found : found.filter(filter)
-  if (side === 0) return list[0]
+  if (side === 0) return filter === undefined ? found[0] : found.find(filter)
   let low = 0
-  let high = list.length
+  let high = found.length
   while (low < high) {
     const middle = (low + high) >> 1
-    if (side < 0 ? list[middle]!.start < start : list[middle]!.start <= start) low = middle + 1
+    if (side < 0 ? found[middle]!.start < start : found[middle]!.start <= start) low = middle + 1
     else high = middle
   }
-  return side < 0 ? (low === 0 ? undefined : list[low - 1]) : list[low]
+  if (side < 0) {
+    for (let at = low - 1; at >= 0; at--) if (filter === undefined || filter(found[at]!)) return found[at]
+  } else {
+    for (let at = low; at < found.length; at++) if (filter === undefined || filter(found[at]!)) return found[at]
+  }
+  return undefined
 }
 
 function findIn(list: unknown, where: (item: unknown) => boolean): unknown {

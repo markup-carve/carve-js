@@ -39,7 +39,7 @@ describe('the public 0.2 entry', () => {
       'RESERVED_WRITER_TARGETS', 'SMART_PUNCTUATION', 'SPEC_VERSION', 'VERSION', 'applyPatch', 'createEditorSession', 'createWriterRegistry', 'decodeTree',
       'diffTree', 'encodeEnvelope', 'encodeTree', 'fix', 'fixEdits', 'fixableRules', 'flatten', 'format', 'formatWithDiagnostics',
       'headingId', 'importDocument', 'includeDependencies',
-      'includeRegion', 'isUrlAllowed', 'lint', 'migrateTree', 'parse', 'parseWithDiagnostics', 'parseWithLayout', 'positionOf',
+      'includeRegion', 'isUrlAllowed', 'lint', 'migrateTree', 'parse', 'parseWithDiagnostics', 'parseWithLayout', 'positionOf', 'prepareLint',
       'render', 'renderWithDiagnostics', 'renderWithDocumentTransforms', 'sourceFingerprint', 'stringOffsetOfByte',
       'tabsExtensions', 'tabsRenderer', 'treeFingerprint', 'treesEqual', 'tryRenderHtmlStreaming', 'urlScheme', 'utf8Length', 'validateLayout', 'validateTree', 'write',
       'writeDocument', 'writeWithDiagnostics',

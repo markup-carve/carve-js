@@ -65,7 +65,7 @@ export {
   type IncludeAnswer, type IncludeConfig, type IncludeError, type IncludeRequest, type IncludeResolver,
 } from './include-settings.ts'
 export { type IncludeDependency, includeDependencies } from './include-dependencies.ts'
-export { lint, type LintOptions } from "../lint/lint.ts"
+export { lint, prepareLint, type LintOptions, type PreparedLint } from "../lint/lint.ts"
 /** C2-H-173: shared scheme test and default policy data for consumers of URL sinks. */
 export { isUrlAllowed, urlScheme } from './html-attributes.ts'
 export { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'

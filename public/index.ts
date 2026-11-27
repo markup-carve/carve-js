@@ -55,7 +55,7 @@ export {
 } from '../src/include-settings.ts'
 export { type IncludeDependency, includeDependencies, type IncludeDependencyOptions } from '../src/include-dependencies.ts'
 export { flatten, type Flattened } from '../src/flatten.ts'
-export { lint, type LintOptions } from '../lint/lint.ts'
+export { lint, prepareLint, type LintOptions, type PreparedLint } from '../lint/lint.ts'
 export { type FixEdit, type FixResult } from '../lint/fix.ts'
 export { isUrlAllowed, urlScheme } from '../src/html-attributes.ts'
 export { DEFAULT_DENIED_SCHEMES } from '../src/option-tables.ts'
