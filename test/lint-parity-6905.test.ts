@@ -29,6 +29,15 @@ describe('includes-22: a duplicate id in an included file (C2-N-058, C2-T-031)',
       .diagnostics.filter((entry) => entry.code === 'duplicate-footnote-definition')
     expect(found.map((entry) => [entry.file, entry.range])).toEqual([['c.crv', { startOffset: 12, endOffset: 17 }]])
   })
+
+  it('a parse entry outside the lines an include selects is not reported (C2-N-086)', () => {
+    const child = { 'c.crv': 'x\n\n[^n]: b\n\n[^n]: c\n' }
+    const found = lint('{{ c.crv @lines:1-1 }}\n', { includes: includes(child) })
+    expect(found.filter((entry) => entry.code === 'duplicate-footnote-definition')).toEqual([])
+    const whole = lint('{{ c.crv }}\n', { includes: includes(child) })
+    expect(whole.filter((entry) => entry.code === 'duplicate-footnote-definition').map((entry) => entry.range))
+      .toEqual([{ startOffset: 12, endOffset: 17 }])
+  })
 })
 
 describe('comment-in-reference-label covers reference labels only (C2-I-076, C2-I-077)', () => {
