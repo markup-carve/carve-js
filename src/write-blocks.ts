@@ -766,6 +766,7 @@ function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number
   fenced(w, node, prefix, ' |', false, () => {
     for (const line of node.children) {
       if (line.type === 'comment') {
+        if (line.form === 'block' && closesLineBlock(line.value)) lose(w, line, 'value')
         comment(w, line, prefix)
         continue
       }
@@ -777,6 +778,14 @@ function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number
       for (const lazy of line.children.slice(end)) lazyComment(w, lazy as CommentNode, prefix)
     }
   })
+}
+
+/**
+ * C2-B-123, C2-W-039: a body line of a comment block in a line block that is a bare colon run closes the line block,
+ * whose run is three colons, so the value has no spelling (C2-W-117).
+ */
+function closesLineBlock(value: string): boolean {
+  return value.split('\n').some((line) => /^[ \t]*:{3,}[ \t]*$/u.test(line))
 }
 
 function isLineComment(node: Node | undefined): boolean {
