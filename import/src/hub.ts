@@ -354,14 +354,27 @@ const GFM_HTML = (): HtmlExtension[] => [gfmAutolinkLiteralHtml(), gfmFootnoteHt
  * micromark-extension-frontmatter 2.0.0 tries an opening fence as a concrete construct up to the end of the input, so an
  * unclosed `---` on the first line kept the document from opening any list or quote. It runs only on a closed one.
  */
-const CLOSED_FRONTMATTER = /^\uFEFF?(---|\+\+\+)[ \t]*(?:\r\n?|\n)(?:[^\n\r]*(?:\r\n?|\n))*?\1[ \t]*(?:\r\n?|\n|$)/u
+const CLOSED_FRONTMATTER = /^\uFEFF?(---|\+\+\+)[ \t]*(?:\r\n?|\n)((?:[^\n\r]*(?:\r\n?|\n))*?)\1[ \t]*(?:\r\n?|\n|$)/u
+const YAML_MAPPING_KEY = /^(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s\-[{"'#][^:\r\n]*):(?:[ \t]|$)/u
+
+/** The #2799 shape test applies to an ambiguous bare dash fence, never to an explicit format. */
+function closedFrontmatter(input: string): boolean {
+  const match = CLOSED_FRONTMATTER.exec(input)
+  if (match === null) return false
+  if (match[1] !== '---') return true
+  for (const line of (match[2] ?? '').split(/\r\n?|\n/u)) {
+    if (line.trim() === '' || line.trimStart().startsWith('#')) continue
+    return YAML_MAPPING_KEY.test(line)
+  }
+  return false
+}
 
 /** Markdown (CommonMark) or GFM to HTML with micromark. */
 export function markdownHtml(input: string, format: 'markdown' | 'gfm', sink: Sink): string {
   const options: Options = {
     allowDangerousHtml: true,
     allowDangerousProtocol: true,
-    extensions: [...(CLOSED_FRONTMATTER.test(input) ? [frontmatter(['yaml', 'toml'])] : []), math(), containerDirectives(),
+    extensions: [...(closedFrontmatter(input) ? [frontmatter(['yaml', 'toml'])] : []), math(), containerDirectives(),
       indentedCodeDoesNotInterrupt(), ...(format === 'gfm' ? [gfm()] : [])],
     htmlExtensions: [frontmatterCapture(sink), rawHtmlCarrier(sink), mathHtml(), codeLineEndings(), directiveHandlers(),
       ...(format === 'gfm' ? GFM_HTML() : [])],
