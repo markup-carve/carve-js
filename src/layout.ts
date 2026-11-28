@@ -10,6 +10,7 @@ import { cellRange, cellWraps, continuationRows, type TableRows, tableRows } fro
 import { contentSource, type LayoutTrace } from './ast-inline.ts'
 import { type BlockNode } from './tree.ts'
 import { ByteCursor } from './positions.ts'
+import { withoutUnpairedSurrogates } from './unicode.ts'
 
 export const LAYOUT_VERSION = 2
 
@@ -219,7 +220,8 @@ export function buildLayout(src: string, document: DocumentNode, trace: LayoutTr
     declarations: document.extensions ?? [] }
   visit(walk, document, '', { start: 0, end: src.length, quotes: 0, open: false, spans: null, table: null, row: -1 })
   return {
-    version: LAYOUT_VERSION, encoding: 'utf-8', source: src, lineEndings: lineEndings(src), bom: src.charCodeAt(0) === BYTE_ORDER_MARK,
+    version: LAYOUT_VERSION, encoding: 'utf-8', source: withoutUnpairedSurrogates(src), lineEndings: lineEndings(src),
+    bom: src.charCodeAt(0) === BYTE_ORDER_MARK,
     nodes: walk.nodes,
   }
 }
