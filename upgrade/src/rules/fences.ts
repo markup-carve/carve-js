@@ -87,17 +87,31 @@ function closerPrefix(ctx: Context, start: number, line: number): string {
 /**
  * U-049: 0.1 refused a closer at another indent and ran the block to the end of its container;
  * 0.2 has no column test (C2-B-109). A longer opener keeps the line in the body, and a closer is
- * added where 0.1 ended the block.
+ * added where 0.1 ended the block. When the refused run is the last line of the document, the
+ * unclosed fence already ends there (C2-B-113), so only the opener changes (U-242).
  */
 function indentedCloser(ctx: Context, node: Node01): void {
   const width = refusedCloserRun(ctx, node)
   if (width === 0) return
   const { startLine, startOffset: start } = node.pos!
   const run = '`'.repeat(width)
+  const bodyEnd = Math.max(lastLine(node.pos!), startLine + bodyLines(node))
+  const end = lineEnd(ctx.lines, bodyEnd)
+  const opener: [number, number] = [start, start + runLength(ctx.src, start, BACKTICK)]
+  const last = insideQuotes(lineText(ctx.lines, bodyEnd)).trim()
+  if (ctx.src.slice(end).trim() === '' && last !== '' && runLength(last, 0, BACKTICK) === last.length) {
+    change(ctx, 'U-242', ...opener, run, 'the opening fence was lengthened to keep the indented run as content')
+    return
+  }
   const message = 'fence lengthened past the closer 0.1 refused for its indent, and closed where 0.1 ended it'
-  change(ctx, 'U-049', start, start + runLength(ctx.src, start, BACKTICK), run, message)
-  const end = lineEnd(ctx.lines, lastLine(node.pos!))
+  change(ctx, 'U-049', ...opener, run, message)
   change(ctx, 'U-049', end, end, '\n' + closerPrefix(ctx, start, startLine) + run, message)
+}
+
+/** The number of lines 0.1 kept in the body of the code block `node`, trailing blank lines included. */
+function bodyLines(node: Node01): number {
+  const content = node.content as string
+  return content === '' ? 0 : content.split('\n').length - (content.endsWith('\n') ? 1 : 0)
 }
 
 /** The opener run U-049 writes for a code block whose closer 0.1 refused for its indent, or 0. */
@@ -108,8 +122,12 @@ export function refusedCloserRun(ctx: Context, node: Node01): number {
   const code = ctx.src.charCodeAt(start)
   const length = runLength(ctx.src, start, code)
   if (length < 3 || typeof node.content !== 'string' || code !== BACKTICK) return 0
-  const last = insideQuotes(lineText(ctx.lines, endLine)).trim()
-  const closed = endLine > startLine && runLength(last, 0, code) === last.length && last.length >= length
+  const text = lineText(ctx.lines, endLine)
+  const last = insideQuotes(text).trim()
+  // A bare run indented past the opener stays in the 0.1 body, also on the block's last line.
+  const refused = startLine + bodyLines(node) >= endLine
+    && text.indexOf('`') > start - lineStart(ctx.lines, startLine)
+  const closed = endLine > startLine && runLength(last, 0, code) === last.length && last.length >= length && !refused
   const longest = longestBareRun(node.content, code)
   return closed || longest < length ? 0 : longest + 1
 }
