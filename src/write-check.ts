@@ -263,6 +263,10 @@ export interface Check {
   parsedAt: number
   /** In a probe: a node around the probed content, outside `around`, can form (`noneForms`). */
   formsAround: boolean
+  /** The first node of the inline content under comparison at which its comparison stopped (`reportUnheld`). */
+  stopNode: Node | null
+  /** No construct of the parse that opens behind `stopNode` starts before this byte. */
+  stopByte: number
 }
 
 export function createCheck(w: Writer): Check {
@@ -273,7 +277,7 @@ export function createCheck(w: Writer): Check {
     reported: new Set(),
     constructs: new Set(), behind: new Set(), lengthening: new Set(), pairedLengthening: new Set(), capped: [],
     earlyCloser: false, notesDone: new Map(), note: null,
-    parsed: [], parsedAt: 0, formsAround: false,
+    parsed: [], parsedAt: 0, formsAround: false, stopNode: null, stopByte: 0,
   }
 }
 
@@ -2743,6 +2747,12 @@ function compareInlines(c: Check, es: readonly Node[], as: readonly Node[], owne
   c.owner = outer
 }
 
+function noteStop(c: Check, e: Node, as: readonly Node[], at: Cursor): void {
+  if (c.stopNode !== null) return
+  c.stopNode = e
+  c.stopByte = (as[at.j] ?? as[as.length - 1])?.pos?.startOffset ?? 0
+}
+
 function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
   const at: Cursor = { i: 0, vi: 0, j: 0, aj: 0, anchor: -1, anchorByte: 0 }
   while (at.i < es.length) {
@@ -2750,7 +2760,7 @@ function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: 
     const e = es[at.i]!
     const more = e.type === 'text' ? matchText(c, e, es, as, at, owner) : matchNode(c, e, es, as, at, owner)
     if (!more && !resync(c, es, as, at) && !stepOverLostText(c, es, as, at) &&
-      !resyncNextConstructLine(c, es, as, at)) return
+      !resyncNextConstructLine(c, es, as, at)) return noteStop(c, e, as, at)
     // C2-W-125: behind a content that ended early a text difference asks for nothing in this list, even where the
     // lists align again; the procedure runs again from the backslash that round placed.
   }
@@ -2875,13 +2885,175 @@ function compareBlock(c: Check, e: Node, a: Node, absorbed = false): boolean {
   compareFields(c, e, a)
   // A content that ended early in another block keeps nothing of this one from being compared.
   c.cut = false
-  if (isInlineParent(e)) compareInlines(c, e.children, childNodes(a), e)
+  if (isInlineParent(e)) compareContent(c, e, a)
   // C2-N-081: the children of an include are a result of its expansion, which the source does not hold.
   else if (e.type !== 'include') compareBlocks(c, childNodes(e), childNodes(a), e, absorbed)
   compareSlots(c, e, a)
   c.spanMarks = marks
   c.flags = flags
   return true
+}
+
+function compareContent(c: Check, e: Node & { children: Node[] }, a: Node): void {
+  const outer = c.stopNode
+  c.stopNode = null
+  compareInlines(c, e.children, childNodes(a), e)
+  if (c.stopNode !== null && c.w.kindRounds && e.type === 'paragraph') reportUnheld(c, e, a)
+  c.stopNode = outer ?? c.stopNode
+}
+
+/** A text of the tree as written in a paragraph: the node holding it and its range in the written content. */
+interface WrittenText { node: TextNode, owner: Node, start: number, end: number }
+
+/** Where the inline nodes of the tree stand in the written content of a paragraph. */
+interface WrittenMap {
+  texts: WrittenText[]
+  /** The type and content offset of every other inline node. */
+  held: Set<string>
+  spans: Map<Node, [number, number]>
+}
+
+// Each level of nesting writes its subtree again.
+const MAP_DEPTH = 64
+
+function mapWritten(c: Check, owner: Node, nodes: readonly Node[], content: string, from: number, to: number, depth: number,
+  map: WrittenMap): void {
+  let at = from
+  for (const node of nodes) {
+    const spelled = writeInline(c.w, node, c.flags)
+    if (spelled === '') continue
+    const start = content.indexOf(spelled, at)
+    if (start < 0 || start + spelled.length > to) return
+    const end = start + spelled.length
+    at = end
+    map.spans.set(node, [start, end])
+    if (node.type === 'text') map.texts.push({ node, owner, start, end })
+    else if (!isBreak(node)) {
+      map.held.add(`${node.type} ${start}`)
+      if (depth < MAP_DEPTH && isInlineParent(node)) mapWritten(c, node, node.children, content, start, end, depth + 1, map)
+    }
+  }
+}
+
+/** The offset in the value of `t` of the character its spelling holds at content offset `at`; -1 for an added backslash. */
+function valueOffset(content: string, t: WrittenText, at: number): number {
+  const value = t.node.value
+  for (let si = t.start, vi = 0; si < t.end && vi < value.length; si++) {
+    if (content[si] !== value[vi]) continue
+    if (si === at) return vi
+    vi++
+  }
+  return -1
+}
+
+/**
+ * Each line of the written `content` behind the prefix its line of the source holds, from the byte `start` on: its
+ * content offset, the source byte where it starts there, and the line. Null where a line is not there.
+ */
+function contentLines(c: Check, start: number, content: string): [number, number, string][] | null {
+  const bytes = c.bytes ??= ENCODER.encode(c.source!)
+  let lineStart = start === 0 ? 0 : bytes.lastIndexOf(0x0a, start - 1) + 1
+  let contentAt = 0
+  const lines: [number, number, string][] = []
+  for (const part of content.split('\n')) {
+    const found = bytes.indexOf(0x0a, lineStart)
+    const lineEnd = found < 0 ? bytes.length : found
+    const want = ENCODER.encode(part)
+    const partStart = lineEnd - want.length
+    if (partStart < lineStart) return null
+    for (let k = 0; k < want.length; k++) if (bytes[partStart + k] !== want[k]) return null
+    lines.push([contentAt, partStart, part])
+    contentAt += part.length + 1
+    lineStart = lineEnd + 1
+  }
+  return lines
+}
+
+/** The content offset of the source byte `at`, where a line of `contentLines` holds it; -1 otherwise. */
+function toContent(lines: readonly [number, number, string][], at: number): number {
+  let low = 0
+  let high = lines.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (lines[middle]![1] <= at) low = middle + 1
+    else high = middle
+  }
+  const line = lines[low - 1]
+  if (line === undefined) return -1
+  const [contentAt, byte, part] = line
+  let units = 0
+  for (let bytes = byte; bytes < at; units++) {
+    if (units >= part.length) return -1
+    bytes += unitBytes(part, units)
+  }
+  return units < part.length || part.length === 0 && units === 0 ? contentAt + units : -1
+}
+
+/**
+ * C2-W-088: every construct the parse holds and the tree does not is reported, also behind a difference the
+ * comparison of the paragraph `e` could not resync (carve#6802). Each inline construct of the parse `a` whose opener
+ * lies on a text of the tree behind the node of the stop, where the tree holds no node of its type, reports its opener.
+ */
+function reportUnheld(c: Check, e: ParagraphNode, a: Node): void {
+  const start = a.pos?.startOffset
+  const stop = c.stopNode
+  if (c.source === null || start === undefined || stop === null || !opensFrom(childNodes(a), c.stopByte)) return
+  const content = writeInlines(c.w, e.children, c.flags)
+  const lines = contentLines(c, start, content)
+  if (lines === null) return
+  const map: WrittenMap = { texts: [], held: new Set(), spans: new Map() }
+  mapWritten(c, e, e.children, content, 0, content.length, 0, map)
+  const span = map.spans.get(stop)
+  if (span === undefined) return
+  const behind = span[1]
+  const pending = [...childNodes(a)].reverse()
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    const opener = unheldOpener(map, lines, content, node, behind)
+    if (opener === null) {
+      pushAll(pending, [...childNodes(node)].reverse())
+      continue
+    }
+    const [text, offset] = opener
+    // C2-W-125, case five: a bracket of the content of a bracketed node takes its own backslash, which gives no kind.
+    if (text.node.value[offset] === '[' && BRACKETED.has(text.owner.type)) continue
+    if (readsIntoCloser(text.owner, [text.node, offset]) || !escapeAt(c, text.node, offset)) continue
+    c.constructs.add(c.escapes[c.escapes.length - 1]!)
+  }
+}
+
+/** Whether a construct of the parse `nodes` starts at the byte `from` or later. */
+function opensFrom(nodes: readonly Node[], from: number): boolean {
+  const pending = [...nodes]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    const pos = node.pos
+    if (pos === undefined || pos.endOffset <= from) continue
+    if (node.type !== 'text' && node.type !== 'soft_break' && pos.startOffset >= from) return true
+    pushAll(pending, childNodes(node))
+  }
+  return false
+}
+
+/** The tree text and value offset of the opener of the parse node `node`, where the tree holds no node of its type there. */
+function unheldOpener(map: WrittenMap, lines: readonly [number, number, string][], content: string, node: Node,
+  behind: number): [WrittenText, number] | null {
+  if (node.type === 'text' || node.type === 'soft_break' || node.pos === undefined) return null
+  const at = toContent(lines, node.pos.startOffset)
+  if (at < behind || map.held.has(`${node.type} ${at}`)) return null
+  const ownerOf = (offset: number): [WrittenText, number] | null => {
+    let low = 0
+    let high = map.texts.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (map.texts[middle]!.start <= offset) low = middle + 1
+      else high = middle
+    }
+    const text = map.texts[low - 1]
+    if (text === undefined || offset >= text.end) return null
+    const value = valueOffset(content, text, offset)
+    return value < 0 ? null : [text, value]
+  }
+  const shift = openerShift(node)
+  return ownerOf(at + shift) ?? (shift > 0 ? ownerOf(at) : null)
 }
 
 /** The blocks of a parse, by the line they start on: paragraphs by place, other blocks by column. */

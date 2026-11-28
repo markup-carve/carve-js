@@ -658,7 +658,10 @@ function compareWithLinkFallback(w: Writer, document: DocumentNode, group: reado
   const check = compareGroup(w, document, group, first)
   if (attempts === null) return check
   if (asksNothing(check) && readsBack(w, group, first)) return check
-  if (reportsConstruct(check, group) && !linkRepairRequested(group, check)) {
+  if (reportsConstruct(check, group)) {
+    // C2-W-088: the round reports every construct of its parse, also where it asks for a change inside a link
+    // (carve#6802), so the rounds go on from the bare text with those kinds.
+    if (linkRepairRequested(group, check)) return check
     // C2-W-125: the case backslash is placed in this round, beside the kind escapes (carve#6656 ruling A, carve#6681).
     w.linkFallback = true
     return check
