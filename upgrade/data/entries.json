@@ -2196,6 +2196,12 @@
       "name": "first item paragraph that keeps its <p> around images",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-445",
+      "name": "attributed bracket pair left literal at the 0.1 shared inline cap",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

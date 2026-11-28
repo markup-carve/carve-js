@@ -22,8 +22,9 @@ const request = (path: string): IncludeRequest => ({ path, options: {} })
 const read = (path: string): string => readFileSync(join(root, path), 'utf8')
 
 describe('the Prettier plugin', () => {
-  // Prettier turns every line ending into a line feed before a plugin sees the text, and writes a blank file as empty.
-  const formatted = CARVE_SOURCES.filter(({ input }) => !input.includes('\r') && input.trim() !== '').flatMap(({ id, input }) => {
+  // Prettier normalizes line endings, writes a blank file as empty, and restores a leading BOM after printing.
+  const formatted = CARVE_SOURCES.filter(({ input }) => !input.includes('\r') && !input.startsWith('\ufeff')
+    && input.trim() !== '').flatMap(({ id, input }) => {
     try {
       return [{ id, input, expected: format(input) }]
     } catch {
