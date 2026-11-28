@@ -706,12 +706,25 @@ function mayCloseLineBlock(leaf: Leaf): boolean {
   while (code(leaf, at) === SPACE) at++
   const first = code(leaf, at)
   if (first < 0 || first === LF || first === TAB) return true
+  return lineBlockFence(leaf, at)
+}
+
+/** A comment block opener or a bare colon run at `at`, behind the spaces that lead a line of a line block. */
+function lineBlockFence(leaf: Leaf, at: number): boolean {
+  const first = code(leaf, at)
   if (first === 37 && code(leaf, at + 1) === 37 && code(leaf, at + 2) === 37) return true
   if (first !== 58) return false
   const end = runLength(leaf, at, 58) + at
   let rest = end
   while (code(leaf, rest) === SPACE || code(leaf, rest) === TAB) rest++
   return end - at >= 3 && (code(leaf, rest) < 0 || code(leaf, rest) === LF)
+}
+
+/** The first unit of a fence of text behind leading spaces, which a backslash keeps a line of text (C2-I-010); else -1. */
+function lineBlockFenceEscape(leaf: Leaf): number {
+  let at = 0
+  while (code(leaf, at) === SPACE && leaf.kinds[at] === TEXT) at++
+  return at > 0 && leaf.kinds[at] === TEXT && lineBlockFence(leaf, at) ? at : -1
 }
 
 /** C2-W-146: a line of a line block that starts with a caret and a space is text that `unattached-caption` reports. */
@@ -731,7 +744,9 @@ function checkLines(leaf: Leaf, start: number, place: LeafPlace | undefined, esc
     leaf.cursor = Math.max(at, 0)
     if (at < 0 ? start !== LINE_START : leaf.codes[at] !== LF || leaf.kinds[at] === TEXT) continue
     if (line && at < 0) {
-      undecidedIf(mayCloseLineBlock(leaf), leaf, 'line start')
+      const fence = lineBlockFenceEscape(leaf)
+      if (fence > 0) escaped[fence] = 1
+      else undecidedIf(mayCloseLineBlock(leaf), leaf, 'line start')
       if (caretLine(leaf)) escaped[0] = 1
     }
     else if (rules === null) undecidedIf(opensBlock(leaf, at + 1), leaf, 'line start')
