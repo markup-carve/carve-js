@@ -766,7 +766,7 @@ function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number
   fenced(w, node, prefix, ' |', false, () => {
     for (const line of node.children) {
       if (line.type === 'comment') {
-        comment(w, line, prefix)
+        comment(w, closerFreeComment(w, line), prefix)
         continue
       }
       // C2-B-024: every lazy `%%` line below a stanza line ends that line, so the whole trailing run is lazy.
@@ -777,6 +777,19 @@ function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number
       for (const lazy of line.children.slice(end)) lazyComment(w, lazy as CommentNode, prefix)
     }
   })
+}
+
+/**
+ * C2-B-111, C2-B-123 (CC-143): a bare colon run in the body of a comment block closes the line block, whose run is
+ * three colons. Such a value has no spelling (C2-W-117); the nearest form leaves those lines out.
+ */
+function closerFreeComment(w: Writer, node: CommentNode): CommentNode {
+  if (node.form !== 'block') return node
+  const lines = node.value.split('\n')
+  const kept = lines.filter((line) => !/^[ \t]*:{3,}[ \t]*$/u.test(line))
+  if (kept.length === lines.length) return node
+  lose(w, node, 'value')
+  return { ...node, value: kept.join('\n') }
 }
 
 function isLineComment(node: Node | undefined): boolean {
