@@ -1,6 +1,6 @@
 import { type Attrs, type BlockExtensionNode, type CodeBlockNode, type DivNode, type DocumentNode, forEachSlot,
   type InlineExtensionNode,
-  type Node } from '../ast.ts'
+  type Node, type SpanNode } from '../ast.ts'
 import { plainText } from '../ast-text.ts'
 import { type ParsedTree } from '../ast-blocks.ts'
 import { CarveTreeError, fragmentValidator } from '../ast-validate.ts'
@@ -155,6 +155,7 @@ function validTransform(node: BlockExtensionNode | InlineExtensionNode, input: E
   if (definition.parent !== undefined && (definition.parent.name !== parent?.name ||
     definition.parent.slot !== parent.slot)) return false
   attachClaim(node, input, input.node)
+  coreFallbacks(node)
   const registry = registryFor(definition, pass, parent)
   const children: DocumentNode['children'] = node.type === 'inline_extension' ?
     [{ type: 'paragraph', children: [node] }] : [node]
@@ -164,6 +165,50 @@ function validTransform(node: BlockExtensionNode | InlineExtensionNode, input: E
   } catch (error) {
     if (error instanceof CarveTreeError || error instanceof RangeError) return false
     throw error
+  }
+}
+
+function holdsCoreExtension(nodes: readonly Node[]): boolean {
+  return nodes.some((node) => {
+    if (node.type === 'inline_extension' && !node.name.includes('.')) return true
+    let found = false
+    forEachSlot(node, (children) => { found ||= holdsCoreExtension(children) })
+    return found
+  })
+}
+
+/** C2-A-124: an unqualified inline extension stands as the span the renderer writes for it (C2-H-076). */
+function lowerCoreExtensions(nodes: readonly Node[]): void {
+  for (const [at, node] of nodes.entries()) {
+    if (node.type === 'inline_extension' && !node.name.includes('.')) {
+      lowerCoreExtensions(node.children)
+      const { id, keyValues, classes = [] } = node.attrs ?? {}
+      const span: SpanNode = { type: 'span', attrs: { ...(id === undefined ? {} : { id }), classes: [`ext-${node.name}`, ...classes],
+        ...(keyValues === undefined ? {} : { keyValues }) }, children: node.children }
+      if (node.pos !== undefined) span.pos = node.pos
+      Reflect.set(nodes, at, span)
+      continue
+    }
+    forEachSlot(node, lowerCoreExtensions)
+  }
+}
+
+/**
+ * C2-X-022: a fallback holds no extension node, so a claimed body copied into one gives each of its core inline
+ * extensions as core content. The nodes a transform creates in its slots, as the tabs of a group, are checked too.
+ */
+function coreFallbacks(node: BlockExtensionNode | InlineExtensionNode): void {
+  if (node.fallback !== undefined && holdsCoreExtension(node.fallback)) {
+    const fallback = structuredClone(node.fallback)
+    lowerCoreExtensions(fallback)
+    Reflect.set(node, 'fallback', fallback)
+  }
+  for (const nodes of Object.values(node.slots ?? {})) {
+    for (const child of nodes) {
+      if ((child.type === 'block_extension' || child.type === 'inline_extension') && child.name.includes('.')) {
+        coreFallbacks(child)
+      }
+    }
   }
 }
 
