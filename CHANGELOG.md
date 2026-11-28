@@ -9,15 +9,30 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-27
+
+This release makes the package the Carve 0.2 engine: the 0.2 API moves to the package root, the `carve` command is the 0.2 command line, and `carve upgrade` rewrites 0.1 documents.
+
 ### Breaking
 
-- The package is the Carve 0.2 engine. The 0.2 API moves from the `./v2` entry to the package root and `./v2/node` to `./node`; the 0.1 root API and its `./node` entry are removed, and `./prettier` is a 0.2 plugin now. [docs/api.md](docs/api.md) maps each 0.1 call to its replacement; the Markdown, plain-text and ANSI writers are #5057.
+- The package is the Carve 0.2 engine. The 0.2 API moves from the `./v2` entry to the package root and `./v2/node` to `./node`; the 0.1 root API and its `./node` entry are removed, and `./prettier` is a 0.2 plugin now. [docs/api.md](docs/api.md) maps each 0.1 call to its replacement; the Markdown, plain-text and ANSI exports move to `@markup-carve/carve/export` (#5076, #5057).
 - The `carve` bin is the 0.2 command line (formerly `carve2`); `carve2` is removed. `carve upgrade` rewrites 0.1 documents.
 - `dist/carve.iife.min.js` (the `carve` global, `unpkg` and `jsdelivr`) exposes the 0.2 API.
 - The GitHub Action drops the `from-djot` and `portable` inputs, and the pre-commit hooks `carve-lint-from-djot` and `carve-lint-portable` are removed: 0.2 has no Djot divergence lint.
 - A `codeBlockRenderer` result that is neither text nor nothing throws `CarveOptionError` instead of `TypeError` (C2-H-207).
 
-### Added
+### Fixes
+
+- `fmt` keeps the backslash in front of a bracket at the start of a strong that opens a paragraph, so `*\[x]: ^*` no longer reads back as an abbreviation definition (#5703, #5700).
+- `fmt` escapes paragraph text that would read back as a snippet definition, such as a first line starting with `{$v}` and a value (#5710, #5708).
+- `fmt` is idempotent when a pruned backslash sits in a group with a verbatim reference (#5718, #5715).
+- The writer's authored-block fallback leaves no trailing space or doubled indentation in a wrapped footnote label, also runs under `normalize`, tries the other leaf blocks of a group before giving up, and drops the CR of a CR LF (#5714, #5201, #5707, markup-carve/carve#6848).
+- `header-rows` on a pipe table ends the head where the written rows would not, and a kept `body-rows` key adds no head (#5705, markup-carve/carve#6860, markup-carve/carve#6874).
+- HTML import drops an empty `code`, math, raw or comment inline and an empty MathML element instead of refusing the document, and a ranged comment counts only the nodes the import keeps (#5711, #5713, #5712, #5709, markup-carve/carve#6859, markup-carve/carve#6834).
+- Rendering keeps the `<p>` of a tight item's first paragraph when its bare form would not import back as that paragraph, for example a paragraph of images only; `carve upgrade` accounts for that change (#5704, #5722, markup-carve/carve#6832).
+- Under the `comment` and `minimal` profiles a frontmatter block is reported with `profile-construct-degraded` (#5702, markup-carve/carve#6877).
+
+### Improvements
 
 - Render options `softBreak` (`newline`, `space`, `br`), `allowLosses` and `maxLosses` (default 100), also read by `importDocument`; the command line takes `--soft-break` (C2-H-203 to C2-H-205).
 - `positionOf(source, offset)`: the line and column of C2-T-041 for a UTF-8 byte offset.
@@ -26,10 +41,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - `@markup-carve/carve/prettier`: a Prettier 3 plugin on `format`, with `carveAlignTables` and `carveNormalize` (#5063).
 - `VERSION`, `SPEC_VERSION`, `NODE_TYPES`, `headingId(text, options)` and `includeRegion(text, name, { code })` (#5059); `includeDependencies(tree, { ranges: true })` gives each directive's byte range.
 - `fileSystemResolver(root, { maxFileBytes, allowAbsolute })` from `./node`.
-
-### Added
-
 - The 0.2 `carve` program brings back 0.1 commands: `carve flatten` writes a document with its includes expanded, `carve fix` (also `carve lint --fix`, with `--write`) rewrites Markdown and Djot habits to the replacement their lint rule names, and `carve upgrade --migrate` respells references that miss their target only by case. `-o/--output` on `render`, `fmt` and `import`, `--strict` on `render` and `lint`, and `lint --ignore FILE-ID` are back too. See [docs/cli.md](docs/cli.md).
+- A `roundtrip` render marks a loose list with two or more items with `data-carve-loose`, and HTML import reads it back as a loose list (#5706, markup-carve/carve#6844).
+- `decodeTree` adds envelope-only declarations to the root `extensions`, and an annotation range may carry `data` (#5720, #5717, markup-carve/carve#6888, markup-carve/carve#6885).
+- The writer no longer repeats whole-trial repair passes that give no tree, which makes `fmt` faster on long paragraphs (#5699, part of #5666).
 
 ## [0.1.17] - 2026-11-12
 
@@ -791,7 +806,8 @@ references and external fragment links need manual review. See the
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.17...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/markup-carve/carve-js/compare/0.1.17...0.2.0
 [0.1.17]: https://github.com/markup-carve/carve-js/compare/0.1.16...0.1.17
 [0.1.16]: https://github.com/markup-carve/carve-js/compare/0.1.15...0.1.16
 [0.1.15]: https://github.com/markup-carve/carve-js/compare/0.1.14...0.1.15
