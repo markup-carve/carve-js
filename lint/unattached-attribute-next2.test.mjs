@@ -31,3 +31,25 @@ describe('unattached attributes use parsed ownership and document end', () => {
     expect(findings('{.c}\n%% x\npara\n')).toEqual([])
   })
 })
+
+describe('an attribute line the parse lifts into lang attaches (carve-js#5773)', () => {
+  for (const source of [
+    '{:fr}\nUn paragraphe.\n',
+    '> {:fr}\n> Un paragraphe.\n',
+    '- {:fr}\n  Un paragraphe.\n',
+    '{:fr}\n# Titre\n',
+    '{:fr}\n- item\n',
+    '{:fr}\n> cite\n',
+    '{:fr}\n| a | b |\n',
+  ]) {
+    it(`does not report ${JSON.stringify(source)}`, () => {
+      expect(findings(source)).toEqual([])
+    })
+  }
+
+  for (const source of ['{:fr}\n', '{:fr}\n\nUn paragraphe.\n']) {
+    it(`still reports ${JSON.stringify(source)}`, () => {
+      expect(findings(source)).toHaveLength(1)
+    })
+  }
+})

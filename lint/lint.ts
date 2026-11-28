@@ -224,7 +224,10 @@ function collectKeys(node: Node, path: string, context: LintContext): void {
 function visit(node: Node, path: string, context: LintContext, controls: Control[][], quotes: number): void {
   context.nodeTypes.set(path, node.type)
   collectKeys(node, path, context)
-  if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
+  // C2-A-027: the parse lifts `{:fr}` into `lang` (and `dir`), so an attribute line may leave `attrs` unset.
+  if ((node.attrs !== undefined || node.lang !== undefined || node.dir !== undefined) && node.pos !== undefined) {
+    context.state.attachedLines.add(node.pos.startLine)
+  }
   const pos = node.pos
   markDescriptionAndCloser(node, context)
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
