@@ -355,13 +355,41 @@ const GFM_HTML = (): HtmlExtension[] => [gfmAutolinkLiteralHtml(), gfmFootnoteHt
  * unclosed `---` on the first line kept the document from opening any list or quote. It runs only on a closed one.
  */
 const CLOSED_FRONTMATTER = /^\uFEFF?(---|\+\+\+)[ \t]*(?:\r\n?|\n)(?:[^\n\r]*(?:\r\n?|\n))*?\1[ \t]*(?:\r\n?|\n|$)/u
+const YAML_MAPPING_KEY = /^(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s\-[{"'#][^:\r\n]*):(?:[ \t]|$)/u
+
+function frontmatterBodyStart(input: string): number {
+  let at = (input.charCodeAt(0) === 0xFEFF ? 1 : 0) + 3
+  while (input[at] === ' ' || input[at] === '\t') at++
+  if (input[at] === '\r') at++
+  if (input[at] === '\n') at++
+  return at
+}
+
+/** The #2799 shape test applies to an ambiguous bare dash fence, never to an explicit format. */
+function closedFrontmatter(input: string): boolean {
+  if (!CLOSED_FRONTMATTER.test(input)) return false
+  if (input.startsWith('+++', input.charCodeAt(0) === 0xFEFF ? 1 : 0)) return true
+  let at = frontmatterBodyStart(input)
+  while (at < input.length) {
+    let end = at
+    while (end < input.length && input[end] !== '\r' && input[end] !== '\n') end++
+    const line = input.slice(at, end)
+    if (/^---[ \t]*$/u.test(line)) return false
+    if (line.trim() === '' || line.trimStart().startsWith('#')) {
+      at = end + (input[end] === '\r' && input[end + 1] === '\n' ? 2 : 1)
+      continue
+    }
+    return YAML_MAPPING_KEY.test(line)
+  }
+  return false
+}
 
 /** Markdown (CommonMark) or GFM to HTML with micromark. */
 export function markdownHtml(input: string, format: 'markdown' | 'gfm', sink: Sink): string {
   const options: Options = {
     allowDangerousHtml: true,
     allowDangerousProtocol: true,
-    extensions: [...(CLOSED_FRONTMATTER.test(input) ? [frontmatter(['yaml', 'toml'])] : []), math(), containerDirectives(),
+    extensions: [...(closedFrontmatter(input) ? [frontmatter(['yaml', 'toml'])] : []), math(), containerDirectives(),
       indentedCodeDoesNotInterrupt(), ...(format === 'gfm' ? [gfm()] : [])],
     htmlExtensions: [frontmatterCapture(sink), rawHtmlCarrier(sink), mathHtml(), codeLineEndings(), directiveHandlers(),
       ...(format === 'gfm' ? GFM_HTML() : [])],
