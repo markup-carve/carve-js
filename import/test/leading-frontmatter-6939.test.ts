@@ -46,7 +46,7 @@ describe('leading Markdown thematic breaks (carve#6939)', () => {
     for (const body of ['title:Value\n', '  title: A\n', '- title: A\n', '[title]: A\n', '# comment\n']) {
       expect(imported(`---\n${body}---\n`, 'markdown').document.children[0]?.type, body).toBe('thematic_break')
     }
-    for (const body of ['title: A\n', 'title:\n', '# comment\nname: A\n', '"title": A\n', "'title': A\n"]) {
+    for (const body of ['title: A\n', 'title:\n', '# comment\nname: A\n', '"title": A\n', "'title': A\n", "'author''s': Bob\n"]) {
       expect(imported(`---\n${body}---\n`, 'markdown').document.children[0]?.type, body).toBe('frontmatter')
     }
     expect(imported('+++\nname = "A"\n+++\n', 'markdown').document.children[0]?.type).toBe('frontmatter')

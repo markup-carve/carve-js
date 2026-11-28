@@ -355,7 +355,7 @@ const GFM_HTML = (): HtmlExtension[] => [gfmAutolinkLiteralHtml(), gfmFootnoteHt
  * unclosed `---` on the first line kept the document from opening any list or quote. It runs only on a closed one.
  */
 const CLOSED_FRONTMATTER = /^\uFEFF?(---|\+\+\+)[ \t]*(?:\r\n?|\n)((?:[^\n\r]*(?:\r\n?|\n))*?)\1[ \t]*(?:\r\n?|\n|$)/u
-const YAML_MAPPING_KEY = /^(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s\-[{"'#][^:\r\n]*):(?:[ \t]|$)/u
+const YAML_MAPPING_KEY = /^(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s\-[{"'#][^:\r\n]*):(?:[ \t]|$)/u
 
 /** The #2799 shape test applies to an ambiguous bare dash fence, never to an explicit format. */
 function closedFrontmatter(input: string): boolean {
