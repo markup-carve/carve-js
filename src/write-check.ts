@@ -406,10 +406,21 @@ function joinedValue(texts: readonly TextNode[]): string {
   return texts.length === 1 ? texts[0]!.value : texts.map((text) => text.value).join('')
 }
 
+/**
+ * C2-B-130, C2-W-090: the spaces that lead a line of a line block are content, so its opener is escaped at its first
+ * mark behind them.
+ */
+function lineOpenerOffsets(value: string): number[] {
+  let lead = 0
+  while (value.charCodeAt(lead) === 32) lead++
+  return lead > 0 && lead < value.length ? [lead] : []
+}
+
 /** Escapes the opener of the text that `texts` hold joined, at the character it falls on in whichever node. */
-function escapeLeadingOpener(c: Check, texts: readonly TextNode[]): boolean {
+function escapeLeadingOpener(c: Check, texts: readonly TextNode[], inLine = false): boolean {
   if (texts.length === 0) return false
-  for (let offset of openerOffsets(joinedValue(texts))) {
+  const value = joinedValue(texts)
+  for (let offset of inLine ? [...openerOffsets(value), ...lineOpenerOffsets(value)] : openerOffsets(value)) {
     let k = 0
     while (k < texts.length - 1 && offset >= texts[k]!.value.length) offset -= texts[k++]!.value.length
     if (!escapeAt(c, texts[k]!, offset)) continue
@@ -426,7 +437,7 @@ function escapeLineStart(c: Check, nodes: readonly Node[], from: number, owner: 
   c.misaligned = true
   if (escapeAttributeLinesAbove(c, nodes, from, owner)) return
   const first = nodes[from]
-  if (escapeLeadingOpener(c, leadingTexts(nodes, from))) return
+  if (escapeLeadingOpener(c, leadingTexts(nodes, from), owner.type === 'line')) return
   for (let at = from + 1; at < nodes.length && !isBreak(nodes[at]); at++) {
     const node = nodes[at]
     if (node?.type === 'text' && escapeAt(c, node, 0)) return
