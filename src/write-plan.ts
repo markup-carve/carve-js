@@ -743,15 +743,18 @@ function checkLines(leaf: Leaf, start: number, place: LeafPlace | undefined, esc
   for (let at = -1; at < leaf.codes.length && leaf.undecided === null; at++) {
     leaf.cursor = Math.max(at, 0)
     if (at < 0 ? start !== LINE_START : leaf.codes[at] !== LF || leaf.kinds[at] === TEXT) continue
-    if (line && at < 0) {
-      const fence = lineBlockFenceEscape(leaf)
-      if (fence > 0) escaped[fence] = 1
-      else undecidedIf(mayCloseLineBlock(leaf), leaf, 'line start')
-      if (caretLine(leaf)) escaped[0] = 1
-    }
+    if (line && at < 0) checkLineBlockLine(leaf, escaped)
     else if (rules === null) undecidedIf(opensBlock(leaf, at + 1), leaf, 'line start')
     else above = checkLine(leaf, at, rules, escaped, above)
   }
+}
+
+/** The start of a line of a line block: a fence behind its leading spaces takes the backslash on its first mark. */
+function checkLineBlockLine(leaf: Leaf, escaped: Uint8Array): void {
+  const fence = lineBlockFenceEscape(leaf)
+  if (fence > 0) escaped[fence] = 1
+  else undecidedIf(mayCloseLineBlock(leaf), leaf, 'line start')
+  if (caretLine(leaf)) escaped[0] = 1
 }
 
 /** The place whose line rules a leaf follows: a paragraph from its first line, a term on its later lines (C2-B-069). */

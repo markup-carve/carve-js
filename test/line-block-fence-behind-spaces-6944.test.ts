@@ -13,6 +13,10 @@ describe('C2-W-002, C2-W-090: a fence run behind the leading spaces of a line of
     '- ::: |\n     \\%%%\n  :::\n',
     '> ::: |\n>   \\:::\n> :::\n',
     ':::: d\n::: |\n  \\:::\n:::\n::::\n',
+    // An empty line before it leaves the group to the repair rounds, which escape the same mark.
+    '::: |\na\n\n  \\%%%\n:::\n',
+    '::: |\n\n   \\:::\n:::\n',
+    '::: |\na\n\nb\n  \\:::\n:::\n',
   ]
 
   it.each(kept)('formats %j unchanged', (source) => {
