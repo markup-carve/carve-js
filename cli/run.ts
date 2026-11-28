@@ -95,8 +95,9 @@ function writeOut(path: string, text: string): void {
   catch (error) { throw new CliError('output-unwritable', `${path}: ${String(error)}`) }
 }
 
+/** C2-X-003: a required extension that `--extensions` registers is known to the reader. */
 function tree(text: string): DocumentNode {
-  try { return decodeTree(text) }
+  try { return decodeTree(text, undefined, standard.extensions) }
   catch (error) { throw new CliError('ast-json-invalid', error instanceof Error ? error.message : String(error)) }
 }
 
@@ -452,7 +453,7 @@ function formatted(path: string, bytes: Uint8Array, args: ParsedArgs): { before:
   const settings = options(args) as FormatOptions
   if (args.values['from-ast'] === true) {
     const text = strictText(path, bytes)
-    return { before: text, after: write(tree(text), { alignTables: settings.alignTables === true }) }
+    return { before: text, after: write(tree(text), { alignTables: settings.alignTables === true, ...registered() }) }
   }
   const before = lenientText(bytes)
   return { before, after: format(before, settings) }
