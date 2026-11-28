@@ -40,8 +40,9 @@ interface CapPair { open: number; close: number }
 
 // Count the inline path, not enclosing quote, list or div nodes in the AST path.
 const INLINE_DEPTH_NODES = new Set([
-  'paragraph', 'heading', 'term', 'caption', 'table_cell', 'span', 'emphasis', 'strong', 'underline',
-  'strike', 'highlight', 'insert', 'delete', 'substitution', 'link', 'footnote_reference',
+  'paragraph', 'heading', 'table_cell', 'citation_definition', 'span', 'emphasis', 'strong', 'underline',
+  'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete', 'substitution', 'link',
+  'inline_footnote', 'inline_extension', 'ruby', 'small_caps',
 ])
 
 /** The 0.1 text at its shared block and inline cap can contain a complete attributed pair. */

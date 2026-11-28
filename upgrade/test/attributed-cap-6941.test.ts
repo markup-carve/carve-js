@@ -45,6 +45,15 @@ describe('U-445 attributed brackets at the 0.1 shared depth cap', () => {
     expect(compareHtmlExact(html01(source), html02(result.output, false)).equal).toBe(true)
   })
 
+  it('counts an inline footnote toward the shared depth cap', () => {
+    const source = '^[' + '['.repeat(199) + 'x' + ']{.a}'.repeat(199) + ']\n'
+    const expected = '^[' + '['.repeat(198) + '\\[x\\]{.a}' + ']{.a}'.repeat(198) + ']\n'
+    const result = upgrade(source)
+    expect(result.output).toBe(expected)
+    expect(result.check).toBe('pass')
+    expect(compareHtmlExact(html01(source), html02(result.output, false)).equal).toBe(true)
+  })
+
   it('reports U-445 at the literal bracket pair if another difference prevents a full match', () => {
     const source = oldSource + '\n[x]{class=""}\n'
     const result = upgrade(source)
