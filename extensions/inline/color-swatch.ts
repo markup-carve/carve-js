@@ -66,8 +66,8 @@ function colorChannels(value: string, hex: string | undefined): number[] | undef
 
 function transform(claim: ExtensionClaim) {
   if (claim.form !== 'inline') return null
-  const value = safeColor(textOf(claim.children))
-  if (value === null) return null
+  // C2-X-074: every `:color[value]` is claimed; a value that is no color writes the fallback.
+  const value = safeColor(textOf(claim.children)) ?? textOf(claim.children).trim()
   const fallback = structuredClone(claim.children)
   return { type: 'inline_extension' as const, name: 'carve.colorSwatch', version: '1', children: [],
     props: { value }, slots: { value: claim.children }, fallback }
@@ -113,6 +113,11 @@ export function createColorSwatch(options: ColorSwatchOptions = {}): { definitio
   if (options.shape !== undefined && !['square', 'round', 'ring'].includes(options.shape)) throw new Error('Invalid swatch shape')
   const renderer: ExtensionRenderer = { version: '1', render(node, host) {
     const value = String(node.props?.['value'] ?? '')
+    if (safeColor(value) === null) {
+      // C2-X-035: the fallback of a node with attributes stands in a span that carries them.
+      const fallback = host.inlines(node.type === 'inline_extension' ? node.fallback ?? [] : [])
+      return node.attrs === undefined ? fallback : `<span${authorAttrs(node.attrs, host)}>${fallback}</span>`
+    }
     const contrast = attrValue(node.attrs, 'contrast') !== undefined
     const contrastColor = contrast ? contrastText(value) : null
     if (contrastColor !== null) {
