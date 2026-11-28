@@ -651,7 +651,9 @@ function lintSource(source: string, options: LintOptions, facts?: SourceFacts, p
     for (const rule of activeLineRules) rule.checkLine?.(line, context)
   }
   if (walk !== undefined) runDataRules(walk, { ...context, lines: scanLines }, (id) => active(id, options), defaults)
-  const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
+  // C2-T-031: a parse also writes the render losses of a failed claim (C2-X-050); lint returns its parse channel only.
+  const parseFindings = parsed.diagnostics.filter((entry) => entry.channel === 'parse' &&
+    (options.includes === undefined || entry.code !== 'include-no-resolver'))
   return reconcileSnippetFootnotes(source, parsed.document,
     positionOrder(context, [...parseFindings, ...filterControls(context, controls)]))
 }
