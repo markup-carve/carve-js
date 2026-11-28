@@ -29,6 +29,25 @@ describe('U-049: a refused closer on the last line of its block', () => {
   }
 })
 
+interface Shape {
+  kind: string
+  first: string
+  prefix: string
+  length: number
+  above: boolean
+  blanks: number
+  shift: number
+  tail: string
+}
+
+function variant({ kind, first, prefix, length, above, blanks, shift, tail }: Shape): [string, string] {
+  const fence = '`'.repeat(length)
+  const lines = [first + fence, ...(above ? [prefix + 'a'] : []), prefix + ' '.repeat(shift) + fence]
+  lines.push(...Array<string>(blanks).fill(prefix.trimEnd()))
+  const name = `${kind} ${length} above=${above} blanks=${blanks} shift=${shift} tail=${tail !== ''}`
+  return [name, lines.join('\n') + '\n' + tail]
+}
+
 describe('U-049: generated refused closers on the last line', () => {
   const containers: [string, string, string][] = [
     ['top', '', ''],
@@ -37,24 +56,9 @@ describe('U-049: generated refused closers on the last line', () => {
     ['description', ':: t\n: ', '  '],
     ['description list', ':: t\n: . ', '    '],
   ]
-  const variants: [string, string][] = []
-  for (const [kind, first, prefix] of containers) {
-    for (const length of [3, 4, 5]) {
-      for (const above of [false, true]) {
-        for (const blanks of [0, 1, 2]) {
-          for (const shift of [1, 2, 3]) for (const tail of ['', '\nx\n']) {
-            const fence = '`'.repeat(length)
-            const lines = [first + fence]
-            if (above) lines.push(prefix + 'a')
-            lines.push(prefix + ' '.repeat(shift) + fence)
-            for (let count = 0; count < blanks; count++) lines.push(prefix.trimEnd())
-            const name = `${kind} ${length} above=${above} blanks=${blanks} shift=${shift} tail=${tail !== ''}`
-            variants.push([name, lines.join('\n') + '\n' + tail])
-          }
-        }
-      }
-    }
-  }
+  const variants = containers.flatMap(([kind, first, prefix]) => [3, 4, 5].flatMap((length) =>
+    [false, true].flatMap((above) => [0, 1, 2].flatMap((blanks) => [1, 2, 3].flatMap((shift) =>
+      ['', '\nx\n'].map((tail) => variant({ kind, first, prefix, length, above, blanks, shift, tail })))))))
 
   it('covers at least 200 variants', () => expect(variants.length).toBeGreaterThanOrEqual(200))
 
